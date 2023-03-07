@@ -1,5 +1,6 @@
 from __future__ import annotations
 import unittest
+import asyncio
 from pydantic import BaseModel
 from pydantic_resolve import resolver
 
@@ -10,8 +11,12 @@ class Student(BaseModel):
         return f'hello {self.name}'
     
     books: tuple[Book, ...] = tuple()
-    def resolve_books(self):
-        return [Book(name="sky"), Book(name="sea")]
+    async def resolve_books(self):
+        return await get_books()
+
+async def get_books():
+    await asyncio.sleep(1)
+    return [Book(name="sky"), Book(name="sea")]
 
 class Book(BaseModel):
     name: str
