@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "pydantic-resolve"
+version = "0.1.0"
+description = ""
+authors = ["tangkikodo <allmonday@126.com>"]
+readme = "README.md"
+packages = [{include = "pydantic_resolve"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pydantic = "^1.10.5"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
