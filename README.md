@@ -5,15 +5,11 @@
 pip install pydantic-resolve
 ```
 
-## test
-
-```python
-poetry run python -m unittest
-```
-
 ## demo
 
 ```python
+from pydantic_resolve import resolver
+
 class Student(BaseModel):
     name: str
     intro: str = ''
@@ -44,4 +40,13 @@ class TestResolver(unittest.IsolatedAsyncioTestCase):
         schema = Student.schema_json()
         expected = '''{"title": "Student", "type": "object", "properties": {"name": {"title": "Name", "type": "string"}, "intro": {"title": "Intro", "default": "", "type": "string"}, "books": {"title": "Books", "default": [], "type": "array", "items": {"$ref": "#/definitions/Book"}}}, "required": ["name"], "definitions": {"Book": {"title": "Book", "type": "object", "properties": {"name": {"title": "Name", "type": "string"}}, "required": ["name"]}}}'''
         self.assertEqual(schema, expected)
+```
+
+### TODO:
+play with aiodataloader
+
+## test
+
+```python
+poetry run python -m unittest
 ```

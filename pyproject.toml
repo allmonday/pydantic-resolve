@@ -1,9 +1,12 @@
 [tool.poetry]
 name = "pydantic-resolve"
-version = "0.1.0"
-description = ""
+version = "0.1.1"
+description = "Make pydantic have a GraphQL-like assembly experience."
 authors = ["tangkikodo <allmonday@126.com>"]
 readme = "README.md"
+repository = "https://github.com/allmonday/pydantic_resolve"
+keywords = ["pydantic", "fastapi"]
+license = "MIT"
 packages = [{include = "pydantic_resolve"}]
 
 [tool.poetry.dependencies]
