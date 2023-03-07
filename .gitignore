@@ -1,2 +1,5 @@
 dist
 *.pyc
+htmlcov
+.pytest_cache
+.coverage

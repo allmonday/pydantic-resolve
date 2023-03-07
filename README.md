@@ -45,8 +45,15 @@ class TestResolver(unittest.IsolatedAsyncioTestCase):
 ### TODO:
 play with aiodataloader
 
-## test
+## unittest
 
-```python
+```shell
 poetry run python -m unittest
+```
+
+## coverage 
+
+```shell
+poetry run coverage run -m pytest
+poetry run coverage report -m
 ```
