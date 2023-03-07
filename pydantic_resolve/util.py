@@ -2,7 +2,7 @@ import asyncio
 from inspect import ismethod, iscoroutine
 from pydantic import BaseModel
 from dataclasses import is_dataclass
-from typing import TypeVar, Union
+from typing import TypeVar, Union, List
 
 T = TypeVar("T")
 
@@ -21,7 +21,7 @@ def _iter_object(target):
                 yield k
 
 
-async def resolver(target: Union[T, list[T]]) -> Union[T, list]:
+async def resolver(target: Union[T, List[T]]) -> Union[T, List[T]]:
     """ resolve dataclass object or pydantic object """
 
     if isinstance(target, list):
