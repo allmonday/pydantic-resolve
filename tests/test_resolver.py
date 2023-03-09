@@ -23,6 +23,7 @@ class Student(BaseModel):
 async def get_books():
     await asyncio.sleep(1)
     return [Book(name="sky"), Book(name="sea")]
+
 class TestResolver(unittest.IsolatedAsyncioTestCase):
 
     async def test_resolver_1(self):
