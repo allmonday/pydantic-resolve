@@ -1,7 +1,7 @@
 # Pydantic-resolve
 
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
-[![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)][PyPI]
+![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
 ## install
 
 ```shell
