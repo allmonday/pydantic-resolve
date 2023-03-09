@@ -1,5 +1,4 @@
 from __future__ import annotations
-from operator import is_
 from typing import Tuple
 import unittest
 import asyncio
@@ -16,7 +15,7 @@ class Student(BaseModel):
     def resolve_intro(self):
         return f'hello {self.name}'
     
-    books: tuple[Book, ...] = tuple()
+    books: Tuple[Book, ...] = tuple()
     async def resolve_books(self):
         return await get_books()
 
