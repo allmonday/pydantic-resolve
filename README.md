@@ -10,6 +10,9 @@ pip install pydantic-resolve
 ```python
 from pydantic_resolve import resolver
 
+class Book(BaseModel):
+    name: str
+
 class Student(BaseModel):
     name: str
     intro: str = ''
@@ -17,11 +20,12 @@ class Student(BaseModel):
         return f'hello {self.name}'
     
     books: tuple[Book, ...] = tuple()
-    def resolve_books(self):
-        return [Book(name="sky"), Book(name="sea")]
+    async def resolve_books(self):
+        return await get_books()
 
-class Book(BaseModel):
-    name: str
+async def get_books():
+    await asyncio.sleep(1)
+    return [Book(name="sky"), Book(name="sea")]
 
 class TestResolver(unittest.IsolatedAsyncioTestCase):
 
@@ -35,8 +39,18 @@ class TestResolver(unittest.IsolatedAsyncioTestCase):
         }
         self.assertEqual(result.dict(), expected)
 
+    async def test_resolver_2(self):
+        stu = [Student(name="boy")]
+        result = await resolver(stu)
+        expected = {
+            'name': 'boy',
+            'intro': 'hello boy',
+            'books': [{'name': 'sky'}, {'name': 'sea'}]
+        }
+        self.assertEqual(result[0].dict(), expected)
+
     async def test_schema(self):
-        Student.update_forward_refs(Book=Book)
+        # Student.update_forward_refs(Book=Book)
         schema = Student.schema_json()
         expected = '''{"title": "Student", "type": "object", "properties": {"name": {"title": "Name", "type": "string"}, "intro": {"title": "Intro", "default": "", "type": "string"}, "books": {"title": "Books", "default": [], "type": "array", "items": {"$ref": "#/definitions/Book"}}}, "required": ["name"], "definitions": {"Book": {"title": "Book", "type": "object", "properties": {"name": {"title": "Name", "type": "string"}}, "required": ["name"]}}}'''
         self.assertEqual(schema, expected)
