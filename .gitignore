@@ -3,5 +3,6 @@ dist
 htmlcov
 .pytest_cache
 .coverage
+coverage.json
 .venv
 .tox
