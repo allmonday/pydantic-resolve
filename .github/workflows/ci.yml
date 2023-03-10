@@ -45,12 +45,6 @@ jobs:
       - name: Test with pytest coverage
         run: poetry run coverage run -m pytest
 
-      - name: Upload coverage data
-        uses: actions/upload-artifact@v3
-        with:
-          name: covdata
-          path: .coverage.*
-
       - name: "Combine"
         run: |
           poetry run coverege json
