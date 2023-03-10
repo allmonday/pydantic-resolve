@@ -65,7 +65,9 @@ play with aiodataloader
 ## unittest
 
 ```shell
-poetry run python -m unittest
+poetry run python -m unittest  # or
+poetry run pytest  # or
+poetry run tox
 ```
 
 ## coverage 

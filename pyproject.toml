@@ -10,7 +10,7 @@ license = "MIT"
 packages = [{include = "pydantic_resolve"}]
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.8"
 pydantic = "^1.10.4"
 tox = "^4.4.6"
 
