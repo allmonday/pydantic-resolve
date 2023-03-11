@@ -12,13 +12,13 @@ packages = [{include = "pydantic_resolve"}]
 [tool.poetry.dependencies]
 python = "^3.8"
 pydantic = "^1.10.4"
-tox = "^4.4.6"
-
 
 [tool.poetry.group.dev.dependencies]
+tox = "^4.4.6"
 pytest = "^7.2.2"
 pytest-cov = "^4.0.0"
 coverage = "^7.2.1"
+aiodataloader = "^0.4.0"
 
 [build-system]
 requires = ["poetry-core"]

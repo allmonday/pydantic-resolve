@@ -12,7 +12,7 @@ pip install pydantic-resolve
 ## demo
 
 ```python
-from pydantic_resolve import resolver
+from pydantic_resolve import resolve
 
 class Book(BaseModel):
     name: str
@@ -35,7 +35,7 @@ class TestResolver(unittest.IsolatedAsyncioTestCase):
 
     async def test_resolver_1(self):
         stu = Student(name="boy")
-        result = await resolver(stu)
+        result = await resolve(stu)
         expected = {
             'name': 'boy',
             'intro': 'hello boy',
@@ -45,7 +45,7 @@ class TestResolver(unittest.IsolatedAsyncioTestCase):
 
     async def test_resolver_2(self):
         stu = [Student(name="boy")]
-        result = await resolver(stu)
+        result = await resolve(stu)
         expected = {
             'name': 'boy',
             'intro': 'hello boy',

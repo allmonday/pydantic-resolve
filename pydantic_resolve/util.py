@@ -21,11 +21,11 @@ def _iter_object(target):
                 yield k
 
 
-async def resolver(target: Union[T, List[T]]) -> Union[T, List[T]]:
+async def resolve(target: Union[T, List[T]]) -> Union[T, List[T]]:
     """ resolve dataclass object or pydantic object """
 
     if isinstance(target, list):
-        results = await asyncio.gather(*[resolver(t) for t in target])
+        results = await asyncio.gather(*[resolve(t) for t in target])
         return results
 
     for k in _iter_object(target):
@@ -39,7 +39,7 @@ async def resolver(target: Union[T, List[T]]) -> Union[T, List[T]]:
 
             if asyncio.isfuture(val):  # is future
                 val = await val  # get value from future
-                val = await resolver(val)
+                val = await resolve(val)
 
             target.__setattr__(k.replace('resolve_', ''), val)
 
