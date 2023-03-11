@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pydantic-resolve"
-version = "0.2.0"
+version = "0.2.1"
 description = "Make pydantic have a GraphQL-like assembly experience."
 authors = ["tangkikodo <allmonday@126.com>"]
 readme = "README.md"
