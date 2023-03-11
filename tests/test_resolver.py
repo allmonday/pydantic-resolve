@@ -3,7 +3,7 @@ from typing import Tuple
 import unittest
 import asyncio
 from pydantic import BaseModel
-from pydantic_resolve import resolver
+from pydantic_resolve import resolve
 from dataclasses import dataclass, asdict
 
 class Book(BaseModel):
@@ -27,7 +27,7 @@ class TestResolver(unittest.IsolatedAsyncioTestCase):
 
     async def test_resolver_1(self):
         stu = Student(name="boy")
-        result = await resolver(stu)
+        result = await resolve(stu)
         expected = {
             'name': 'boy',
             'intro': 'hello boy',
@@ -37,7 +37,7 @@ class TestResolver(unittest.IsolatedAsyncioTestCase):
 
     async def test_resolver_2(self):
         stu = [Student(name="boy")]
-        result = await resolver(stu)
+        result = await resolve(stu)
         expected = {
             'name': 'boy',
             'intro': 'hello boy',
@@ -69,7 +69,7 @@ class TestDataclassResolver(unittest.IsolatedAsyncioTestCase):
 
     async def test_resolver_1(self):
         car = Car(name="byd")
-        result = await resolver(car)
+        result = await resolve(car)
         expected = {
             'name': 'byd',
             'wheels': [{'is_ok': True}]
@@ -78,7 +78,7 @@ class TestDataclassResolver(unittest.IsolatedAsyncioTestCase):
 
     async def test_resolver_2(self):
         car = [Car(name="byd")]
-        result = await resolver(car)
+        result = await resolve(car)
         expected = {
             'name': 'byd',
             'wheels': [{'is_ok': True}]
