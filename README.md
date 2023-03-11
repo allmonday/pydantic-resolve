@@ -1,15 +1,44 @@
 # Pydantic-resolve
 
+```python
+import asyncio
+from pydantic import BaseModel
+from pydantic_resolve import resolve
+
+class Book(BaseModel):
+    name: str
+
+class Student(BaseModel):
+    name: str
+    greet: str = ''
+    async def resolve_greet(self):
+        await asyncio.sleep(1)  # mock i/o
+        return f'hello {self.name}'
+
+async def main():
+    students = [Student(name='john' )]
+    results = await resolve(students)
+    print(results)
+
+asyncio.run(main())
+
+# output: [Student(name='john', greet='hello john')]
+```
+
+- Pydantic-resolve helps you asynchoronously, resursively resolve a pydantic object (or dataclass object)
+
+- Pydantic-resolve, when used in conjunction with aiodataloader, allows you to easily generate nested data structures without worrying about generating N+1 queries.
+
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 ![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
 ![Test Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/allmonday/6f1661c6310e1b31c9a10b0d09d52d11/raw/covbadge.json)
-## install
+## Install
 
 ```shell
 pip install pydantic-resolve
 ```
 
-## demo
+## Basic Demo
 
 ```python
 from pydantic_resolve import resolve
@@ -60,10 +89,53 @@ class TestResolver(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(schema, expected)
 ```
 
-### TODO:
-play with aiodataloader
+### Demo: Integrated with aiodataloader:
 
-## unittest
+```python
+from __future__ import annotations
+from typing import Tuple
+import unittest
+from pydantic import BaseModel
+from pydantic_resolve import resolve
+from aiodataloader import DataLoader
+
+class TestDataloaderResolver(unittest.IsolatedAsyncioTestCase):
+    async def test_dataloader_1(self):
+
+        BOOKS = {
+            1: [{'name': 'book1'}, {'name': 'book2'}],
+            2: [{'name': 'book3'}, {'name': 'book4'}],
+        }
+
+        class Book(BaseModel):
+            name: str
+
+        class BookLoader(DataLoader):
+            async def batch_load_fn(self, keys):
+                books = [[Book(**bb) for bb in BOOKS.get(k, [])] for k in keys]
+                return books
+
+        book_loader = BookLoader()  
+
+        class Student(BaseModel):
+            id: int
+            name: str
+
+            books: Tuple[Book, ...] = tuple()
+            def resolve_books(self):
+                return book_loader.load(self.id)
+
+        students = [Student(id=1, name="jack"), Student(id=2, name="mike")]
+        results = await resolve(students)
+        source = [r.dict() for r in results]
+        expected = [
+            {'id': 1, 'name': 'jack', 'books': [{ 'name': 'book1'}, {'name': 'book2'}]},
+            {'id': 2, 'name': 'mike', 'books': [{ 'name': 'book3'}, {'name': 'book4'}]},
+        ]
+        self.assertEqual(source, expected)
+```
+
+## Unittest
 
 ```shell
 poetry run python -m unittest  # or
@@ -71,7 +143,7 @@ poetry run pytest  # or
 poetry run tox
 ```
 
-## coverage 
+## Coverage 
 
 ```shell
 poetry run coverage run -m pytest

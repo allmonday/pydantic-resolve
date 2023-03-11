@@ -1,14 +1,11 @@
 from __future__ import annotations
-import asyncio
 from typing import Tuple
 import unittest
 from pydantic import BaseModel
 from pydantic_resolve import resolve
 from aiodataloader import DataLoader
 
-
-
-class TestResolver(unittest.IsolatedAsyncioTestCase):
+class TestDataloaderResolver(unittest.IsolatedAsyncioTestCase):
     async def test_dataloader_1(self):
 
         BOOKS = {
@@ -21,11 +18,14 @@ class TestResolver(unittest.IsolatedAsyncioTestCase):
 
         class BookLoader(DataLoader):
             async def batch_load_fn(self, keys):
-                # mock db query
                 books = [[Book(**bb) for bb in BOOKS.get(k, [])] for k in keys]
                 return books
 
-        book_loader = BookLoader()
+        # for testing, loder instance need to initialized inside a thread with eventloop
+        # (which means it can't be put in global scope of this file)
+        # otherwise it will generate anthoer loop which will raise error of
+        # "task attached to another loop"
+        book_loader = BookLoader()  
 
         class Student(BaseModel):
             id: int
