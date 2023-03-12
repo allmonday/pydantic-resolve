@@ -5,9 +5,6 @@ import asyncio
 from pydantic import BaseModel
 from pydantic_resolve import resolve
 
-class Book(BaseModel):
-    name: str
-
 class Student(BaseModel):
     name: str
     greet: str = ''
@@ -40,7 +37,7 @@ asyncio.run(main())
 pip install pydantic-resolve
 ```
 
-## Basic Demo
+## Demo 1, Resolve asynchoronously
 
 ```python
 from pydantic_resolve import resolve
@@ -91,7 +88,7 @@ class TestResolver(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(schema, expected)
 ```
 
-### Demo: Integrated with aiodataloader:
+### Demo 2: Integrated with aiodataloader:
 
 ```python
 from __future__ import annotations
