@@ -6,41 +6,46 @@ from typing import TypeVar, Union, List
 
 T = TypeVar("T")
 
-def _iter_object(target):
-    if isinstance(target, BaseModel):
-        keys = target.__fields_set__
-        for k in dir(target):
-            if k in keys:  # attr
-                yield k
-            if k.startswith('resolve_'):  # methods
-                yield k
+PREFIX = 'resolve_'
 
-    elif is_dataclass(target):
-        for k in dir(target):
-            if not k.startswith('__'):  # attrs and methods
-                yield k
+def _is_acceptable_type(target):
+    return isinstance(target, BaseModel) or is_dataclass(target)
 
+def _iter_over_object_resolvers(target):
+    """get method starts with resolve_"""
+    for k in dir(target):
+        if k.startswith(PREFIX):
+            yield k
 
 async def resolve(target: Union[T, List[T]]) -> Union[T, List[T]]:
     """ resolve dataclass object or pydantic object """
 
-    if isinstance(target, list):
+    if isinstance(target, (list, tuple)):
         results = await asyncio.gather(*[resolve(t) for t in target])
         return results
 
-    for k in _iter_object(target):
-        item = target.__getattribute__(k)
+    if _is_acceptable_type(target):
+        for k in _iter_over_object_resolvers(target):
+            item = target.__getattribute__(k)
 
-        if ismethod(item):  # instance method
-            val = item()
+            if ismethod(item):  # instance method
+                val = item()
 
-            if iscoroutine(val):
-                val = await val
+                if iscoroutine(val):
+                    """
+                    async def resolve_xxx(self):
+                        return ...
+                    """
+                    val = await val
 
-            if asyncio.isfuture(val):  # is future
-                val = await val  # get value from future
-                val = await resolve(val)
+                if asyncio.isfuture(val):  # is future
+                    """
+                    def resolve_xxx(self):
+                        return asyncio.Future()
+                    """
+                    val = await val
+                    val = await resolve(val)  
 
-            target.__setattr__(k.replace('resolve_', ''), val)
+                target.__setattr__(k.replace(PREFIX, ''), val)
 
     return target

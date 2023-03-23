@@ -26,21 +26,21 @@ async def get_books():
 class TestResolver(unittest.IsolatedAsyncioTestCase):
 
     async def test_resolver_1(self):
-        stu = Student(name="boy")
+        stu = Student(name="martin")
         result = await resolve(stu)
         expected = {
-            'name': 'boy',
-            'intro': 'hello boy',
+            'name': 'martin',
+            'intro': 'hello martin',
             'books': [{'name': 'sky'}, {'name': 'sea'}]
         }
         self.assertEqual(result.dict(), expected)
 
     async def test_resolver_2(self):
-        stu = [Student(name="boy")]
+        stu = [Student(name="martin")]
         result = await resolve(stu)
         expected = {
-            'name': 'boy',
-            'intro': 'hello boy',
+            'name': 'martin',
+            'intro': 'hello martin',
             'books': [{'name': 'sky'}, {'name': 'sea'}]
         }
         self.assertEqual(result[0].dict(), expected)
