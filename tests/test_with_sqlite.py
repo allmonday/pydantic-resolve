@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Tuple
 import unittest
-from collections import defaultdict
+from collections import Counter, defaultdict
 from typing import Tuple
 from aiodataloader import DataLoader
 from pydantic import BaseModel
@@ -16,6 +16,7 @@ from pydantic_resolve import resolve
 
 class TestDataloaderWithSqlite(unittest.IsolatedAsyncioTestCase):
     async def test_sqlite_and_dataloader(self):
+        counter = Counter()
         engine = create_async_engine(
             "sqlite+aiosqlite://",
             echo=False,
@@ -65,6 +66,7 @@ class TestDataloaderWithSqlite(unittest.IsolatedAsyncioTestCase):
         # =========================== Pydantic Schema layer =========================
         class FeedbackLoader(DataLoader):
             async def batch_load_fn(self, comment_ids):
+                counter['load-comments'] += 1
                 async with async_session() as session:
                     res = await session.execute(select(Feedback).where(Feedback.comment_id.in_(comment_ids)))
                     rows = res.scalars().all()
@@ -75,6 +77,7 @@ class TestDataloaderWithSqlite(unittest.IsolatedAsyncioTestCase):
 
         class CommentLoader(DataLoader):
             async def batch_load_fn(self, task_ids):
+                counter['load-tasks'] += 1
                 async with async_session() as session:
                     res = await session.execute(select(Comment).where(Comment.task_id.in_(task_ids)))
                     rows = res.scalars().all()
@@ -158,5 +161,8 @@ class TestDataloaderWithSqlite(unittest.IsolatedAsyncioTestCase):
                 'id': 2,
                 'name': 'task-2'},
                 {'comments': [], 'id': 3, 'name': 'task-3'}]
+
         self.assertEqual(result, expected)
+        self.assertEqual(counter['load-comments'], 1)  # batch_load_fn only called once
+        self.assertEqual(counter['load-tasks'], 1)
         
