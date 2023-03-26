@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pydantic-resolve"
-version = "0.2.2"
+version = "0.2.3"
 description = "Make pydantic have a GraphQL-like assembly experience."
 authors = ["tangkikodo <allmonday@126.com>"]
 readme = "README.md"
@@ -19,6 +19,8 @@ pytest = "^7.2.2"
 pytest-cov = "^4.0.0"
 coverage = "^7.2.1"
 aiodataloader = "^0.4.0"
+aiosqlite = "^0.18.0"
+sqlalchemy = {extras = ["asyncio"], version = "^2.0.7"}
 
 [build-system]
 requires = ["poetry-core"]

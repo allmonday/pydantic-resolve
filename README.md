@@ -139,6 +139,8 @@ class TestDataloaderResolver(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(source, expected)
 ```
 
+For more examples, please explore in `demo`
+
 ## Unittest
 
 ```shell
