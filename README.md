@@ -40,7 +40,7 @@ pip install pydantic-resolve
 
 ## TL;DR
 
-[Demo: stormtrooper](https://github.com/allmonday/stormtrooper/blob/main/backend/app/entries/task/entry.py#L22)
+[Demo: stormtrooper](https://github.com/allmonday/stormtrooper/blob/main/backend/app/entries/task/router.py#L24)
 
 ## Demo 1, Resolve asynchoronously
 
