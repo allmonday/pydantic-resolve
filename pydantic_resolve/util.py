@@ -17,6 +17,30 @@ def _iter_over_object_resolvers(target):
         if k.startswith(PREFIX):
             yield k
 
+async def resolve_obj(target, k):
+    item = target.__getattribute__(k)
+
+    if ismethod(item):  # instance method
+        val = item()
+
+        if iscoroutine(val):
+            """
+            async def resolve_xxx(self):
+                return ...
+            """
+            val = await val
+
+        if asyncio.isfuture(val):  # is future
+            """
+            def resolve_xxx(self):
+                return asyncio.Future()
+            """
+            val = await val
+
+        val = await resolve(val)  
+        target.__setattr__(k.replace(PREFIX, ''), val)
+
+
 async def resolve(target: Union[T, List[T]]) -> Union[T, List[T]]:
     """ resolve dataclass object or pydantic object """
 
@@ -25,27 +49,6 @@ async def resolve(target: Union[T, List[T]]) -> Union[T, List[T]]:
         return results
 
     if _is_acceptable_type(target):
-        for k in _iter_over_object_resolvers(target):
-            item = target.__getattribute__(k)
-
-            if ismethod(item):  # instance method
-                val = item()
-
-                if iscoroutine(val):
-                    """
-                    async def resolve_xxx(self):
-                        return ...
-                    """
-                    val = await val
-
-                if asyncio.isfuture(val):  # is future
-                    """
-                    def resolve_xxx(self):
-                        return asyncio.Future()
-                    """
-                    val = await val
-
-                val = await resolve(val)  
-                target.__setattr__(k.replace(PREFIX, ''), val)
+        await asyncio.gather(*[resolve_obj(target, k) for k in _iter_over_object_resolvers(target)])
 
     return target

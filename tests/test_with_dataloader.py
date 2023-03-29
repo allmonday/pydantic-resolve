@@ -7,6 +7,9 @@ from aiodataloader import DataLoader
 
 class TestDataloaderResolver(unittest.IsolatedAsyncioTestCase):
     async def test_dataloader_1(self):
+        counter = {
+            "book": 0
+        }
 
         BOOKS = {
             1: [{'name': 'book1'}, {'name': 'book2'}],
@@ -18,6 +21,7 @@ class TestDataloaderResolver(unittest.IsolatedAsyncioTestCase):
 
         class BookLoader(DataLoader):
             async def batch_load_fn(self, keys):
+                counter["book"] += 1
                 books = [[Book(**bb) for bb in BOOKS.get(k, [])] for k in keys]
                 return books
 
@@ -43,8 +47,13 @@ class TestDataloaderResolver(unittest.IsolatedAsyncioTestCase):
             {'id': 2, 'name': 'mike', 'books': [{ 'name': 'book3'}, {'name': 'book4'}]},
         ]
         self.assertEqual(source, expected)
+        self.assertEqual(counter["book"], 1)
 
     async def test_dataloader_2(self):
+        counter = {
+            "book": 0,
+            "author": 0
+        }
 
         BOOKS = {
             1: [{'name': 'book1'}, {'name': 'book2'}],
@@ -57,11 +66,13 @@ class TestDataloaderResolver(unittest.IsolatedAsyncioTestCase):
 
         class BookLoader(DataLoader):
             async def batch_load_fn(self, keys):
+                counter["book"] += 1
                 books = [[Book(**bb) for bb in BOOKS.get(k, [])] for k in keys]
                 return books
 
         class AuthorLoader(DataLoader):
             async def batch_load_fn(self, keys):
+                counter["author"] += 1
                 authors = [[Author(**aa) for aa in AUTHORS.get(k, [])] for k in keys]
                 return authors
 
@@ -98,3 +109,5 @@ class TestDataloaderResolver(unittest.IsolatedAsyncioTestCase):
             {'id': 2, 'name': 'mike', 'books': [{ 'name': 'book3', 'authors': []}, {'name': 'book4', 'authors': []}]},
         ]
         self.assertEqual(source, expected)
+        self.assertEqual(counter["author"], 1)
+        self.assertEqual(counter["book"], 1)
