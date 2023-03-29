@@ -44,8 +44,8 @@ async def resolve(target: Union[T, List[T]]) -> Union[T, List[T]]:
                         return asyncio.Future()
                     """
                     val = await val
-                    val = await resolve(val)  
 
+                val = await resolve(val)  
                 target.__setattr__(k.replace(PREFIX, ''), val)
 
     return target
