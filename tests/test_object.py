@@ -2,7 +2,8 @@ import unittest
 from pydantic import BaseModel
 from typing import Optional
 from pydantic_resolve import resolve
-
+import asyncio
+import time
 
 class DetailA(BaseModel):
     name: str = ''
@@ -20,17 +21,29 @@ class ServiceDetail1(BaseModel):
 
 class Service(BaseModel):
     service_detail_1: Optional[ServiceDetail1] = None
-    def resolve_service_detail_1(self):
+    async def resolve_service_detail_1(self):
+        await asyncio.sleep(2)
         return ServiceDetail1()
 
     service_detail_2: str = ''
-    def resolve_service_detail_2(self):
+    async def resolve_service_detail_2(self):
+        await asyncio.sleep(2)
         return "detail_2"
 
+    service_detail_3: str = ''
+    async def resolve_service_detail_3(self):
+        await asyncio.sleep(2)
+        return "detail_3"
+
+    service_detail_4: str = ''
+    async def resolve_service_detail_4(self):
+        await asyncio.sleep(2)
+        return "detail_4"
 
 class TestObjectResolver(unittest.IsolatedAsyncioTestCase):
 
     async def test_resolver_1(self):
+        t = time.time()
         s = Service()
         result = await resolve(s)
         expected = {
@@ -40,6 +53,10 @@ class TestObjectResolver(unittest.IsolatedAsyncioTestCase):
                 },
                 "detail_b": "good"
             },
-            "service_detail_2": "detail_2" 
+            "service_detail_2": "detail_2",
+            "service_detail_3": "detail_3",
+            "service_detail_4": "detail_4",
         }
         self.assertEqual(result.dict(), expected)
+        delta = time.time() - t
+        self.assertTrue(delta < 3)
