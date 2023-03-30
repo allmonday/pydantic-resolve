@@ -11,33 +11,40 @@ class DetailA(BaseModel):
 class ServiceDetail1(BaseModel):
     detail_a: Optional[DetailA] = None
 
-    def resolve_detail_a(self):
+    async def resolve_detail_a(self):
+        await asyncio.sleep(1)
         return DetailA(name='hello world')
 
     detail_b: str = ''
 
-    def resolve_detail_b(self):
+    async def resolve_detail_b(self):
+        await asyncio.sleep(1)
         return 'good'
 
 class Service(BaseModel):
     service_detail_1: Optional[ServiceDetail1] = None
     async def resolve_service_detail_1(self):
-        await asyncio.sleep(2)
+        await asyncio.sleep(1)
+        return ServiceDetail1()
+
+    service_detail_1b: Optional[ServiceDetail1] = None
+    async def resolve_service_detail_1b(self):
+        await asyncio.sleep(1)
         return ServiceDetail1()
 
     service_detail_2: str = ''
     async def resolve_service_detail_2(self):
-        await asyncio.sleep(2)
+        await asyncio.sleep(1)
         return "detail_2"
 
     service_detail_3: str = ''
     async def resolve_service_detail_3(self):
-        await asyncio.sleep(2)
+        await asyncio.sleep(1)
         return "detail_3"
 
     service_detail_4: str = ''
     async def resolve_service_detail_4(self):
-        await asyncio.sleep(2)
+        await asyncio.sleep(1)
         return "detail_4"
 
 class TestObjectResolver(unittest.IsolatedAsyncioTestCase):
@@ -53,10 +60,16 @@ class TestObjectResolver(unittest.IsolatedAsyncioTestCase):
                 },
                 "detail_b": "good"
             },
+            "service_detail_1b": {
+                "detail_a": {
+                    "name": "hello world"
+                },
+                "detail_b": "good"
+            },
             "service_detail_2": "detail_2",
             "service_detail_3": "detail_3",
             "service_detail_4": "detail_4",
         }
         self.assertEqual(result.dict(), expected)
         delta = time.time() - t
-        self.assertTrue(delta < 3)
+        self.assertTrue(delta < 2.5)
