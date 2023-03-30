@@ -4,9 +4,9 @@ from pydantic import BaseModel
 from dataclasses import is_dataclass
 from typing import TypeVar, Union, List
 from .exceptions import ResolverTargetAttrNotFound
+from .constant import PREFIX
 
 T = TypeVar("T")
-PREFIX = 'resolve_'
 
 
 def _is_acceptable_type(target):
