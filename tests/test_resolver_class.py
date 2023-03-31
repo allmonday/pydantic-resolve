@@ -1,5 +1,4 @@
 from __future__ import annotations
-import contextvars
 from typing import Tuple
 import unittest
 import asyncio

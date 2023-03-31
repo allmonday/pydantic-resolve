@@ -134,31 +134,40 @@ class TestDataloaderWithSqlite(unittest.IsolatedAsyncioTestCase):
         result = await main()
         expected = [
             {
-                'comments': [{'content': 'comment-1 for task 1',
-                'feedbacks': [{'comment_id': 1,
-                               'content': 'feedback-1 for comment-1',
-                               'id': 1},
-                              {'comment_id': 1,
-                               'content': 'feedback-1 for comment-1',
-                               'id': 2},
-                              {'comment_id': 1,
-                               'content': 'feedback-1 for comment-1',
-                               'id': 3}],
+                'comments': [
+                    {
+                        'content': 'comment-1 for task 1',
+                        'feedbacks': [
+                            {'comment_id': 1, 'content': 'feedback-1 for comment-1', 'id': 1},
+                            {'comment_id': 1, 'content': 'feedback-1 for comment-1', 'id': 2},
+                            {'comment_id': 1, 'content': 'feedback-1 for comment-1', 'id': 3}],
+                        'id': 1,
+                        'task_id': 1
+                    },
+                    {
+                        'content': 'comment-2 for task 1',
+                        'feedbacks': [],
+                        'id': 2,
+                        'task_id': 1
+                    }],
                 'id': 1,
-                'task_id': 1},
-                            {'content': 'comment-2 for task 1',
-                                'feedbacks': [],
-                                'id': 2,
-                                'task_id': 1}],
-                'id': 1,
-                'name': 'task-1'},
-                {'comments': [{'content': 'comment-1 for task 2',
-                                'feedbacks': [],
-                                'id': 3,
-                                'task_id': 2}],
+                'name': 'task-1'
+            },
+            {
+                'comments': [
+                    {
+                        'content': 'comment-1 for task 2',
+                        'feedbacks': [],
+                        'id': 3,
+                        'task_id': 2
+                    }], 
                 'id': 2,
-                'name': 'task-2'},
-                {'comments': [], 'id': 3, 'name': 'task-3'}]
+                'name': 'task-2'
+            }, 
+            {
+                'comments': [], 'id': 3, 'name': 'task-3'
+            }
+        ]
 
         self.assertEqual(result, expected)
         self.assertEqual(counter['load-comments'], 1)  # batch_load_fn only called once

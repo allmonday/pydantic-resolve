@@ -6,7 +6,6 @@ from typing import TypeVar, Union, List
 from .exceptions import ResolverTargetAttrNotFound
 from typing import Any, Callable, Optional
 from pydantic_resolve import core
-import uuid
 
 def LoaderDepend(  # noqa: N802
     dependency: Optional[Callable[..., Any]] = None 
@@ -27,9 +26,9 @@ PREFIX = 'resolve_'
 
 class Resolver:
     def __init__(self):
-        self.ctx = contextvars.ContextVar(str(uuid.uuid1()), default={})
+        self.ctx = contextvars.ContextVar('pydantic_resolve_internal_context', default={})
     
-    def run_method(self, method):
+    def exec_method(self, method):
         signature = inspect.signature(method)
         params = {}
 
@@ -39,20 +38,23 @@ class Resolver:
 
             if isinstance(v.default, Depends):
                 cache_key = str(v.default.dependency.__name__)
-                data = self.ctx.get()
-                hit = data.get(cache_key, None)
+                cache = self.ctx.get()
+                hit = cache.get(cache_key, None)
+
                 if hit:
                     instance = hit
                 else:
                     instance = v.default.dependency()
-                    data[cache_key] = instance
-                    self.ctx.set(data)
+                    cache[cache_key] = instance
+                    self.ctx.set(cache)
+
                 params[k] = instance
+                
         return method(**params)
 
     async def resolve_obj(self, target, k):
         item = target.__getattribute__(k)
-        val = self.run_method(item)
+        val = self.exec_method(item)
 
         if iscoroutine(val):  # async def func()
             val = await val

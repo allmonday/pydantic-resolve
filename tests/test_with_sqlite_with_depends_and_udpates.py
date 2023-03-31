@@ -62,12 +62,21 @@ class TestDataloaderWithSqlite(unittest.IsolatedAsyncioTestCase):
                         ]
                     )
 
-        async def insert_new_objects() -> None:
+        async def insert_and_update_objects() -> None:
             async with async_session() as session:
                 async with session.begin():
                     task_1 = (await session.execute(select(Task).filter_by(id=1))).scalar_one()
-                    task_1.name = 'task-1 x'
+                    task_1.name = 'task-1 xyz'
+
+                    comment_1 = (await session.execute(select(Comment).filter_by(id=1))).scalar_one()
+                    comment_1.content = 'comment-1 for task 1 (changes)'
+
+                    feedback_1 = (await session.execute(select(Feedback).filter_by(id=1))).scalar_one()
+                    feedback_1.content = 'feedback-1 for comment-1 (changes)'
+
                     session.add(task_1)
+                    session.add(comment_1)
+                    session.add(feedback_1)
                     session.add_all(
                         [
                             Comment(id=2, task_id=1, content="comment-2 for task 1"),
@@ -147,7 +156,7 @@ class TestDataloaderWithSqlite(unittest.IsolatedAsyncioTestCase):
 
         await init()
         result_1 = await task_query()
-        await insert_new_objects()
+        await insert_and_update_objects()
         result_2 = await task_query()
         self.maxDiff = None
         expected_1 = [
@@ -171,12 +180,12 @@ class TestDataloaderWithSqlite(unittest.IsolatedAsyncioTestCase):
         expected_2 = [
             {
                 'id': 1,
-                'name': 'task-1 x',
+                'name': 'task-1 xyz',
                 'comments': [
                     {
-                        'content': 'comment-1 for task 1',
+                        'content': 'comment-1 for task 1 (changes)',
                         'feedbacks': [
-                            {'comment_id': 1, 'content': 'feedback-1 for comment-1', 'id': 1},
+                            {'comment_id': 1, 'content': 'feedback-1 for comment-1 (changes)', 'id': 1},
                             {'comment_id': 1, 'content': 'feedback-2 for comment-1', 'id': 2},
                             {'comment_id': 1, 'content': 'feedback-3 for comment-1', 'id': 3}
                             ],
