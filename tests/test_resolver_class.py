@@ -4,7 +4,6 @@ import unittest
 import asyncio
 from pydantic import BaseModel
 from pydantic_resolve import Resolver
-from dataclasses import dataclass, asdict
 
 class Book(BaseModel):
     name: str
