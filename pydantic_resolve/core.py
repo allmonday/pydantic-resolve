@@ -3,46 +3,44 @@ from inspect import ismethod, iscoroutine
 from pydantic import BaseModel
 from dataclasses import is_dataclass
 from typing import TypeVar, Union, List
+from .exceptions import ResolverTargetAttrNotFound
+from .constant import PREFIX
 
 T = TypeVar("T")
 
-PREFIX = 'resolve_'
 
 def _is_acceptable_type(target):
     return isinstance(target, BaseModel) or is_dataclass(target)
 
+
 def _iter_over_object_resolvers(target):
     """get method starts with resolve_"""
     for k in dir(target):
-        if k.startswith(PREFIX):
+        if k.startswith(PREFIX) and ismethod(target.__getattribute__(k)):
             yield k
+
 
 async def resolve_obj(target, k):
     item = target.__getattribute__(k)
+    val = item()
 
-    if ismethod(item):  # instance method
-        val = item()
+    if iscoroutine(val):  # async def func()
+        val = await val
 
-        if iscoroutine(val):
-            """
-            async def resolve_xxx(self):
-                return ...
-            """
-            val = await val
+    if asyncio.isfuture(val):
+        val = await val
 
-        if asyncio.isfuture(val):  # is future
-            """
-            def resolve_xxx(self):
-                return asyncio.Future()
-            """
-            val = await val
+    val = await resolve(val)  
 
-        val = await resolve(val)  
-        target.__setattr__(k.replace(PREFIX, ''), val)
+    replace_attr_name = k.replace(PREFIX, '')
+    if hasattr(target, replace_attr_name):
+        target.__setattr__(replace_attr_name, val)
+    else:
+        raise ResolverTargetAttrNotFound(f"attribute {replace_attr_name} not found")
 
 
 async def resolve(target: Union[T, List[T]]) -> Union[T, List[T]]:
-    """ resolve dataclass object or pydantic object """
+    """ entry: resolve dataclass object or pydantic object / or list in place """
 
     if isinstance(target, (list, tuple)):
         results = await asyncio.gather(*[resolve(t) for t in target])

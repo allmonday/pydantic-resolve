@@ -87,6 +87,11 @@ class TestDataloaderResolver(unittest.IsolatedAsyncioTestCase):
             def resolve_authors(self):
                 return author_loader.load(self.name)
 
+            other_authors: Tuple[Author, ...] = tuple()
+
+            def resolve_other_authors(self):  # test load multiple times.
+                return author_loader.load(self.name)
+
         book_loader = BookLoader()  
         author_loader = AuthorLoader()  
 
@@ -103,10 +108,16 @@ class TestDataloaderResolver(unittest.IsolatedAsyncioTestCase):
         source = [r.dict() for r in results]
         expected = [
             {'id': 1, 'name': 'jack', 'books': [
-                { 'name': 'book1', 'authors': [{'name': 'book1-author'}]},
-                { 'name': 'book2', 'authors': [{'name': 'book2-author'}]}
+                { 'name': 'book1', 
+                  'authors': [{'name': 'book1-author'}],
+                  'other_authors': [{'name': 'book1-author'}]
+                },
+                { 'name': 'book2', 
+                  'authors': [{'name': 'book2-author'}],
+                  'other_authors': [{'name': 'book2-author'}],
+                }
             ]},
-            {'id': 2, 'name': 'mike', 'books': [{ 'name': 'book3', 'authors': []}, {'name': 'book4', 'authors': []}]},
+            {'id': 2, 'name': 'mike', 'books': [{ 'name': 'book3', 'authors': [], 'other_authors': []}, {'name': 'book4', 'authors': [], 'other_authors': []}]},
         ]
         self.assertEqual(source, expected)
         self.assertEqual(counter["author"], 1)

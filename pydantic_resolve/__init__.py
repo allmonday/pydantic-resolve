@@ -1,3 +1,5 @@
-from .util import resolve
+from .core import resolve
+from .exceptions import ResolverTargetAttrNotFound
+from .resolver import Resolver, LoaderDepend
 
-__all__ = ['util']
+__all__ = ['core', 'ResolverTargetAttrNotFound', 'Resolver', 'LoaderDepend']

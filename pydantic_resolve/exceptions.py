@@ -1,0 +1,2 @@
+class ResolverTargetAttrNotFound(Exception):
+    pass

@@ -57,7 +57,7 @@ class Student(BaseModel):
         return f'hello {self.name}'
     
     books: tuple[Book, ...] = tuple()
-    async def resolve_books(self):
+    async def resolve_books(self):  # <---------------- will be resolved
         return await get_books()
 
 async def get_books():
@@ -85,22 +85,18 @@ class TestResolver(unittest.IsolatedAsyncioTestCase):
             'books': [{'name': 'sky'}, {'name': 'sea'}]
         }
         self.assertEqual(result[0].dict(), expected)
-
-    async def test_schema(self):
-        # Student.update_forward_refs(Book=Book)
-        schema = Student.schema_json()
-        expected = '''{"title": "Student", "type": "object", "properties": {"name": {"title": "Name", "type": "string"}, "intro": {"title": "Intro", "default": "", "type": "string"}, "books": {"title": "Books", "default": [], "type": "array", "items": {"$ref": "#/definitions/Book"}}}, "required": ["name"], "definitions": {"Book": {"title": "Book", "type": "object", "properties": {"name": {"title": "Name", "type": "string"}}, "required": ["name"]}}}'''
-        self.assertEqual(schema, expected)
 ```
 
 ### Demo 2: Integrated with aiodataloader:
+
+`pydantic_resolve.Resolver` will handle the lifecycle and injection of loader instance, you don't need to manage it with contextvars any more.
 
 ```python
 from __future__ import annotations
 from typing import Tuple
 import unittest
 from pydantic import BaseModel
-from pydantic_resolve import resolve
+from pydantic_resolve import Resolver, LoaderDepend
 from aiodataloader import DataLoader
 
 class TestDataloaderResolver(unittest.IsolatedAsyncioTestCase):
@@ -119,18 +115,16 @@ class TestDataloaderResolver(unittest.IsolatedAsyncioTestCase):
                 books = [[Book(**bb) for bb in BOOKS.get(k, [])] for k in keys]
                 return books
 
-        book_loader = BookLoader()  
-
         class Student(BaseModel):
             id: int
             name: str
 
             books: Tuple[Book, ...] = tuple()
-            def resolve_books(self):
+            def resolve_books(self, book_loader=LoaderDepend(BookLoader)):  # <------------------------- Attention
                 return book_loader.load(self.id)
 
         students = [Student(id=1, name="jack"), Student(id=2, name="mike")]
-        results = await resolve(students)
+        results = await Resolver().resolve(students)
         source = [r.dict() for r in results]
         expected = [
             {'id': 1, 'name': 'jack', 'books': [{ 'name': 'book1'}, {'name': 'book2'}]},
@@ -139,7 +133,7 @@ class TestDataloaderResolver(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(source, expected)
 ```
 
-For more examples, please explore in `demo`
+For more examples, please explore `examples` folder.
 
 ## Unittest
 
