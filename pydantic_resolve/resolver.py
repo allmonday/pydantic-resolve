@@ -1,15 +1,12 @@
 import asyncio
 import inspect
 import contextvars
-from inspect import ismethod, iscoroutine
-from pydantic import BaseModel
-from dataclasses import is_dataclass
+from inspect import iscoroutine
 from typing import TypeVar, Union, List
 from .exceptions import ResolverTargetAttrNotFound
 from typing import Any, Callable, Optional
 from pydantic_resolve import core
-
-context = contextvars.ContextVar('pydantic_loader_context')
+import uuid
 
 def LoaderDepend(  # noqa: N802
     dependency: Optional[Callable[..., Any]] = None 
@@ -29,9 +26,9 @@ PREFIX = 'resolve_'
 
 
 class Resolver:
-    def __init__(self, ctx=context):
-        self.context = ctx
-
+    def __init__(self):
+        self.ctx = contextvars.ContextVar(str(uuid.uuid1()), default={})
+    
     def run_method(self, method):
         signature = inspect.signature(method)
         params = {}
@@ -42,14 +39,14 @@ class Resolver:
 
             if isinstance(v.default, Depends):
                 cache_key = str(v.default.dependency.__name__)
-                ctx = self.context.get()
-                hit = ctx.get(cache_key, None)
+                data = self.ctx.get()
+                hit = data.get(cache_key, None)
                 if hit:
                     instance = hit
                 else:
                     instance = v.default.dependency()
-                    ctx[cache_key] = instance
-                    self.context.set(ctx)
+                    data[cache_key] = instance
+                    self.ctx.set(data)
                 params[k] = instance
         return method(**params)
 

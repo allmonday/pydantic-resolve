@@ -16,6 +16,7 @@ class TestDataloaderResolver(unittest.IsolatedAsyncioTestCase):
         BOOKS = {
             1: [{'name': 'book1'}, {'name': 'book2'}],
             2: [{'name': 'book3'}, {'name': 'book4'}],
+            3: [{'name': 'book1'}, {'name': 'book2'}],
         }
 
         class Book(BaseModel):
@@ -40,13 +41,13 @@ class TestDataloaderResolver(unittest.IsolatedAsyncioTestCase):
             def resolve_books(self, loader=LoaderDepend(BookLoader)):
                 return loader.load(self.id)
 
-        students = [Student(id=1, name="jack"), Student(id=2, name="mike")]
-        context = contextvars.ContextVar('test', default={})
-        results = await Resolver(ctx=context).resolve(students)
+        students = [Student(id=1, name="jack"), Student(id=2, name="mike"), Student(id=3, name="wiki")]
+        results = await Resolver().resolve(students)
         source = [r.dict() for r in results]
         expected = [
             {'id': 1, 'name': 'jack', 'books': [{ 'name': 'book1'}, {'name': 'book2'}]},
             {'id': 2, 'name': 'mike', 'books': [{ 'name': 'book3'}, {'name': 'book4'}]},
+            {'id': 3, 'name': 'wiki', 'books': [{ 'name': 'book1'}, {'name': 'book2'}]},
         ]
         self.assertEqual(source, expected)
         self.assertEqual(counter["book"], 1)

@@ -28,8 +28,7 @@ class TestResolver(unittest.IsolatedAsyncioTestCase):
 
     async def test_resolver_1(self):
         stu = Student(name="martin")
-        context = contextvars.ContextVar('test', default={})
-        result = await Resolver(ctx=context).resolve(stu)
+        result = await Resolver().resolve(stu)
         expected = {
             'name': 'martin',
             'intro': 'hello martin',
