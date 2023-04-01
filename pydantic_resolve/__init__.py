@@ -1,5 +1,11 @@
 from .core import resolve
-from .exceptions import ResolverTargetAttrNotFound
+from .exceptions import ResolverTargetAttrNotFound, DataloaderDependCantBeResolved
 from .resolver import Resolver, LoaderDepend
 
-__all__ = ['core', 'ResolverTargetAttrNotFound', 'Resolver', 'LoaderDepend']
+__all__ = [
+    'core',
+    'Resolver',
+    'LoaderDepend',
+    'ResolverTargetAttrNotFound',
+    'DataloaderDependCantBeResolved',
+]

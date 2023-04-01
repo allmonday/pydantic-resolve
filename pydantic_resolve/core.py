@@ -2,8 +2,8 @@ import asyncio
 from inspect import ismethod, iscoroutine
 from pydantic import BaseModel
 from dataclasses import is_dataclass
-from typing import Awaitable, Coroutine, TypeVar, Generic, List
-from .exceptions import ResolverTargetAttrNotFound
+from typing import TypeVar
+from .exceptions import ResolverTargetAttrNotFound, DataloaderDependCantBeResolved
 from .constant import PREFIX
 
 T = TypeVar("T")
@@ -22,7 +22,13 @@ def _iter_over_object_resolvers(target):
 
 async def resolve_obj(target, field):
     item = target.__getattribute__(field)
-    val = item()
+    try:
+        val = item()
+    except AttributeError as e:
+        if str(e) == "'Depends' object has no attribute 'load'":  
+            # if str(e) changes in future, update testcases
+            raise DataloaderDependCantBeResolved("DataLoader used in schema, replace resolve with Resolver()")
+        raise e
 
     if iscoroutine(val):  # async def func()
         val = await val
