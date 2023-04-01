@@ -72,6 +72,7 @@ class FeedbackLoader(DataLoader):
                 dct[row.comment_id].append(FeedbackSchema.from_orm(row))
             return [dct.get(k, []) for k in comment_ids]
 
+
 class CommentLoader(DataLoader):
     async def batch_load_fn(self, task_ids):
         async with async_session() as session:

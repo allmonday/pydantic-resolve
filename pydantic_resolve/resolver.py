@@ -33,9 +33,6 @@ class Resolver:
         params = {}
 
         for k, v in signature.parameters.items():
-            if v.default == inspect._empty:
-                continue
-
             if isinstance(v.default, Depends):
                 cache_key = str(v.default.dependency.__name__)
                 cache = self.ctx.get()

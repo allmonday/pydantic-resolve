@@ -1,6 +1,6 @@
 import unittest
 from pydantic import BaseModel
-from pydantic_resolve import resolve, ResolverTargetAttrNotFound
+from pydantic_resolve import resolve, ResolverTargetAttrNotFound, Resolver
 import pytest
 
 class TestResolverException(unittest.IsolatedAsyncioTestCase):
@@ -24,3 +24,13 @@ class TestResolverException(unittest.IsolatedAsyncioTestCase):
         s = Service()
         with pytest.raises(ResolverTargetAttrNotFound, match="attribute service not found"):
             await resolve(s)
+
+    async def test_exception_3(self):
+        class Service(BaseModel):
+            service_detail: str = ''
+            def resolve_service(self):
+                return "detail"
+
+        s = Service()
+        with pytest.raises(ResolverTargetAttrNotFound, match="attribute service not found"):
+            await Resolver().resolve(s)
