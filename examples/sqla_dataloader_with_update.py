@@ -12,6 +12,7 @@ from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
 from pydantic_resolve import Resolver, LoaderDepend
+from pprint import pprint
 
 engine = create_async_engine(
     "sqlite+aiosqlite://",
@@ -135,7 +136,7 @@ async def query_tasks():
         task_objs = [TaskSchema.from_orm(t) for t in tasks]
         resolved_results = await Resolver().resolve(task_objs)
         arr = [r.dict() for r in resolved_results]
-        print(arr)
+        pprint(arr)
 
 async def main():
     await init()
