@@ -68,12 +68,11 @@ class Resolver:
             raise ResolverTargetAttrNotFound(f"attribute {replace_attr_name} not found")
 
 
-    async def resolve(self, target: Union[T, List[T]]) -> Union[T, List[T]]:
+    async def resolve(self, target: T) -> T:
         """ entry: resolve dataclass object or pydantic object / or list in place """
 
         if isinstance(target, (list, tuple)):
-            results = await asyncio.gather(*[self.resolve(t) for t in target])
-            return results
+            await asyncio.gather(*[self.resolve(t) for t in target])
 
         if core._is_acceptable_type(target):
             await asyncio.gather(*[self.resolve_obj(target, k) for k in core._iter_over_object_resolvers(target)])

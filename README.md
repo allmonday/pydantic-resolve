@@ -38,10 +38,14 @@ async def main():
 pip install pydantic-resolve
 ```
 
+imports
 
-## TL;DR
-
-[Demo: stormtrooper](https://github.com/allmonday/stormtrooper/blob/main/backend/app/entries/task/router.py#L24)
+```python
+from pydantic_resolve import (
+    Resolver, LoaderDepend,  # schema with DataLoader
+    resolve  # simple resolve
+)
+```
 
 ## Feature-1, Resolve asynchoronously
 
@@ -83,7 +87,7 @@ class Root(BaseModel):
 async def main():
     t = time()
     root = Root()
-    result = await resolve(root)
+    result = await resolve(root)  # <=== simple resolve
     print(result.json())
     print(time() - t)
 
@@ -185,8 +189,7 @@ class TaskSchema(BaseModel):
 ```python
 tasks = (await session.execute(select(Task))).scalars().all()
 tasks = [TaskSchema.from_orm(t) for t in tasks]
-results = await Resolver().resolve(tasks)
-
+results = await Resolver().resolve(tasks)  # <=== resolve schema with DataLoaders
 
 # output
 [
