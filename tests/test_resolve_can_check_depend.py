@@ -37,5 +37,5 @@ class TestDataloaderResolver(unittest.IsolatedAsyncioTestCase):
                 return loader.load(self.id)
 
         students = [Student(id=1, name="jack"), Student(id=2, name="mike"), Student(id=3, name="wiki")]
-        with pytest.raises(DataloaderDependCantBeResolved, match="DataLoader used in schema, replace resolve with Resolver()"):
+        with pytest.raises(DataloaderDependCantBeResolved, match="DataLoader used in schema, use Resolver().resolve() instead"):
             await resolve(students)
