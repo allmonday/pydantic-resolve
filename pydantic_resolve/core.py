@@ -26,7 +26,7 @@ async def resolve_obj(target, field):
         val = item()
     except AttributeError as e:
         if str(e) == "'Depends' object has no attribute 'load'":  
-            # if str(e) changes in future, update testcases
+            # TODO: str(e) may changes in future, not stable
             raise DataloaderDependCantBeResolved("DataLoader used in schema, replace resolve with Resolver()")
         raise e
 

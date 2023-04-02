@@ -28,11 +28,6 @@ class TestDataloaderResolver(unittest.IsolatedAsyncioTestCase):
                 books = [[Book(**bb) for bb in BOOKS.get(k, [])] for k in keys]
                 return books
 
-        # for testing, loder instance need to initialized inside a thread with eventloop
-        # (which means it can't be put in global scope of this file)
-        # otherwise it will generate anthoer loop which will raise error of
-        # "task attached to another loop"
-
         class Student(BaseModel):
             id: int
             name: str
