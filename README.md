@@ -1,5 +1,11 @@
 # Pydantic-resolve
 
+[![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
+![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
+![Test Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/allmonday/6f1661c6310e1b31c9a10b0d09d52d11/raw/covbadge.json)
+[![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
+
+
 ```python
 import asyncio
 from pydantic import BaseModel
@@ -21,16 +27,14 @@ async def main():
 # [Student(name='john', greet='hello john')]
 ```
 
-- `Pydantic-resolve` helps you asynchoronously, resursively resolve a pydantic object (or dataclass object)
-
-- `Pydantic-resolve`, when used in conjunction with aiodataloader, allows you to easily generate nested data structures without worrying about generating N+1 queries.
-
+- Helps you asynchoronously, resursively resolve a pydantic object (or dataclass object)
+- When used in conjunction with aiodataloader, allows you to easily generate nested data structures without worrying about generating N+1 queries.
+- say byebye to contextvars when using dataloader.
 - Inspired by [GraphQL](https://graphql.org/) and [graphene](https://graphene-python.org/)
 
-[![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
-![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
-![Test Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/allmonday/6f1661c6310e1b31c9a10b0d09d52d11/raw/covbadge.json)
-[![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
+## Why create this package?
+- [english version](./doc/english.md)
+- [chinese version](./doc/chinese.md)
 
 ## Install
 
@@ -47,7 +51,7 @@ from pydantic_resolve import (
 )
 ```
 
-## Feature-1, Resolve asynchoronously
+## Feature 1, Resolve asynchoronously
 
 ```python
 class NodeB(BaseModel):  # concurrently resolve fields
@@ -119,7 +123,7 @@ async def main():
 # 1.0116631984710693
 ```
 
-### Feature-2: Integrated with aiodataloader:
+### Feature 2: Integrated with aiodataloader:
 
 `pydantic_resolve.Resolver` will handle the lifecycle and injection of loader instance, you don't need to manage it with contextvars any more.
 
