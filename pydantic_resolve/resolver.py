@@ -2,10 +2,11 @@ import asyncio
 import inspect
 import contextvars
 from inspect import iscoroutine
-from typing import TypeVar, Union, List
+from typing import TypeVar
 from .exceptions import ResolverTargetAttrNotFound
 from typing import Any, Callable, Optional
 from pydantic_resolve import core
+from .constant import PREFIX
 
 def LoaderDepend(  # noqa: N802
     dependency: Optional[Callable[..., Any]] = None 
@@ -19,10 +20,7 @@ class Depends:
     ):
         self.dependency = dependency
 
-
 T = TypeVar("T")
-PREFIX = 'resolve_'
-
 
 class Resolver:
     def __init__(self):
@@ -36,8 +34,8 @@ class Resolver:
             if isinstance(v.default, Depends):
                 cache_key = str(v.default.dependency.__name__)
                 cache = self.ctx.get()
-                hit = cache.get(cache_key, None)
 
+                hit = cache.get(cache_key, None)
                 if hit:
                     instance = hit
                 else:
@@ -49,8 +47,8 @@ class Resolver:
                 
         return method(**params)
 
-    async def resolve_obj(self, target, k):
-        item = target.__getattribute__(k)
+    async def resolve_obj(self, target, field):
+        item = target.__getattribute__(field)
         val = self.exec_method(item)
 
         if iscoroutine(val):  # async def func()
@@ -61,12 +59,11 @@ class Resolver:
 
         val = await self.resolve(val)  
 
-        replace_attr_name = k.replace(PREFIX, '')
+        replace_attr_name = field.replace(PREFIX, '')
         if hasattr(target, replace_attr_name):
             target.__setattr__(replace_attr_name, val)
         else:
             raise ResolverTargetAttrNotFound(f"attribute {replace_attr_name} not found")
-
 
     async def resolve(self, target: T) -> T:
         """ entry: resolve dataclass object or pydantic object / or list in place """
@@ -75,6 +72,7 @@ class Resolver:
             await asyncio.gather(*[self.resolve(t) for t in target])
 
         if core._is_acceptable_type(target):
-            await asyncio.gather(*[self.resolve_obj(target, k) for k in core._iter_over_object_resolvers(target)])
+            await asyncio.gather(*[self.resolve_obj(target, field) 
+                                   for field in core._iter_over_object_resolvers(target)])
 
         return target
