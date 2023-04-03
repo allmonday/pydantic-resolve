@@ -8,17 +8,14 @@ from .constant import PREFIX
 
 T = TypeVar("T")
 
-
 def _is_acceptable_type(target):
     return isinstance(target, BaseModel) or is_dataclass(target)
-
 
 def _iter_over_object_resolvers(target):
     """get method starts with resolve_"""
     for k in dir(target):
         if k.startswith(PREFIX) and ismethod(target.__getattribute__(k)):
             yield k
-
 
 async def resolve_obj(target, field):
     item = target.__getattribute__(field)
@@ -44,7 +41,6 @@ async def resolve_obj(target, field):
     else:
         raise ResolverTargetAttrNotFound(f"attribute {replace_attr_name} not found")
 
-
 async def resolve(target: T) -> T:
     """ entry: resolve dataclass object or pydantic object / or list in place """
 
@@ -52,6 +48,7 @@ async def resolve(target: T) -> T:
         await asyncio.gather(*[resolve(t) for t in target])
 
     if _is_acceptable_type(target):
-        await asyncio.gather(*[resolve_obj(target, field) for field in _iter_over_object_resolvers(target)])
+        await asyncio.gather(*[resolve_obj(target, field) 
+                               for field in _iter_over_object_resolvers(target)])
 
     return target

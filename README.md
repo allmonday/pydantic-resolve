@@ -8,23 +8,28 @@
 
 ```python
 import asyncio
+from random import random
 from pydantic import BaseModel
 from pydantic_resolve import resolve
 
-class Student(BaseModel):
+class Human(BaseModel):
     name: str
-    greet: str = ''
+    lucky: bool = True
 
-    async def resolve_greet(self):
-        await asyncio.sleep(1)
-        return f'hello {self.name}'
+    async def resolve_lucky(self):
+        print('calculating...')
+        await asyncio.sleep(1)  # mock i/o
+        return random() > 0.5
 
 async def main():
-    students = [Student(name='john' )]
+    students = Human(name="john wick's dog" )
     results = await resolve(students)
-    print(results)
+    print(results.json())
 
-# [Student(name='john', greet='hello john')]
+asyncio.run(main())
+
+# calculating...
+# {"name": "john wick's dog", "lucky": false}
 ```
 
 - Helps you asynchoronously, resursively resolve a pydantic object (or dataclass object)
@@ -51,76 +56,81 @@ from pydantic_resolve import (
 )
 ```
 
-## Feature 1, Resolve asynchoronously
+## Feature 1, Resolve asynchoronously, recursiverly, concurrently.
 
 ```python
-class NodeB(BaseModel):  # concurrently resolve fields
+import asyncio
+from random import random
+from time import time
+from pydantic import BaseModel
+from pydantic_resolve import resolve
+
+t = time()
+
+class NodeB(BaseModel):
     value_1: int = 0
     async def resolve_value_1(self):
+        print(f"resolve_value_1, {time() - t}")
         await asyncio.sleep(1)  # sleep 1
         return random()
-    
-    value_2: int = 0
-    async def resolve_value_2(self):
-        await asyncio.sleep(1)  # sleep 1
-        return 12
-
-    value_3: int = 0
-    async def resolve_value_3(self):
-        await asyncio.sleep(1)  # sleep 1
-        return 12
 
 class NodeA(BaseModel):
     node_b_1: int = 0
-    def resolve_node_b_1(self):
+    async def resolve_node_b_1(self):
+        print(f"resolve_node_b_1, {time() - t}")
+        await asyncio.sleep(1)
         return NodeB()
 
-    node_b_2: int = 0
-    def resolve_node_b_2(self):
-        return NodeB()
-
-class Root(BaseModel):
+class Root(BaseModel):  # [!] resolve fields concurrently
     node_a_1: int = 0
-    def resolve_node_a_1(self):
+    async def resolve_node_a_1(self):
+        print(f"resolve_node_a_1, {time() - t}")
+        await asyncio.sleep(1)
         return NodeA()
 
     node_a_2: int = 0
-    def resolve_node_a_2(self):
+    async def resolve_node_a_2(self):
+        print(f"resolve_node_a_2, {time() - t}")
+        await asyncio.sleep(1)
+        return NodeA()
+
+    node_a_3: int = 0
+    async def resolve_node_a_3(self):
+        print(f"resolve_node_a_3, {time() - t}")
+        await asyncio.sleep(1)
         return NodeA()
 
 async def main():
-    t = time()
     root = Root()
-    result = await resolve(root)  # <=== simple resolve
+    result = await resolve(root)
     print(result.json())
-    print(time() - t)
+    print(f'total {time() - t}')
 
-# output
+asyncio.run(main())
+```
+
+```
+resolve_node_a_1, 0.002000093460083008
+resolve_node_a_2, 0.002000093460083008
+resolve_node_a_3, 0.002000093460083008
+
+resolve_node_b_1, 1.0142452716827393
+resolve_node_b_1, 1.0142452716827393
+resolve_node_b_1, 1.0142452716827393
+
+resolve_value_1, 2.0237653255462646
+resolve_value_1, 2.0237653255462646
+resolve_value_1, 2.0237653255462646
+
+total 3.0269699096679688
+```
+
+```json
 {
-    "node_a_1": {
-        "node_b_1": {
-            "value": 0.7815090210172618,
-            "value_2": 12, "value_3": 12
-        },
-        "node_b_2": {
-            "value": 0.22252007296099774,
-            "value_2": 12,
-            "value_3": 12
-        }}, 
-    "node_a_2": {
-        "node_b_1": {
-            "value": 0.30685697832345826,
-            "value_2": 12,
-            "value_3": 12
-        }, 
-        "node_b_2": {
-            "value": 0.7664967562984117,
-            "value_2": 12,
-            "value_3": 12
-        }
-    }
+    "node_a_1": {"node_b_1": {"value_1": 0.912570826381839}}, 
+    "node_a_2": {"node_b_1": {"value_1": 0.41784985892912485}}, 
+    "node_a_3": {"node_b_1": {"value_1": 0.6148494329990393}}
 }
-# 1.0116631984710693
 ```
 
 ### Feature 2: Integrated with aiodataloader:
