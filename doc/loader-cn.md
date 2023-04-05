@@ -1,9 +1,9 @@
 # LoaderDepend的用途
 
 ## 背景介绍
-如果你使用过dataloader, 不论是js还是python的，都会遇到一个问题，如果为单独的一个请求创建独立的dataloader?
+如果你使用过dataloader, 不论是js还是python的，都会遇到一个问题，如何为单独的一个请求创建独立的dataloader?
 
-以python 的 strawberry 来举例子：
+以 python 的 `strawberry` 来举例子：
 
 ```python
 @strawberry.type
@@ -24,9 +24,9 @@ class Query:
 schema = strawberry.Schema(query=Query)
 ```
 
-如果单独实例化的话，会导致所有的请求都使用同一个dataloader, 由于loader本身是有缓存优化机制的，所以内容更新之后，依然返回缓存数据的问题。
+如果单独实例化的话，会导致所有的请求都使用同一个dataloader, 由于loader本身是有缓存优化机制的，所以即使内容更新之后，依然会返回缓存的历史数据。
 
-所以 `strawberry` 的处理方式是：
+因此 `strawberry` 的处理方式是：
 
 ```python
 @strawberry.type
@@ -53,21 +53,23 @@ schema = strawberry.Schema(query=Query)
 app = MyGraphQL(schema)
 ```
 
-开发者需要在`get_context`中去初始化loader, 然后框架会负责在每次request的时候会执行初始化。 这样每个请求就会有独立的loader, 这样就解决了多次请求被缓存的问题。
+开发者需要在`get_context`中去初始化loader, 然后框架会负责在每次request的时候会执行初始化。 这样每个请求就会有独立的loader, 解决了多次请求被缓存的问题。
 
-其中的基本原理是：contextvars 在 await 的时候会做一次浅拷贝，所以外层的context可以被内部读到，因此手动在最外层（request) 初始化之后，那么（request）内部自动就被隔离了。
+其中的原理是：contextvars 在 await 的时候会做一次浅拷贝，所以外层的context可以被内部读到，因此手动在最外层（request的时候) 初始化之后，那么在 request 内部自然就独立了。
 
 但这个方法虽然很好，存在两个问题：
 
-1. 需要手动去维护get_context, 每当新增了一个DataLoader, 就需要去里面添加
-2. 存在初始化了却没有被使用到的情况，比如整个Query 有 N 个loader， 但是用户的查询实际只用到了1个，那么其他loader 的初始化就浪费了。而且东西多了之后代码维护会不清晰。
+1. 需要手动去维护 `get_context`, 每当新增了一个 DataLoader, 就需要去里面添加, 实际load的地方也要从context 里面取。
+2. 存在初始化了loaders却没有被使用到的情况，比如整个Query 有 N 个loader，但是用户的查询实际只用到了1个，那么其他loader 的初始化就浪费了。而且作为公共区域东西多了之后代码维护会不清晰。(重要)
 
-而 `graphene` 就更加任性了，把loader 的活交给了 [aiodataloader](https://github.com/graphql/dataloader#creating-a-new-dataloader-per-request), 如果翻阅文档的话， 发现处理的思路也是类似的，需要手动去维护创建过程。
+而 `graphene` 就更加任性了，把loader 的活交给了 [aiodataloader](https://github.com/graphql/dataloader#creating-a-new-dataloader-per-request), 如果翻阅文档的话，会发现处理的思路也是类似的，只是需要手动去维护创建过程。
 
 ## 解决方法
 
-1. 我希望初始化按需执行，比如我的整个schema 里面只存在 DataLoaderA, 那我希望只有DataLoaderA 被实例化
-2. 我不希望在某个reqeust或者 middleware中干手动维护初始化的事情。
+我所期望的功能是：
+
+1. 初始化按需执行，比如我的整个schema 里面只存在 DataLoaderA, 那我希望只有DataLoaderA 被实例化
+2. 不希望在某个reqeust或者 middleware中干手动维护初始化。
 
 其实这两件事情说的是同一个问题，就是如何把初始化的事情依赖反转到 resolve_field 方法中。
 
@@ -94,12 +96,16 @@ class TaskSchema(BaseModel):
 
 就是说，我只要这样申明好loader，其他的事情就一律不用操心。那么，这做得到么？
 
-得益于`pydantic-resolve` 存在一个手动执行`resolve`方法的前提，于是有一个思路：
+得益于`pydantic-resolve` 存在一个手动执行`resolve`的过程，于是有一个思路：
 
-1. contextvar 是浅拷贝，所以存的如果是引用类型，那么在最外层定义的dict， 可以被所有内层读到。
-2. 假如 `tasks: list[TaskSchema]` 有n个，我希望在第一次遇到的时候把loader 初始化并缓存，然后在后续都使用缓存loader。
-3. LoaderDepend 里面存放的是 DataLoader类，做的default 参数传入resolve_field 方法
+1. contextvar 是浅拷贝，所以存的如果是引用类型，那么在最外层定义的dict，可以被所有内层读到。可以在Resolver初始化的时候定义。
+2. 假如 `tasks: list[TaskSchema]` 有n个，我希望在第一次遇到的时候把loader 初始化并缓存，后续其他都使用缓存的loader。
+3. LoaderDepend 里面存放的是 DataLoader类，做为default 参数传入resolve_field 方法
 4. 执行resolve_field之前，利用inspect.signature 分析 default 参数，执行初始化和缓存的逻辑。
+
+总体就是一个lazy的路子，到实际执行的时候去处理初始化流程。
+
+下图中 1 会执行LoaderA 初始化，2，3则是读取缓存, 1.1 会执行LoaderB初始化，1.2，1.3 读取缓存
 
 ![img](./imgs/contextvar_cache.png)
 
@@ -132,13 +138,11 @@ class Resolver:
         return method(**params)
 ```
 
-Resolver 在 `__init__` 的时候创建一个空dict， 供后续resolve 的时候使用。
-
 ## 遗留问题
 
-有些DataLoader的实现可能需要一个外部的查询条件， 比如查询用户的absense信息的时候，除了user_key 之外，还需要额外提供其他filter （比如sprint_id)。
+有些DataLoader的实现可能需要一个外部的查询条件， 比如查询用户的absense信息的时候，除了user_key 之外，还需要额外提供其他全局filter 比如sprint_id)。 这种全局变量从load参数走会显得非常啰嗦。
 
-这种时候依然需要借助contextvars 在外部设置变量。
+这种时候就依然需要借助contextvars 在外部设置变量。 以一段项目代码为例：
 
 ```python
 async def get_team_users_load(team_id: int, sprint_id: Optional[int], session: AsyncSession):
@@ -151,7 +155,8 @@ async def get_team_users_load(team_id: int, sprint_id: Optional[int], session: A
     db_users = res.scalars()
     users = [schema.UserLoadUser(id=u.id, employee_id=u.employee_id, name=u.name) 
                 for u in db_users]
-    results = await Resolver().resolve(users)
+
+    results = await Resolver().resolve(users)  # resolve
     return results
 ```
 
@@ -177,7 +182,11 @@ class AbsenseLoader(DataLoader):
 期望的设置方式为：
 
 ```python
-results = await Resolver(loader_filters={AbsenseLoader: {'sprint_id': 10}, OtherLoader: {field: 'value_x'}}).resolve(users)
+loader_filters = {
+    AbsenseLoader: {'sprint_id': 10}, 
+    OtherLoader: {field: 'value_x'}
+}
+results = await Resolver(loader_filters=loader_filters).resolve(users)
 ```
 
-> 在需要filter但是没有设置的情况下抛异常
+> 如果需要filter但是却没有设置, 该情况下要抛异常
