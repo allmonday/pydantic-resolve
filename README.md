@@ -57,8 +57,8 @@ imports
 
 ```python
 from pydantic_resolve import (
-    Resolver, LoaderDepend,  # schema with DataLoader
-    resolve  # simple resolve
+    Resolver, LoaderDepend,      # handle schema resolver with DataLoader
+    resolve                      # handle simple resolve
 )
 ```
 
