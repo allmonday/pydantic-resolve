@@ -49,3 +49,14 @@ async def test_pydantic_validate_exception():
     with pytest.raises(ValidationError):
         s = Service3()
         await resolve(s)
+
+class Service4(BaseModel):
+    service_detail: int = 0
+    def resolve_service_detail(self):
+        raise AttributeError('test')
+
+@pytest.mark.asyncio
+async def test_attribute_error():
+    with pytest.raises(AttributeError):
+        s = Service4()
+        await resolve(s)
