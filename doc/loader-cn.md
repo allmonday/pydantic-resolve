@@ -55,11 +55,11 @@ app = MyGraphQL(schema)
 
 开发者需要在`get_context`中去初始化loader, 然后框架会负责在每次request的时候会执行初始化。 这样每个请求就会有独立的loader, 解决了多次请求被缓存的问题。
 
-其中的原理是：contextvars 在 await 的时候会做一次浅拷贝，所以外层的context可以被内部读到，因此手动在最外层（request的时候) 初始化之后，那么在 request 内部自然就独立了。
+其中的原理是：contextvars 在 await 的时候会做一次浅拷贝，所以外层的context可以被内部读到，因此手动在最外层（request的时候) 初始化一个引用类型(dict)之后，那么在 request 内部自然就能获取到引用类型内的loader。
 
-但这个方法虽然很好，存在两个问题：
+这个方法虽然好，但存在两个问题：
 
-1. 需要手动去维护 `get_context`, 每当新增了一个 DataLoader, 就需要去里面添加, 实际load的地方也要从context 里面取。
+1. 需要手动去维护 `get_context`, 每当新增了一个 DataLoader, 就需要去里面添加, 而且实际执行 `.load` 的地方也要从context 里面取loader。
 2. 存在初始化了loaders却没有被使用到的情况，比如整个Query 有 N 个loader，但是用户的查询实际只用到了1个，那么其他loader 的初始化就浪费了。而且作为公共区域东西多了之后代码维护会不清晰。(重要)
 
 而 `graphene` 就更加任性了，把loader 的活交给了 [aiodataloader](https://github.com/graphql/dataloader#creating-a-new-dataloader-per-request), 如果翻阅文档的话，会发现处理的思路也是类似的，只是需要手动去维护创建过程。
