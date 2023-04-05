@@ -36,7 +36,7 @@ asyncio.run(main())
 #   Human(name='man-8', lucky=False),
 #   Human(name='man-9', lucky=True)
 # ]
-# ```
+```
 
 - Helps you asynchoronously, resursively resolve a pydantic object (or dataclass object)
 - When used in conjunction with aiodataloader, allows you to easily generate nested data structures without worrying about generating N+1 queries.
