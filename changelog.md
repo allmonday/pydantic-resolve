@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.3 (2023.4.5)
+- add new install option `pip install "pydantic-resolve[dataloader]" to include `aiodataloader` by default
+- add new `doc/loader-cn.md` to explain the convinence of using `LoaderDepen`
+
 ## v0.3.2 (2023.4.5)
 
 - refact tests, group by `core` and `resolver`
