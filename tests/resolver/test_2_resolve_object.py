@@ -1,7 +1,7 @@
-import unittest
+import pytest
 from pydantic import BaseModel
 from typing import Optional
-from pydantic_resolve import resolve
+from pydantic_resolve import Resolver
 import asyncio
 import time
 
@@ -47,29 +47,29 @@ class Service(BaseModel):
         await asyncio.sleep(1)
         return "detail_4"
 
-class TestObjectResolver(unittest.IsolatedAsyncioTestCase):
+@pytest.mark.asyncio
+async def test_resolve_object():
+    t = time.time()
+    s = Service()
+    result = await Resolver().resolve(s)
+    expected = {
+        "service_detail_1": {
+            "detail_a": {
+                "name": "hello world"
+            },
+            "detail_b": "good"
+        },
+        "service_detail_1b": {
+            "detail_a": {
+                "name": "hello world"
+            },
+            "detail_b": "good"
+        },
+        "service_detail_2": "detail_2",
+        "service_detail_3": "detail_3",
+        "service_detail_4": "detail_4",
+    }
+    assert result.dict() == expected
+    delta = time.time() - t
 
-    async def test_resolver_1(self):
-        t = time.time()
-        s = Service()
-        result = await resolve(s)
-        expected = {
-            "service_detail_1": {
-                "detail_a": {
-                    "name": "hello world"
-                },
-                "detail_b": "good"
-            },
-            "service_detail_1b": {
-                "detail_a": {
-                    "name": "hello world"
-                },
-                "detail_b": "good"
-            },
-            "service_detail_2": "detail_2",
-            "service_detail_3": "detail_3",
-            "service_detail_4": "detail_4",
-        }
-        self.assertEqual(result.dict(), expected)
-        delta = time.time() - t
-        self.assertTrue(delta < 2.5)
+    assert delta < 2.1

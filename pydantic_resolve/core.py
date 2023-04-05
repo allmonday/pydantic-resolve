@@ -44,7 +44,7 @@ async def resolve_obj(target, field):
 async def resolve(target: T) -> T:
     """ entry: resolve dataclass object or pydantic object / or list in place """
 
-    if isinstance(target, (list, tuple)):
+    if isinstance(target, (list, tuple)):  # core/test_1, 3
         await asyncio.gather(*[resolve(t) for t in target])
 
     if _is_acceptable_type(target):

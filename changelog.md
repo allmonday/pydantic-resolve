@@ -1,12 +1,18 @@
 # Changelog
 
-## v0.3.0
+## v0.3.2 (2023.4.5)
 
-- add `DataloaderDependCantBeResolved`, it will raise if use `resolve` to handle schema with `Dataloader`
-- add `chinese.md` and `english.md` in `doc` folder
+- refact tests, group by `core` and `resolver`
+- replace `unittest` with `pytest.mark.asyncio`
+- little `readme.md` change, new top sample code
 
 ## v0.3.1 (2023.4.3)
 
 - change code examples in readme.md
 - add unittest for pydantic validationError
 - code refactor (rename)
+
+## v0.3.0
+
+- add `DataloaderDependCantBeResolved`, it will raise if use `resolve` to handle schema with `Dataloader`
+- add `chinese.md` and `english.md` in `doc` folder

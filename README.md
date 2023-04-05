@@ -22,15 +22,21 @@ class Human(BaseModel):
         return random() > 0.5
 
 async def main():
-    students = Human(name="john wick's dog" )
-    results = await resolve(students)
-    print(results.json())
+    humans = [Human(name=f'man-{i}') for i in range(10)]
+    results = await resolve(humans)
+    print(results)
 
 asyncio.run(main())
 
-# calculating...
-# {"name": "john wick's dog", "lucky": false}
-```
+# calculating... x 10
+# [
+#   Human(name='man-0', lucky=False),
+#   Human(name='man-1', lucky=False),
+#   ...
+#   Human(name='man-8', lucky=False),
+#   Human(name='man-9', lucky=True)
+# ]
+# ```
 
 - Helps you asynchoronously, resursively resolve a pydantic object (or dataclass object)
 - When used in conjunction with aiodataloader, allows you to easily generate nested data structures without worrying about generating N+1 queries.

@@ -13,8 +13,8 @@ class Human(BaseModel):
         return random() > 0.5
 
 async def main():
-    students = Human(name='john' )
-    results = await resolve(students)
-    print(results.json())
+    humans = [Human(name=f'man-{i}') for i in range(10)]
+    results = await resolve(humans)
+    print(results)
 
 asyncio.run(main())

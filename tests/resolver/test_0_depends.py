@@ -1,6 +1,6 @@
 import inspect
 from typing import Any, Callable, Optional
-import unittest
+import pytest
 
 # verify the Feasibility of implement depends 
 class Loader:
@@ -54,17 +54,15 @@ def runner_maker():
         return counter
     return exec
 
+@pytest.mark.asyncio
+async def test_depend():
+    run = runner_maker()
+    t = TestClass()
+    t2 = TestClass()
+    t3 = TestClass()
 
-class TestObjectResolver(unittest.IsolatedAsyncioTestCase):
+    run(t.resolve)   # missing
+    run(t2.resolve)  # hit
+    counter = run(t3.resolve)  # hit
 
-    async def test_resolver_1(self):
-        run = runner_maker()
-        t = TestClass()
-        t2 = TestClass()
-        t3 = TestClass()
-
-        run(t.resolve)   # missing
-        run(t2.resolve)  # hit
-        counter = run(t3.resolve)  # hit
-
-        self.assertEqual(counter["init_count"], 1)
+    assert counter["init_count"] == 1
