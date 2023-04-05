@@ -105,7 +105,7 @@ class TaskSchema(BaseModel):
 
 总体就是一个lazy的路子，到实际执行的时候去处理初始化流程。
 
-下图中 1 会执行LoaderA 初始化，2，3则是读取缓存, 1.1 会执行LoaderB初始化，1.2，1.3 读取缓存
+下图中 1 会执行LoaderA 初始化，2，3则是读取缓存, 1.1 会执行LoaderB初始化，2.1，3.1 读取缓存
 
 ![img](./imgs/contextvar_cache.png)
 
