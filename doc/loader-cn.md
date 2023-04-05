@@ -101,7 +101,7 @@ class TaskSchema(BaseModel):
 3. LoaderDepend 里面存放的是 DataLoader类，做的default 参数传入resolve_field 方法
 4. 执行resolve_field之前，利用inspect.signature 分析 default 参数，执行初始化和缓存的逻辑。
 
-![img]("./imgs/contextvar_cache.png")
+![img](./imgs/contextvar_cache.png)
 
 代码如下：
 
