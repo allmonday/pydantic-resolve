@@ -6,7 +6,7 @@ from pydantic_resolve import resolve
 
 t = time()
 
-class NodeB(BaseModel):  # concurrently resolve fields
+class NodeB(BaseModel):  # recursively, concurrently resolve fields
     value_1: int = 0
     async def resolve_value_1(self):
         print(f"resolve_value_1, {time() - t}")

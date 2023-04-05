@@ -13,7 +13,6 @@ def LoaderDepend(  # noqa: N802
 ) -> Any:
     return Depends(dependency=dependency)
 
-
 class Depends:
     def __init__(
         self, dependency: Optional[Callable[..., Any]] = None
