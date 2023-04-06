@@ -2,7 +2,7 @@ import asyncio
 import inspect
 import contextvars
 from inspect import iscoroutine
-from typing import TypeVar
+from typing import TypeVar, Dict
 from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError
 from typing import Any, Callable, Optional
 from pydantic_resolve import core
@@ -23,7 +23,7 @@ class Depends:
 T = TypeVar("T")
 
 class Resolver:
-    def __init__(self, loader_filters: Optional[dict[Any, dict[str, Any]]] = None):
+    def __init__(self, loader_filters: Optional[Dict[Any, Dict[str, Any]]] = None):
         self.ctx = contextvars.ContextVar('pydantic_resolve_internal_context', default={})
         self.loader_filters_ctx = contextvars.ContextVar('pydantic_resolve_internal_filter', default=loader_filters or {})
     
