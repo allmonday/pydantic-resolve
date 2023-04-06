@@ -5,6 +5,12 @@
 ![Test Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/allmonday/6f1661c6310e1b31c9a10b0d09d52d11/raw/covbadge.json)
 [![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
 
+如果你想快速构建嵌套数据结构，来尝试一下吧
+如果你想方便省力地使用aiodataloader, 来尝试一下吧
+
+> If you want to quickly build nested data structures, give it a try.
+>
+> If you want to use aiodataloader conveniently and effortlessly, give it a try.
 
 ```python
 import asyncio
@@ -42,6 +48,7 @@ asyncio.run(main())
 - When used in conjunction with aiodataloader, allows you to easily generate nested data structures without worrying about generating N+1 queries.
 - say byebye to contextvars when using dataloader.
 - Inspired by [GraphQL](https://graphql.org/) and [graphene](https://graphene-python.org/)
+- full-feature [example](./examples/6_sqlalchemy_loaderdepend_global_filter.py) which includes `dataloader`, `LoaderDepend` and global `loader_filters`
 
 ## Why create this package?
 - [english version](./doc/english.md)
@@ -51,7 +58,8 @@ asyncio.run(main())
 
 ```shell
 pip install pydantic-resolve
-pip install "pydantic-resolve[dataloader]"  # install aiodataloader
+
+pip install "pydantic-resolve[dataloader]"  # install with aiodataloader
 ```
 
 imports
@@ -59,7 +67,7 @@ imports
 ```python
 from pydantic_resolve import (
     Resolver, LoaderDepend,      # handle schema resolver with DataLoader
-    resolve                      # handle simple resolve
+    resolve                      # handle simple resolve task
 )
 ```
 
