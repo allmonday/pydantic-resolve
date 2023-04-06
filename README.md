@@ -49,9 +49,10 @@ asyncio.run(main())
 - Inspired by [GraphQL](https://graphql.org/) and [graphene](https://graphene-python.org/)
 
 
-## Why create this package?
-- [english version](./doc/english.md)
-- [chinese version](./doc/chinese.md)
+## Some documentations.
+- [Reason](./doc/reason-en.md)
+- [How LoaderDepend works](./doc/loader-en.md)
+- [Comparsion with common solutions](./doc/compare-en.md)
 
 ## Install
 
