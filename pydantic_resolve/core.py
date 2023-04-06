@@ -8,10 +8,10 @@ from .constant import PREFIX
 
 T = TypeVar("T")
 
-def _is_acceptable_type(target):
+def is_acceptable_type(target):
     return isinstance(target, BaseModel) or is_dataclass(target)
 
-def _iter_over_object_resolvers(target):
+def iter_over_object_resolvers(target):
     """get method starts with resolve_"""
     for k in dir(target):
         if k.startswith(PREFIX) and ismethod(target.__getattribute__(k)):
@@ -47,8 +47,8 @@ async def resolve(target: T) -> T:
     if isinstance(target, (list, tuple)):  # core/test_1, 3
         await asyncio.gather(*[resolve(t) for t in target])
 
-    if _is_acceptable_type(target):
+    if is_acceptable_type(target):
         await asyncio.gather(*[resolve_obj(target, field) 
-                               for field in _iter_over_object_resolvers(target)])
+                               for field in iter_over_object_resolvers(target)])
 
     return target

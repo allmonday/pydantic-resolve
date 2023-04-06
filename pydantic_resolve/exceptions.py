@@ -3,3 +3,6 @@ class ResolverTargetAttrNotFound(Exception):
 
 class DataloaderDependCantBeResolved(Exception):
     pass
+
+class LoaderFieldNotProvidedError(Exception):
+    pass
