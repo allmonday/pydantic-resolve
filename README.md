@@ -5,8 +5,6 @@
 ![Test Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/allmonday/6f1661c6310e1b31c9a10b0d09d52d11/raw/covbadge.json)
 [![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
 
-如果你想快速构建嵌套数据结构，来尝试一下吧
-如果你想方便省力地使用aiodataloader, 来尝试一下吧
 
 > If you want to quickly build nested data structures, give it a try.
 >
