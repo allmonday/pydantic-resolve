@@ -42,11 +42,12 @@ asyncio.run(main())
 # ]
 ```
 
+- Full-feature [example](./examples/6_sqlalchemy_loaderdepend_global_filter.py) which includes `dataloader`, `LoaderDepend` and global `loader_filters`
 - Helps you asynchoronously, resursively resolve a pydantic object (or dataclass object)
 - When used in conjunction with aiodataloader, allows you to easily generate nested data structures without worrying about generating N+1 queries.
 - say byebye to contextvars when using dataloader.
 - Inspired by [GraphQL](https://graphql.org/) and [graphene](https://graphene-python.org/)
-- full-feature [example](./examples/6_sqlalchemy_loaderdepend_global_filter.py) which includes `dataloader`, `LoaderDepend` and global `loader_filters`
+
 
 ## Why create this package?
 - [english version](./doc/english.md)
