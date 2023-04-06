@@ -51,6 +51,7 @@ asyncio.run(main())
 
 ```shell
 pip install pydantic-resolve
+pip install "pydantic-resolve[dataloader]"  # install aiodataloader
 ```
 
 imports

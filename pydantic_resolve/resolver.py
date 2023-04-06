@@ -2,11 +2,12 @@ import asyncio
 import inspect
 import contextvars
 from inspect import iscoroutine
-from typing import TypeVar
-from .exceptions import ResolverTargetAttrNotFound
+from typing import TypeVar, Dict
+from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError
 from typing import Any, Callable, Optional
 from pydantic_resolve import core
 from .constant import PREFIX
+from .util import get_class_field_annotations
 
 def LoaderDepend(  # noqa: N802
     dependency: Optional[Callable[..., Any]] = None 
@@ -22,8 +23,9 @@ class Depends:
 T = TypeVar("T")
 
 class Resolver:
-    def __init__(self):
+    def __init__(self, loader_filters: Optional[Dict[Any, Dict[str, Any]]] = None):
         self.ctx = contextvars.ContextVar('pydantic_resolve_internal_context', default={})
+        self.loader_filters_ctx = contextvars.ContextVar('pydantic_resolve_internal_filter', default=loader_filters or {})
     
     def exec_method(self, method):
         signature = inspect.signature(method)
@@ -36,13 +38,25 @@ class Resolver:
 
                 hit = cache.get(cache_key, None)
                 if hit:
-                    instance = hit
+                    loader = hit
                 else:
-                    instance = v.default.dependency()
-                    cache[cache_key] = instance
+                    loader_filters = self.loader_filters_ctx.get()
+                    loader_filter = loader_filters.get(v.default.dependency, {})
+
+                    loader = v.default.dependency()
+
+                    # validate dependency's class field existed in filter then set value 
+                    for field in get_class_field_annotations(v.default.dependency):
+                        try:
+                            value = loader_filter[field]
+                        except KeyError:
+                            raise LoaderFieldNotProvidedError(f'{v.default.dependency.__name__}.{field} not found in Resolver()')
+                        setattr(loader, field, value)
+
+                    cache[cache_key] = loader
                     self.ctx.set(cache)
 
-                params[k] = instance
+                params[k] = loader
                 
         return method(**params)
 
@@ -70,8 +84,8 @@ class Resolver:
         if isinstance(target, (list, tuple)):
             await asyncio.gather(*[self.resolve(t) for t in target])
 
-        if core._is_acceptable_type(target):
+        if core.is_acceptable_type(target):
             await asyncio.gather(*[self.resolve_obj(target, field) 
-                                   for field in core._iter_over_object_resolvers(target)])
+                                   for field in core.iter_over_object_resolvers(target)])
 
         return target
