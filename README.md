@@ -64,16 +64,19 @@ pip install pydantic-resolve
 pip install "pydantic-resolve[dataloader]"  # install with aiodataloader
 ```
 
-imports
+
+- use `resolve` for simple scenario, 
+- use `Resolver` and `LoaderDepend` for complicated nested batch query.
 
 ```python
 from pydantic_resolve import (
-    Resolver, LoaderDepend,      # handle schema resolver with DataLoader
-    resolve                      # handle simple resolve task
+    resolve,                     # handle simple resolving task
+    Resolver, LoaderDepend,      # handle schema resolving with LoaderDepend and DataLoader
+    ResolverTargetAttrNotFound, DataloaderDependCantBeResolved, LoaderFieldNotProvidedError
 )
 ```
 
-## Feature 1, Resolve asynchoronously, recursiverly, concurrently.
+## 1, Pydantic-resolve can resolve pydantic (dataclass) objects asynchoronously, recursiverly, concurrently.
 
 ```python
 import asyncio
@@ -150,11 +153,11 @@ total 3.0269699096679688
 }
 ```
 
-### Feature 2: Integrated with aiodataloader:
+## 2: Pydantic-resolve is highly integrated with aiodataloader, it manage the loader lifecycle automatically.
 
 `pydantic_resolve.Resolver` will handle the lifecycle and injection of loader instance, you don't need to manage it with contextvars any more.
 
-1. Define DataLoaders, it will run the batch query without generating the `N+1 query` issue:
+### 1. Define DataLoaders, it will run the batch query without generating the `N+1 query` issue:
 
 ```python
 class FeedbackLoader(DataLoader):
@@ -181,7 +184,7 @@ class CommentLoader(DataLoader):
 
 ```
 
-2. Define schemas, and resolver methods, and declare related dataloader:
+### 2. Define schemas, and resolver methods, and declare related dataloader:
 
 ```python
 class FeedbackSchema(BaseModel):
@@ -215,7 +218,7 @@ class TaskSchema(BaseModel):
         orm_mode = True
 ```
 
-3. then... resolve it, and you will get all you want:
+### 3. then... resolve it, and you will get all you want:
 
 ```python
 tasks = (await session.execute(select(Task))).scalars().all()
