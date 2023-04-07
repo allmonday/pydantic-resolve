@@ -6,9 +6,11 @@
 [![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
 
 
-> If you want to quickly build nested data structures, give it a try.
+> If you are fan of GraphQL and want to quickly build nested data structures without any invasion, give it a try.
 >
 > If you want to use aiodataloader conveniently and effortlessly, give it a try.
+> 
+> Using pydantic-resolve with FastAPI (response_model & generating client), will greatly improve your development efficiency.
 
 ```python
 import asyncio
@@ -152,7 +154,7 @@ total 3.0269699096679688
 
 `pydantic_resolve.Resolver` will handle the lifecycle and injection of loader instance, you don't need to manage it with contextvars any more.
 
-1. Define loaders
+1. Define DataLoaders, it will run the batch query without generating the `N+1 query` issue:
 
 ```python
 class FeedbackLoader(DataLoader):
@@ -179,7 +181,7 @@ class CommentLoader(DataLoader):
 
 ```
 
-2. Define schemas
+2. Define schemas, and resolver methods, and declare related dataloader:
 
 ```python
 class FeedbackSchema(BaseModel):
@@ -195,7 +197,7 @@ class CommentSchema(BaseModel):
     task_id: int
     content: str
     feedbacks: Tuple[FeedbackSchema, ...]  = tuple()
-    def resolve_feedbacks(self, feedback_loader = LoaderDepend(FeedbackLoader)):  
+    def resolve_feedbacks(self, feedback_loader=LoaderDepend(FeedbackLoader)):  
         # LoaderDepend will manage contextvars for you
         return feedback_loader.load(self.id)
 
@@ -206,14 +208,14 @@ class TaskSchema(BaseModel):
     id: int
     name: str
     comments: Tuple[CommentSchema, ...]  = tuple()
-    def resolve_comments(self, comment_loader = LoaderDepend(CommentLoader)):
+    def resolve_comments(self, comment_loader=LoaderDepend(CommentLoader)):
         return comment_loader.load(self.id)
 
     class Config:
         orm_mode = True
 ```
 
-3. Resolve it
+3. then... resolve it, and you will get all you want:
 
 ```python
 tasks = (await session.execute(select(Task))).scalars().all()
@@ -250,7 +252,7 @@ results = await Resolver().resolve(tasks)  # <=== resolve schema with DataLoader
 
 ```
 
-For more examples, please explore `examples` folder.
+For more examples, please explore [examples](./examples/) folder.
 
 ## Comparison with Common Solutions
 
