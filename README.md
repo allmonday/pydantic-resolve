@@ -6,11 +6,9 @@
 [![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
 
 
-> If you are fan of GraphQL and want to quickly build nested data structures without any invasion, give it a try.
->
-> If you want to use aiodataloader conveniently and effortlessly, give it a try.
-> 
-> Using pydantic-resolve with FastAPI (response_model & generating client), will greatly improve your development efficiency.
+- If you are a fan of GraphQL and want to quickly build **nested data structures** without any invasion, give it a try.
+- If you want to work with aiodataloader conveniently and effortlessly, give it a try.
+- Using pydantic-resolve with FastAPI (response_model & generating client), will greatly improve your development efficiency.
 
 ```python
 import asyncio
