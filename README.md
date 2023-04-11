@@ -79,44 +79,45 @@ from pydantic_resolve import (
 ```python
 import asyncio
 from random import random
+from typing import Optional
 from time import time
 from pydantic import BaseModel
 from pydantic_resolve import resolve
 
 t = time()
 
-class NodeB(BaseModel):
+class B(BaseModel):  # recursively, concurrently resolve fields
     value_1: int = 0
     async def resolve_value_1(self):
         print(f"resolve_value_1, {time() - t}")
         await asyncio.sleep(1)  # sleep 1
         return random()
 
-class NodeA(BaseModel):
+class A(BaseModel):
     node_b_1: int = 0
     async def resolve_node_b_1(self):
         print(f"resolve_node_b_1, {time() - t}")
         await asyncio.sleep(1)
-        return NodeB()
+        return B()
 
-class Root(BaseModel):  # [!] resolve fields concurrently
-    node_a_1: int = 0
+class Root(BaseModel):
+    node_a_1: Optional[A] = None
     async def resolve_node_a_1(self):
         print(f"resolve_node_a_1, {time() - t}")
         await asyncio.sleep(1)
-        return NodeA()
+        return A()
 
-    node_a_2: int = 0
+    node_a_2: Optional[A] = None
     async def resolve_node_a_2(self):
         print(f"resolve_node_a_2, {time() - t}")
         await asyncio.sleep(1)
-        return NodeA()
+        return A()
 
-    node_a_3: int = 0
+    node_a_3: Optional[A] = None
     async def resolve_node_a_3(self):
         print(f"resolve_node_a_3, {time() - t}")
         await asyncio.sleep(1)
-        return NodeA()
+        return A()
 
 async def main():
     root = Root()
