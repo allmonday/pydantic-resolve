@@ -1,8 +1,6 @@
-from __future__ import annotations
-from typing import List, Tuple
+from typing import List
 import pytest
 from collections import Counter, defaultdict
-from typing import Tuple
 from aiodataloader import DataLoader
 from pydantic import BaseModel
 from sqlalchemy import select

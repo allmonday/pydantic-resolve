@@ -8,11 +8,11 @@ import pytest
 class Student(BaseModel):
     name: str
     intro: str = ''
-    def resolve_intro(self):
+    def resolve_intro(self) -> str:
         return f'hello {self.name}'
 
     books: List[str] = []    
-    async def resolve_books(self):
+    async def resolve_books(self) -> List[str]:
         await asyncio.sleep(1)
         return ['book1', 'book2']
 

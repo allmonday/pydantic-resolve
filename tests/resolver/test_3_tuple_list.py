@@ -7,12 +7,12 @@ import pytest
 
 class Student(BaseModel):
     new_books: List[str] = []    
-    async def resolve_new_books(self):
+    async def resolve_new_books(self) -> List[str]:
         await asyncio.sleep(1)
         return ['book1', 'book2']
 
-    old_books: Tuple[str, ...] = tuple()    
-    async def resolve_old_books(self):
+    old_books: List[str] = []    
+    async def resolve_old_books(self) -> List[str]:
         await asyncio.sleep(1)
         return ['book1', 'book2']
 

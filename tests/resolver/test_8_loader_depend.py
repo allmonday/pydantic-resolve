@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Tuple
+from typing import List
 import pytest
 from pydantic import BaseModel
 from pydantic_resolve import Resolver, LoaderDepend
@@ -35,7 +35,7 @@ async def test_loader_depends():
         id: int
         name: str
 
-        books: Tuple[Book, ...] = tuple()
+        books: List[Book] = [] 
         def resolve_books(self, loader=LoaderDepend(BookLoader)):
             return loader.load(self.id)
 

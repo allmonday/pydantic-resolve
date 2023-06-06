@@ -1,5 +1,9 @@
 from .core import resolve
-from .exceptions import ResolverTargetAttrNotFound, DataloaderDependCantBeResolved, LoaderFieldNotProvidedError
+from .exceptions import (
+    ResolverTargetAttrNotFound,
+    DataloaderDependCantBeResolved,
+    LoaderFieldNotProvidedError,
+    MissingAnnotationError)
 from .resolver import Resolver, LoaderDepend
 
 __all__ = [
@@ -8,5 +12,6 @@ __all__ = [
     'LoaderDepend',
     'ResolverTargetAttrNotFound',
     'DataloaderDependCantBeResolved',
-    'LoaderFieldNotProvidedError'
+    'LoaderFieldNotProvidedError',
+    'MissingAnnotationError',
 ]

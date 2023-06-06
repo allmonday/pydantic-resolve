@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Tuple
+from typing import List
 import pytest
 from pydantic import BaseModel
 from pydantic_resolve import Resolver, LoaderDepend, LoaderFieldNotProvidedError
@@ -22,7 +22,7 @@ async def test_loader_depends():
 
     class BookLoader(DataLoader):
         inventory: bool
-        async def batch_load_fn(self, keys):
+        async def batch_load_fn(self, keys) -> List[List[Book]]:
             counter["book"] += 1
             books = [[Book(**bb) for bb in BOOKS.get(k, [])] for k in keys]
             return books
@@ -36,7 +36,7 @@ async def test_loader_depends():
         id: int
         name: str
 
-        books: Tuple[Book, ...] = tuple()
+        books: List[Book] = [] 
         def resolve_books(self, loader=LoaderDepend(BookLoader)):
             return loader.load(self.id)
 

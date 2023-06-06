@@ -6,3 +6,6 @@ class DataloaderDependCantBeResolved(Exception):
 
 class LoaderFieldNotProvidedError(Exception):
     pass
+
+class MissingAnnotationError(Exception):
+    pass
