@@ -4,9 +4,11 @@
 ![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
 ![Test Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/allmonday/6f1661c6310e1b31c9a10b0d09d52d11/raw/covbadge.json)
 [![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
+[![Downloads](https://static.pepy.tech/personalized-badge/pydantic-resolve?period=month&units=abbreviation&left_color=grey&right_color=orange&left_text=Downloads)](https://pepy.tech/project/pydantic-resolve)
 
-- If you are a fan of GraphQL and want to quickly build **nested data structures** without any invasion, give it a try.
-- If you want to work with aiodataloader conveniently and effortlessly, give it a try.
+
+- If you are a fan of GraphQL and want to quickly build **nested data structures** without any invasion, try it.
+- If you want to work with aiodataloader conveniently and effortlessly, try it.
 - Using pydantic-resolve with FastAPI (response_model & generating client), will greatly improve your development efficiency.
 
 ```python
