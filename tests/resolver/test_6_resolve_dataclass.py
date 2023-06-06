@@ -13,7 +13,7 @@ class Car:
     name: str
     wheels: List[Wheel] = field(default_factory=list)
 
-    async def resolve_wheels(self):
+    async def resolve_wheels(self) -> List[Wheel]:
         await asyncio.sleep(1)
         return [Wheel(is_ok=True)]
 

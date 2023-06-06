@@ -1,4 +1,5 @@
 from __future__ import annotations
+from asyncio import Future
 from typing import List, Tuple
 import pytest
 from collections import Counter, defaultdict
@@ -99,7 +100,7 @@ async def test_sqlite_and_dataloader():
         content: str
         feedbacks: List[FeedbackSchema]  = []
 
-        def resolve_feedbacks(self, loader=LoaderDepend(FeedbackLoader)):
+        def resolve_feedbacks(self, loader=LoaderDepend(FeedbackLoader)) -> Future[List[FeedbackSchema]]:
             return loader.load(self.id)
 
         class Config:
@@ -110,7 +111,7 @@ async def test_sqlite_and_dataloader():
         name: str
         comments: List[CommentSchema]  = []
         
-        def resolve_comments(self, loader=LoaderDepend(CommentLoader)):
+        def resolve_comments(self, loader=LoaderDepend(CommentLoader)) -> Future[List[CommentSchema]]:
             return loader.load(self.id)
 
         class Config:

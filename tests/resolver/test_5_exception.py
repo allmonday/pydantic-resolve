@@ -5,7 +5,7 @@ import pytest
 
 class Service(BaseModel):
     service_detail: str = ''
-    def resolve_service_details(self):
+    def resolve_service_details(self) -> str:
         return "detail"
 
 @pytest.mark.asyncio
@@ -22,11 +22,11 @@ class CustomException2(Exception):
 
 class Service2(BaseModel):
     service_detail: str = ''
-    async def resolve_service_detail(self):
+    async def resolve_service_detail(self) -> str:
         raise CustomException2('oops')
 
     service_detail_2: str = ''
-    async def resolve_service_detail_2(self):
+    async def resolve_service_detail_2(self) -> str:
         raise CustomException('oops')
 
 @pytest.mark.asyncio
@@ -38,8 +38,8 @@ async def test_custom_exception():
 
 class Service3(BaseModel):
     service_detail: int = 0
-    def resolve_service_detail(self):
-        return 'abc'  # wrong type
+    def resolve_service_detail(self) -> int: 
+        return 'abc'  # type:ignore
 
     class Config:
         validate_assignment = True  # <<< required.

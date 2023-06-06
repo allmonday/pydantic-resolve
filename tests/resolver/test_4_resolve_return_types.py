@@ -11,19 +11,19 @@ async def set_after(fut, value):
 
 class Student(BaseModel):
     scores: List[int] = []
-    async def resolve_scores(self):
+    async def resolve_scores(self) -> List[int]:
         return [1,2,3]
 
     age: Optional[int] = None
-    def resolve_age(self):
+    def resolve_age(self) -> Optional[int]:
         return 12
 
     name: Optional[str] = None
-    def resolve_name(self):
+    def resolve_name(self) -> Optional[str]:
         return 'name'
     
     future: Optional[str] = None
-    def resolve_future(self):
+    def resolve_future(self) -> Optional[str]:
         loop = asyncio.get_running_loop()
         fut = loop.create_future()
         loop.create_task(set_after(fut, 'hello'))

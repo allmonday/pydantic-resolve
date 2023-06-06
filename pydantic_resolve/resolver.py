@@ -3,11 +3,12 @@ import inspect
 import contextvars
 from inspect import iscoroutine
 from typing import TypeVar, Dict
-from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError
+from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingAnnotationError
 from typing import Any, Callable, Optional
 from pydantic_resolve import core
 from .constant import PREFIX
 from .util import get_class_field_annotations
+
 
 def LoaderDepend(  # noqa: N802
     dependency: Optional[Callable[..., Any]] = None 
@@ -23,9 +24,10 @@ class Depends:
 T = TypeVar("T")
 
 class Resolver:
-    def __init__(self, loader_filters: Optional[Dict[Any, Dict[str, Any]]] = None, debug: bool=False):
+    def __init__(self, loader_filters: Optional[Dict[Any, Dict[str, Any]]] = None, ensure_type=False):
         self.ctx = contextvars.ContextVar('pydantic_resolve_internal_context', default={})
         self.loader_filters_ctx = contextvars.ContextVar('pydantic_resolve_internal_filter', default=loader_filters or {})
+        self.ensure_type = ensure_type
     
     def exec_method(self, method):
         signature = inspect.signature(method)
@@ -45,7 +47,7 @@ class Resolver:
 
                     loader = v.default.dependency()
 
-                    # validate dependency's class field existed in filter then set value 
+                    # validate dependency's class field existed in filter and set value 
                     for field in get_class_field_annotations(v.default.dependency):
                         try:
                             value = loader_filter[field]
@@ -62,7 +64,15 @@ class Resolver:
 
     async def resolve_obj(self, target, field):
         item = target.__getattribute__(field)
+        target_attr_name = str(field).replace(PREFIX, '')
         val = self.exec_method(item)
+
+        if not hasattr(target, target_attr_name):
+            raise ResolverTargetAttrNotFound(f"attribute {target_attr_name} not found")
+
+        if self.ensure_type:
+            if not item.__annotations__:
+                raise MissingAnnotationError(f'{field}: return annotation is required')
 
         if iscoroutine(val):  # async def func()
             val = await val
@@ -72,11 +82,7 @@ class Resolver:
 
         val = await self.resolve(val)  
 
-        replace_attr_name = field.replace(PREFIX, '')
-        if hasattr(target, replace_attr_name):
-            target.__setattr__(replace_attr_name, val)
-        else:
-            raise ResolverTargetAttrNotFound(f"attribute {replace_attr_name} not found")
+        target.__setattr__(target_attr_name, val)
 
     async def resolve(self, target: T) -> T:
         """ entry: resolve dataclass object or pydantic object / or list in place """

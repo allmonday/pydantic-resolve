@@ -5,7 +5,6 @@
 ![Test Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/allmonday/6f1661c6310e1b31c9a10b0d09d52d11/raw/covbadge.json)
 [![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
 
-
 - If you are a fan of GraphQL and want to quickly build **nested data structures** without any invasion, give it a try.
 - If you want to work with aiodataloader conveniently and effortlessly, give it a try.
 - Using pydantic-resolve with FastAPI (response_model & generating client), will greatly improve your development efficiency.
@@ -48,8 +47,17 @@ asyncio.run(main())
 - say byebye to contextvars when using dataloader.
 - Inspired by [GraphQL](https://graphql.org/) and [graphene](https://graphene-python.org/)
 
+## Run FastAPI example
+
+```shell
+poetry shell
+cd examples
+uvicorn fastapi_demo.main:app
+# http://localhost:8000/docs#/default/get_tasks_tasks_get
+```
 
 ## Some documentations.
+
 - [Reason](./doc/reason-en.md)
 - [How LoaderDepend works](./doc/loader-en.md)
 - [Comparsion with common solutions](./doc/compare-en.md)
@@ -62,8 +70,7 @@ pip install pydantic-resolve
 pip install "pydantic-resolve[dataloader]"  # install with aiodataloader
 ```
 
-
-- use `resolve` for simple scenario, 
+- use `resolve` for simple scenario,
 - use `Resolver` and `LoaderDepend` for complicated nested batch query.
 
 ```python
@@ -146,9 +153,9 @@ total 3.0269699096679688
 
 ```json
 {
-    "node_a_1": {"node_b_1": {"value_1": 0.912570826381839}}, 
-    "node_a_2": {"node_b_1": {"value_1": 0.41784985892912485}}, 
-    "node_a_3": {"node_b_1": {"value_1": 0.6148494329990393}}
+  "node_a_1": { "node_b_1": { "value_1": 0.912570826381839 } },
+  "node_a_2": { "node_b_1": { "value_1": 0.41784985892912485 } },
+  "node_a_3": { "node_b_1": { "value_1": 0.6148494329990393 } }
 }
 ```
 
@@ -199,7 +206,7 @@ class CommentSchema(BaseModel):
     task_id: int
     content: str
     feedbacks: Tuple[FeedbackSchema, ...]  = tuple()
-    def resolve_feedbacks(self, feedback_loader=LoaderDepend(FeedbackLoader)):  
+    def resolve_feedbacks(self, feedback_loader=LoaderDepend(FeedbackLoader)):
         # LoaderDepend will manage contextvars for you
         return feedback_loader.load(self.id)
 
@@ -269,6 +276,7 @@ For more examples, please explore [examples](./examples/) folder.
 7. Pydantic-resolve also provides support for global loader filters, which can simplify a lot of code in some business logic. If the keys of Dataloader are considered equivalent to the join on conditions of relationship, then loader_filters is similar to other filtering conditions elsewhere.
 
 > Conclusion:
+>
 > 1. GraphQL is more suitable for public APIs.
 > 2. For projects where the frontend and backend are treated as a whole, RESTful + Pydantic-resolve is the best way to quickly and flexibly provide data structures.
 
@@ -280,6 +288,7 @@ For more examples, please explore [examples](./examples/) folder.
 4. Pydantic-resolve does not have this problem. No relationship needs to be defined at the ORM layer, and all join logic is solved through dataloader batch queries. And through the global loader_filters parameter, additional global filtering conditions can be provided.
 
 > Conclusion:
+>
 > 1. The flexibility of the relationship solution is low, and it is not easy to modify. The default usage will produce foreign key constraints. It is not friendly to projects with frequent iterations.
 > 2. Pydantic-resolve is completely decoupled from the ORM layer and can meet various needs by flexibly creating Dataloader.
 
@@ -291,7 +300,7 @@ poetry run pytest  # or
 poetry run tox
 ```
 
-## Coverage 
+## Coverage
 
 ```shell
 poetry run coverage run -m pytest

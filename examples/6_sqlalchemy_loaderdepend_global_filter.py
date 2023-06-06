@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from asyncio import Future
 from collections import defaultdict
 from typing import List
 from aiodataloader import DataLoader
@@ -88,7 +89,7 @@ class CommentSchema(BaseModel):
     content: str
 
     feedbacks: List[FeedbackSchema] = [] 
-    def resolve_feedbacks(self, feedback_loader=LoaderDepend(FeedbackLoader)):
+    def resolve_feedbacks(self, feedback_loader=LoaderDepend(FeedbackLoader)) -> Future[List[FeedbackSchema]]:
         return feedback_loader.load(self.id)
 
     class Config:
@@ -99,7 +100,7 @@ class TaskSchema(BaseModel):
     name: str
 
     comments: List[CommentSchema] = [] 
-    def resolve_comments(self, comment_loader=LoaderDepend(CommentLoader)):
+    def resolve_comments(self, comment_loader=LoaderDepend(CommentLoader)) -> Future[List[CommentSchema]]:
         return comment_loader.load(self.id)
 
     class Config:
@@ -144,7 +145,8 @@ async def query_tasks(private_comment=True):
         task_objs = [TaskSchema.from_orm(t) for t in tasks]
 
         # !!!============= resolve =============!!!
-        resolver = Resolver(loader_filters={FeedbackLoader: {'private': private_comment}})   # <----- global filter
+        resolver = Resolver(loader_filters={FeedbackLoader: {'private': private_comment}},
+                            ensure_type=True)   # <----- global filter
         resolved_results = await resolver.resolve(task_objs)
 
         arr = [r.dict() for r in resolved_results]
