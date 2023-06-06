@@ -1,6 +1,4 @@
 from __future__ import annotations
-from typing import List, Optional
-import asyncio
 from pydantic import BaseModel
 from pydantic_resolve import Resolver, MissingAnnotationError
 import pytest

@@ -1,8 +1,6 @@
-from asyncio import Future
 from typing import List
 import pytest
 from collections import Counter, defaultdict
-from typing import Tuple
 from aiodataloader import DataLoader
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -102,7 +100,7 @@ async def test_sqlite_and_dataloader():
         content: str
         feedbacks: List[FeedbackSchema]  = []
 
-        def resolve_feedbacks(self) -> Future[List[FeedbackSchema]]:
+        def resolve_feedbacks(self):
             return feedback_loader.load(self.id)
 
         class Config:
@@ -113,7 +111,7 @@ async def test_sqlite_and_dataloader():
         name: str
         comments: List[CommentSchema] = [] 
         
-        def resolve_comments(self) -> Future[List[CommentSchema]]:
+        def resolve_comments(self):
             return comment_loader.load(self.id)
 
         class Config:

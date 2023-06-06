@@ -1,5 +1,4 @@
 from __future__ import annotations
-from asyncio import Future
 from typing import List
 import pytest
 from pydantic import BaseModel
@@ -38,7 +37,7 @@ async def test_loader_depends():
         name: str
 
         books: List[Book] = [] 
-        def resolve_books(self, loader=LoaderDepend(BookLoader)) -> Future[List[Book]]:
+        def resolve_books(self, loader=LoaderDepend(BookLoader)):
             return loader.load(self.id)
 
     students = [Student(id=1, name="jack"), Student(id=2, name="mike"), Student(id=3, name="wiki")]
