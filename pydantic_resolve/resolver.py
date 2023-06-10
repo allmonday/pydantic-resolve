@@ -36,33 +36,37 @@ class Resolver:
         signature = inspect.signature(method)
         params = {}
 
+        # manage the creation of loader instances
         for k, v in signature.parameters.items():
             if isinstance(v.default, Depends):
-                cache_key = str(v.default.dependency.__name__)
-                cache = self.ctx.get()
+                # module.kls to avoid same kls name from different module
+                cache_key = f'{v.default.dependency.__module__}.{v.default.dependency.__name__}'
+                cache_provider = self.ctx.get()
 
-                hit = cache.get(cache_key, None)
+                hit = cache_provider.get(cache_key, None)
                 if hit:
                     loader = hit
                 else:
-                    loader_filters = self.loader_filters_ctx.get()
-                    loader_filter = loader_filters.get(v.default.dependency, {})
-
+                    # create loader instance and pick config from 'loader_filters' param
                     loader = v.default.dependency()
+                    filter_config_provider = self.loader_filters_ctx.get()
+                    filter_config = filter_config_provider.get(v.default.dependency, {})
 
-                    # validate dependency's class field existed in filter and set value 
+                    # class ExampleLoader(DataLoader):
+                    #     filtar_x: bool  <--------------- set this
+                    #
+                    #     async def batch_load_fn(self, keys):
+                    #         ....
                     for field in get_class_field_annotations(v.default.dependency):
                         try:
-                            value = loader_filter[field]
+                            value = filter_config[field]
+                            setattr(loader, field, value)
                         except KeyError:
-                            raise LoaderFieldNotProvidedError(f'{v.default.dependency.__name__}.{field} not found in Resolver()')
-                        setattr(loader, field, value)
+                            raise LoaderFieldNotProvidedError(f'{cache_key}.{field} not found in Resolver()')
 
-                    cache[cache_key] = loader
-                    self.ctx.set(cache)
-
+                    cache_provider[cache_key] = loader
+                    self.ctx.set(cache_provider)
                 params[k] = loader
-                
         return method(**params)
 
     async def resolve_obj(self, target, field):
