@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.5.1 (2023.6.11)
+
+- add helper utils for Dataloader.batch_load_fn `built_list` and `build_object`, see `examples/fastapi_demo/loader.py`
+- FIX: fix potential error caused by same loader name from different module. see `tests/resolver/test_14_check_loader_name.py`
+
 ## v0.5.0 (2023.6.1)
 
 - `Resolver.ensure_type`: True will ensure `resolve_*` methods have return annotation.
