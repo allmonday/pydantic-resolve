@@ -9,6 +9,14 @@ from .constant import PREFIX
 T = TypeVar("T")
 
 def is_acceptable_type(target):
+    """
+    Check whether target is Pydantic object or Dataclass object
+
+    :param target: object
+    :type target: BaseModel or Dataclass 
+    :rtype: bool
+
+    """
     return isinstance(target, BaseModel) or is_dataclass(target)
 
 def iter_over_object_resolvers(target):

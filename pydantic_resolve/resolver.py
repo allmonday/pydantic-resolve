@@ -24,6 +24,9 @@ class Depends:
 T = TypeVar("T")
 
 class Resolver:
+    """
+    Entrypoint of a resolve action
+    """
     def __init__(self, loader_filters: Optional[Dict[Any, Dict[str, Any]]] = None, ensure_type=False):
         self.ctx = contextvars.ContextVar('pydantic_resolve_internal_context', default={})
         self.loader_filters_ctx = contextvars.ContextVar('pydantic_resolve_internal_filter', default=loader_filters or {})
