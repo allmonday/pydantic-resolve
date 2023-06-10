@@ -6,13 +6,26 @@
 Welcome to pydantic-resolve's documentation!
 ====
 
-Pydantic-resolve 是一个轻量级的工具库
+Pydantic-resolve 是一个轻量级的工具库，用来构建多层嵌套数据。
 
 它这么几个功能：
 
 1. 从各个数据源来构建嵌套数据结构。
 2. 利用dataloader解决多层嵌套结构中会出现的N+1查询问题。
 3. 拼装出类似graphql 的多层级嵌套数据，却不用引入整套 graphql 框架。
+
+
+安装
+----
+
+.. code-block:: shell
+
+   pip install pydantic-resolve
+   
+   # or
+   pip install "pydantic-resolve[dataloader]"  # install with aiodataloader
+
+source: https://github.com/allmonday/pydantic-resolve
 
 
 最简单用法
