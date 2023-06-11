@@ -5,6 +5,7 @@ from .exceptions import (
     LoaderFieldNotProvidedError,
     MissingAnnotationError)
 from .resolver import Resolver, LoaderDepend
+from .util import build_list, build_object
 
 __all__ = [
     'resolve',
@@ -14,4 +15,6 @@ __all__ = [
     'DataloaderDependCantBeResolved',
     'LoaderFieldNotProvidedError',
     'MissingAnnotationError',
+    'build_list',
+    'build_object'
 ]

@@ -8,6 +8,8 @@ from typing import Any, Callable, Optional
 from pydantic_resolve import core
 from .constant import PREFIX
 from .util import get_class_field_annotations
+from inspect import isclass
+from aiodataloader import DataLoader
 
 
 def LoaderDepend(  # noqa: N802
@@ -47,22 +49,29 @@ class Resolver:
                 if hit:
                     loader = hit
                 else:
-                    # create loader instance and pick config from 'loader_filters' param
-                    loader = v.default.dependency()
-                    filter_config_provider = self.loader_filters_ctx.get()
-                    filter_config = filter_config_provider.get(v.default.dependency, {})
+                    # create loader instance 
+                    if isclass(v.default.dependency):
+                        loader = v.default.dependency()
 
-                    # class ExampleLoader(DataLoader):
-                    #     filtar_x: bool  <--------------- set this
-                    #
-                    #     async def batch_load_fn(self, keys):
-                    #         ....
-                    for field in get_class_field_annotations(v.default.dependency):
-                        try:
-                            value = filter_config[field]
-                            setattr(loader, field, value)
-                        except KeyError:
-                            raise LoaderFieldNotProvidedError(f'{cache_key}.{field} not found in Resolver()')
+                        # and pick config from 'loader_filters' param, only for DataClass
+                        filter_config_provider = self.loader_filters_ctx.get()
+                        filter_config = filter_config_provider.get(v.default.dependency, {})
+
+                        # class ExampleLoader(DataLoader):
+                        #     filtar_x: bool  <--------------- set this
+                        #
+                        #     async def batch_load_fn(self, keys):
+                        #         ....
+                        for field in get_class_field_annotations(v.default.dependency):
+                            try:
+                                value = filter_config[field]
+                                setattr(loader, field, value)
+                            except KeyError:
+                                raise LoaderFieldNotProvidedError(f'{cache_key}.{field} not found in Resolver()')
+
+                    # build loader from batch_load_fn, filters config is impossible
+                    else:
+                        loader = DataLoader(batch_load_fn=v.default.dependency)
 
                     cache_provider[cache_key] = loader
                     self.ctx.set(cache_provider)
