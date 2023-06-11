@@ -233,6 +233,50 @@ Resolver里dataloader实例化方式 和 graphene 或者 strawberry 里面的有
 
 在pydantic-resolve 中，loader 会被 Resolver管理起来，只有真正被用到的时候才会进行实例化并且缓存。 因此降低了loader 使用的心智负担和代码成本。用户可以随心所欲地创建各种一次性的dataloader类。
 
+v1.0.0 更新
+----
+
+现在不用额外定义继承DataLoader 的dataloader 类，直接传入 `batch_load_fn` 即可。
+
+.. code-block:: python
+   :linenos:
+
+   async def friend_batch_load_fn(names):
+      mock_db = {
+            'tangkikodo': ['tom', 'jerry'],
+            'john': ['mike', 'wallace'],
+            'trump': ['sam', 'jim'],
+            'sally': ['sindy', 'lydia'],
+      }
+      result = []
+      for name in names:
+         friends = mock_db.get(name, [])
+         friends = [Friend(name=f) for f in friends]
+         result.append(friends)
+      return result
+
+   class Friend(BaseModel):
+      name: str
+
+   class User(BaseModel):
+      name: str
+      age: int
+      
+      friends: List[Friend] = []
+      def resolve_friends(self, loader=LoaderDepend(friend_batch_load_fn)):
+         return loader.load(self.name)
+
+   async def main():
+      users = [
+         User(name="tangkikodo", age=19),
+         User(name='john', age=21),
+      ]
+      users = await Resolver().resolve(users)
+      print(users)
+
+   asyncio.run(main())
+
+
 
 更多 ...
 -----
