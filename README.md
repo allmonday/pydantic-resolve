@@ -6,6 +6,8 @@
 [![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
 [![Downloads](https://static.pepy.tech/personalized-badge/pydantic-resolve?period=month&units=abbreviation&left_color=grey&right_color=orange&left_text=Downloads)](https://pepy.tech/project/pydantic-resolve)
 
+> v1.0.0 released
+
 - If you are a fan of GraphQL and want to quickly build **nested data structures** without any invasion, try it.
 - If you want to work with aiodataloader conveniently and effortlessly, try it.
 - Using pydantic-resolve with FastAPI (response_model & generating client), will greatly improve your development efficiency.
