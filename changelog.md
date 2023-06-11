@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.0 (2023.6.11)
+
+- support `batch_load_fn` as params for `LoaderDepend`
+- add test `tests/resolver/test_15_support_batch_load_fn.py`
+- `build_object`, `build_list` can be imported from `pydantic_resolve`
+
 ## v0.5.1 (2023.6.11)
 
 - add helper utils for Dataloader.batch_load_fn `built_list` and `build_object`, see `examples/fastapi_demo/loader.py`
