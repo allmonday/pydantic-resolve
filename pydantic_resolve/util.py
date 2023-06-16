@@ -1,3 +1,4 @@
+import functools
 from typing import DefaultDict, Type, TypeVar, List, Callable, Optional, Mapping
 from collections import defaultdict
 
@@ -31,3 +32,20 @@ def build_list(items: List[T], keys: List[V], get_pk: Callable[[T], V]) -> List[
         dct[_key].append(item)
     results = [dct.get(k, []) for k in keys]
     return results
+
+
+def replace_method(cls: Type, cls_name: str, func_name: str, func: Callable):
+    KLS = type(cls_name, (cls,), {func_name: func})
+    return KLS
+
+
+def mapper(func: Callable):
+    def inner(fn):
+        @functools.wraps(fn)
+        async def wrap(*args, **kwargs):
+            item = await fn(*args, **kwargs)
+            item = func(item)
+            return item
+        return wrap
+    return inner
+

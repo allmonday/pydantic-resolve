@@ -13,13 +13,14 @@ from aiodataloader import DataLoader
 
 
 def LoaderDepend(  # noqa: N802
-    dependency: Optional[Callable[..., Any]] = None 
+    dependency: Optional[Callable[..., Any]] = None,
 ) -> Any:
     return Depends(dependency=dependency)
 
 class Depends:
     def __init__(
-        self, dependency: Optional[Callable[..., Any]] = None
+        self, 
+        dependency: Optional[Callable[..., Any]] = None,
     ):
         self.dependency = dependency
 
@@ -41,28 +42,34 @@ class Resolver:
         # manage the creation of loader instances
         for k, v in signature.parameters.items():
             if isinstance(v.default, Depends):
+                # Base: DataLoader or batch_load_fn
+                # transform: data transform function
+                Base = v.default.dependency
+
                 # module.kls to avoid same kls name from different module
                 cache_key = f'{v.default.dependency.__module__}.{v.default.dependency.__name__}'
-                cache_provider = self.ctx.get()
 
+                cache_provider = self.ctx.get()
                 hit = cache_provider.get(cache_key, None)
+
                 if hit:
                     loader = hit
                 else:
                     # create loader instance 
-                    if isclass(v.default.dependency):
-                        loader = v.default.dependency()
+                    if isclass(Base):
+                        # if extra transform provides
+                        loader = Base()
 
                         # and pick config from 'loader_filters' param, only for DataClass
                         filter_config_provider = self.loader_filters_ctx.get()
-                        filter_config = filter_config_provider.get(v.default.dependency, {})
+                        filter_config = filter_config_provider.get(Base, {})
 
                         # class ExampleLoader(DataLoader):
                         #     filtar_x: bool  <--------------- set this
                         #
                         #     async def batch_load_fn(self, keys):
                         #         ....
-                        for field in get_class_field_annotations(v.default.dependency):
+                        for field in get_class_field_annotations(Base):
                             try:
                                 value = filter_config[field]
                                 setattr(loader, field, value)
@@ -71,7 +78,7 @@ class Resolver:
 
                     # build loader from batch_load_fn, filters config is impossible
                     else:
-                        loader = DataLoader(batch_load_fn=v.default.dependency)
+                        loader = DataLoader(batch_load_fn=Base) # type:ignore
 
                     cache_provider[cache_key] = loader
                     self.ctx.set(cache_provider)

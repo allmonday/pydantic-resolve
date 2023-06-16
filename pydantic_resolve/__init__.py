@@ -5,7 +5,7 @@ from .exceptions import (
     LoaderFieldNotProvidedError,
     MissingAnnotationError)
 from .resolver import Resolver, LoaderDepend
-from .util import build_list, build_object
+from .util import build_list, build_object, mapper
 
 __all__ = [
     'resolve',
@@ -16,5 +16,6 @@ __all__ = [
     'LoaderFieldNotProvidedError',
     'MissingAnnotationError',
     'build_list',
-    'build_object'
+    'build_object',
+    'mapper'
 ]

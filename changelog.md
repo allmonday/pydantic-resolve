@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.1.0 (2023.6.16)
+
+- add @mapper decorator, to enable custom data transform
+
+```python
+comments: List[CommentSchema]  = []
+@mapper(lambda items: [CommentSchema.from_orm(item) for item in items])
+def resolve_comments(self, loader=LoaderDepend(CommentLoader)):
+    return loader.load(self.id)
+```
+
 ## v1.0.0 (2023.6.11)
 
 - support `batch_load_fn` as params for `LoaderDepend`
