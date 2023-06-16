@@ -1,9 +1,7 @@
-Pydantic-resolve 使用手册 
+Pydantic-resolve 使用手册  / Manual
 ====
 
-Pydantic-resolve 是一个轻量级的工具库，用来构建多层嵌套数据。
-
-它这么几个功能：
+Pydantic-resolve 是一个轻量级的工具库，用来构建多层嵌套结构的数据。
 
 1. 从各个数据源来构建嵌套数据结构。
 2. 利用dataloader解决多层嵌套结构中会出现的N+1查询问题。
@@ -33,6 +31,7 @@ source: https://github.com/allmonday/pydantic-resolve
 
 .. code-block:: python
    :linenos:
+   :emphasize-lines: 9, 10, 11, 15
 
    import asyncio
    from pydantic import BaseModel

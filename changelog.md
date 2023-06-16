@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.1.0 (2023.6.16)
+
+- add custom transform function param in `LoaderDepend`
+
+```python
+def resolve_x_id(self, loader=LoaderDepend(batch_load_fn, lambda x: f'prefix-{x}')):
+    return loader.load(self.id)
+```
+
 ## v1.0.0 (2023.6.11)
 
 - support `batch_load_fn` as params for `LoaderDepend`
