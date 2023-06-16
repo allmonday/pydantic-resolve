@@ -35,10 +35,7 @@ async def resolve_obj(target, field):
             raise DataloaderDependCantBeResolved("DataLoader used in schema, use Resolver().resolve() instead")
         raise e
 
-    if iscoroutine(val):  # async def func()
-        val = await val
-
-    if asyncio.isfuture(val):
+    while iscoroutine(val) or asyncio.isfuture(val):
         val = await val
 
     val = await resolve(val)  

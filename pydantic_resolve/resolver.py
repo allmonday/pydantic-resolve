@@ -97,10 +97,7 @@ class Resolver:
             if not item.__annotations__:
                 raise MissingAnnotationError(f'{field}: return annotation is required')
 
-        if iscoroutine(val):  # async def func()
-            val = await val
-
-        if asyncio.isfuture(val):
+        while iscoroutine(val) or asyncio.isfuture(val):
             val = await val
 
         val = await self.resolve(val)  

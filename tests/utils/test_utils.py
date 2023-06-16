@@ -1,9 +1,9 @@
+import asyncio
+from dataclasses import dataclass
 from typing import List
 from pydantic_resolve import util
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 import pytest
-from aiodataloader import DataLoader
-import asyncio
 
 def test_get_class_field_annotations():
     class C:
@@ -46,7 +46,6 @@ def test_build_list():
     output = util.build_list(users, ids, lambda x: x.id)
     assert output == [[b], [c], [a], []]
 
-
 @pytest.mark.asyncio
 async def test_replace_method():
     class A():
@@ -85,3 +84,63 @@ def test_super_logic():
 
     b = B()
     assert b.say() == 'B.A'
+
+
+
+@pytest.mark.asyncio
+async def test_mapper_1():
+    class A(BaseModel):
+        a: int
+
+    @util.mapper(lambda x: A(**x))
+    async def foo():
+        return {'a': 1}
+
+    async def call_later(f):
+        await asyncio.sleep(1)
+        f.set_result({'a': 1})
+
+    @util.mapper(lambda x: A(**x))
+    async def bar():
+        lp = asyncio.get_event_loop()
+        f = lp.create_future()
+        asyncio.create_task(call_later(f))
+        return f
+    
+    ret = await foo()
+    ret2 = await bar()
+    assert ret == A(a=1)
+    assert ret2 == A(a=1)
+
+
+def test_auto_mapper_1():
+    class A(BaseModel):
+        a: int
+    
+    ret = util.auto_mapping(A, {'a': 1})
+    assert ret == A(a=1)
+    
+    @dataclass
+    class B:
+        a: int
+
+    ret2 = util.auto_mapping(B, {'a': 1})
+    assert ret2 == B(a=1)
+
+
+def test_auto_mapper_2():
+    class A(BaseModel):
+        a: int
+        class Config:
+            orm_mode=True
+    
+    class AA:
+        def __init__(self, a):
+            self.a = a
+    
+    ret = util.auto_mapping(A, AA(1))
+    assert ret == A(a=1)
+
+    with pytest.raises(ValidationError):
+        util.auto_mapping(A, {'a': 1})
+    
