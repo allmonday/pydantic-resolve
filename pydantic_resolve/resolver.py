@@ -7,7 +7,7 @@ from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError,
 from typing import Any, Callable, Optional
 from pydantic_resolve import core
 from .constant import PREFIX
-from .util import get_class_field_annotations, replace_method, transformer_decorator
+from .util import get_class_field_annotations
 from inspect import isclass
 from aiodataloader import DataLoader
 
