@@ -44,6 +44,7 @@ async def contact_batch_load_fn(names):
 # schemas
 class Contact(BaseModel):
     number: Optional[int]
+
 class Friend(BaseModel):
     name: str
 
@@ -51,6 +52,7 @@ class Friend(BaseModel):
     @mapper(lambda n: Contact(number=n))
     def resolve_contact(self, loader=LoaderDepend(contact_batch_load_fn)):
         return loader.load(self.name)
+
 class User(BaseModel):
     name: str
     age: int
