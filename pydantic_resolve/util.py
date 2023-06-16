@@ -34,17 +34,18 @@ def build_list(items: List[T], keys: List[V], get_pk: Callable[[T], V]) -> List[
     return results
 
 
-def transformer_decorator(func: Callable):
-    def inner(fn):
-        @functools.wraps(fn)
-        async def wrap(*args, **kwargs):
-            items = await fn(*args, **kwargs)
-            items = [func(item) for item in items]
-            return items
-        return wrap
-    return inner
-
-
 def replace_method(cls: Type, cls_name: str, func_name: str, func: Callable):
     KLS = type(cls_name, (cls,), {func_name: func})
     return KLS
+
+
+def mapper(func: Callable):
+    def inner(fn):
+        @functools.wraps(fn)
+        async def wrap(*args, **kwargs):
+            item = await fn(*args, **kwargs)
+            item = func(item)
+            return item
+        return wrap
+    return inner
+

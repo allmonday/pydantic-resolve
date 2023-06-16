@@ -2,10 +2,12 @@
 
 ## v1.1.0 (2023.6.16)
 
-- add custom transform function param in `LoaderDepend`
+- add @mapper decorator, to enable custom data transform
 
 ```python
-def resolve_x_id(self, loader=LoaderDepend(batch_load_fn, lambda x: f'prefix-{x}')):
+comments: List[CommentSchema]  = []
+@mapper(lambda items: [CommentSchema.from_orm(item) for item in items])
+def resolve_comments(self, loader=LoaderDepend(CommentLoader)):
     return loader.load(self.id)
 ```
 
