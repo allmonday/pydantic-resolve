@@ -1,6 +1,11 @@
-import functools
-from typing import DefaultDict, Sequence, Type, TypeVar, List, Callable, Optional, Mapping
+import asyncio
 from collections import defaultdict
+from dataclasses import is_dataclass
+import functools
+from pydantic import BaseModel
+from inspect import iscoroutine
+from typing import DefaultDict, Sequence, Type, TypeVar, List, Callable, Optional, Mapping, Union
+import types
 
 def get_class_field_annotations(cls: Type):
     anno = cls.__dict__.get('__annotations__') or {}
@@ -39,13 +44,52 @@ def replace_method(cls: Type, cls_name: str, func_name: str, func: Callable):
     return KLS
 
 
-def mapper(func: Callable):
-    def inner(fn):
-        @functools.wraps(fn)
+def mapper(func_or_class: Union[Callable, Type]):
+    """
+    execute post-transform function after the value is reolved
+    func_or_class:
+        is func: run func
+        is class: call auto_mapping to have a try
+    """
+    def inner(inner_fn):
+        @functools.wraps(inner_fn)
         async def wrap(*args, **kwargs):
-            item = await fn(*args, **kwargs)
-            item = func(item)
-            return item
+
+            val = inner_fn(*args, **kwargs)
+            while iscoroutine(val) or asyncio.isfuture(val):
+                val = await val
+            
+            if val is None:
+                return None
+
+            if isinstance(func_or_class, types.FunctionType):
+                return func_or_class(val)
+            else:
+                if isinstance(val, list):
+                    return [auto_mapping(func_or_class, v) for v in val]
+                return auto_mapping(func_or_class, val)
         return wrap
     return inner
 
+
+def auto_mapping(target, source):
+    # do noting
+    if isinstance(source, target):
+        return source
+
+    try:
+        # pydantic
+        if issubclass(target, BaseModel):
+            if target.Config.orm_mode:
+                return target.from_orm(source)
+            return target.parse_obj(source)
+        
+        # dataclass
+        if is_dataclass(target):
+            if isinstance(source, dict):
+                return target(**source)
+
+    except Exception as e:
+        raise e
+    
+    raise RuntimeError('auto mapping fails')

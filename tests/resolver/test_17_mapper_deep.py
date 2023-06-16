@@ -90,7 +90,7 @@ async def test_sqlite_and_dataloader():
         task_id: int
         content: str
         feedbacks: List[FeedbackSchema]  = []
-        @mapper(lambda items: [FeedbackSchema.from_orm(item) for item in items])
+        @mapper(FeedbackSchema)
         def resolve_feedbacks(self, loader=LoaderDepend(FeedbackLoader)):
             return loader.load(self.id)
 
@@ -101,7 +101,7 @@ async def test_sqlite_and_dataloader():
         id: int
         name: str
         comments: List[CommentSchema]  = []
-        @mapper(lambda items: [CommentSchema.from_orm(item) for item in items])
+        @mapper(CommentSchema)
         def resolve_comments(self, loader=LoaderDepend(CommentLoader)):
             return loader.load(self.id)
 

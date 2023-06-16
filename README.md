@@ -6,16 +6,12 @@
 [![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
 [![Downloads](https://static.pepy.tech/personalized-badge/pydantic-resolve?period=month&units=abbreviation&left_color=grey&right_color=orange&left_text=Downloads)](https://pepy.tech/project/pydantic-resolve)
 
-> v1.0.0 released
-
-- If you are a fan of GraphQL and want to quickly, easily build **nested data structures** without any invasion, try it.
-- If you want to work with aiodataloader conveniently and effortlessly, try it.
-- Using pydantic-resolve with FastAPI (response_model & generating client), will greatly improve your development efficiency.
+> A small yet powerful package which can run resolvers to generate deep nested datasets.
 
 **example**:
 
 ```python
-# loader functions
+# define loader functions
 async def friends_batch_load_fn(names):
     mock_db = {
         'tangkikodo': ['tom', 'jerry'],
@@ -23,11 +19,7 @@ async def friends_batch_load_fn(names):
         'trump': ['sam', 'jim'],
         'sally': ['sindy', 'lydia'],
     }
-    result = []
-    for name in names:
-        friends = mock_db.get(name, [])
-        result.append(friends)
-    return result
+    return [mock_db.get(name, []) for name in names]
 
 async def contact_batch_load_fn(names):
     mock_db = {
@@ -35,13 +27,9 @@ async def contact_batch_load_fn(names):
         'jim': 600, 'sindy': 700, 'lydia': 800, 'tangkikodo': 900, 'john': 1000,
         'trump': 1200, 'sally': 1300,
     }
-    result = []
-    for name in names:
-        contact = mock_db.get(name, None)
-        result.append(contact)
-    return result
+    return [mock_db.get(name, None) for name in names]
 
-# schemas
+# define schemas
 class Contact(BaseModel):
     number: Optional[int]
 
@@ -75,17 +63,17 @@ class Root(BaseModel):
     users: List[User] = []
     def resolve_users(self):
         return [
+          {"name": "tangkikodo", "age": 19},
             User(name="tangkikodo", age=19),  # transform first
             User(name='john', age=21),
-            # User(name='trump', age=59),  # uncomment to resolve more
+            # User(name='trump', age=59),
             # User(name='sally', age=21),
             # User(name='some one', age=0)
         ]
 
 async def main():
     import json
-    root = Root()
-    root = await Resolver().resolve(root)
+    root = await Resolver().resolve(Root())
     dct = root.dict()
     print(json.dumps(dct, indent=4))
 
