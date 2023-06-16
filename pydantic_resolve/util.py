@@ -1,5 +1,5 @@
 import functools
-from typing import DefaultDict, Type, TypeVar, List, Callable, Optional, Mapping
+from typing import DefaultDict, Sequence, Type, TypeVar, List, Callable, Optional, Mapping
 from collections import defaultdict
 
 def get_class_field_annotations(cls: Type):
@@ -10,7 +10,7 @@ def get_class_field_annotations(cls: Type):
 T = TypeVar("T")
 V = TypeVar("V")
 
-def build_object(items: List[T], keys: List[V], get_pk: Callable[[T], V]) -> List[Optional[T]]:
+def build_object(items: Sequence[T], keys: List[V], get_pk: Callable[[T], V]) -> List[Optional[T]]:
     """
     helper function to build return object data required by aiodataloader
     """
@@ -22,7 +22,7 @@ def build_object(items: List[T], keys: List[V], get_pk: Callable[[T], V]) -> Lis
     return results
 
 
-def build_list(items: List[T], keys: List[V], get_pk: Callable[[T], V]) -> List[List[T]]:
+def build_list(items: Sequence[T], keys: List[V], get_pk: Callable[[T], V]) -> List[List[T]]:
     """
     helper function to build return list data required by aiodataloader
     """

@@ -2,8 +2,7 @@ from __future__ import annotations
 from typing import List
 import pytest
 from pydantic import BaseModel
-from pydantic_resolve import Resolver, LoaderDepend
-import pydantic_resolve
+from pydantic_resolve import Resolver, LoaderDepend, mapper
 from aiodataloader import DataLoader
 
 @pytest.mark.asyncio
@@ -17,7 +16,7 @@ async def test_loader_depends():
         name: str
 
         books: List[str] = []
-        @pydantic_resolve.util.mapper(lambda x: str(x))
+        @mapper(lambda x: str(x))
         def resolve_books(self, loader=LoaderDepend(BookLoader)):
             return loader.load(self.id)
 

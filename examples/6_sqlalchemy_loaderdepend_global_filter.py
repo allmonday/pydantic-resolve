@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
-from pydantic_resolve import Resolver, LoaderDepend
+from pydantic_resolve import Resolver, LoaderDepend, build_list, mapper
 from pprint import pprint
 
 """jump to main() at bottom"""
@@ -59,21 +59,14 @@ class FeedbackLoader(DataLoader):
                 .where(Feedback.private==self.private)  # <-------- global filter
                 .where(Feedback.comment_id.in_(comment_ids)))
             rows = res.scalars().all()
-            dct = defaultdict(list)
-            for row in rows:
-                dct[row.comment_id].append(FeedbackSchema.from_orm(row))
-            return [dct.get(k, []) for k in comment_ids]
+            return build_list(rows, comment_ids, lambda x: x.comment_id)
 
 class CommentLoader(DataLoader):
     async def batch_load_fn(self, task_ids):
         async with async_session() as session:
             res = await session.execute(select(Comment).where(Comment.task_id.in_(task_ids)))
             rows = res.scalars().all()
-
-            dct = defaultdict(list)
-            for row in rows:
-                dct[row.task_id].append(CommentSchema.from_orm(row))
-            return [dct.get(k, []) for k in task_ids]
+            return build_list(rows, task_ids, lambda x: x.task_id)
 
 class FeedbackSchema(BaseModel):
     id: int
@@ -89,6 +82,7 @@ class CommentSchema(BaseModel):
     content: str
 
     feedbacks: List[FeedbackSchema] = [] 
+    @mapper(lambda items: [FeedbackSchema.from_orm(i) for i in items])
     def resolve_feedbacks(self, feedback_loader=LoaderDepend(FeedbackLoader)) -> Future[List[FeedbackSchema]]:
         return feedback_loader.load(self.id)
 
@@ -100,6 +94,7 @@ class TaskSchema(BaseModel):
     name: str
 
     comments: List[CommentSchema] = [] 
+    @mapper(lambda items: [CommentSchema.from_orm(i) for i in items])
     def resolve_comments(self, comment_loader=LoaderDepend(CommentLoader)) -> Future[List[CommentSchema]]:
         return comment_loader.load(self.id)
 
