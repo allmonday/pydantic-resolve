@@ -14,9 +14,21 @@ class B(BaseModel):  # recursively, concurrently resolve fields
         await asyncio.sleep(1)  # sleep 1
         return random()
 
+    value_2: int = 0
+    async def resolve_value_2(self):
+        print(f"resolve_value_1, {time() - t}")
+        await asyncio.sleep(1)  # sleep 1
+        return random()
+
 class A(BaseModel):
     node_b_1: Optional[B] = None
     async def resolve_node_b_1(self):
+        print(f"resolve_node_b_1, {time() - t}")
+        await asyncio.sleep(1)
+        return B()
+
+    node_b_2: Optional[B] = None
+    async def resolve_node_b_2(self):
         print(f"resolve_node_b_1, {time() - t}")
         await asyncio.sleep(1)
         return B()
@@ -34,16 +46,11 @@ class Root(BaseModel):
         await asyncio.sleep(1)
         return A()
 
-    node_a_3: Optional[A] = None
-    async def resolve_node_a_3(self):
-        print(f"resolve_node_a_3, {time() - t}")
-        await asyncio.sleep(1)
-        return A()
-
 async def main():
+    from pprint import pprint
     root = Root()
     result = await resolve(root)
-    print(result.json())
+    pprint(result.json())
     print(f'total {time() - t}')
 
 asyncio.run(main())

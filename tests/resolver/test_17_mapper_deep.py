@@ -2,7 +2,6 @@ from __future__ import annotations
 from typing import List
 import pytest
 from collections import Counter, defaultdict
-from typing import Tuple
 from aiodataloader import DataLoader
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -11,7 +10,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
-from pydantic_resolve import Resolver, LoaderDepend, mapper
+from pydantic_resolve import Resolver, LoaderDepend, mapper, build_list
 
 class Base(DeclarativeBase):
     pass
@@ -68,10 +67,7 @@ async def test_sqlite_and_dataloader():
             async with async_session() as session:
                 res = await session.execute(select(Feedback).where(Feedback.comment_id.in_(comment_ids)))
                 rows = res.scalars().all()
-                dct = defaultdict(list)
-                for row in rows:
-                    dct[row.comment_id].append(row)
-                return [dct.get(k, []) for k in comment_ids]
+                return build_list(rows, comment_ids, lambda x: x.comment_id)
 
     class CommentLoader(DataLoader):
         async def batch_load_fn(self, task_ids):
@@ -79,11 +75,7 @@ async def test_sqlite_and_dataloader():
             async with async_session() as session:
                 res = await session.execute(select(Comment).where(Comment.task_id.in_(task_ids)))
                 rows = res.scalars().all()
-
-                dct = defaultdict(list)
-                for row in rows:
-                    dct[row.task_id].append(row)
-                return [dct.get(k, []) for k in task_ids]
+                return build_list(rows, task_ids, lambda x: x.task_id)
 
     class FeedbackSchema(BaseModel):
         id: int

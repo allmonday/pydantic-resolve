@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
-from typing import Tuple
+from typing import List
 from aiodataloader import DataLoader
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
-from pydantic_resolve import resolve
+from pydantic_resolve import resolve, mapper, build_list
 from pprint import pprint
 
 engine = create_async_engine(
@@ -67,10 +67,7 @@ class FeedbackLoader(DataLoader):
         async with async_session() as session:
             res = await session.execute(select(Feedback).where(Feedback.comment_id.in_(comment_ids)))
             rows = res.scalars().all()
-            dct = defaultdict(list)
-            for row in rows:
-                dct[row.comment_id].append(FeedbackSchema.from_orm(row))
-            return [dct.get(k, []) for k in comment_ids]
+            return build_list(rows, comment_ids, lambda x: x.comment_id)
 
 
 class CommentLoader(DataLoader):
@@ -78,11 +75,7 @@ class CommentLoader(DataLoader):
         async with async_session() as session:
             res = await session.execute(select(Comment).where(Comment.task_id.in_(task_ids)))
             rows = res.scalars().all()
-
-            dct = defaultdict(list)
-            for row in rows:
-                dct[row.task_id].append(CommentSchema.from_orm(row))
-            return [dct.get(k, []) for k in task_ids]
+            return build_list(rows, task_ids, lambda x: x.task_id)
 
 feedback_loader = FeedbackLoader()
 comment_loader = CommentLoader()
@@ -99,8 +92,9 @@ class CommentSchema(BaseModel):
     id: int
     task_id: int
     content: str
-    feedbacks: Tuple[FeedbackSchema, ...]  = tuple()
+    feedbacks: List[FeedbackSchema] = []
 
+    @mapper(lambda items: [FeedbackSchema.from_orm(i) for i in items])
     def resolve_feedbacks(self):
         return feedback_loader.load(self.id)
 
@@ -110,8 +104,9 @@ class CommentSchema(BaseModel):
 class TaskSchema(BaseModel):
     id: int
     name: str
-    comments: Tuple[CommentSchema, ...]  = tuple()
+    comments: List[CommentSchema]  = []
     
+    @mapper(lambda items: [CommentSchema.from_orm(i) for i in items])
     def resolve_comments(self):
         return comment_loader.load(self.id)
 
