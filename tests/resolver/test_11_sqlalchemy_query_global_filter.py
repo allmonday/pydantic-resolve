@@ -33,13 +33,13 @@ async def test_sqlite_and_dataloader():
     class Comment(Base):
         __tablename__ = "comment"
         id: Mapped[int] = mapped_column(primary_key=True)
-        task_id: Mapped[int] = mapped_column()
+        task_id: Mapped[int] = mapped_column(index=True)
         content: Mapped[str]
 
     class Feedback(Base):
         __tablename__ = "feedback"
         id: Mapped[int] = mapped_column(primary_key=True)
-        comment_id: Mapped[int] = mapped_column()
+        comment_id: Mapped[int] = mapped_column(index=True)
         content: Mapped[str]
         private: Mapped[bool]
 

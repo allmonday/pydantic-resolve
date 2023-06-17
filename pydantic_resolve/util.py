@@ -4,7 +4,7 @@ from dataclasses import is_dataclass
 import functools
 from pydantic import BaseModel
 from inspect import iscoroutine
-from typing import DefaultDict, Sequence, Type, TypeVar, List, Callable, Optional, Mapping, Union
+from typing import Any, DefaultDict, Sequence, Type, TypeVar, List, Callable, Optional, Mapping, Union
 import types
 
 def get_class_field_annotations(cls: Type):
@@ -55,41 +55,62 @@ def mapper(func_or_class: Union[Callable, Type]):
         @functools.wraps(inner_fn)
         async def wrap(*args, **kwargs):
 
-            val = inner_fn(*args, **kwargs)
-            while iscoroutine(val) or asyncio.isfuture(val):
-                val = await val
+            retVal = inner_fn(*args, **kwargs)
+            while iscoroutine(retVal) or asyncio.isfuture(retVal):
+                retVal = await retVal  # get final result
             
-            if val is None:
+            if retVal is None:
                 return None
 
             if isinstance(func_or_class, types.FunctionType):
-                return func_or_class(val)
+                # manual mapping
+                return func_or_class(retVal)
             else:
-                if isinstance(val, list):
-                    return [auto_mapping(func_or_class, v) for v in val]
-                return auto_mapping(func_or_class, val)
+                # auto mapping
+                if isinstance(retVal, list):
+                    if retVal:
+                        rule = get_mapping_rule(func_or_class, retVal[0])
+                        return apply_rule(rule, func_or_class, retVal, True)
+                    else:
+                        return retVal  # return []
+                else:
+                    rule = get_mapping_rule(func_or_class, retVal)
+                    return apply_rule(rule, func_or_class, retVal, False)
         return wrap
     return inner
 
 
-def auto_mapping(target, source):
+def get_mapping_rule(target, source) -> Optional[Callable]:
     # do noting
     if isinstance(source, target):
+        return None
+
+    # pydantic
+    if issubclass(target, BaseModel):
+        if target.Config.orm_mode:
+            if isinstance(source, dict):
+                raise AttributeError("pydantic from_orm can't handle dict object")
+            else:
+                return lambda t, s: t.from_orm(s)
+
+        if isinstance(source, dict):
+            return lambda t, s: t.parse_obj(s)
+        else:
+            raise AttributeError("pydantic can't handle non-dict data")
+    
+    # dataclass
+    if is_dataclass(target):
+        if isinstance(source, dict):
+            return lambda t, s: t(**s)
+    
+    raise NotImplementedError('faild to get auto mapping rule and execut mapping, use your own rule instead.')
+
+
+def apply_rule(rule: Optional[Callable], target, source: Any, is_list: bool):
+    if not rule:  # no change
         return source
 
-    try:
-        # pydantic
-        if issubclass(target, BaseModel):
-            if target.Config.orm_mode:
-                return target.from_orm(source)
-            return target.parse_obj(source)
-        
-        # dataclass
-        if is_dataclass(target):
-            if isinstance(source, dict):
-                return target(**source)
-
-    except Exception as e:
-        raise e
-    
-    raise RuntimeError('auto mapping fails')
+    if is_list:
+        return [rule(target, s) for s in source]
+    else:
+        return rule(target, source)
