@@ -61,14 +61,14 @@ class User(BaseModel):
 
 class Root(BaseModel):
     users: List[User] = []
+    @mapper(lambda items: [User(**item) for item in items])
     def resolve_users(self):
         return [
-          {"name": "tangkikodo", "age": 19},
-            User(name="tangkikodo", age=19),  # transform first
-            User(name='john', age=21),
-            # User(name='trump', age=59),
-            # User(name='sally', age=21),
-            # User(name='some one', age=0)
+            {"name": "tangkikodo", "age": 19},
+            {"name": "john", "age": 20},
+            # {"name": "trump", "age": 21},
+            # {"name": "sally", "age": 22},
+            # {"name": "no man", "age": 23},
         ]
 
 async def main():
