@@ -36,7 +36,7 @@ class Contact(BaseModel):
 class Friend(BaseModel):
     name: str
 
-    contact: int = 0
+    contact: Optional[Contact] = None
     @mapper(lambda n: Contact(number=n))
     def resolve_contact(self, loader=LoaderDepend(contact_batch_load_fn)):
         return loader.load(self.name)
@@ -49,7 +49,7 @@ class User(BaseModel):
     def resolve_greeting(self):
         return f"hello, i'm {self.name}, {self.age} years old."
 
-    contact: int = 0
+    contact: Optional[Contact] = None
     @mapper(lambda n: Contact(number=n))
     def resolve_contact(self, loader=LoaderDepend(contact_batch_load_fn)):
         return loader.load(self.name)

@@ -117,14 +117,16 @@ def test_auto_mapper_1():
     class A(BaseModel):
         a: int
     
-    ret = util.auto_mapping(A, {'a': 1})
+    params = (A, {'a': 1})
+    ret = util.get_mapping_rule(*params)(*params)  # type:ignore
     assert ret == A(a=1)
     
     @dataclass
     class B:
         a: int
 
-    ret2 = util.auto_mapping(B, {'a': 1})
+    params2 = (B, {'a': 1})
+    ret2 = util.get_mapping_rule(*params2)(*params2) # type:ignore
     assert ret2 == B(a=1)
 
 
@@ -138,9 +140,11 @@ def test_auto_mapper_2():
         def __init__(self, a):
             self.a = a
     
-    ret = util.auto_mapping(A, AA(1))
+    p1 = (A, AA(1))
+    ret = util.get_mapping_rule(*p1)(*p1)  # type: ignore
     assert ret == A(a=1)
 
-    with pytest.raises(ValidationError):
-        util.auto_mapping(A, {'a': 1})
+    p2 = (A, {'a': 1})
+    with pytest.raises(AttributeError):
+        util.get_mapping_rule(*p2)  # type: ignore
     

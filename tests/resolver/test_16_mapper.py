@@ -164,5 +164,5 @@ async def test_mapper_5():
             return loader.load(self.id)
 
     students = [ Student(id=1, name="jack") ]
-    with pytest.raises(RuntimeError):
+    with pytest.raises(NotImplementedError):
         await Resolver().resolve(students)
