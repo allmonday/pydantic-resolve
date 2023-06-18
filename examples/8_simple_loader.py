@@ -47,7 +47,7 @@ class User(BaseModel):
         return loader.load(self.name)
     
     friends: List[Friend] = []
-    @mapper(lambda items: [Friend(name=item) for item in items])
+    @mapper(lambda names: [Friend(name=name) for name in names])
     def resolve_friends(self, loader=LoaderDepend(friends_batch_load_fn)):
         return loader.load(self.name)
 
