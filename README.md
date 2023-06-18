@@ -8,6 +8,8 @@
 
 > A small yet powerful package which can run resolvers to generate deep nested datasets.
 
+[Change log](./changelog.md)
+
 **example**:
 
 ```python

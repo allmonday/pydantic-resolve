@@ -6,7 +6,7 @@ from typing import TypeVar, Dict
 from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingAnnotationError
 from typing import Any, Callable, Optional
 from pydantic_resolve import core
-from .constant import PREFIX
+from .constant import PREFIX, POST_PREFIX
 from .util import get_class_field_annotations
 from inspect import isclass
 from aiodataloader import DataLoader
@@ -100,9 +100,19 @@ class Resolver:
         while iscoroutine(val) or asyncio.isfuture(val):
             val = await val
 
+        # start to resolve
         val = await self.resolve(val)  
-
+        # all children is resolved
         target.__setattr__(target_attr_name, val)
+
+        # execute post methods, accept no params
+        for post_key in core.iter_over_object_post_methods(target):
+            post_attr_name = post_key.replace(POST_PREFIX, '')
+            if not hasattr(target, post_attr_name):
+                raise ResolverTargetAttrNotFound(f"fail to run {post_key}(), attribute {post_attr_name} not found")
+
+            post_method = target.__getattribute__(post_key)
+            post_method()
 
     async def resolve(self, target: T) -> T:
         """ entry: resolve dataclass object or pydantic object / or list in place """

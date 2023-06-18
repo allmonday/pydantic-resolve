@@ -89,21 +89,21 @@ def get_mapping_rule(target, source) -> Optional[Callable]:
     if issubclass(target, BaseModel):
         if target.Config.orm_mode:
             if isinstance(source, dict):
-                raise AttributeError("pydantic from_orm can't handle dict object")
+                raise AttributeError(f"{type(source)} -> {target.__name__}: pydantic from_orm can't handle dict object")
             else:
                 return lambda t, s: t.from_orm(s)
 
         if isinstance(source, dict):
             return lambda t, s: t.parse_obj(s)
         else:
-            raise AttributeError("pydantic can't handle non-dict data")
+            raise AttributeError(f"{type(source)} -> {target.__name__}: pydantic can't handle non-dict data")
     
     # dataclass
     if is_dataclass(target):
         if isinstance(source, dict):
             return lambda t, s: t(**s)
     
-    raise NotImplementedError('faild to get auto mapping rule and execut mapping, use your own rule instead.')
+    raise NotImplementedError(f"{type(source)} -> {target.__name__}: faild to get auto mapping rule and execut mapping, use your own rule instead.")
 
 
 def apply_rule(rule: Optional[Callable], target, source: Any, is_list: bool):

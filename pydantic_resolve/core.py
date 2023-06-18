@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from dataclasses import is_dataclass
 from typing import TypeVar
 from .exceptions import ResolverTargetAttrNotFound, DataloaderDependCantBeResolved
-from .constant import PREFIX
+from .constant import PREFIX, POST_PREFIX
 
 T = TypeVar("T")
 
@@ -23,6 +23,12 @@ def iter_over_object_resolvers(target):
     """get method starts with resolve_"""
     for k in dir(target):
         if k.startswith(PREFIX) and ismethod(target.__getattribute__(k)):
+            yield k
+
+def iter_over_object_post_methods(target):
+    """get method starts with post_"""
+    for k in dir(target):
+        if k.startswith(POST_PREFIX) and ismethod(target.__getattribute__(k)):
             yield k
 
 async def resolve_obj(target, field):
