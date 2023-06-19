@@ -13,7 +13,12 @@
 **example**:
 
 ```python
-# define loader functions
+import asyncio
+from typing import List, Optional
+from pydantic import BaseModel
+from pydantic_resolve import Resolver, mapper, LoaderDepend
+
+# define dataset and loader functions
 async def friends_batch_load_fn(names):
     mock_db = {
         'tangkikodo': ['tom', 'jerry'],
@@ -25,13 +30,17 @@ async def friends_batch_load_fn(names):
 
 async def contact_batch_load_fn(names):
     mock_db = {
-        'tom': 100, 'jerry':200, 'mike': 3000, 'wallace': 400, 'sam': 500,
-        'jim': 600, 'sindy': 700, 'lydia': 800, 'tangkikodo': 900, 'john': 1000,
-        'trump': 1200, 'sally': 1300,
+        'tom': 1001, 'jerry': 1002, 'mike': 1003, 'wallace': 1004, 'sam': 1005,
+        'jim': 1006, 'sindy': 1007, 'lydia': 1008, 'tangkikodo': 1009, 'john': 1010,
+        'trump': 2011, 'sally': 2012,
     }
-    return [mock_db.get(name, None) for name in names]
+    result = []
+    for name in names:
+        n = mock_db.get(name, None)
+        result.append({'number': n} if n else None)
+    return result
 
-# define schemas
+# define data schemas
 class Contact(BaseModel):
     number: Optional[int]
 
@@ -39,27 +48,40 @@ class Friend(BaseModel):
     name: str
 
     contact: Optional[Contact] = None
-    @mapper(lambda n: Contact(number=n))
-    def resolve_contact(self, loader=LoaderDepend(contact_batch_load_fn)):
-        return loader.load(self.name)
+    @mapper(Contact)                                          # 1. resolve dataloader and map return dict to Contact object
+    def resolve_contact(self, contact_loader=LoaderDepend(contact_batch_load_fn)):
+        return contact_loader.load(self.name)
+
+    is_contact_10: bool = False
+    def post_is_contact_10(self):                             # 3. after resolve_contact executed, do extra computation
+        if self.contact:
+            if str(self.contact.number).startswith('10'):
+                self.is_contact_10 = True
+        else:
+            self.is_contact_10 = False
 
 class User(BaseModel):
     name: str
     age: int
 
     greeting: str = ''
-    def resolve_greeting(self):
+    async def resolve_greeting(self):
+        await asyncio.sleep(1)
         return f"hello, i'm {self.name}, {self.age} years old."
 
     contact: Optional[Contact] = None
-    @mapper(lambda n: Contact(number=n))
-    def resolve_contact(self, loader=LoaderDepend(contact_batch_load_fn)):
-        return loader.load(self.name)
+    @mapper(Contact)
+    def resolve_contact(self, contact_loader=LoaderDepend(contact_batch_load_fn)):
+        return contact_loader.load(self.name)
 
     friends: List[Friend] = []
-    @mapper(lambda items: [Friend(name=item) for item in items])  # transform after data received
-    def resolve_friends(self, loader=LoaderDepend(friends_batch_load_fn)):
-        return loader.load(self.name)
+    @mapper(lambda names: [Friend(name=name) for name in names])
+    def resolve_friends(self, friend_loader=LoaderDepend(friends_batch_load_fn)):
+        return friend_loader.load(self.name)
+
+    friend_count: int = 0
+    def post_friend_count(self):
+        self.friend_count = len(self.friends)
 
 class Root(BaseModel):
     users: List[User] = []
@@ -68,14 +90,15 @@ class Root(BaseModel):
         return [
             {"name": "tangkikodo", "age": 19},
             {"name": "john", "age": 20},
-            # {"name": "trump", "age": 21},
-            # {"name": "sally", "age": 22},
-            # {"name": "no man", "age": 23},
+            {"name": "trump", "age": 21},
+            {"name": "sally", "age": 22},
+            {"name": "no man", "age": 23},
         ]
 
 async def main():
     import json
-    root = await Resolver().resolve(Root())
+    root = Root()
+    root = await Resolver().resolve(root)                 # 4. run it
     dct = root.dict()
     print(json.dumps(dct, indent=4))
 
@@ -92,61 +115,117 @@ asyncio.run(main())
       "age": 19,
       "greeting": "hello, i'm tangkikodo, 19 years old.",
       "contact": {
-        "number": 900
+        "number": 1009
       },
       "friends": [
         {
           "name": "tom",
           "contact": {
-            "number": 100
-          }
+            "number": 1001
+          },
+          "is_contact_10": true
         },
         {
           "name": "jerry",
           "contact": {
-            "number": 200
-          }
+            "number": 1002
+          },
+          "is_contact_10": true
         }
-      ]
+      ],
+      "friend_count": 2
     },
     {
       "name": "john",
-      "age": 21,
-      "greeting": "hello, i'm john, 21 years old.",
+      "age": 20,
+      "greeting": "hello, i'm john, 20 years old.",
       "contact": {
-        "number": 1000
+        "number": 1010
       },
       "friends": [
         {
           "name": "mike",
           "contact": {
-            "number": 3000
-          }
+            "number": 1003
+          },
+          "is_contact_10": true
         },
         {
           "name": "wallace",
           "contact": {
-            "number": 400
-          }
+            "number": 1004
+          },
+          "is_contact_10": true
         }
-      ]
+      ],
+      "friend_count": 2
+    },
+    {
+      "name": "trump",
+      "age": 21,
+      "greeting": "hello, i'm trump, 21 years old.",
+      "contact": {
+        "number": 2011
+      },
+      "friends": [
+        {
+          "name": "sam",
+          "contact": {
+            "number": 1005
+          },
+          "is_contact_10": true
+        },
+        {
+          "name": "jim",
+          "contact": {
+            "number": 1006
+          },
+          "is_contact_10": true
+        }
+      ],
+      "friend_count": 2
+    },
+    {
+      "name": "sally",
+      "age": 22,
+      "greeting": "hello, i'm sally, 22 years old.",
+      "contact": {
+        "number": 2012
+      },
+      "friends": [
+        {
+          "name": "sindy",
+          "contact": {
+            "number": 1007
+          },
+          "is_contact_10": true
+        },
+        {
+          "name": "lydia",
+          "contact": {
+            "number": 1008
+          },
+          "is_contact_10": true
+        }
+      ],
+      "friend_count": 2
+    },
+    {
+      "name": "no man",
+      "age": 23,
+      "greeting": "hello, i'm no man, 23 years old.",
+      "contact": null,
+      "friends": [],
+      "friend_count": 0
     }
   ]
 }
 ```
 
-- Full-feature [example](./examples/6_sqlalchemy_loaderdepend_global_filter.py) which includes `dataloader`, `LoaderDepend` and global `loader_filters`
-- Helps you asynchoronously, resursively resolve a pydantic object (or dataclass object)
-- When used in conjunction with aiodataloader, allows you to easily generate nested data structures without worrying about generating N+1 queries.
-- say byebye to contextvars when using dataloader.
-- Inspired by [GraphQL](https://graphql.org/) and [graphene](https://graphene-python.org/)
-
 ## Install
 
 ```shell
 pip install pydantic-resolve
-
-pip install "pydantic-resolve[dataloader]"  # install with aiodataloader, from v1.0, aiodataloader is a default dependency, [dataloader] is removed.
 ```
 
 - use `resolve` for simple scenario,
@@ -156,7 +235,7 @@ pip install "pydantic-resolve[dataloader]"  # install with aiodataloader, from v
 from pydantic_resolve import (
     resolve,                     # handle simple resolving task
     Resolver, LoaderDepend,      # handle schema resolving with LoaderDepend and DataLoader
-    ResolverTargetAttrNotFound, DataloaderDependCantBeResolved, LoaderFieldNotProvidedError
+    ResolverTargetAttrNotFound, DataloaderDependCantBeResolved, LoaderFieldNotProvidedError  # errors
 )
 ```
 
