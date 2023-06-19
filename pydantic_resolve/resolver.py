@@ -105,14 +105,6 @@ class Resolver:
         # all children is resolved
         target.__setattr__(target_attr_name, val)
 
-        # execute post methods, accept no params
-        for post_key in core.iter_over_object_post_methods(target):
-            post_attr_name = post_key.replace(POST_PREFIX, '')
-            if not hasattr(target, post_attr_name):
-                raise ResolverTargetAttrNotFound(f"fail to run {post_key}(), attribute {post_attr_name} not found")
-
-            post_method = target.__getattribute__(post_key)
-            post_method()
 
     async def resolve(self, target: T) -> T:
         """ entry: resolve dataclass object or pydantic object / or list in place """
@@ -123,5 +115,14 @@ class Resolver:
         if core.is_acceptable_type(target):
             await asyncio.gather(*[self.resolve_obj(target, field) 
                                    for field in core.iter_over_object_resolvers(target)])
+
+            # execute post methods, accept no params
+            for post_key in core.iter_over_object_post_methods(target):
+                post_attr_name = post_key.replace(POST_PREFIX, '')
+                if not hasattr(target, post_attr_name):
+                    raise ResolverTargetAttrNotFound(f"fail to run {post_key}(), attribute {post_attr_name} not found")
+
+                post_method = target.__getattribute__(post_key)
+                post_method()
 
         return target

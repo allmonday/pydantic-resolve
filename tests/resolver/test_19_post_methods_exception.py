@@ -1,6 +1,6 @@
 from typing import List, Optional
 from pydantic import BaseModel
-from pydantic_resolve import Resolver, mapper, LoaderDepend
+from pydantic_resolve import Resolver, mapper, LoaderDepend, ResolverTargetAttrNotFound
 import pytest
 
 # define loader functions
@@ -15,9 +15,9 @@ async def friends_batch_load_fn(names):
 
 async def cash_batch_load_fn(names):
     mock_db = {
-        'jerry':200, 'mike': 3000, 'wallace': 400, 'sam': 500,
+        'tom': 100, 'jerry':200, 'mike': 3000, 'wallace': 400, 'sam': 500,
         'jim': 600, 'sindy': 700, 'lydia': 800, 'tangkikodo': 900, 'john': 1000,
-        'trump': 1200
+        'trump': 1200, 'sally': 1300,
     }
     result = []
     for name in names:
@@ -38,7 +38,7 @@ class Friend(BaseModel):
         return contact_loader.load(self.name)
     
     has_cash: bool = False
-    def post_has_cash(self):
+    def post_has_cashx(self):
         self.has_cash = self.cash is not None
     
 
@@ -67,12 +67,5 @@ class Root(BaseModel):
 @pytest.mark.asyncio
 async def test_post_methods():
     root = Root()
-    root = await Resolver().resolve(root)
-    dct = root.dict()
-    assert dct == {'users': [{'age': 19,
-                     'has_cash': True,
-                     'friends': [{'has_cash': False,'cash': None, 'name': 'tom'},
-                                 {'has_cash': True, 'cash': {'number': 200}, 'name': 'jerry'}],
-                     'name': 'tangkikodo'},
-                     {'name': 'noone', 'age': 19, 'friends': [], 'has_cash':False }
-                     ]}
+    with pytest.raises(ResolverTargetAttrNotFound):
+        await Resolver().resolve(root)
