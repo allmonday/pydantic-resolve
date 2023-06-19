@@ -148,3 +148,30 @@ def test_auto_mapper_2():
     with pytest.raises(AttributeError):
         util.get_mapping_rule(*p2)  # type: ignore
     
+
+def test_auto_mapper_3():
+    class A(BaseModel):
+        a: int
+        class Config:
+            orm_mode=True
+    
+    p1 = (A, A(a=1))
+    rule = util.get_mapping_rule(*p1)  # type: ignore
+
+    assert rule is None
+    output = util.apply_rule(rule, *p1, is_list=False)
+    assert output == A(a=1)
+
+
+def test_auto_mapper_4():
+    class A(BaseModel):
+        a: int
+
+    class AA:
+        def __init__(self, a):
+            self.a = a
+    
+    p1 = (A, AA(a=1))
+    with pytest.raises(AttributeError):
+        util.get_mapping_rule(*p1)(*p1)  # type: ignore
+
