@@ -77,9 +77,9 @@ class Root(BaseModel):
         return [
             {"name": "tangkikodo", "age": 19},
             {"name": "john", "age": 20},
-            {"name": "trump", "age": 21},
-            {"name": "sally", "age": 22},
-            {"name": "no man", "age": 23},
+            # {"name": "trump", "age": 21},
+            # {"name": "sally", "age": 22},
+            # {"name": "no man", "age": 23},
         ]
 
 async def main():
