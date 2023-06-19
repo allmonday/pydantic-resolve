@@ -15,9 +15,9 @@ async def friends_batch_load_fn(names):
 
 async def contact_batch_load_fn(names):
     mock_db = {
-        'tom': 100, 'jerry':200, 'mike': 3000, 'wallace': 400, 'sam': 500,
-        'jim': 600, 'sindy': 700, 'lydia': 800, 'tangkikodo': 900, 'john': 1000,
-        'trump': 1200, 'sally': 1300,
+        'tom': 1001, 'jerry': 1002, 'mike': 1003, 'wallace': 1004, 'sam': 1005,
+        'jim': 1006, 'sindy': 1007, 'lydia': 1008, 'tangkikodo': 1009, 'john': 1010,
+        'trump': 2011, 'sally': 2012,
     }
     result = []
     for name in names:
@@ -28,6 +28,7 @@ async def contact_batch_load_fn(names):
 # define schemas
 class Contact(BaseModel):
     number: Optional[int]
+    
 
 class Friend(BaseModel):
     name: str
@@ -36,6 +37,15 @@ class Friend(BaseModel):
     @mapper(Contact)  # auto mapping
     def resolve_contact(self, contact_loader=LoaderDepend(contact_batch_load_fn)):
         return contact_loader.load(self.name)
+    
+    is_contact_10: bool = False  # starts with 10
+    def post_is_contact_10(self):
+        if self.contact:
+            if str(self.contact.number).startswith('10'):
+                self.is_contact_10 = True
+        else:
+            self.is_contact_10 = False
+
 
 class User(BaseModel):
     name: str
@@ -55,17 +65,21 @@ class User(BaseModel):
     @mapper(lambda names: [Friend(name=name) for name in names])
     def resolve_friends(self, friend_loader=LoaderDepend(friends_batch_load_fn)):
         return friend_loader.load(self.name)
+    
+    friend_count: int = 0
+    def post_friend_count(self):
+        self.friend_count = len(self.friends)
 
 class Root(BaseModel):
     users: List[User] = []
     @mapper(lambda items: [User(**item) for item in items])
     def resolve_users(self):
         return [
-            {"name": "tangkikodo", "age": 19}, 
-            {"name": "john", "age": 20}, 
-            {"name": "trump", "age": 21}, 
-            {"name": "sally", "age": 22}, 
-            {"name": "no man", "age": 23}, 
+            {"name": "tangkikodo", "age": 19},
+            {"name": "john", "age": 20},
+            {"name": "trump", "age": 21},
+            {"name": "sally", "age": 22},
+            {"name": "no man", "age": 23},
         ]
 
 async def main():
