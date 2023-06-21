@@ -4,7 +4,7 @@ from dataclasses import is_dataclass
 import functools
 from pydantic import BaseModel
 from inspect import iscoroutine
-from typing import Any, DefaultDict, Sequence, Type, TypeVar, List, Callable, Optional, Mapping, Union
+from typing import Any, DefaultDict, Sequence, Type, TypeVar, List, Callable, Optional, Mapping, Union, Iterator
 import types
 
 def get_class_field_annotations(cls: Type):
@@ -15,7 +15,7 @@ def get_class_field_annotations(cls: Type):
 T = TypeVar("T")
 V = TypeVar("V")
 
-def build_object(items: Sequence[T], keys: List[V], get_pk: Callable[[T], V]) -> List[Optional[T]]:
+def build_object(items: Sequence[T], keys: List[V], get_pk: Callable[[T], V]) -> Iterator[Optional[T]]:
     """
     helper function to build return object data required by aiodataloader
     """
@@ -23,11 +23,11 @@ def build_object(items: Sequence[T], keys: List[V], get_pk: Callable[[T], V]) ->
     for item in items:
         _key = get_pk(item)
         dct[_key] = item
-    results = [dct.get(k, None) for k in keys]
+    results = (dct.get(k, None) for k in keys)
     return results
 
 
-def build_list(items: Sequence[T], keys: List[V], get_pk: Callable[[T], V]) -> List[List[T]]:
+def build_list(items: Sequence[T], keys: List[V], get_pk: Callable[[T], V]) -> Iterator[List[T]]:
     """
     helper function to build return list data required by aiodataloader
     """
@@ -35,7 +35,7 @@ def build_list(items: Sequence[T], keys: List[V], get_pk: Callable[[T], V]) -> L
     for item in items:
         _key = get_pk(item)
         dct[_key].append(item)
-    results = [dct.get(k, []) for k in keys]
+    results = (dct.get(k, []) for k in keys)
     return results
 
 

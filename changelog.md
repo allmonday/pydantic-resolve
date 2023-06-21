@@ -1,5 +1,13 @@
 # Changelog
 
+# v1.2.2 (2023.6.21)
+
+- minor adjustment, `build_list` and `build_object` will return iterator instead of list.
+
+## v1.2.1 (2023.6.19)
+
+- fix, modify `post_fieldname` execution position, reduce the duplication.
+
 ## v1.2.0 (2023.6.18)
 
 - add `post_fieldname` method, it will be called after the object is fully resolve as a hook, developer can run some aggregation computation. `tests/resolver/test_18_post_methods.py`
