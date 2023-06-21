@@ -35,7 +35,7 @@ def test_build_object():
     a, b, c = users
     ids = [2, 3, 1, 4]
     output = util.build_object(users, ids, lambda x: x.id)
-    assert output == [b, c, a, None]
+    assert list(output) == [b, c, a, None]
     
 
 def test_build_list():
@@ -44,7 +44,7 @@ def test_build_list():
     a, b, c = users
     ids = [2, 3, 1, 4]
     output = util.build_list(users, ids, lambda x: x.id)
-    assert output == [[b], [c], [a], []]
+    assert list(output) == [[b], [c], [a], []]
 
 @pytest.mark.asyncio
 async def test_replace_method():

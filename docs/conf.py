@@ -9,7 +9,7 @@
 project = 'pydantic-resolve'
 copyright = '2023, tangkikodo'
 author = 'tangkikodo'
-release = '1.2.1'
+release = '1.2.2'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -29,5 +29,11 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'sphinxdoc'
+html_theme = 'haiku'
+html_theme_options = {
+    # "nosidebar": True,
+    # "body_max_width": '1200px',
+    # "body_max_width": None,
+    # "stickysidebar": True
+}
 html_static_path = ['_static']

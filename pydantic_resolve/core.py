@@ -32,12 +32,14 @@ def iter_over_object_post_methods(target):
             yield k
 
 async def resolve_obj(target, field):
+    """
+    TODO: deprecated, will remove in v2.0
+    """
     item = target.__getattribute__(field)
     try:
         val = item()
     except AttributeError as e:
         if str(e) == "'Depends' object has no attribute 'load'":  
-            # TODO: str(e) may changes in future, not stable
             raise DataloaderDependCantBeResolved("DataLoader used in schema, use Resolver().resolve() instead")
         raise e
 
@@ -53,7 +55,10 @@ async def resolve_obj(target, field):
         raise ResolverTargetAttrNotFound(f"attribute {replace_attr_name} not found")
 
 async def resolve(target: T) -> T:
-    """ entry: resolve dataclass object or pydantic object / or list in place """
+    """ 
+    entry: resolve dataclass object or pydantic object / or list in place 
+    TODO: deprecated, will remove in v2.0
+    """
 
     if isinstance(target, (list, tuple)):  # core/test_1, 3
         await asyncio.gather(*[resolve(t) for t in target])

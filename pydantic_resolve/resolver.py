@@ -35,6 +35,7 @@ class Resolver:
         self.loader_filters_ctx = contextvars.ContextVar('pydantic_resolve_internal_filter', default=loader_filters or {})
         self.ensure_type = ensure_type
     
+
     def exec_method(self, method):
         signature = inspect.signature(method)
         params = {}
@@ -43,7 +44,6 @@ class Resolver:
         for k, v in signature.parameters.items():
             if isinstance(v.default, Depends):
                 # Base: DataLoader or batch_load_fn
-                # transform: data transform function
                 Base = v.default.dependency
 
                 # module.kls to avoid same kls name from different module
@@ -65,10 +65,8 @@ class Resolver:
                         filter_config = filter_config_provider.get(Base, {})
 
                         # class ExampleLoader(DataLoader):
-                        #     filtar_x: bool  <--------------- set this
-                        #
-                        #     async def batch_load_fn(self, keys):
-                        #         ....
+                        #     filtar_x: bool  <--------------- set this field
+
                         for field in get_class_field_annotations(Base):
                             try:
                                 value = filter_config[field]
@@ -85,10 +83,10 @@ class Resolver:
                 params[k] = loader
         return method(**params)
 
+
     async def resolve_obj(self, target, field):
         item = target.__getattribute__(field)
         target_attr_name = str(field).replace(PREFIX, '')
-        val = self.exec_method(item)
 
         if not hasattr(target, target_attr_name):
             raise ResolverTargetAttrNotFound(f"attribute {target_attr_name} not found")
@@ -97,12 +95,11 @@ class Resolver:
             if not item.__annotations__:
                 raise MissingAnnotationError(f'{field}: return annotation is required')
 
+        val = self.exec_method(item)
         while iscoroutine(val) or asyncio.isfuture(val):
             val = await val
 
-        # start to resolve
         val = await self.resolve(val)  
-        # all children is resolved
         target.__setattr__(target_attr_name, val)
 
 
@@ -116,7 +113,7 @@ class Resolver:
             await asyncio.gather(*[self.resolve_obj(target, field) 
                                    for field in core.iter_over_object_resolvers(target)])
 
-            # execute post methods, accept no params
+            # execute post methods, take no params
             for post_key in core.iter_over_object_post_methods(target):
                 post_attr_name = post_key.replace(POST_PREFIX, '')
                 if not hasattr(target, post_attr_name):
