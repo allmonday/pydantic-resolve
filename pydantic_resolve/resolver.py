@@ -30,11 +30,31 @@ class Resolver:
     """
     Entrypoint of a resolve action
     """
-    def __init__(self, loader_filters: Optional[Dict[Any, Dict[str, Any]]] = None, ensure_type=False):
+    def __init__(
+            self, 
+            loader_filters: Optional[Dict[Any, Dict[str, Any]]] = None, 
+            loader_instances: Optional[Dict[Any, Any]] = None,
+            ensure_type=False):
         self.ctx = contextvars.ContextVar('pydantic_resolve_internal_context', default={})
+
+        # for dataloader which has class attributes, you can assign the value at here
         self.loader_filters_ctx = contextvars.ContextVar('pydantic_resolve_internal_filter', default=loader_filters or {})
+
+        # now you can pass your loader instance, Resolver will check isinstance
+        if loader_instances and self.validate_instance(loader_instances):
+            self.loader_instances = loader_instances
+        else:
+            self.loader_instances = None
+
         self.ensure_type = ensure_type
     
+    def validate_instance(self, loader_instances: Dict[Any, Any]):
+        for cls, loader in loader_instances.items():
+            if not issubclass(cls, DataLoader):
+                raise AttributeError(f'{cls.__name__} must be subclass of DataLoader')
+            if not isinstance(loader, cls):
+                raise AttributeError(f'{loader.__name__} is not instance of {cls.__name__}')
+        return True
 
     def exec_method(self, method):
         signature = inspect.signature(method)
@@ -46,12 +66,16 @@ class Resolver:
                 # Base: DataLoader or batch_load_fn
                 Base = v.default.dependency
 
+                # check loader_instance first, if has predefined loader instance, just use it.
+                if self.loader_instances and self.loader_instances.get(Base):
+                    loader = self.loader_instances.get(Base)
+                    params[k] = loader
+                    continue
+
                 # module.kls to avoid same kls name from different module
                 cache_key = f'{v.default.dependency.__module__}.{v.default.dependency.__name__}'
-
                 cache_provider = self.ctx.get()
                 hit = cache_provider.get(cache_key, None)
-
                 if hit:
                     loader = hit
                 else:
