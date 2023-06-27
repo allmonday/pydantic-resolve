@@ -1,6 +1,20 @@
 # Changelog
 
-# v1.2.2 (2023.6.21)
+## v1.3.0 (2023.6.27)
+
+- add `Resolver.loader_instances` param, user can create loader before Resolver and this loader will be used inside. for example: you can prime value and to avoid extra query.
+
+```python
+loader = FriendLoader()
+loader.prime('tangkikodo', ['tom', 'jerry'])
+loader.prime('john', ['mike', 'wallace'])
+result = await Resolver(loader_instances={FriendLoader: loader}).resolve(root)
+# batch_load_fn will not run.
+```
+
+more detail: `tests/resolver/test_20_loader_instance.py`
+
+## v1.2.2 (2023.6.21)
 
 - minor adjustment, `build_list` and `build_object` will return iterator instead of list.
 
