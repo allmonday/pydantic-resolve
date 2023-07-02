@@ -46,7 +46,7 @@ async def test_mapper_2():
 
     class BookLoader(DataLoader):
         async def batch_load_fn(self, keys):
-            return [{'name': f'book-{k}'} for k in keys ]
+            return [[{'name': f'book-{k}'}] for k in keys ]
     
     class Book(BaseModel):
         name: str
@@ -65,7 +65,7 @@ async def test_mapper_2():
     source = [r.dict() for r in results]
 
     expected = [
-        {'id': 1, 'name': 'jack', 'book': {'name': 'book-1'} },
+        {'id': 1, 'name': 'jack', 'book': [{'name': 'book-1'}] },
         ]
     assert source == expected
 
@@ -113,7 +113,7 @@ async def test_mapper_4():
     """
 
     async def batch_load_fn(keys):
-        return [{'name': f'book-{k}'} for k in keys ]
+        return [[{'name': f'book-{k}'}] for k in keys ]
     
     @dataclass
     class Book:
@@ -133,7 +133,7 @@ async def test_mapper_4():
     source = [r.dict() for r in results]
 
     expected = [
-        {'id': 1, 'name': 'jack', 'book': Book(name='book-1')},
+        {'id': 1, 'name': 'jack', 'book': [Book(name='book-1')]},
         ]
     assert source == expected
 
@@ -148,7 +148,7 @@ async def test_mapper_5():
             self.name = name
 
     async def batch_load_fn(keys):
-        return [Bo(name=f'book-{k}') for k in keys ]
+        return [[Bo(name=f'book-{k}')] for k in keys ]
     
     @dataclass
     class Book:
@@ -166,3 +166,66 @@ async def test_mapper_5():
     students = [ Student(id=1, name="jack") ]
     with pytest.raises(NotImplementedError):
         await Resolver().resolve(students)
+
+
+@pytest.mark.asyncio
+async def test_mapper_6():
+    """
+    pydantic to pydantic
+    """
+    class Bo(BaseModel):
+        name: str
+
+    class Book(BaseModel):
+        name: str
+        published: bool = False
+
+    async def batch_load_fn(keys):
+        return [[Bo(name=f'book-{k}')] for k in keys ]
+    
+
+    class Student(BaseModel):
+        id: int
+        name: str
+
+        books: List[Book] = []
+        @mapper(Book)
+        def resolve_books(self, loader=LoaderDepend(batch_load_fn)):
+            return loader.load(self.id)
+
+    students = [ Student(id=1, name="jack") ]
+    result = await Resolver().resolve(students)
+    assert result[0].dict() == {'id':1, 'name':"jack", 'books':[{'name': "book-1", 'published':False}]}
+
+
+@pytest.mark.asyncio
+async def test_mapper_7():
+    """
+    pydantic to pydantic
+    """
+    class Bo(BaseModel):
+        name: str
+
+    class Book(BaseModel):
+        name: str
+        published: bool = False
+
+        class Config:
+            orm_mode = True
+
+    async def batch_load_fn(keys):
+        return [[Bo(name=f'book-{k}')] for k in keys ]
+    
+
+    class Student(BaseModel):
+        id: int
+        name: str
+
+        books: List[Book] = []
+        @mapper(Book)
+        def resolve_books(self, loader=LoaderDepend(batch_load_fn)):
+            return loader.load(self.id)
+
+    students = [ Student(id=1, name="jack") ]
+    result = await Resolver().resolve(students)
+    assert result[0].dict() == {'id':1, 'name':"jack", 'books':[{'name': "book-1", 'published':False}]}
