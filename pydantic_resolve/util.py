@@ -93,8 +93,9 @@ def get_mapping_rule(target, source) -> Optional[Callable]:
             else:
                 return lambda t, s: t.from_orm(s)
 
-        if isinstance(source, dict):
+        if isinstance(source, (dict, BaseModel)):
             return lambda t, s: t.parse_obj(s)
+
         else:
             raise AttributeError(f"{type(source)} -> {target.__name__}: pydantic can't handle non-dict data")
     

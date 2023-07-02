@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.3.1 (2023.7.3)
+
+- support `auto-mapping` from pydantic to pydantic and fix some testcases.
+
+more detail: `tests/resolver/test_16_mapper.py`
+
+- test_mapper_6
+- test_mapper_7
+
 ## v1.3.0 (2023.6.27)
 
 - add `Resolver.loader_instances` param, user can create loader before Resolver and this loader will be used inside. for example: you can prime value and to avoid extra query.
