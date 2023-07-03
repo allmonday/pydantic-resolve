@@ -160,56 +160,8 @@ asyncio.run(main())
       ],
       "friend_count": 2
     },
-    {
-      "name": "trump",
-      "age": 21,
-      "greeting": "hello, i'm trump, 21 years old.",
-      "contact": {
-        "number": 2011
-      },
-      "friends": [
-        {
-          "name": "sam",
-          "contact": {
-            "number": 1005
-          },
-          "is_contact_10": true
-        },
-        {
-          "name": "jim",
-          "contact": {
-            "number": 1006
-          },
-          "is_contact_10": true
-        }
-      ],
-      "friend_count": 2
-    },
-    {
-      "name": "sally",
-      "age": 22,
-      "greeting": "hello, i'm sally, 22 years old.",
-      "contact": {
-        "number": 2012
-      },
-      "friends": [
-        {
-          "name": "sindy",
-          "contact": {
-            "number": 1007
-          },
-          "is_contact_10": true
-        },
-        {
-          "name": "lydia",
-          "contact": {
-            "number": 1008
-          },
-          "is_contact_10": true
-        }
-      ],
-      "friend_count": 2
-    },
+    ...
+    ,
     {
       "name": "no man",
       "age": 23,
@@ -231,13 +183,56 @@ pip install pydantic-resolve
 - use `resolve` for simple scenario,
 - use `Resolver` and `LoaderDepend` for complicated nested batch query.
 
-```python
-from pydantic_resolve import (
-    resolve,                     # handle simple resolving task
-    Resolver, LoaderDepend,      # handle schema resolving with LoaderDepend and DataLoader
-    ResolverTargetAttrNotFound, DataloaderDependCantBeResolved, LoaderFieldNotProvidedError  # errors
-)
-```
+## API
+
+`Resolver(loader_filters, loader_instances, ensure_type)`
+
+- `loader_filters`
+
+  provide extra query filters along with loader key.
+
+  detail: `examples/6_sqlalchemy_loaderdepend_global_filter.py` L55, L59
+
+- `loader_instances`
+
+  provide pre-created loader instance, with can `prime` data into loader cache.
+
+  detail: `tests/resolver/test_20_loader_instance.py`, L62, L63
+
+- `ensure_type`
+
+  if `True`, resolve method is restricted to be annotated.
+
+  detail: `tests/resolver/test_13_check_wrong_type`
+
+`LoaderDepend(loader_fn)`
+
+- `loader_fn`: subclass of DataLoader or batch_load_fn. [detail](https://github.com/syrusakbary/aiodataloader#dataloaderbatch_load_fn-options)
+
+  declare dataloader dependency, `pydantic-resolve` will take the care of lifecycle of dataloader.
+
+`build_list(rows, keys, fn)` & `build_object(rows, keys, fn)`
+
+- `rows`: query result
+- `keys`: batch_load_fn:keys
+- `fn`: define the way to get primary key
+
+  helper function to generate return value required by `batch_load_fn`. read the code for details.
+
+`mapper(param)`
+
+- `param`: can be either a class of pydantic or dataclass, or a lambda.
+
+  `pydantic-resolve` will trigger the fn in `mapper` after inner future is resolved. it exposes an interface to change return schema even from the same dataloader.
+  if param is a class, it will try to automatically transform it.
+
+`ensure_subset(base_class)`
+
+- `base_class`: pydantic class
+
+  it can raise exception if fields of decorated class has field not existed in `base_class`.
+
+  detail: `tests/utils/test_2_ensure_subset.py`
 
 ## Run FastAPI example
 
