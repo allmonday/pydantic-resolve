@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.3.2 (2023.7.4)
+
+- add subset check decorator `ensure_subset`.
+
+```python
+    class Base(BaseModel):
+        a: str
+        b: int
+
+    @util.ensure_subset(Base)
+    class ChildA(BaseModel):
+        a: str
+
+    @util.ensure_subset(Base)
+    class ChildB(BaseModel):
+        a: str
+        c: int = 0
+        def resolve_c(self):
+            return 21
+
+    @util.ensure_subset(Base)
+    class ChildB(BaseModel):
+        a: int  # raise attribute error
+```
+
 ## v1.3.1 (2023.7.3)
 
 - support `auto-mapping` from pydantic to pydantic and fix some testcases.

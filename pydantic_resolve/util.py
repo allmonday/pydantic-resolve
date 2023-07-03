@@ -115,3 +115,25 @@ def apply_rule(rule: Optional[Callable], target, source: Any, is_list: bool):
         return [rule(target, s) for s in source]
     else:
         return rule(target, source)
+    
+
+def ensure_subset(base):
+    """
+    used with pydantic class to make sure a class's field is 
+    subset of target class
+    """
+    def wrap(kls):
+        assert issubclass(base, BaseModel), 'base should be pydantic class'
+        assert issubclass(kls, BaseModel), 'class should be pydantic class'
+        @functools.wraps(kls)
+        def inner():
+            for k, field in kls.__fields__.items():
+                if field.required:
+                    base_field = base.__fields__.get(k)
+                    if not base_field:
+                        raise AttributeError(f'{k} not existed in {base.__name__}.')
+                    if base_field and base_field.type_ != field.type_:
+                        raise AttributeError(f'type of {k} not consistent with {base.__name__}'  )
+            return  kls
+        return inner()
+    return wrap
