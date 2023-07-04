@@ -13,6 +13,8 @@
 **example**:
 
 ```python
+# prepare dataloader
+
 import asyncio
 from typing import List, Optional
 from pydantic import BaseModel
@@ -39,8 +41,11 @@ async def contact_batch_load_fn(names):
         n = mock_db.get(name, None)
         result.append({'number': n} if n else None)
     return result
+```
 
+```python
 # define data schemas
+
 class Contact(BaseModel):
     number: Optional[int]
 
@@ -94,6 +99,11 @@ class Root(BaseModel):
             {"name": "sally", "age": 22},
             {"name": "no man", "age": 23},
         ]
+
+```
+
+```python
+# resolve results
 
 async def main():
     import json
