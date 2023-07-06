@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.4.1 (2023.7.6)
+
+- minor optimization, iteration of object attributes.
+
 ## v1.4.0 (2023.7.6)
 
 - support resolve through objects which intermediate items has not `resolve_` methods.
