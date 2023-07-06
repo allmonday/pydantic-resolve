@@ -6,7 +6,7 @@ from typing import TypeVar, Dict
 from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingAnnotationError
 from typing import Any, Callable, Optional
 from pydantic_resolve import core
-from .constant import PREFIX, POST_PREFIX
+from .constant import PREFIX, POST_PREFIX, ATTRIBUTE, RESOLVER
 from .util import get_class_field_annotations
 from inspect import isclass
 from aiodataloader import DataLoader
@@ -108,18 +108,17 @@ class Resolver:
         return method(**params)
 
 
-    async def resolve_obj(self, target, field):
-        item = target.__getattribute__(field)
+    async def resolve_obj(self, target, field, attr):
         target_attr_name = str(field).replace(PREFIX, '')
 
         if not hasattr(target, target_attr_name):
             raise ResolverTargetAttrNotFound(f"attribute {target_attr_name} not found")
 
         if self.ensure_type:
-            if not item.__annotations__:
+            if not attr.__annotations__:
                 raise MissingAnnotationError(f'{field}: return annotation is required')
 
-        val = self.exec_method(item)
+        val = self.exec_method(attr)
         while iscoroutine(val) or asyncio.isfuture(val):
             val = await val
 
@@ -129,13 +128,16 @@ class Resolver:
 
     async def resolve(self, target: T) -> T:
         """ entry: resolve dataclass object or pydantic object / or list in place """
-
         if isinstance(target, (list, tuple)):
             await asyncio.gather(*[self.resolve(t) for t in target])
 
         if core.is_acceptable_type(target):
-            await asyncio.gather(*[self.resolve_obj(target, field) 
-                                   for field in core.iter_over_object_resolvers(target)])
+            tasks = []
+            for field, attr, _type in core.iter_over_object_resolvers_and_acceptable_fields(target):
+                if _type == ATTRIBUTE: tasks.append(self.resolve(attr))
+                if _type == RESOLVER: tasks.append(self.resolve_obj(target, field, attr))
+
+            await asyncio.gather(*tasks)
 
             # execute post methods, take no params
             for post_key in core.iter_over_object_post_methods(target):

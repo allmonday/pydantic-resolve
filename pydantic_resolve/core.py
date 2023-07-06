@@ -4,9 +4,12 @@ from pydantic import BaseModel
 from dataclasses import is_dataclass
 from typing import TypeVar
 from .exceptions import ResolverTargetAttrNotFound, DataloaderDependCantBeResolved
-from .constant import PREFIX, POST_PREFIX
+from .constant import PREFIX, POST_PREFIX, RESOLVER, ATTRIBUTE
 
 T = TypeVar("T")
+
+def is_list(target) -> bool:
+    return isinstance(target, (list, tuple))
 
 def is_acceptable_type(target):
     """
@@ -19,11 +22,34 @@ def is_acceptable_type(target):
     """
     return isinstance(target, BaseModel) or is_dataclass(target)
 
-def iter_over_object_resolvers(target):
-    """get method starts with resolve_"""
-    for k in dir(target):
-        if k.startswith(PREFIX) and ismethod(target.__getattribute__(k)):
-            yield k
+def iter_over_object_resolvers_and_acceptable_fields(target):
+    """
+        return 
+        1. method starts with resolve_,  eg: resolve_name, resolve_age
+        2. field of pydantic or dataclass, which is not resolved by step1. (if `resolve_name` already exists, it will skip `name` )
+    """
+    # TODO: if pydantic object, read field from __fields__
+    resolver_fields = set()
+    fields = dir(target)
+    resolvers = [f for f in fields if f.startswith(PREFIX)]
+
+    if isinstance(target, BaseModel):
+        attributes = target.__fields__.keys()
+    else:
+        attributes = [f for f in fields if not f.startswith('__')]
+
+    for field in resolvers:
+        attr = target.__getattribute__(field)
+        if ismethod(attr):
+            resolver_fields.add(field.replace(PREFIX, ''))
+            yield (field, attr, RESOLVER)
+
+    for field in attributes: 
+        if (field in resolver_fields):  # skip field of resolve_[field]
+            continue
+        attr = target.__getattribute__(field)
+        if is_acceptable_type(attr) or is_list(attr):
+            yield (field, attr,ATTRIBUTE)
 
 def iter_over_object_post_methods(target):
     """get method starts with post_"""
@@ -31,13 +57,12 @@ def iter_over_object_post_methods(target):
         if k.startswith(POST_PREFIX) and ismethod(target.__getattribute__(k)):
             yield k
 
-async def resolve_obj(target, field):
+async def resolve_obj(target, field: str, attr):
     """
     TODO: deprecated, will remove in v2.0
     """
-    item = target.__getattribute__(field)
     try:
-        val = item()
+        val = attr()
     except AttributeError as e:
         if str(e) == "'Depends' object has no attribute 'load'":  
             raise DataloaderDependCantBeResolved("DataLoader used in schema, use Resolver().resolve() instead")
@@ -60,11 +85,15 @@ async def resolve(target: T) -> T:
     TODO: deprecated, will remove in v2.0
     """
 
-    if isinstance(target, (list, tuple)):  # core/test_1, 3
+    if is_list(target):  # core/test_1, 3
         await asyncio.gather(*[resolve(t) for t in target])
 
     if is_acceptable_type(target):
-        await asyncio.gather(*[resolve_obj(target, field) 
-                               for field in iter_over_object_resolvers(target)])
+        tasks = []
+        for field, attr, _type in iter_over_object_resolvers_and_acceptable_fields(target):
+            if _type == ATTRIBUTE: tasks.append(resolve(attr))  # attribut
+            if _type == RESOLVER: tasks.append(resolve_obj(target, field, attr))
+
+        await asyncio.gather(*tasks)
 
     return target

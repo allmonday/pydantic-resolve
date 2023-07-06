@@ -1,5 +1,36 @@
 # Changelog
 
+## v1.4.0 (2023.7.6)
+
+- support resolve through objects which intermediate items has not `resolve_` methods.
+
+more detail: `tests/resolver/test_21_not_stop_by_idle_level.py`
+
+```python
+class C(BaseModel):
+    name: str = ''
+
+class B(BaseModel):
+    name: str
+    c: Optional[C] = None
+    async def resolve_c(self) -> Optional[C]:
+        await asyncio.sleep(1)
+        return C(name='hello world')
+
+class A(BaseModel):
+    b: B
+
+class Z(BaseModel):
+    a: A
+    resolve_age: int
+
+@pytest.mark.asyncio
+async def test_resolve_object():
+    s = Z(a=A(b=B(name="kikodo")), resolve_age=21)  # resolve starts from B
+
+    result = await Resolver().resolve(s)
+```
+
 ## v1.3.2 (2023.7.4)
 
 - add subset check decorator `ensure_subset`.
