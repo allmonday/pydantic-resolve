@@ -1,7 +1,7 @@
 import asyncio
 from inspect import ismethod, iscoroutine
 from pydantic import BaseModel
-from dataclasses import is_dataclass
+from dataclasses import is_dataclass, fields as dc_fields
 from typing import TypeVar
 from .exceptions import ResolverTargetAttrNotFound, DataloaderDependCantBeResolved
 from .constant import PREFIX, POST_PREFIX, RESOLVER, ATTRIBUTE
@@ -34,9 +34,11 @@ def iter_over_object_resolvers_and_acceptable_fields(target):
     resolvers = [f for f in fields if f.startswith(PREFIX)]
 
     if isinstance(target, BaseModel):
-        attributes = target.__fields__.keys()
+        attributes = list(target.__fields__.keys())
+    elif is_dataclass(target):
+        attributes = [f.name for f in dc_fields(target)]
     else:
-        attributes = [f for f in fields if not f.startswith('__')]
+        raise AttributeError('invalid type: should be pydantic object or dataclass object')
 
     for field in resolvers:
         attr = target.__getattribute__(field)
