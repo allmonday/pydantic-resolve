@@ -7,7 +7,7 @@ from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError,
 from typing import Any, Callable, Optional
 from pydantic_resolve import core
 from .constant import PREFIX, POST_PREFIX, ATTRIBUTE, RESOLVER
-from .util import get_class_field_annotations
+from .util import get_class_field_annotations, try_parse_to_object
 from inspect import isclass
 from aiodataloader import DataLoader
 
@@ -123,6 +123,9 @@ class Resolver:
             val = await val
 
         val = await self.resolve(val)  
+
+        if not getattr(attr, '__has_mapper__', False):  # defined in util.mapper
+            val = try_parse_to_object(target, target_attr_name, val)
         target.__setattr__(target_attr_name, val)
 
 

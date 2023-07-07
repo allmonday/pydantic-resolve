@@ -2,7 +2,7 @@ import asyncio
 from collections import defaultdict
 from dataclasses import is_dataclass
 import functools
-from pydantic import BaseModel
+from pydantic import BaseModel, parse_obj_as
 from inspect import iscoroutine
 from typing import Any, DefaultDict, Sequence, Type, TypeVar, List, Callable, Optional, Mapping, Union, Iterator
 import types
@@ -52,6 +52,7 @@ def mapper(func_or_class: Union[Callable, Type]):
         is class: call auto_mapping to have a try
     """
     def inner(inner_fn):
+        inner_fn.__has_mapper__ = True
         @functools.wraps(inner_fn)
         async def wrap(*args, **kwargs):
 
@@ -137,3 +138,20 @@ def ensure_subset(base):
             return  kls
         return inner()
     return wrap
+
+
+def try_parse_to_object(target, field, data):
+    if isinstance(target, BaseModel):
+        _fields = target.__fields__
+        field_anno = _fields[field].annotation
+        result = parse_obj_as(field_anno, data)
+        return result
+
+    elif is_dataclass(target):
+        _fields = target.__dataclass_fields__
+        field_type = _fields[field].type
+        result = parse_obj_as(field_type, data)
+        return result
+    else:
+        return data
+
