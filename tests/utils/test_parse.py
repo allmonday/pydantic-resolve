@@ -55,3 +55,28 @@ def test_mix():
 
     with pytest.raises(ValidationError):
         util.try_parse_to_object(a, 'b', [1,2,3])
+
+def test_orm():
+    class B(BaseModel):
+        age: int
+        class Config:
+            orm_mode=True
+
+    @dataclass
+    class A:
+        b: Optional[B] 
+
+    class BB():
+        def __init__(self, age: int):
+            self.age = age
+
+    
+    a = A(b=None)
+    value = util.try_parse_to_object(a, 'b', None)
+    assert value is None 
+
+    value = util.try_parse_to_object(a, 'b', BB(age=21))
+    assert value == B(age=21)
+
+    with pytest.raises(ValidationError):
+        util.try_parse_to_object(a, 'b', [1,2,3])
