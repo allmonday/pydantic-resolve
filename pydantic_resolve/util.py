@@ -4,7 +4,7 @@ from dataclasses import is_dataclass
 import functools
 from pydantic import BaseModel, parse_obj_as
 from inspect import iscoroutine
-from typing import Any, DefaultDict, Sequence, Type, TypeVar, List, Callable, Optional, Mapping, Union, Iterator
+from typing import Any, DefaultDict, Sequence, Type, TypeVar, List, Callable, Optional, Mapping, Union, Iterator, ForwardRef
 import types
 
 def get_class_field_annotations(cls: Type):
