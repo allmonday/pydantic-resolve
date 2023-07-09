@@ -6,10 +6,11 @@ from typing import TypeVar, Dict
 from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingAnnotationError
 from typing import Any, Callable, Optional
 from pydantic_resolve import core
-from .constant import HAS_MAPPER_FUNCTION, PREFIX, POST_PREFIX, ATTRIBUTE, RESOLVER
-from .util import get_class_field_annotations, try_parse_data_to_target_field_type
-from inspect import isclass
 from aiodataloader import DataLoader
+from inspect import isclass
+
+import pydantic_resolve.constant as const
+import pydantic_resolve.util as util
 
 
 def LoaderDepend(  # noqa: N802
@@ -91,7 +92,7 @@ class Resolver:
                         # class ExampleLoader(DataLoader):
                         #     filtar_x: bool  <--------------- set this field
 
-                        for field in get_class_field_annotations(Base):
+                        for field in util.get_class_field_annotations(Base):
                             try:
                                 value = filter_config[field]
                                 setattr(loader, field, value)
@@ -109,7 +110,7 @@ class Resolver:
 
 
     async def resolve_obj_field(self, target, field, attr):
-        target_attr_name = str(field).replace(PREFIX, '')
+        target_attr_name = str(field).replace(const.PREFIX, '')
 
         if not hasattr(target, target_attr_name):
             raise ResolverTargetAttrNotFound(f"attribute {target_attr_name} not found")
@@ -122,8 +123,8 @@ class Resolver:
         while iscoroutine(val) or asyncio.isfuture(val):
             val = await val
 
-        if not getattr(attr, HAS_MAPPER_FUNCTION, False):  # defined in util.mapper
-            val = try_parse_data_to_target_field_type(target, target_attr_name, val)
+        if not getattr(attr, const.HAS_MAPPER_FUNCTION, False):  # defined in util.mapper
+            val = util.try_parse_data_to_target_field_type(target, target_attr_name, val)
 
         val = await self.resolve(val)
 
@@ -138,14 +139,14 @@ class Resolver:
         if core.is_acceptable_type(target):
             tasks = []
             for field, attr, _type in core.iter_over_object_resolvers_and_acceptable_fields(target):
-                if _type == ATTRIBUTE: tasks.append(self.resolve(attr))
-                if _type == RESOLVER: tasks.append(self.resolve_obj_field(target, field, attr))
+                if _type == const.ATTRIBUTE: tasks.append(self.resolve(attr))
+                if _type == const.RESOLVER: tasks.append(self.resolve_obj_field(target, field, attr))
 
             await asyncio.gather(*tasks)
 
             # execute post methods, take no params
             for post_key in core.iter_over_object_post_methods(target):
-                post_attr_name = post_key.replace(POST_PREFIX, '')
+                post_attr_name = post_key.replace(const.POST_PREFIX, '')
                 if not hasattr(target, post_attr_name):
                     raise ResolverTargetAttrNotFound(f"fail to run {post_key}(), attribute {post_attr_name} not found")
 

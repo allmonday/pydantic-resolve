@@ -34,7 +34,6 @@ class Friend(BaseModel):
     name: str
 
     contact: Optional[Contact] = None
-    @mapper(Contact)  # auto mapping
     def resolve_contact(self, contact_loader=LoaderDepend(contact_batch_load_fn)):
         return contact_loader.load(self.name)
     
