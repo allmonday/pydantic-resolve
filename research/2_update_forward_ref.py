@@ -20,6 +20,8 @@ def forwrad(kls: BaseModel):
 
 DD = namedtuple('DD', 'name')
 
+class Base(BaseModel):
+    count: int
 
 class A(BaseModel):
     name: str
@@ -30,7 +32,7 @@ class B(BaseModel):
     name: str
     c: List[C] = []
 
-class C(BaseModel):
+class C(Base):
     name: str
     d: Optional[D] = None
 
@@ -47,7 +49,7 @@ forwrad(B)
 # C.update_forward_refs()
 
 t = time.time()
-c = parse_obj_as(B, {'name': 'ki', 'c': [{'name': '1', 'd': DD(name='d')}]})
+c = parse_obj_as(B, {'name': 'ki', 'c': [{'name': '1', 'count': 1, 'd': DD(name='d')}]})
 print(time.time() - t)
 c = parse_obj_as(B, c)
 print(time.time() - t)

@@ -142,3 +142,39 @@ async def test_4():
     classroom = ClassRoom(students=students)
     classroom = await Resolver().resolve(classroom)
     assert isinstance(classroom.students[0].books[0], Book)
+
+@pytest.mark.asyncio
+async def test_5():
+    BOOKS = {
+        1: [{'name': 'book1'}, {'name': 'book2'}],
+        2: [{'name': 'book3'}, {'name': 'book4'}],
+        3: [{'name': 'book1'}, {'name': 'book2'}],
+    }
+
+    class Book(BaseModel):
+        name: str
+        num: int  # missing fields
+
+    async def batch_load_fn(keys):
+        books = [[bb for bb in BOOKS.get(k, [])] for k in keys]
+        return books
+
+    class StudentBase(BaseModel):
+        id: int
+        name: str
+
+    class Student(StudentBase):
+
+        books: List[Book] = [] 
+        def resolve_books(self, loader=LoaderDepend(batch_load_fn)):
+            return loader.load(self.id)
+    
+    class ClassRoom(BaseModel):
+        students: List[Student]
+
+
+    students = [Student(id=1, name="jack"), Student(id=2, name="mike"), Student(id=3, name="wiki")]
+    classroom = ClassRoom(students=students)
+    with pytest.raises(ValidationError):
+        await Resolver().resolve(classroom)
+
