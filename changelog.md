@@ -1,6 +1,10 @@
 # Changelog
 
-## v1.5.0 (2023.7.7)
+## v1.5.1 (2023.7.9)
+
+- fix the order of auto map, which will break the resolve chain
+
+## v1.5.0 (2023.7.9) [has bug, do not use]
 
 - new feature. the return value from resolve_method will be automatically converted to the type of target field, which means mapper with params of type is not required any more.
 - if you `fromt __future__ import annotations` at top, make sure you define schemas in global scopes.

@@ -122,10 +122,11 @@ class Resolver:
         while iscoroutine(val) or asyncio.isfuture(val):
             val = await val
 
-        val = await self.resolve(val)  
-
         if not getattr(attr, HAS_MAPPER_FUNCTION, False):  # defined in util.mapper
             val = try_parse_data_to_target_field_type(target, target_attr_name, val)
+
+        val = await self.resolve(val)
+
         target.__setattr__(target_attr_name, val)
 
 
