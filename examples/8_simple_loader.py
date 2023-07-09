@@ -57,7 +57,6 @@ class User(BaseModel):
         return f"hello, i'm {self.name}, {self.age} years old."
 
     contact: Optional[Contact] = None
-    @mapper(Contact)
     def resolve_contact(self, contact_loader=LoaderDepend(contact_batch_load_fn)):
         return contact_loader.load(self.name)
     
@@ -72,14 +71,13 @@ class User(BaseModel):
 
 class Root(BaseModel):
     users: List[User] = []
-    @mapper(lambda items: [User(**item) for item in items])
     def resolve_users(self):
         return [
             {"name": "tangkikodo", "age": 19},
             {"name": "john", "age": 20},
-            # {"name": "trump", "age": 21},
-            # {"name": "sally", "age": 22},
-            # {"name": "no man", "age": 23},
+            {"name": "trump", "age": 21},
+            {"name": "sally", "age": 22},
+            {"name": "no man", "age": 23},
         ]
 
 async def main():
