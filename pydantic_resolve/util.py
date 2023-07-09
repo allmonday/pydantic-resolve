@@ -6,6 +6,9 @@ from pydantic import BaseModel, parse_obj_as
 from inspect import iscoroutine
 from typing import Any, DefaultDict, Sequence, Type, TypeVar, List, Callable, Optional, Mapping, Union, Iterator, ForwardRef
 import types
+from .constant import PYDANTIC_FORWARD_REF_UPDATED, HAS_MAPPER_FUNCTION
+
+from pydantic_resolve.core import is_acceptable_type
 
 def get_class_field_annotations(cls: Type):
     anno = cls.__dict__.get('__annotations__') or {}
@@ -52,7 +55,10 @@ def mapper(func_or_class: Union[Callable, Type]):
         is class: call auto_mapping to have a try
     """
     def inner(inner_fn):
-        inner_fn.__has_mapper__ = True
+
+        # if mapper provided, auto map from target type will be disabled
+        setattr(inner_fn, HAS_MAPPER_FUNCTION, True)
+
         @functools.wraps(inner_fn)
         async def wrap(*args, **kwargs):
 
@@ -140,18 +146,35 @@ def ensure_subset(base):
     return wrap
 
 
-def try_parse_to_object(target, field, data):
+def forwrad_ref(kls: BaseModel):
+    kls.update_forward_refs()
+    setattr(kls, PYDANTIC_FORWARD_REF_UPDATED, True)
+
+    for field in kls.__fields__.values():
+        if issubclass(field.type_, BaseModel):
+            forwrad_ref(field.type_)
+
+def try_parse_to_object(target, field_name, data):
+    """
+    parse to pydantic or dataclass object
+    """
+    field_type = None
+
     if isinstance(target, BaseModel):
         _fields = target.__fields__
-        field_anno = _fields[field].annotation
-        result = parse_obj_as(field_anno, data)
-        return result
+        field_type = _fields[field_name].annotation
+        # research/2_update_forward_ref.py
+        if getattr(target.__class__, PYDANTIC_FORWARD_REF_UPDATED, False):
+            forwrad_ref(target.__class__)
 
     elif is_dataclass(target):
         _fields = target.__dataclass_fields__
-        field_type = _fields[field].type
+        field_type = _fields[field_name].type
+
+    if field_type:
         result = parse_obj_as(field_type, data)
         return result
+
     else:
         return data
 
