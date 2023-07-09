@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.5.2 (2023.7.10)
+
+- fix pydantic annotation related minor issue
+
 ## v1.5.1 (2023.7.9)
 
 - fix the order of auto map, which will break the resolve chain

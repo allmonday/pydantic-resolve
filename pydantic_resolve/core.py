@@ -28,7 +28,6 @@ def iter_over_object_resolvers_and_acceptable_fields(target):
         1. method starts with resolve_,  eg: resolve_name, resolve_age
         2. field of pydantic or dataclass, which is not resolved by step1. (if `resolve_name` already exists, it will skip `name` )
     """
-    # TODO: if pydantic object, read field from __fields__
     resolver_fields = set()
     fields = dir(target)
     resolvers = [f for f in fields if f.startswith(PREFIX)]
@@ -38,7 +37,7 @@ def iter_over_object_resolvers_and_acceptable_fields(target):
     elif is_dataclass(target):
         attributes = [f.name for f in dc_fields(target)]
     else:
-        raise AttributeError('invalid type: should be pydantic object or dataclass object')
+        raise AttributeError('invalid type: should be pydantic object or dataclass object')  # noqa
 
     for field in resolvers:
         attr = target.__getattribute__(field)

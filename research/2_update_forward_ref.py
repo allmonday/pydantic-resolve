@@ -12,9 +12,6 @@ type should call update_forward_refs to find the real type.
 def forwrad(kls: BaseModel):
     kls.update_forward_refs()
     for f, field in kls.__fields__.items():
-        print(f)
-        print(field.type_)
-
         if issubclass(field.type_, BaseModel):
             forwrad(field.type_)
 
@@ -25,7 +22,6 @@ class Base(BaseModel):
 
 class A(BaseModel):
     name: str
-    a: Optional[A]
     b: Optional[B]
 
 class B(BaseModel):
@@ -42,15 +38,10 @@ class D(BaseModel):
     class Config:
         orm_mode = True
 
-forwrad(B)
+forwrad(A)
 
-# acts like
-# B.update_forward_refs()
-# C.update_forward_refs()
+c = parse_obj_as(A,{'name': 'a', 'b': {'name': 'ki', 'c': [{'name': '1', 'count': 1, 'd': DD(name='d')}]}})
+print(c)
 
-t = time.time()
-c = parse_obj_as(B, {'name': 'ki', 'c': [{'name': '1', 'count': 1, 'd': DD(name='d')}]})
-print(time.time() - t)
 c = parse_obj_as(B, c)
-print(time.time() - t)
 print(c)

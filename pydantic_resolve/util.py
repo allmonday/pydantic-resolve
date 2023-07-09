@@ -1,14 +1,14 @@
 import asyncio
+import types
+import functools
 from collections import defaultdict
 from dataclasses import is_dataclass
-import functools
 from pydantic import BaseModel, parse_obj_as
 from inspect import iscoroutine
-from typing import Any, DefaultDict, Sequence, Type, TypeVar, List, Callable, Optional, Mapping, Union, Iterator, ForwardRef
-import types
-from .constant import PYDANTIC_FORWARD_REF_UPDATED, HAS_MAPPER_FUNCTION
+from typing import Any, DefaultDict, Sequence, Type, TypeVar, List, Callable, Optional, Mapping, Union, Iterator
 
-from pydantic_resolve.core import is_acceptable_type
+import pydantic_resolve.constant as const
+
 
 def get_class_field_annotations(cls: Type):
     anno = cls.__dict__.get('__annotations__') or {}
@@ -57,7 +57,7 @@ def mapper(func_or_class: Union[Callable, Type]):
     def inner(inner_fn):
 
         # if mapper provided, auto map from target type will be disabled
-        setattr(inner_fn, HAS_MAPPER_FUNCTION, True)
+        setattr(inner_fn, const.HAS_MAPPER_FUNCTION, True)
 
         @functools.wraps(inner_fn)
         async def wrap(*args, **kwargs):
@@ -132,6 +132,7 @@ def ensure_subset(base):
     def wrap(kls):
         assert issubclass(base, BaseModel), 'base should be pydantic class'
         assert issubclass(kls, BaseModel), 'class should be pydantic class'
+
         @functools.wraps(kls)
         def inner():
             for k, field in kls.__fields__.items():
@@ -146,13 +147,17 @@ def ensure_subset(base):
     return wrap
 
 
-def forwrad_ref(kls: BaseModel):
+def update_forward_refs(kls: BaseModel):
+    """
+    recursively update refs.
+    """
     kls.update_forward_refs()
-    setattr(kls, PYDANTIC_FORWARD_REF_UPDATED, True)
+    setattr(kls, const.PYDANTIC_FORWARD_REF_UPDATED, True)
 
     for field in kls.__fields__.values():
         if issubclass(field.type_, BaseModel):
-            forwrad_ref(field.type_)
+            update_forward_refs(field.type_)
+
 
 def try_parse_data_to_target_field_type(target, field_name, data):
     """
@@ -164,11 +169,16 @@ def try_parse_data_to_target_field_type(target, field_name, data):
 
     # 1. get type of target field
     if isinstance(target, BaseModel):
-        _fields = target.__fields__
-        field_type = _fields[field_name].annotation
+        _fields = target.__class__.__fields__
+        field_type = _fields[field_name].outer_type_
+
+        # handle optional logic
+        if data is None and _fields[field_name].required == False:
+            return data
+
         # research/2_update_forward_ref.py
-        if getattr(target.__class__, PYDANTIC_FORWARD_REF_UPDATED, False):
-            forwrad_ref(target.__class__)
+        if getattr(target.__class__, const.PYDANTIC_FORWARD_REF_UPDATED, False):
+            update_forward_refs(target.__class__)
 
     elif is_dataclass(target):
         _fields = target.__dataclass_fields__
@@ -180,4 +190,4 @@ def try_parse_data_to_target_field_type(target, field_name, data):
         return result
     
     else:
-        return data
+        return data  #noqa
