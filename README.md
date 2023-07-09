@@ -53,7 +53,6 @@ class Friend(BaseModel):
     name: str
 
     contact: Optional[Contact] = None
-    @mapper(Contact)                                          # 1. resolve dataloader and map return dict to Contact object
     def resolve_contact(self, contact_loader=LoaderDepend(contact_batch_load_fn)):
         return contact_loader.load(self.name)
 
@@ -75,12 +74,11 @@ class User(BaseModel):
         return f"hello, i'm {self.name}, {self.age} years old."
 
     contact: Optional[Contact] = None
-    @mapper(Contact)
     def resolve_contact(self, contact_loader=LoaderDepend(contact_batch_load_fn)):
         return contact_loader.load(self.name)
 
     friends: List[Friend] = []
-    @mapper(lambda names: [Friend(name=name) for name in names])
+    @mapper(lambda names: [Friend(name=name) for name in names])  # manually convert
     def resolve_friends(self, friend_loader=LoaderDepend(friends_batch_load_fn)):
         return friend_loader.load(self.name)
 
@@ -90,7 +88,6 @@ class User(BaseModel):
 
 class Root(BaseModel):
     users: List[User] = []
-    @mapper(lambda items: [User(**item) for item in items])
     def resolve_users(self):
         return [
             {"name": "tangkikodo", "age": 19},
