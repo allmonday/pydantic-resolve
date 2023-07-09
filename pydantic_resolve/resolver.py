@@ -6,8 +6,8 @@ from typing import TypeVar, Dict
 from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingAnnotationError
 from typing import Any, Callable, Optional
 from pydantic_resolve import core
-from .constant import PREFIX, POST_PREFIX, ATTRIBUTE, RESOLVER
-from .util import get_class_field_annotations
+from .constant import HAS_MAPPER_FUNCTION, PREFIX, POST_PREFIX, ATTRIBUTE, RESOLVER
+from .util import get_class_field_annotations, try_parse_data_to_target_field_type
 from inspect import isclass
 from aiodataloader import DataLoader
 
@@ -108,7 +108,7 @@ class Resolver:
         return method(**params)
 
 
-    async def resolve_obj(self, target, field, attr):
+    async def resolve_obj_field(self, target, field, attr):
         target_attr_name = str(field).replace(PREFIX, '')
 
         if not hasattr(target, target_attr_name):
@@ -123,6 +123,9 @@ class Resolver:
             val = await val
 
         val = await self.resolve(val)  
+
+        if not getattr(attr, HAS_MAPPER_FUNCTION, False):  # defined in util.mapper
+            val = try_parse_data_to_target_field_type(target, target_attr_name, val)
         target.__setattr__(target_attr_name, val)
 
 
@@ -135,7 +138,7 @@ class Resolver:
             tasks = []
             for field, attr, _type in core.iter_over_object_resolvers_and_acceptable_fields(target):
                 if _type == ATTRIBUTE: tasks.append(self.resolve(attr))
-                if _type == RESOLVER: tasks.append(self.resolve_obj(target, field, attr))
+                if _type == RESOLVER: tasks.append(self.resolve_obj_field(target, field, attr))
 
             await asyncio.gather(*tasks)
 

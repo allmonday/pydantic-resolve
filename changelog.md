@@ -1,5 +1,43 @@
 # Changelog
 
+## v1.5.0 (2023.7.7)
+
+- new feature. the return value from resolve_method will be automatically converted to the type of target field, which means mapper with params of type is not required any more.
+- if you `fromt __future__ import annotations` at top, make sure you define schemas in global scopes.
+
+```python
+    class Book(BaseModel):
+        name: str
+
+    async def batch_load_fn(keys):
+        print('oader')
+        books = [[bb for bb in BOOKS.get(k, [])] for k in keys]
+        return books
+
+    class Student(BaseModel):
+        id: int
+        name: str
+
+        books: List[Book] = []
+        def resolve_books(self, loader=LoaderDepend(batch_load_fn)):
+            return loader.load(self.id)  # auto convert dict into Book type
+
+    class ClassRoom(BaseModel):
+        students: List[Student]
+
+
+    students = [Student(id=1, name="jack"), Student(id=2, name="mike"), Student(id=3, name="wiki")]
+    classroom = ClassRoom(students=students)
+    classroom = await Resolver().resolve(classroom)
+    assert isinstance(classroom.students[0].books[0], Book)
+```
+
+- recommend: using `mapper` with lambda only
+
+## v1.4.1 (2023.7.6)
+
+- minor optimization, iteration of object attributes.
+
 ## v1.4.0 (2023.7.6)
 
 - support resolve through objects which intermediate items has not `resolve_` methods.

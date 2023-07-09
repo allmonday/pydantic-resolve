@@ -1,4 +1,3 @@
-from __future__ import annotations
 from typing import List
 import pytest
 from pydantic import BaseModel

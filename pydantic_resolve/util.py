@@ -2,10 +2,13 @@ import asyncio
 from collections import defaultdict
 from dataclasses import is_dataclass
 import functools
-from pydantic import BaseModel
+from pydantic import BaseModel, parse_obj_as
 from inspect import iscoroutine
-from typing import Any, DefaultDict, Sequence, Type, TypeVar, List, Callable, Optional, Mapping, Union, Iterator
+from typing import Any, DefaultDict, Sequence, Type, TypeVar, List, Callable, Optional, Mapping, Union, Iterator, ForwardRef
 import types
+from .constant import PYDANTIC_FORWARD_REF_UPDATED, HAS_MAPPER_FUNCTION
+
+from pydantic_resolve.core import is_acceptable_type
 
 def get_class_field_annotations(cls: Type):
     anno = cls.__dict__.get('__annotations__') or {}
@@ -52,6 +55,10 @@ def mapper(func_or_class: Union[Callable, Type]):
         is class: call auto_mapping to have a try
     """
     def inner(inner_fn):
+
+        # if mapper provided, auto map from target type will be disabled
+        setattr(inner_fn, HAS_MAPPER_FUNCTION, True)
+
         @functools.wraps(inner_fn)
         async def wrap(*args, **kwargs):
 
@@ -137,3 +144,40 @@ def ensure_subset(base):
             return  kls
         return inner()
     return wrap
+
+
+def forwrad_ref(kls: BaseModel):
+    kls.update_forward_refs()
+    setattr(kls, PYDANTIC_FORWARD_REF_UPDATED, True)
+
+    for field in kls.__fields__.values():
+        if issubclass(field.type_, BaseModel):
+            forwrad_ref(field.type_)
+
+def try_parse_data_to_target_field_type(target, field_name, data):
+    """
+    parse to pydantic or dataclass object
+    1. get type of target field
+    2. parse
+    """
+    field_type = None
+
+    # 1. get type of target field
+    if isinstance(target, BaseModel):
+        _fields = target.__fields__
+        field_type = _fields[field_name].annotation
+        # research/2_update_forward_ref.py
+        if getattr(target.__class__, PYDANTIC_FORWARD_REF_UPDATED, False):
+            forwrad_ref(target.__class__)
+
+    elif is_dataclass(target):
+        _fields = target.__dataclass_fields__
+        field_type = _fields[field_name].type
+
+    # 2. parse
+    if field_type:
+        result = parse_obj_as(field_type, data)
+        return result
+    
+    else:
+        return data
