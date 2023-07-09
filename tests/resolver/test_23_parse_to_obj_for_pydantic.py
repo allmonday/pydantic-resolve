@@ -1,3 +1,4 @@
+from collections import namedtuple
 from typing import List
 import pytest
 from pydantic import BaseModel, ValidationError
@@ -16,7 +17,7 @@ async def test_1():
 
     async def batch_load_fn(keys):
         print('oader')
-        books = [[bb for bb in BOOKS.get(k, [])] for k in keys]
+        books = [BOOKS.get(k, []) for k in keys]
         return books
 
     class Student(BaseModel):
@@ -35,6 +36,7 @@ async def test_1():
     classroom = ClassRoom(students=students)
     classroom = await Resolver().resolve(classroom)
     assert isinstance(classroom.students[0].books[0], Book)
+
 
 @pytest.mark.asyncio
 async def test_2():
@@ -103,3 +105,40 @@ async def test_3():
     classroom = ClassRoom(students=students)
     with pytest.raises(ValidationError):
         await Resolver().resolve(classroom)
+
+
+@pytest.mark.asyncio
+async def test_4():
+    BB = namedtuple('BB', 'name')
+
+    BOOKS = {
+        1: [BB(name='book1'),BB(name='book2')],
+        2: [BB(name='book3'),BB(name='book4')],
+        3: [BB(name='book1'),BB(name='book2')],
+    }
+
+    class Book(BaseModel):
+        name: str
+        class Config:
+            orm_mode = True
+
+    async def batch_load_fn(keys):
+        books = [BOOKS.get(k, []) for k in keys]
+        return books
+
+    class Student(BaseModel):
+        id: int
+        name: str
+
+        books: List[Book] = [] 
+        def resolve_books(self, loader=LoaderDepend(batch_load_fn)):
+            return loader.load(self.id)
+    
+    class ClassRoom(BaseModel):
+        students: List[Student]
+
+
+    students = [Student(id=1, name="jack"), Student(id=2, name="mike"), Student(id=3, name="wiki")]
+    classroom = ClassRoom(students=students)
+    classroom = await Resolver().resolve(classroom)
+    assert isinstance(classroom.students[0].books[0], Book)

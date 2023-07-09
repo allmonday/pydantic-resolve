@@ -1,10 +1,10 @@
 from typing import List
 import pytest
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from pydantic_resolve import Resolver, LoaderDepend
 
 @pytest.mark.asyncio
-async def test_loader_depends_2():
+async def test_loader_depends_1():
     BOOKS = {
         1: [{'name': 'book1'}, {'name': 'book2'}],
         2: [{'name': 'book3'}, {'name': 'book4'}],
