@@ -154,12 +154,15 @@ def forwrad_ref(kls: BaseModel):
         if issubclass(field.type_, BaseModel):
             forwrad_ref(field.type_)
 
-def try_parse_to_object(target, field_name, data):
+def try_parse_data_to_target_field_type(target, field_name, data):
     """
     parse to pydantic or dataclass object
+    1. get type of target field
+    2. parse
     """
     field_type = None
 
+    # 1. get type of target field
     if isinstance(target, BaseModel):
         _fields = target.__fields__
         field_type = _fields[field_name].annotation
@@ -171,10 +174,10 @@ def try_parse_to_object(target, field_name, data):
         _fields = target.__dataclass_fields__
         field_type = _fields[field_name].type
 
+    # 2. parse
     if field_type:
         result = parse_obj_as(field_type, data)
         return result
-
+    
     else:
         return data
-

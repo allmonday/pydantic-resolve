@@ -42,6 +42,10 @@ class D(BaseModel):
 
 forwrad(B)
 
+# acts like
+# B.update_forward_refs()
+# C.update_forward_refs()
+
 t = time.time()
 c = parse_obj_as(B, {'name': 'ki', 'c': [{'name': '1', 'd': DD(name='d')}]})
 print(time.time() - t)

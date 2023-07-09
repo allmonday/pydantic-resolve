@@ -2,7 +2,8 @@
 
 ## v1.5.0 (2023.7.7)
 
-- new feature. the return value from resolve_method will be automatically converted to the type of target field.
+- new feature. the return value from resolve_method will be automatically converted to the type of target field, which means mapper with params of type is not required any more.
+- if you `fromt __future__ import annotations` at top, make sure you define schemas in global scopes.
 
 ```python
     class Book(BaseModel):
