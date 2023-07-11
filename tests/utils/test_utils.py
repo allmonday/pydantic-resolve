@@ -2,7 +2,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import List
 from pydantic_resolve import util
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 import pytest
 
 def test_get_class_field_annotations():

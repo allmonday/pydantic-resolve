@@ -10,176 +10,6 @@
 
 [Change log](./changelog.md)
 
-**example**:
-
-```python
-# prepare dataloader
-
-import asyncio
-from typing import List, Optional
-from pydantic import BaseModel
-from pydantic_resolve import Resolver, mapper, LoaderDepend
-
-# define dataset and loader functions
-async def friends_batch_load_fn(names):
-    mock_db = {
-        'tangkikodo': ['tom', 'jerry'],
-        'john': ['mike', 'wallace'],
-        'trump': ['sam', 'jim'],
-        'sally': ['sindy', 'lydia'],
-    }
-    return [mock_db.get(name, []) for name in names]
-
-async def contact_batch_load_fn(names):
-    mock_db = {
-        'tom': 1001, 'jerry': 1002, 'mike': 1003, 'wallace': 1004, 'sam': 1005,
-        'jim': 1006, 'sindy': 1007, 'lydia': 1008, 'tangkikodo': 1009, 'john': 1010,
-        'trump': 2011, 'sally': 2012,
-    }
-    result = []
-    for name in names:
-        n = mock_db.get(name, None)
-        result.append({'number': n} if n else None)
-    return result
-```
-
-```python
-# define data schemas
-
-class Contact(BaseModel):
-    number: Optional[int]
-
-class Friend(BaseModel):
-    name: str
-
-    contact: Optional[Contact] = None
-    def resolve_contact(self, contact_loader=LoaderDepend(contact_batch_load_fn)):
-        return contact_loader.load(self.name)
-
-    is_contact_10: bool = False
-    def post_is_contact_10(self):                             # 3. after resolve_contact executed, do extra computation
-        if self.contact:
-            if str(self.contact.number).startswith('10'):
-                self.is_contact_10 = True
-        else:
-            self.is_contact_10 = False
-
-class User(BaseModel):
-    name: str
-    age: int
-
-    greeting: str = ''
-    async def resolve_greeting(self):
-        await asyncio.sleep(1)
-        return f"hello, i'm {self.name}, {self.age} years old."
-
-    contact: Optional[Contact] = None
-    def resolve_contact(self, contact_loader=LoaderDepend(contact_batch_load_fn)):
-        return contact_loader.load(self.name)
-
-    friends: List[Friend] = []
-    @mapper(lambda names: [Friend(name=name) for name in names])  # manually convert
-    def resolve_friends(self, friend_loader=LoaderDepend(friends_batch_load_fn)):
-        return friend_loader.load(self.name)
-
-    friend_count: int = 0
-    def post_friend_count(self):
-        self.friend_count = len(self.friends)
-
-class Root(BaseModel):
-    users: List[User] = []
-    def resolve_users(self):
-        return [
-            {"name": "tangkikodo", "age": 19},
-            {"name": "john", "age": 20},
-            {"name": "trump", "age": 21},
-            {"name": "sally", "age": 22},
-            {"name": "no man", "age": 23},
-        ]
-
-```
-
-```python
-# resolve results
-
-async def main():
-    import json
-    root = Root()
-    root = await Resolver().resolve(root)                 # 4. run it
-    dct = root.dict()
-    print(json.dumps(dct, indent=4))
-
-asyncio.run(main())
-```
-
-**output**:
-
-```json
-{
-  "users": [
-    {
-      "name": "tangkikodo",
-      "age": 19,
-      "greeting": "hello, i'm tangkikodo, 19 years old.",
-      "contact": {
-        "number": 1009
-      },
-      "friends": [
-        {
-          "name": "tom",
-          "contact": {
-            "number": 1001
-          },
-          "is_contact_10": true
-        },
-        {
-          "name": "jerry",
-          "contact": {
-            "number": 1002
-          },
-          "is_contact_10": true
-        }
-      ],
-      "friend_count": 2
-    },
-    {
-      "name": "john",
-      "age": 20,
-      "greeting": "hello, i'm john, 20 years old.",
-      "contact": {
-        "number": 1010
-      },
-      "friends": [
-        {
-          "name": "mike",
-          "contact": {
-            "number": 1003
-          },
-          "is_contact_10": true
-        },
-        {
-          "name": "wallace",
-          "contact": {
-            "number": 1004
-          },
-          "is_contact_10": true
-        }
-      ],
-      "friend_count": 2
-    },
-    ...
-    ,
-    {
-      "name": "no man",
-      "age": 23,
-      "greeting": "hello, i'm no man, 23 years old.",
-      "contact": null,
-      "friends": [],
-      "friend_count": 0
-    }
-  ]
-}
-```
 
 ## Install
 
@@ -187,38 +17,376 @@ asyncio.run(main())
 pip install pydantic-resolve
 ```
 
-- use `resolve` for simple scenario,
-- use `Resolver` and `LoaderDepend` for complicated nested batch query.
+## Quick start
+
+Assume we have 3 tables of `departments`, `teams` and `members`, which have `1:n relationship` from left to right. 
+
+```python
+# 1. prepare table records
+departments = [
+    dict(id=1, name='INFRA'),
+    dict(id=2, name='DevOps'),
+    dict(id=1, name='Sales'),
+]
+
+teams = [
+    dict(id=1, department_id=1, name="K8S"),
+    dict(id=2, department_id=1, name="MONITORING"),
+    # ...
+    dict(id=10, department_id=2, name="Operation"),
+]
+
+members = [
+    dict(id=1, team_id=1, name="Sophia"),
+    # ...
+    dict(id=19, team_id=10, name="Emily"),
+    dict(id=20, team_id=10, name="Ella")
+]
+```
+
+and we want to generate nested json base on these three tables. the output should be looks like: 
+
+> and we hope to query each table for only once, N+1 query is forbidden.
+
+```json
+{
+  "departments": [
+    {
+      "id": 1,
+      "name": "INFRA",
+      "teams": [
+        {
+          "id": 1,
+          "name": "K8S",
+          "members": [
+            {
+              "id": 1,
+              "name": "Sophia"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+We will shows how to make it with `pydantic-resolve` which has 4 steps:
+
+1. get data
+2. group children with parent_id in dataloader function
+3. define pydantic schema, bind with dataloader
+4. resolve
+
+
+
+```python
+import json
+import asyncio
+from typing import List
+from pydantic import BaseModel
+from pydantic_resolve import Resolver, LoaderDepend, build_list
+
+# 1. prepare table records
+departments = [
+    dict(id=1, name='INFRA'),
+    dict(id=2, name='DevOps'),
+    dict(id=1, name='Sales'),
+]
+
+teams = [
+    dict(id=1, department_id=1, name="K8S"),
+    dict(id=2, department_id=1, name="MONITORING"),
+    dict(id=3, department_id=1, name="Jenkins"), 
+    dict(id=5, department_id=2, name="Frontend"),
+    dict(id=6, department_id=2, name="Bff"),
+    dict(id=7, department_id=3, name="Backend"), 
+    dict(id=8, department_id=2, name="CAT"),
+    dict(id=9, department_id=2, name="Account"),
+    dict(id=10, department_id=2, name="Operation"),
+]
+
+members = [
+  dict(id=1, team_id=1, name="Sophia"),
+  dict(id=2, team_id=1, name="Jackson"),
+  dict(id=3, team_id=2, name="Olivia"),
+  dict(id=4, team_id=2, name="Liam"),
+  dict(id=5, team_id=3, name="Emma"),
+  dict(id=6, team_id=4, name="Noah"),
+  dict(id=7, team_id=5, name="Ava"),
+  dict(id=8, team_id=6, name="Lucas"),
+  dict(id=9, team_id=6, name="Isabella"),
+  dict(id=10, team_id=6, name="Mason"),
+  dict(id=11, team_id=7, name="Mia"),
+  dict(id=12, team_id=8, name="Ethan"),
+  dict(id=13, team_id=8, name="Amelia"),
+  dict(id=14, team_id=9, name="Oliver"),
+  dict(id=15, team_id=9, name="Charlotte"),
+  dict(id=16, team_id=10, name="Jacob"),
+  dict(id=17, team_id=10, name="Abigail"),
+  dict(id=18, team_id=10, name="Daniel"),
+  dict(id=19, team_id=10, name="Emily"),
+  dict(id=20, team_id=10, name="Ella")
+]
+
+# 2. define dataloader
+async def teams_batch_load_fn(department_ids):
+    """ return teams grouped by department_id """
+    return build_list(teams, department_ids, lambda t: t['department_id'])
+
+async def members_batch_load_fn(team_ids):
+    """ return members grouped by team_id """
+    return build_list(members, team_ids, lambda t: t['team_id'])
+
+# 3. define pydantic types
+class Member(BaseModel):
+    id: int
+    name: str
+
+class Team(BaseModel):
+    id: int
+    name: str
+
+    members: List[Member] = []
+    def resolve_members(self, loader=LoaderDepend(members_batch_load_fn)):
+        return loader.load(self.id)
+
+class Department(BaseModel):
+    id: int
+    name: str
+    teams: List[Team] = []
+    def resolve_teams(self, loader=LoaderDepend(teams_batch_load_fn)):
+        return loader.load(self.id)
+
+class Result(BaseModel):
+    departments: List[Department] = []
+    def resolve_departments(self):
+        return departments
+
+async def main():
+    result = Result()
+    # 4. resolve
+    data = await Resolver().resolve(result)
+    print(json.dumps(data.dict(), indent=4))
+
+asyncio.run(main())
+```
+
+then we got:
+
+```json
+{
+  "departments": [
+    {
+      "id": 1,
+      "name": "INFRA",
+      "teams": [
+        {
+          "id": 1,
+          "name": "K8S",
+          "members": [
+            {
+              "id": 1,
+              "name": "Sophia"
+            },
+            {
+              "id": 2,
+              "name": "Jackson"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "name": "MONITORING",
+          "members": [
+            {
+              "id": 3,
+              "name": "Olivia"
+            },
+            {
+              "id": 4,
+              "name": "Liam"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "name": "Jenkins",
+          "members": [
+            {
+              "id": 5,
+              "name": "Emma"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "DevOps",
+      "teams": [
+        {
+          "id": 5,
+          "name": "Frontend",
+          "members": [
+            {
+              "id": 7,
+              "name": "Ava"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "name": "Bff",
+          "members": [
+            {
+              "id": 8,
+              "name": "Lucas"
+            },
+            {
+              "id": 9,
+              "name": "Isabella"
+            },
+            {
+              "id": 10,
+              "name": "Mason"
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "name": "CAT",
+          "members": [
+            {
+              "id": 12,
+              "name": "Ethan"
+            },
+            {
+              "id": 13,
+              "name": "Amelia"
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "name": "Account",
+          "members": [
+            {
+              "id": 14,
+              "name": "Oliver"
+            },
+            {
+              "id": 15,
+              "name": "Charlotte"
+            }
+          ]
+        },
+        {
+          "id": 10,
+          "name": "Operation",
+          "members": [
+            {
+              "id": 16,
+              "name": "Jacob"
+            },
+            {
+              "id": 17,
+              "name": "Abigail"
+            },
+            {
+              "id": 18,
+              "name": "Daniel"
+            },
+            {
+              "id": 19,
+              "name": "Emily"
+            },
+            {
+              "id": 20,
+              "name": "Ella"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "name": "Sales",
+      "teams": [
+        {
+          "id": 1,
+          "name": "K8S",
+          "members": [
+            {
+              "id": 1,
+              "name": "Sophia"
+            },
+            {
+              "id": 2,
+              "name": "Jackson"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "name": "MONITORING",
+          "members": [
+            {
+              "id": 3,
+              "name": "Olivia"
+            },
+            {
+              "id": 4,
+              "name": "Liam"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "name": "Jenkins",
+          "members": [
+            {
+              "id": 5,
+              "name": "Emma"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
 
 ## API
 
-`Resolver(loader_filters, loader_instances, ensure_type)`
+### Resolver(loader_filters, loader_instances, ensure_type)
 
 - `loader_filters`
 
   provide extra query filters along with loader key.
 
-  detail: `examples/6_sqlalchemy_loaderdepend_global_filter.py` L55, L59
+  reference: [6_sqlalchemy_loaderdepend_global_filter.py](examples/6_sqlalchemy_loaderdepend_global_filter.py) L55, L59
 
 - `loader_instances`
 
   provide pre-created loader instance, with can `prime` data into loader cache.
 
-  detail: `tests/resolver/test_20_loader_instance.py`, L62, L63
+  reference: [test_20_loader_instance.py](tests/resolver/test_20_loader_instance.py), L62, L63
 
-- `ensure_type`
+- ensure_type
 
   if `True`, resolve method is restricted to be annotated.
 
-  detail: `tests/resolver/test_13_check_wrong_type`
+  reference: [test_13_check_wrong_type.py](tests/resolver/test_13_check_wrong_type.py)
 
-`LoaderDepend(loader_fn)`
+### LoaderDepend(loader_fn)
 
 - `loader_fn`: subclass of DataLoader or batch_load_fn. [detail](https://github.com/syrusakbary/aiodataloader#dataloaderbatch_load_fn-options)
 
   declare dataloader dependency, `pydantic-resolve` will take the care of lifecycle of dataloader.
 
-`build_list(rows, keys, fn)` & `build_object(rows, keys, fn)`
+### build_list(rows, keys, fn), build_object(rows, keys, fn)
 
 - `rows`: query result
 - `keys`: batch_load_fn:keys
@@ -226,20 +394,26 @@ pip install pydantic-resolve
 
   helper function to generate return value required by `batch_load_fn`. read the code for details.
 
-`mapper(param)`
+  reference: [test_utils.py](tests/utils/test_utils.py), L32
+
+### mapper(param)
 
 - `param`: can be either a class of pydantic or dataclass, or a lambda.
 
   `pydantic-resolve` will trigger the fn in `mapper` after inner future is resolved. it exposes an interface to change return schema even from the same dataloader.
   if param is a class, it will try to automatically transform it.
 
-`ensure_subset(base_class)`
+  reference: [test_16_mapper.py](tests/resolver/test_16_mapper.py)
+
+
+### ensure_subset(base_class)
 
 - `base_class`: pydantic class
 
-  it can raise exception if fields of decorated class has field not existed in `base_class`.
+  it will raise exception if fields of decorated class has field not existed in `base_class`.
 
-  detail: `tests/utils/test_2_ensure_subset.py`
+  reference: [test_2_ensure_subset.py](tests/utils/test_2_ensure_subset.py)
+
 
 ## Run FastAPI example
 
@@ -250,13 +424,6 @@ uvicorn fastapi_demo.main:app
 # http://localhost:8000/docs#/default/get_tasks_tasks_get
 ```
 
-## Some documentations.
-
-- [Reason](./doc/reason-en.md)
-- [How LoaderDepend works](./doc/loader-en.md)
-- [Comparsion with common solutions](./doc/compare-en.md)
-
-For more examples, please explore [examples](./examples/) folder.
 
 ## Unittest
 

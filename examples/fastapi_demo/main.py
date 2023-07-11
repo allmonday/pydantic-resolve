@@ -26,11 +26,6 @@ async def shutdown():
     await db.engine.dispose()
     print('end done')
 
-
-@app.get('/test', response_model=bool)
-async def get_test():
-    return True
-
 @app.get('/tasks', response_model=List[sc.TaskSchema])
 async def get_tasks(private:bool= Query(default=True),
                     session: AsyncSession = Depends(db.get_session)):
