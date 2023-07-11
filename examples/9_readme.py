@@ -7,7 +7,7 @@ from pydantic_resolve import Resolver, LoaderDepend, build_list
 departments = [
     dict(id=1, name='INFRA'),
     dict(id=2, name='DevOps'),
-    dict(id=1, name='Sales'),
+    dict(id=3, name='Sales'),
 ]
 
 teams = [
@@ -16,10 +16,10 @@ teams = [
     dict(id=3, department_id=1, name="Jenkins"), 
     dict(id=5, department_id=2, name="Frontend"),
     dict(id=6, department_id=2, name="Bff"),
-    dict(id=7, department_id=3, name="Backend"), 
-    dict(id=8, department_id=2, name="CAT"),
-    dict(id=9, department_id=2, name="Account"),
-    dict(id=10, department_id=2, name="Operation"),
+    dict(id=7, department_id=2, name="Backend"), 
+    dict(id=8, department_id=3, name="CAT"),
+    dict(id=9, department_id=3, name="Account"),
+    dict(id=10, department_id=3, name="Operation"),
 ]
 
 members = [
