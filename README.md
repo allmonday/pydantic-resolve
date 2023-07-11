@@ -44,7 +44,9 @@ members = [
 ]
 ```
 
-and we want to generate nested json base on these three tables. the output should be looks like:
+and we want to generate nested json base on these three tables. the output should be looks like: 
+
+> and we hope to query each table for only once, N+1 query is forbidden.
 
 ```json
 {
@@ -69,11 +71,11 @@ and we want to generate nested json base on these three tables. the output shoul
 }
 ```
 
-We will shows how we make it with `pydantic-resolve`, it has 4 steps:
+We will shows how to make it with `pydantic-resolve` which has 4 steps:
 
 1. get data
-2. group children with parent_id
-3. define pydantic schema
+2. group children with parent_id in dataloader function
+3. define pydantic schema, bind with dataloader
 4. resolve
 
 
@@ -372,11 +374,11 @@ then we got:
 
   reference: [test_20_loader_instance.py](tests/resolver/test_20_loader_instance.py), L62, L63
 
-### ensure_type
+- ensure_type
 
-  - if `True`, resolve method is restricted to be annotated.
+  if `True`, resolve method is restricted to be annotated.
 
-    detail: [test_13_check_wrong_type.py](tests/resolver/test_13_check_wrong_type.py)
+  reference: [test_13_check_wrong_type.py](tests/resolver/test_13_check_wrong_type.py)
 
 ### LoaderDepend(loader_fn)
 
@@ -392,12 +394,16 @@ then we got:
 
   helper function to generate return value required by `batch_load_fn`. read the code for details.
 
+  reference: [test_utils.py](tests/utils/test_utils.py), L32
+
 ### mapper(param)
 
 - `param`: can be either a class of pydantic or dataclass, or a lambda.
 
   `pydantic-resolve` will trigger the fn in `mapper` after inner future is resolved. it exposes an interface to change return schema even from the same dataloader.
   if param is a class, it will try to automatically transform it.
+
+  reference: [test_16_mapper.py](tests/resolver/test_16_mapper.py)
 
 
 ### ensure_subset(base_class)
@@ -406,7 +412,7 @@ then we got:
 
   it will raise exception if fields of decorated class has field not existed in `base_class`.
 
-  detail: [test_2_ensure_subset.py](tests/utils/test_2_ensure_subset.py)
+  reference: [test_2_ensure_subset.py](tests/utils/test_2_ensure_subset.py)
 
 
 ## Run FastAPI example
