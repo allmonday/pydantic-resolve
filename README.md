@@ -17,6 +17,8 @@
 pip install pydantic-resolve
 ```
 
+## Quick start
+
 Assume we have 3 tables of `departments`, `teams` and `members`, which have `1:n relationship` from left to right. 
 
 ```python
