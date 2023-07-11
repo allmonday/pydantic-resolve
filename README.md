@@ -11,6 +11,12 @@
 [Change log](./changelog.md)
 
 
+## Install
+
+```shell
+pip install pydantic-resolve
+```
+
 Assume we have 3 tables of `departments`, `teams` and `members`, which have `1:n relationship` from left to right. 
 
 ```python
@@ -347,14 +353,6 @@ then we got:
 }
 ```
 
-## Install
-
-```shell
-pip install pydantic-resolve
-```
-
-- use `resolve` for simple scenario,
-- use `Resolver` and `LoaderDepend` for complicated nested batch query.
 
 ## API
 
@@ -407,6 +405,7 @@ pip install pydantic-resolve
   it will raise exception if fields of decorated class has field not existed in `base_class`.
 
   detail: [test_2_ensure_subset.py](tests/utils/test_2_ensure_subset.py)
+
 
 ## Run FastAPI example
 
