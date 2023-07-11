@@ -26,7 +26,7 @@ Assume we have 3 tables of `departments`, `teams` and `members`, which have `1:n
 departments = [
     dict(id=1, name='INFRA'),
     dict(id=2, name='DevOps'),
-    dict(id=1, name='Sales'),
+    dict(id=3, name='Sales'),
 ]
 
 teams = [
@@ -91,7 +91,7 @@ from pydantic_resolve import Resolver, LoaderDepend, build_list
 departments = [
     dict(id=1, name='INFRA'),
     dict(id=2, name='DevOps'),
-    dict(id=1, name='Sales'),
+    dict(id=3, name='Sales'),
 ]
 
 teams = [
@@ -100,10 +100,10 @@ teams = [
     dict(id=3, department_id=1, name="Jenkins"), 
     dict(id=5, department_id=2, name="Frontend"),
     dict(id=6, department_id=2, name="Bff"),
-    dict(id=7, department_id=3, name="Backend"), 
-    dict(id=8, department_id=2, name="CAT"),
-    dict(id=9, department_id=2, name="Account"),
-    dict(id=10, department_id=2, name="Operation"),
+    dict(id=7, department_id=2, name="Backend"), 
+    dict(id=8, department_id=3, name="CAT"),
+    dict(id=9, department_id=3, name="Account"),
+    dict(id=10, department_id=3, name="Operation"),
 ]
 
 members = [
@@ -254,6 +254,22 @@ then we got:
           ]
         },
         {
+          "id": 7,
+          "name": "Backend",
+          "members": [
+            {
+              "id": 11,
+              "name": "Mia"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Sales",
+      "teams": [
+        {
           "id": 8,
           "name": "CAT",
           "members": [
@@ -304,50 +320,6 @@ then we got:
             {
               "id": 20,
               "name": "Ella"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "id": 1,
-      "name": "Sales",
-      "teams": [
-        {
-          "id": 1,
-          "name": "K8S",
-          "members": [
-            {
-              "id": 1,
-              "name": "Sophia"
-            },
-            {
-              "id": 2,
-              "name": "Jackson"
-            }
-          ]
-        },
-        {
-          "id": 2,
-          "name": "MONITORING",
-          "members": [
-            {
-              "id": 3,
-              "name": "Olivia"
-            },
-            {
-              "id": 4,
-              "name": "Liam"
-            }
-          ]
-        },
-        {
-          "id": 3,
-          "name": "Jenkins",
-          "members": [
-            {
-              "id": 5,
-              "name": "Emma"
             }
           ]
         }
