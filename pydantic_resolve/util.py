@@ -176,10 +176,6 @@ def try_parse_data_to_target_field_type(target, field_name, data):
         if data is None and _fields[field_name].required == False:
             return data
 
-        # research/2_update_forward_ref.py
-        if getattr(target.__class__, const.PYDANTIC_FORWARD_REF_UPDATED, False):
-            update_forward_refs(target.__class__)
-
     elif is_dataclass(target):
         _fields = target.__dataclass_fields__
         field_type = _fields[field_name].type

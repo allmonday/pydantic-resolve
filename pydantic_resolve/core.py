@@ -22,6 +22,7 @@ def is_acceptable_type(target):
     """
     return isinstance(target, BaseModel) or is_dataclass(target)
 
+
 def iter_over_object_resolvers_and_acceptable_fields(target):
     """
         return 
@@ -57,44 +58,3 @@ def iter_over_object_post_methods(target):
     for k in dir(target):
         if k.startswith(POST_PREFIX) and ismethod(target.__getattribute__(k)):
             yield k
-
-async def resolve_obj(target, field: str, attr):
-    """
-    TODO: deprecated, will remove in v2.0
-    """
-    try:
-        val = attr()
-    except AttributeError as e:
-        if str(e) == "'Depends' object has no attribute 'load'":  
-            raise DataloaderDependCantBeResolved("DataLoader used in schema, use Resolver().resolve() instead")
-        raise e
-
-    while iscoroutine(val) or asyncio.isfuture(val):
-        val = await val
-
-    val = await resolve(val)  
-
-    replace_attr_name = field.replace(PREFIX, '')
-    if hasattr(target, replace_attr_name):
-        target.__setattr__(replace_attr_name, val)
-    else:
-        raise ResolverTargetAttrNotFound(f"attribute {replace_attr_name} not found")
-
-async def resolve(target: T) -> T:
-    """ 
-    entry: resolve dataclass object or pydantic object / or list in place 
-    TODO: deprecated, will remove in v2.0
-    """
-
-    if is_list(target):  # core/test_1, 3
-        await asyncio.gather(*[resolve(t) for t in target])
-
-    if is_acceptable_type(target):
-        tasks = []
-        for field, attr, _type in iter_over_object_resolvers_and_acceptable_fields(target):
-            if _type == ATTRIBUTE: tasks.append(resolve(attr))  # attribut
-            if _type == RESOLVER: tasks.append(resolve_obj(target, field, attr))
-
-        await asyncio.gather(*tasks)
-
-    return target

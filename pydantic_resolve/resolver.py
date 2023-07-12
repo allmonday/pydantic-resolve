@@ -2,7 +2,7 @@ import asyncio
 import inspect
 import contextvars
 from inspect import iscoroutine
-from typing import TypeVar, Dict
+from typing import Type, TypeVar, Dict
 from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingAnnotationError
 from typing import Any, Callable, Optional
 from pydantic_resolve import core
@@ -35,7 +35,9 @@ class Resolver:
             self, 
             loader_filters: Optional[Dict[Any, Dict[str, Any]]] = None, 
             loader_instances: Optional[Dict[Any, Any]] = None,
-            ensure_type=False):
+            annotation_class: Optional[Type] = None,
+            ensure_type=False,
+            ):
         self.ctx = contextvars.ContextVar('pydantic_resolve_internal_context', default={})
 
         # for dataloader which has class attributes, you can assign the value at here
@@ -48,6 +50,7 @@ class Resolver:
             self.loader_instances = None
 
         self.ensure_type = ensure_type
+        self.annotation_class = annotation_class
     
     def validate_instance(self, loader_instances: Dict[Any, Any]):
         for cls, loader in loader_instances.items():
@@ -109,7 +112,7 @@ class Resolver:
         return method(**params)
 
 
-    async def resolve_obj_field(self, target, field, attr):
+    async def _resolve_obj_field(self, target, field, attr):
         target_attr_name = str(field).replace(const.PREFIX, '')
 
         if not hasattr(target, target_attr_name):
@@ -126,21 +129,21 @@ class Resolver:
         if not getattr(attr, const.HAS_MAPPER_FUNCTION, False):  # defined in util.mapper
             val = util.try_parse_data_to_target_field_type(target, target_attr_name, val)
 
-        val = await self.resolve(val)
+        val = await self._resolve(val)
 
         target.__setattr__(target_attr_name, val)
 
 
-    async def resolve(self, target: T) -> T:
+    async def _resolve(self, target: T) -> T:
         """ entry: resolve dataclass object or pydantic object / or list in place """
         if isinstance(target, (list, tuple)):
-            await asyncio.gather(*[self.resolve(t) for t in target])
+            await asyncio.gather(*[self._resolve(t) for t in target])
 
         if core.is_acceptable_type(target):
             tasks = []
             for field, attr, _type in core.iter_over_object_resolvers_and_acceptable_fields(target):
-                if _type == const.ATTRIBUTE: tasks.append(self.resolve(attr))
-                if _type == const.RESOLVER: tasks.append(self.resolve_obj_field(target, field, attr))
+                if _type == const.ATTRIBUTE: tasks.append(self._resolve(attr))
+                if _type == const.RESOLVER: tasks.append(self._resolve_obj_field(target, field, attr))
 
             await asyncio.gather(*tasks)
 
@@ -154,3 +157,9 @@ class Resolver:
                 post_method()
 
         return target
+
+    async def resolve(self, target: T) -> T:
+        if self.annotation_class:
+            util.update_forward_refs(self.annotation_class)
+        await self._resolve(target)
+        return target 
