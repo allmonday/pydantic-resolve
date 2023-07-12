@@ -39,7 +39,9 @@ class Friend(BaseModel):
     
     has_cash: bool = False
     def post_has_cash(self):
-        self.has_cash = self.cash is not None
+        # self.has_cash = self.cash is not None
+        return self.cash is not None
+
     
 
 class User(BaseModel):
@@ -53,7 +55,7 @@ class User(BaseModel):
     
     has_cash: bool = False
     def post_has_cash(self):
-        self.has_cash = any([f.has_cash for f in self.friends])
+        return any([f.has_cash for f in self.friends])
 
 class Root(BaseModel):
     users: List[User] = []
@@ -63,6 +65,9 @@ class Root(BaseModel):
             {"name": "tangkikodo", "age": 19}, 
             {"name": "noone", "age": 19}, 
         ]
+    hello: str = ''
+    def post_default_handler(self):
+        self.hello = 'hello'
 
 @pytest.mark.asyncio
 async def test_post_methods():
@@ -75,4 +80,5 @@ async def test_post_methods():
                                  {'has_cash': True, 'cash': {'number': 200}, 'name': 'jerry'}],
                      'name': 'tangkikodo'},
                      {'name': 'noone', 'age': 19, 'friends': [], 'has_cash':False }
-                     ]}
+                     ],
+                    'hello': 'hello'}

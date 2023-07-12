@@ -154,7 +154,13 @@ class Resolver:
                     raise ResolverTargetAttrNotFound(f"fail to run {post_key}(), attribute {post_attr_name} not found")
 
                 post_method = target.__getattribute__(post_key)
-                post_method()
+                calc_result = post_method()
+                target.__setattr__(post_attr_name, calc_result)
+            
+            # hidden entry for performance. run at last
+            default_post_method = getattr(target, const.POST_DEFAULT_HANDLER, None)
+            if default_post_method:
+                default_post_method()
 
         return target
 

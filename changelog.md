@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.6.0
+
+- remove core.resolve
+- change `post_method`, return value will be assined to target field.
+- add `output` decorator
+- add `post_default_handler` for spacial use.
+
 ## v1.5.2 (2023.7.10)
 
 - fix pydantic annotation related minor issue

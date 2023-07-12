@@ -1,10 +1,8 @@
-import asyncio
-from inspect import ismethod, iscoroutine
+from inspect import ismethod
 from pydantic import BaseModel
 from dataclasses import is_dataclass, fields as dc_fields
 from typing import TypeVar
-from .exceptions import ResolverTargetAttrNotFound, DataloaderDependCantBeResolved
-from .constant import PREFIX, POST_PREFIX, RESOLVER, ATTRIBUTE
+from .constant import PREFIX, POST_PREFIX, RESOLVER, ATTRIBUTE, POST_DEFAULT_HANDLER
 
 T = TypeVar("T")
 
@@ -56,5 +54,7 @@ def iter_over_object_resolvers_and_acceptable_fields(target):
 def iter_over_object_post_methods(target):
     """get method starts with post_"""
     for k in dir(target):
+        if k == POST_DEFAULT_HANDLER:  # skip
+            continue
         if k.startswith(POST_PREFIX) and ismethod(target.__getattribute__(k)):
             yield k

@@ -47,6 +47,18 @@ def replace_method(cls: Type, cls_name: str, func_name: str, func: Callable):
     return KLS
 
 
+def output(kls):
+    """
+    set required as True for all fields, make typescript code gen result friendly to use
+    """
+    if issubclass(kls, BaseModel):
+        for f in kls.__fields__.values():
+            f.required = True
+    else:
+        raise AttributeError(f'target class {kls.__name__} is not BaseModel')
+    return kls
+
+
 def mapper(func_or_class: Union[Callable, Type]):
     """
     execute post-transform function after the value is reolved
