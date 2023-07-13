@@ -1,12 +1,12 @@
 # Changelog
 
-## v1.6.2
+## v1.6.2 (2023.7.12)
 - fix `output` minor bug
 
-## v1.6.1
+## v1.6.1 (2023.7.11)
 - fix `output` decorator, it will modify schema_json's `required` field and fill all fields
 
-## v1.6.0
+## v1.6.0 (2023.7.11)
 
 - add `Resolver.context` param
 - remove `core.resolve`
