@@ -6,11 +6,21 @@ import pytest
 def test_output():
     @output
     class A(BaseModel):
+        id: int
         name: str = ''
+        def resolve_name(self):
+            return 'hi'
+
         age: int = 0
+        def resolve_age(self):
+            return 1
     
-    assert A.__fields__['name'].required == True
-    assert A.__fields__['age'].required == True
+    json_schema = A.schema()
+    assert json_schema['required'] == ['id', 'name', 'age']
+
+    a = A(id=1)
+    assert a.id == 1  # can assign
+
 
 def test_output2():
 
@@ -18,5 +28,5 @@ def test_output2():
         @output
         @dataclass
         class A():
-            name: str = ''
-            age: int = 0
+            name: str
+            age: int

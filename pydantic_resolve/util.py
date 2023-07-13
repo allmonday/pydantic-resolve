@@ -5,9 +5,9 @@ from collections import defaultdict
 from dataclasses import is_dataclass
 from pydantic import BaseModel, parse_obj_as
 from inspect import iscoroutine
-from typing import Any, DefaultDict, Sequence, Type, TypeVar, List, Callable, Optional, Mapping, Union, Iterator
-
+from typing import Any, DefaultDict, Sequence, Type, TypeVar, List, Callable, Optional, Mapping, Union, Iterator, Dict
 import pydantic_resolve.constant as const
+
 
 
 def get_class_field_annotations(cls: Type):
@@ -46,14 +46,20 @@ def replace_method(cls: Type, cls_name: str, func_name: str, func: Callable):
     KLS = type(cls_name, (cls,), {func_name: func})
     return KLS
 
-
 def output(kls):
     """
-    set required as True for all fields, make typescript code gen result friendly to use
+    set required as True for all fields
+    make typescript code gen result friendly to use
     """
+
     if issubclass(kls, BaseModel):
-        for f in kls.__fields__.values():
-            f.required = True
+        fnames = list(kls.__fields__.keys())
+
+        def schema_extra(schema: Dict[str, Any]) -> None:
+            schema['required'] = fnames
+
+        kls.Config.schema_extra = staticmethod(schema_extra)
+
     else:
         raise AttributeError(f'target class {kls.__name__} is not BaseModel')
     return kls
