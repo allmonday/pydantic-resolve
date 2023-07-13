@@ -332,7 +332,7 @@ then we got:
 
 ## API
 
-### Resolver(loader_filters, loader_instances, ensure_type)
+### Resolver(loader_filters, loader_instances, ensure_type, annotation_class)
 
 - `loader_filters`
 
@@ -351,6 +351,12 @@ then we got:
   if `True`, resolve method is restricted to be annotated.
 
   reference: [test_13_check_wrong_type.py](tests/resolver/test_13_check_wrong_type.py)
+
+- annotation_class
+
+  if you have `from __future__ import annotation`, and pydantic raises error, use this config to update forward refs
+
+  reference: [test_25_parse_to_obj_for_pydantic_with_annotation.py](tests/resolver/test_25_parse_to_obj_for_pydantic_with_annotation.py), L39
 
 ### LoaderDepend(loader_fn)
 

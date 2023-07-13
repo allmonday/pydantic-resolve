@@ -2,7 +2,7 @@
 
 ## v1.6.0
 
-- remove core.resolve
+- remove `core.resolve`
 - change `post_method`, return value will be assined to target field.
 - add `output` decorator
 - add `post_default_handler` for spacial use.
