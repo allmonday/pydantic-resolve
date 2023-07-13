@@ -2,12 +2,13 @@ import asyncio
 import inspect
 import contextvars
 from inspect import iscoroutine
-from typing import TypeVar, Dict
+from typing import Type, TypeVar, Dict
 from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingAnnotationError
 from typing import Any, Callable, Optional
 from pydantic_resolve import core
 from aiodataloader import DataLoader
 from inspect import isclass
+from types import MappingProxyType
 
 import pydantic_resolve.constant as const
 import pydantic_resolve.util as util
@@ -35,7 +36,10 @@ class Resolver:
             self, 
             loader_filters: Optional[Dict[Any, Dict[str, Any]]] = None, 
             loader_instances: Optional[Dict[Any, Any]] = None,
-            ensure_type=False):
+            annotation_class: Optional[Type] = None,
+            ensure_type=False,
+            context: Optional[Dict[str, Any]] = None
+            ):
         self.ctx = contextvars.ContextVar('pydantic_resolve_internal_context', default={})
 
         # for dataloader which has class attributes, you can assign the value at here
@@ -48,6 +52,8 @@ class Resolver:
             self.loader_instances = None
 
         self.ensure_type = ensure_type
+        self.annotation_class = annotation_class
+        self.context = context
     
     def validate_instance(self, loader_instances: Dict[Any, Any]):
         for cls, loader in loader_instances.items():
@@ -58,11 +64,27 @@ class Resolver:
         return True
 
     def exec_method(self, method):
+        """
+        1. inspect method
+        2. if params has LoaderDepend, manage the creation of dataloader
+            2.1 handle DataLoader class
+                2.1.1 handle dataloader filter config
+            2.2 handle batch_load_fn
+        """
+
+        # >>> 1
         signature = inspect.signature(method)
         params = {}
 
+        if signature.parameters.get('context'):
+            if self.context is None:
+                raise AttributeError('Resolver.context is missing')
+            params['context'] = MappingProxyType(self.context)
+
         # manage the creation of loader instances
         for k, v in signature.parameters.items():
+
+            # >>> 2
             if isinstance(v.default, Depends):
                 # Base: DataLoader or batch_load_fn
                 Base = v.default.dependency
@@ -80,6 +102,7 @@ class Resolver:
                 if hit:
                     loader = hit
                 else:
+                    # >>> 2.1
                     # create loader instance 
                     if isclass(Base):
                         # if extra transform provides
@@ -89,9 +112,9 @@ class Resolver:
                         filter_config_provider = self.loader_filters_ctx.get()
                         filter_config = filter_config_provider.get(Base, {})
 
+                        # >>> 2.1.1
                         # class ExampleLoader(DataLoader):
                         #     filtar_x: bool  <--------------- set this field
-
                         for field in util.get_class_field_annotations(Base):
                             try:
                                 value = filter_config[field]
@@ -99,6 +122,7 @@ class Resolver:
                             except KeyError:
                                 raise LoaderFieldNotProvidedError(f'{cache_key}.{field} not found in Resolver()')
 
+                    # >>> 2.2
                     # build loader from batch_load_fn, filters config is impossible
                     else:
                         loader = DataLoader(batch_load_fn=Base) # type:ignore
@@ -109,7 +133,16 @@ class Resolver:
         return method(**params)
 
 
-    async def resolve_obj_field(self, target, field, attr):
+    async def _resolve_obj_field(self, target, field, attr):
+        """
+        resolve object fields
+        1. validations
+        2. exec methods
+        3. parse to target type & resolve
+        4. set back value
+        """
+
+        # >>> 1
         target_attr_name = str(field).replace(const.PREFIX, '')
 
         if not hasattr(target, target_attr_name):
@@ -119,31 +152,46 @@ class Resolver:
             if not attr.__annotations__:
                 raise MissingAnnotationError(f'{field}: return annotation is required')
 
+        # >>> 2
         val = self.exec_method(attr)
         while iscoroutine(val) or asyncio.isfuture(val):
             val = await val
 
+        # >>> 3
         if not getattr(attr, const.HAS_MAPPER_FUNCTION, False):  # defined in util.mapper
             val = util.try_parse_data_to_target_field_type(target, target_attr_name, val)
 
-        val = await self.resolve(val)
+        val = await self._resolve(val)
 
+        # >>> 4
         target.__setattr__(target_attr_name, val)
 
 
-    async def resolve(self, target: T) -> T:
-        """ entry: resolve dataclass object or pydantic object / or list in place """
-        if isinstance(target, (list, tuple)):
-            await asyncio.gather(*[self.resolve(t) for t in target])
+    async def _resolve(self, target: T) -> T:
+        """ 
+        resolve dataclass object or pydantic object / or list in place 
 
+        1. iterate over elements if target is list
+        2. resolve object
+            2.1 resolve each single resolver fn and object fields
+            2.2 execute post fn
+        """
+
+        # >>> 1
+        if isinstance(target, (list, tuple)):
+            await asyncio.gather(*[self._resolve(t) for t in target])
+
+        # >>> 2
         if core.is_acceptable_type(target):
             tasks = []
+            # >>> 2.1
             for field, attr, _type in core.iter_over_object_resolvers_and_acceptable_fields(target):
-                if _type == const.ATTRIBUTE: tasks.append(self.resolve(attr))
-                if _type == const.RESOLVER: tasks.append(self.resolve_obj_field(target, field, attr))
+                if _type == const.ATTRIBUTE: tasks.append(self._resolve(attr))
+                if _type == const.RESOLVER: tasks.append(self._resolve_obj_field(target, field, attr))
 
             await asyncio.gather(*tasks)
 
+            # >>> 2.2
             # execute post methods, take no params
             for post_key in core.iter_over_object_post_methods(target):
                 post_attr_name = post_key.replace(const.POST_PREFIX, '')
@@ -151,6 +199,20 @@ class Resolver:
                     raise ResolverTargetAttrNotFound(f"fail to run {post_key}(), attribute {post_attr_name} not found")
 
                 post_method = target.__getattribute__(post_key)
-                post_method()
+                calc_result = post_method()
+                target.__setattr__(post_attr_name, calc_result)
+            
+            # hidden entry for performance. run at last
+            default_post_method = getattr(target, const.POST_DEFAULT_HANDLER, None)
+            if default_post_method:
+                default_post_method()
 
         return target
+
+    async def resolve(self, target: T) -> T:
+        # if raise forwardref related error, use this
+        if self.annotation_class:
+            util.update_forward_refs(self.annotation_class)
+
+        await self._resolve(target)
+        return target 

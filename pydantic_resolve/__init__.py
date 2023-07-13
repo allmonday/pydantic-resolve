@@ -1,4 +1,3 @@
-from .core import resolve
 from .exceptions import (
     ResolverTargetAttrNotFound,
     DataloaderDependCantBeResolved,
@@ -8,7 +7,6 @@ from .resolver import Resolver, LoaderDepend
 from .util import build_list, build_object, mapper, ensure_subset, update_forward_refs
 
 __all__ = [
-    'resolve',
     'Resolver',
     'LoaderDepend',
     'ResolverTargetAttrNotFound',

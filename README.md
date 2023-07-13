@@ -332,37 +332,57 @@ then we got:
 
 ## API
 
-### Resolver(loader_filters, loader_instances, ensure_type)
+### Resolver(loader_filters, loader_instances, ensure_type, annotation_class, context)
 
-- `loader_filters`
+- loader_filters: `dict`
 
   provide extra query filters along with loader key.
 
   reference: [6_sqlalchemy_loaderdepend_global_filter.py](examples/6_sqlalchemy_loaderdepend_global_filter.py) L55, L59
 
-- `loader_instances`
+- loader_instances: `dict`
 
   provide pre-created loader instance, with can `prime` data into loader cache.
 
   reference: [test_20_loader_instance.py](tests/resolver/test_20_loader_instance.py), L62, L63
 
-- ensure_type
+- ensure_type: `bool`
 
   if `True`, resolve method is restricted to be annotated.
 
   reference: [test_13_check_wrong_type.py](tests/resolver/test_13_check_wrong_type.py)
 
+- annotation_class: `class`
+
+  if you have `from __future__ import annotation`, and pydantic raises error, use this config to update forward refs
+
+  reference: [test_25_parse_to_obj_for_pydantic_with_annotation.py](tests/resolver/test_25_parse_to_obj_for_pydantic_with_annotation.py), L39
+
+- context: `dict`
+
+  context can carry setting into each single resolver methods.
+
+  ```python
+
+  class Earth(BaseModel):
+      humans: List[Human] = []
+      def resolve_humans(self, context):
+          return [dict(name=f'man-{i}') for i in range(context['count'])]
+
+  earth = await Resolver(context={'count': 10}).resolve(earth)
+  ```
+
 ### LoaderDepend(loader_fn)
 
-- `loader_fn`: subclass of DataLoader or batch_load_fn. [detail](https://github.com/syrusakbary/aiodataloader#dataloaderbatch_load_fn-options)
+- loader_fn: `subclass of DataLoader or batch_load_fn`. [detail](https://github.com/syrusakbary/aiodataloader#dataloaderbatch_load_fn-options)
 
   declare dataloader dependency, `pydantic-resolve` will take the care of lifecycle of dataloader.
 
 ### build_list(rows, keys, fn), build_object(rows, keys, fn)
 
-- `rows`: query result
-- `keys`: batch_load_fn:keys
-- `fn`: define the way to get primary key
+- rows: `list`, query result
+- keys: `list`, batch_load_fn:keys
+- fn: `lambda`, define the way to get primary key
 
   helper function to generate return value required by `batch_load_fn`. read the code for details.
 
@@ -370,7 +390,7 @@ then we got:
 
 ### mapper(param)
 
-- `param`: can be either a class of pydantic or dataclass, or a lambda.
+- param: `class of pydantic or dataclass, or a lambda`
 
   `pydantic-resolve` will trigger the fn in `mapper` after inner future is resolved. it exposes an interface to change return schema even from the same dataloader.
   if param is a class, it will try to automatically transform it.
@@ -380,7 +400,7 @@ then we got:
 
 ### ensure_subset(base_class)
 
-- `base_class`: pydantic class
+- base_class: `class`
 
   it will raise exception if fields of decorated class has field not existed in `base_class`.
 

@@ -1,3 +1,4 @@
+from __future__ import annotations
 import json
 import asyncio
 from typing import List
@@ -51,9 +52,18 @@ async def teams_batch_load_fn(department_ids):
 async def members_batch_load_fn(team_ids):
     return build_list(members, team_ids, lambda t: t['team_id'])
 
-class Member(BaseModel):
+
+class Result(BaseModel):
+    departments: List[Department] = []
+    def resolve_departments(self):
+        return departments
+
+class Department(BaseModel):
     id: int
     name: str
+    teams: List[Team] = []
+    def resolve_teams(self, loader=LoaderDepend(teams_batch_load_fn)):
+        return loader.load(self.id)
 
 class Team(BaseModel):
     id: int
@@ -63,21 +73,14 @@ class Team(BaseModel):
     def resolve_members(self, loader=LoaderDepend(members_batch_load_fn)):
         return loader.load(self.id)
 
-class Department(BaseModel):
+class Member(BaseModel):
     id: int
     name: str
-    teams: List[Team] = []
-    def resolve_teams(self, loader=LoaderDepend(teams_batch_load_fn)):
-        return loader.load(self.id)
 
-class Result(BaseModel):
-    departments: List[Department] = []
-    def resolve_departments(self):
-        return departments
 
 async def main():
     result = Result()
-    data = await Resolver().resolve(result)
+    data = await Resolver(annotation_class=Result).resolve(result)
     print(json.dumps(data.dict(), indent=2))
 
 asyncio.run(main())

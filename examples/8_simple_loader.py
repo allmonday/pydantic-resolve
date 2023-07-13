@@ -41,9 +41,9 @@ class Friend(BaseModel):
     def post_is_contact_10(self):
         if self.contact:
             if str(self.contact.number).startswith('10'):
-                self.is_contact_10 = True
+                return True
         else:
-            self.is_contact_10 = False
+            return False
 
 
 class User(BaseModel):
@@ -66,7 +66,7 @@ class User(BaseModel):
     
     friend_count: int = 0
     def post_friend_count(self):
-        self.friend_count = len(self.friends)
+        return len(self.friends)
 
 class Root(BaseModel):
     users: List[User] = []

@@ -47,6 +47,18 @@ def replace_method(cls: Type, cls_name: str, func_name: str, func: Callable):
     return KLS
 
 
+def output(kls):
+    """
+    set required as True for all fields, make typescript code gen result friendly to use
+    """
+    if issubclass(kls, BaseModel):
+        for f in kls.__fields__.values():
+            f.required = True
+    else:
+        raise AttributeError(f'target class {kls.__name__} is not BaseModel')
+    return kls
+
+
 def mapper(func_or_class: Union[Callable, Type]):
     """
     execute post-transform function after the value is reolved
@@ -175,10 +187,6 @@ def try_parse_data_to_target_field_type(target, field_name, data):
         # handle optional logic
         if data is None and _fields[field_name].required == False:
             return data
-
-        # research/2_update_forward_ref.py
-        if getattr(target.__class__, const.PYDANTIC_FORWARD_REF_UPDATED, False):
-            update_forward_refs(target.__class__)
 
     elif is_dataclass(target):
         _fields = target.__dataclass_fields__
