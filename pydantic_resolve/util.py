@@ -4,7 +4,7 @@ import functools
 from collections import defaultdict
 from dataclasses import is_dataclass
 from pydantic import BaseModel, parse_obj_as
-from inspect import iscoroutine
+from inspect import iscoroutine, ismethod, isfunction
 from typing import Any, DefaultDict, Sequence, Type, TypeVar, List, Callable, Optional, Mapping, Union, Iterator, Dict
 import pydantic_resolve.constant as const
 
@@ -46,6 +46,28 @@ def replace_method(cls: Type, cls_name: str, func_name: str, func: Callable):
     KLS = type(cls_name, (cls,), {func_name: func})
     return KLS
 
+
+def get_required_fields(kls: BaseModel):
+    required_fields = []
+
+    # 1. get required fields
+    for fname, field in kls.__fields__.items():
+        if field.required:
+            required_fields.append(fname)
+
+    # 2. get resolve_ and post_ target fields
+    for f in dir(kls):
+        if f.startswith(const.PREFIX):
+            if isfunction(getattr(kls, f)):
+                required_fields.append(f.replace(const.PREFIX, ''))
+
+        if f.startswith(const.POST_PREFIX):
+            if isfunction(getattr(kls, f)):
+                required_fields.append(f.replace(const.POST_PREFIX, ''))
+    
+    return required_fields
+
+
 def output(kls):
     """
     set required as True for all fields
@@ -53,12 +75,14 @@ def output(kls):
     """
 
     if issubclass(kls, BaseModel):
-        fnames = list(kls.__fields__.keys())
 
-        def schema_extra(schema: Dict[str, Any]) -> None:
-            schema['required'] = fnames
+        def build():
+            def schema_extra(schema: Dict[str, Any], model) -> None:
+                fnames = get_required_fields(model)
+                schema['required'] = fnames
+            return schema_extra
 
-        kls.Config.schema_extra = staticmethod(schema_extra)
+        kls.Config.schema_extra = staticmethod(build())
 
     else:
         raise AttributeError(f'target class {kls.__name__} is not BaseModel')

@@ -1,7 +1,10 @@
 # Changelog
 
+## v1.6.2
+- fix `output` minor bug
+
 ## v1.6.1
-    - fix `output` decorator, it will modify schema_json's `required` field and fill all fields
+- fix `output` decorator, it will modify schema_json's `required` field and fill all fields
 
 ## v1.6.0
 
