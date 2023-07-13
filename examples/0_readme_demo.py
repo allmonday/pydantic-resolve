@@ -58,9 +58,12 @@ class Result(BaseModel):
     def resolve_departments(self):
         return departments
 
-class Member(BaseModel):
+class Department(BaseModel):
     id: int
     name: str
+    teams: List[Team] = []
+    def resolve_teams(self, loader=LoaderDepend(teams_batch_load_fn)):
+        return loader.load(self.id)
 
 class Team(BaseModel):
     id: int
@@ -70,16 +73,14 @@ class Team(BaseModel):
     def resolve_members(self, loader=LoaderDepend(members_batch_load_fn)):
         return loader.load(self.id)
 
-class Department(BaseModel):
+class Member(BaseModel):
     id: int
     name: str
-    teams: List[Team] = []
-    def resolve_teams(self, loader=LoaderDepend(teams_batch_load_fn)):
-        return loader.load(self.id)
+
 
 async def main():
     result = Result()
-    # data = await Resolver().resolve(result)
-    # print(json.dumps(data.dict(), indent=2))
+    data = await Resolver(annotation_class=Result).resolve(result)
+    print(json.dumps(data.dict(), indent=2))
 
 asyncio.run(main())

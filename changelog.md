@@ -2,6 +2,7 @@
 
 ## v1.6.0
 
+- add `Resolver.context` param
 - remove `core.resolve`
 - change `post_method`, return value will be assined to target field.
 - add `output` decorator

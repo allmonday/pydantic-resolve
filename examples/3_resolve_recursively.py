@@ -3,7 +3,7 @@ from random import random
 from typing import Optional
 from time import time
 from pydantic import BaseModel
-from pydantic_resolve import resolve
+from pydantic_resolve import Resolver
 
 t = time()
 
@@ -49,7 +49,7 @@ class Root(BaseModel):
 async def main():
     from pprint import pprint
     root = Root()
-    result = await resolve(root)
+    result = await Resolver().resolve(root)
     pprint(result.json())
     print(f'total {time() - t}')
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from asyncio import Future
-from collections import defaultdict
 from typing import List
 from aiodataloader import DataLoader
 from pydantic import BaseModel
@@ -172,33 +171,3 @@ async def main():
 
 
 asyncio.run(main())
-
-# output:
-# >>> query first time (show all private comments)
-# [{'comments': [{'content': 'comment-1 for task 1',
-#                 'feedbacks': [{'comment_id': 1,
-#                                'content': 'feedback-1 for comment-1 (private)',
-#                                'id': 1},
-#                               {'comment_id': 1,
-#                                'content': 'feedback-2 for comment-1 (private)',
-#                                'id': 2}],
-#                 'id': 1,
-#                 'task_id': 1}],
-#   'id': 1,
-#   'name': 'task-1'}]
-#
-# >>> query second time (show all public comments)
-# [{'comments': [{'content': 'comment-1 for task 1',
-#                 'feedbacks': [{'comment_id': 1,
-#                                'content': 'feedback-3 for comment-1 (public)',
-#                                'id': 3}],
-#                 'id': 1,
-#                 'task_id': 1},
-#                {'content': 'comment-2 for task 1',
-#                 'feedbacks': [{'comment_id': 2,
-#                                'content': 'test (public)',
-#                                'id': 4}],
-#                 'id': 2,
-#                 'task_id': 1}],
-#   'id': 1,
-#   'name': 'task-1 x'}]

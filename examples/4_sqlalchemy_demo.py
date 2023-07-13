@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from collections import defaultdict
 from typing import List
 from aiodataloader import DataLoader
 from pydantic import BaseModel
@@ -11,7 +10,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
-from pydantic_resolve import resolve, mapper, build_list
+from pydantic_resolve import Resolver, mapper, build_list
 from pprint import pprint
 
 engine = create_async_engine(
@@ -122,7 +121,7 @@ async def main():
     async with async_session() as session:
         tasks = (await session.execute(select(Task))).scalars().all()
         task_objs = [TaskSchema.from_orm(t) for t in tasks]
-        resolved_results = await resolve(task_objs)
+        resolved_results = await Resolver().resolve(task_objs)
         to_dict_arr = [r.dict() for r in resolved_results]
         pprint(to_dict_arr)
 

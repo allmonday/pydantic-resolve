@@ -1,8 +1,6 @@
 from __future__ import annotations
-
 import asyncio
-from collections import defaultdict
-from typing import List, Tuple
+from typing import List
 from aiodataloader import DataLoader
 from pydantic import BaseModel
 from sqlalchemy import select

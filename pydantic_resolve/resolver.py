@@ -8,6 +8,7 @@ from typing import Any, Callable, Optional
 from pydantic_resolve import core
 from aiodataloader import DataLoader
 from inspect import isclass
+from types import MappingProxyType
 
 import pydantic_resolve.constant as const
 import pydantic_resolve.util as util
@@ -37,6 +38,7 @@ class Resolver:
             loader_instances: Optional[Dict[Any, Any]] = None,
             annotation_class: Optional[Type] = None,
             ensure_type=False,
+            context: Optional[Dict[str, Any]] = None
             ):
         self.ctx = contextvars.ContextVar('pydantic_resolve_internal_context', default={})
 
@@ -51,6 +53,7 @@ class Resolver:
 
         self.ensure_type = ensure_type
         self.annotation_class = annotation_class
+        self.context = context
     
     def validate_instance(self, loader_instances: Dict[Any, Any]):
         for cls, loader in loader_instances.items():
@@ -72,6 +75,11 @@ class Resolver:
         # >>> 1
         signature = inspect.signature(method)
         params = {}
+
+        if signature.parameters.get('context'):
+            if self.context is None:
+                raise AttributeError('Resolver.context is missing')
+            params['context'] = MappingProxyType(self.context)
 
         # manage the creation of loader instances
         for k, v in signature.parameters.items():
