@@ -9,7 +9,7 @@
 project = 'pydantic-resolve'
 copyright = '2023, tangkikodo'
 author = 'tangkikodo'
-release = '1.6.1'
+release = '1.6.2'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
