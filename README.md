@@ -1,5 +1,3 @@
-# Pydantic-resolve
-
 ![img](doc/imgs/resolver.png)
 
 [![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
