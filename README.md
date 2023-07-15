@@ -332,6 +332,24 @@ then we got:
 }
 ```
 
+## Use cases:
+
+for more cases like: how to filter members, how to make post calculation after resolved?
+
+please read the following demos.
+
+```shell
+cd examples
+
+python -m readme_demo.0_basic
+python -m readme_demo.1_filter
+python -m readme_demo.2_post_methods
+python -m readme_demo.3_context
+python -m readme_demo.4_loader_instance
+python -m readme_demo.5_subset
+python -m readme_demo.6_mapper
+```
+
 
 ## API
 
