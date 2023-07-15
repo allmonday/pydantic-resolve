@@ -1,5 +1,7 @@
 ![img](doc/imgs/resolver.png)
 
+> A small yet powerful package which can run resolvers to generate deep nested datasets.
+
 [![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
 [![Downloads](https://static.pepy.tech/personalized-badge/pydantic-resolve?period=month&units=abbreviation&left_color=grey&right_color=orange&left_text=Downloads)](https://pepy.tech/project/pydantic-resolve)
 ![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
@@ -7,7 +9,6 @@
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
 
-> A small yet powerful package which can run resolvers to generate deep nested datasets.
 
 
 [Change log](./changelog.md)
