@@ -348,6 +348,7 @@ python -m readme_demo.3_context
 python -m readme_demo.4_loader_instance
 python -m readme_demo.5_subset
 python -m readme_demo.6_mapper
+python -m readme_demo.7_single
 ```
 
 
