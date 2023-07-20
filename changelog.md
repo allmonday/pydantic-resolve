@@ -1,6 +1,14 @@
 # Changelog
 
+## v1.6.3 (2023.7.20)
+
+- fix dataclass exception under lazy annotation.  refer to `tests/resolver/test_28_parse_to_obj_for_dataclass_with_annotation.py`
+- provide extra tip on auto map fails.
+
+> recursion dataclass type is still not supported, refer to `test/resolver/test_26_tree.py`, L81
+
 ## v1.6.2 (2023.7.12)
+
 - fix `output` minor bug
 
 ## v1.6.1 (2023.7.11)

@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import is_dataclass
 import inspect
 import contextvars
 from inspect import iscoroutine
@@ -9,7 +10,7 @@ from pydantic_resolve import core
 from aiodataloader import DataLoader
 from inspect import isclass
 from types import MappingProxyType
-
+from pydantic import BaseModel
 import pydantic_resolve.constant as const
 import pydantic_resolve.util as util
 
@@ -212,7 +213,11 @@ class Resolver:
     async def resolve(self, target: T) -> T:
         # if raise forwardref related error, use this
         if self.annotation_class:
-            util.update_forward_refs(self.annotation_class)
+            if issubclass(self.annotation_class, BaseModel):
+                util.update_forward_refs(self.annotation_class)
+
+            if is_dataclass(self.annotation_class):
+                util.update_dataclass_forward_refs(self.annotation_class)
 
         await self._resolve(target)
         return target 

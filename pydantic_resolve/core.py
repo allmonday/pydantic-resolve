@@ -49,7 +49,7 @@ def iter_over_object_resolvers_and_acceptable_fields(target):
             continue
         attr = target.__getattribute__(field)
         if is_acceptable_type(attr) or is_list(attr):
-            yield (field, attr,ATTRIBUTE)
+            yield (field, attr, ATTRIBUTE)
 
 def iter_over_object_post_methods(target):
     """get method starts with post_"""
