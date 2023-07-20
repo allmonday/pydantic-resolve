@@ -3,9 +3,9 @@ import types
 import functools
 from collections import defaultdict
 from dataclasses import is_dataclass
-from pydantic import BaseModel, parse_obj_as
-from inspect import iscoroutine, ismethod, isfunction
-from typing import Any, DefaultDict, Sequence, Type, TypeVar, List, Callable, Optional, Mapping, Union, Iterator, Dict
+from pydantic import BaseModel, parse_obj_as, ValidationError
+from inspect import iscoroutine, isfunction
+from typing import Any, DefaultDict, Sequence, Type, TypeVar, List, Callable, Optional, Mapping, Union, Iterator, Dict, get_type_hints
 import pydantic_resolve.constant as const
 
 
@@ -189,7 +189,7 @@ def ensure_subset(base):
     return wrap
 
 
-def update_forward_refs(kls: BaseModel):
+def update_forward_refs(kls: Type[BaseModel]):
     """
     recursively update refs.
     """
@@ -199,6 +199,18 @@ def update_forward_refs(kls: BaseModel):
     for field in kls.__fields__.values():
         if issubclass(field.type_, BaseModel):
             update_forward_refs(field.type_)
+
+
+def update_dataclass_forward_refs(kls):
+    if not getattr(kls, const.DATACLASS_FORWARD_REF_UPDATED, False):
+        anno = get_type_hints(kls)
+        kls.__annotations__ = anno
+        setattr(kls, const.DATACLASS_FORWARD_REF_UPDATED, True)
+
+        for _, v in kls.__annotations__.items():
+            t = shelling_type(v)
+            if is_dataclass(t):
+                update_dataclass_forward_refs(t)
 
 
 def try_parse_data_to_target_field_type(target, field_name, data):
@@ -219,13 +231,31 @@ def try_parse_data_to_target_field_type(target, field_name, data):
             return data
 
     elif is_dataclass(target):
-        _fields = target.__dataclass_fields__
-        field_type = _fields[field_name].type
+        field_type = target.__class__.__annotations__[field_name]
 
     # 2. parse
     if field_type:
-        result = parse_obj_as(field_type, data)
-        return result
+        try:
+            result = parse_obj_as(field_type, data)
+            return result
+        except ValidationError as e:
+            print(f'Warning: type mismatch, pls check the return type for "{field_name}", expected: {field_type}')
+            raise e
     
     else:
         return data  #noqa
+
+
+def is_optional(annotation):
+    annotation_origin = getattr(annotation, "__origin__", None)
+    return annotation_origin == Union \
+        and len(annotation.__args__) == 2 \
+        and annotation.__args__[1] == type(None)  # noqa
+
+def is_list(annotation):
+    return getattr(annotation, "__origin__", None) == list
+
+def shelling_type(type):
+    while is_optional(type) or is_list(type):
+        type = type.__args__[0]
+    return type
