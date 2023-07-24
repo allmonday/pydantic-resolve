@@ -22,7 +22,7 @@ pip install pydantic-resolve
 
 ## Quick start
 
-Assume we have 3 tables of `departments`, `teams` and `members`, which have `1:n relationship` from left to right. 
+Assume we have 3 tables: `departments`, `teams` and `members`, which have `1:N relationship` from left to right. 
 
 ```python
 # 1. prepare table records
@@ -47,7 +47,7 @@ members = [
 ]
 ```
 
-and we want to generate nested json base on these three tables. the output should be looks like: 
+and we want to generate nested json base on these 3 tables. the output should be looks like: 
 
 > and we hope to query each table for only once, N+1 query is forbidden.
 
@@ -332,9 +332,12 @@ then we got:
 }
 ```
 
-## Use cases:
+## More cases:
 
-for more cases like: how to filter members, how to make post calculation after resolved?
+for more cases like: 
+- how to filter members
+- how to make post calculation after resolved?
+- and so on..
 
 please read the following demos.
 
