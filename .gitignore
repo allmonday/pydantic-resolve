@@ -7,3 +7,4 @@ coverage.json
 .venv
 .tox
 docs/_build
+.vscode

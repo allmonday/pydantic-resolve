@@ -41,10 +41,10 @@ class Resolver:
             ensure_type=False,
             context: Optional[Dict[str, Any]] = None
             ):
-        self.ctx = contextvars.ContextVar('pydantic_resolve_internal_context', default={})
+        self.ctx = {}
 
         # for dataloader which has class attributes, you can assign the value at here
-        self.loader_filters_ctx = contextvars.ContextVar('pydantic_resolve_internal_filter', default=loader_filters or {})
+        self.loader_filters = loader_filters or {}
 
         # now you can pass your loader instance, Resolver will check isinstance
         if loader_instances and self.validate_instance(loader_instances):
@@ -88,35 +88,32 @@ class Resolver:
             # >>> 2
             if isinstance(v.default, Depends):
                 # Base: DataLoader or batch_load_fn
-                Base = v.default.dependency
+                Loader = v.default.dependency
 
                 # check loader_instance first, if has predefined loader instance, just use it.
-                if self.loader_instances and self.loader_instances.get(Base):
-                    loader = self.loader_instances.get(Base)
+                if self.loader_instances and self.loader_instances.get(Loader):
+                    loader = self.loader_instances.get(Loader)
                     params[k] = loader
                     continue
 
                 # module.kls to avoid same kls name from different module
                 cache_key = f'{v.default.dependency.__module__}.{v.default.dependency.__name__}'
-                cache_provider = self.ctx.get()
-                hit = cache_provider.get(cache_key, None)
+                hit = self.ctx.get(cache_key)
                 if hit:
                     loader = hit
                 else:
                     # >>> 2.1
                     # create loader instance 
-                    if isclass(Base):
+                    if isclass(Loader):
                         # if extra transform provides
-                        loader = Base()
+                        loader = Loader()
 
-                        # and pick config from 'loader_filters' param, only for DataClass
-                        filter_config_provider = self.loader_filters_ctx.get()
-                        filter_config = filter_config_provider.get(Base, {})
+                        filter_config = self.loader_filters.get(Loader, {})
 
+                        for field in util.get_class_field_annotations(Loader):
                         # >>> 2.1.1
                         # class ExampleLoader(DataLoader):
                         #     filtar_x: bool  <--------------- set this field
-                        for field in util.get_class_field_annotations(Base):
                             try:
                                 value = filter_config[field]
                                 setattr(loader, field, value)
@@ -126,10 +123,9 @@ class Resolver:
                     # >>> 2.2
                     # build loader from batch_load_fn, filters config is impossible
                     else:
-                        loader = DataLoader(batch_load_fn=Base) # type:ignore
+                        loader = DataLoader(batch_load_fn=Loader) # type:ignore
 
-                    cache_provider[cache_key] = loader
-                    self.ctx.set(cache_provider)
+                    self.ctx[cache_key] = loader
                 params[k] = loader
         return method(**params)
 
@@ -165,7 +161,7 @@ class Resolver:
         val = await self._resolve(val)
 
         # >>> 4
-        target.__setattr__(target_attr_name, val)
+        setattr(target, target_attr_name, val)
 
 
     async def _resolve(self, target: T) -> T:
@@ -201,7 +197,7 @@ class Resolver:
 
                 post_method = target.__getattribute__(post_key)
                 calc_result = post_method()
-                target.__setattr__(post_attr_name, calc_result)
+                setattr(target, post_attr_name, calc_result)
             
             # hidden entry for performance. run at last
             default_post_method = getattr(target, const.POST_DEFAULT_HANDLER, None)
