@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "pydantic-resolve"
-version = "1.6."
-description = "Make pydantic have a GraphQL-like assembly experience."
+version = "1.6.4"
+description = "create nested data structure easily"
 authors = ["tangkikodo <allmonday@126.com>"]
 readme = "README.md"
 repository = "https://github.com/allmonday/pydantic_resolve"
