@@ -1,9 +1,10 @@
-.. _composer:
+.. _context:
 
-1. 组合查询数据, 处理数据
+
+2. 通过Context传递参数
 ====
 
-另一个常用的场景是拼接多个异步查询, 下面的例子假设使用异步查询返回了当前用户的所有Friend 信息:
+在上一个例子中，如果希望search的参数可以从外部传入的话， 可以使用`context` 
 
 .. code-block:: python
    :linenos:
