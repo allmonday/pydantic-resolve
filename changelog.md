@@ -1,5 +1,9 @@
 # Changelog
 
+## v.1.6.5 (2023.8.12)
+
+- `post_field` method and `post_default_handler` now can read context (setting in Resolver)
+
 ## v.1.6.4 (2023.8.7)
 
 - some inside refactor

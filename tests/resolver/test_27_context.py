@@ -17,6 +17,10 @@ class Earth(BaseModel):
     humans: List[Human] = []
     def resolve_humans(self, context):
         return [dict(name=f'man-{i}') for i in range(context['count'])]
+    
+    count: int = 0
+    def post_count(self, context):
+        return context['count']
 
 class EarthBad(BaseModel):
     humans: List[Human] = []
@@ -24,11 +28,23 @@ class EarthBad(BaseModel):
         context['name'] = 'earth'  # mappingproxytype will raise TypeError
         return [dict(name=f'man-{i}') for i in range(context['count'])]
 
+class EarthBad2(BaseModel):
+    humans: List[Human] = []
+    def resolve_humans(self, context):
+        return [dict(name=f'man-{i}') for i in range(context['count'])]
+    
+    count: int = 0
+    def post_count(self, context):
+        context['count'] = 111
+        return context['count']
+
+
 @pytest.mark.asyncio
 async def test_1():
     earth = Earth()
     earth = await Resolver(context={'count': 10}).resolve(earth)
     assert len(earth.humans) == 10
+    assert earth.count == 10
 
 
 @pytest.mark.asyncio
@@ -46,5 +62,11 @@ async def test_3():
 @pytest.mark.asyncio
 async def test_4():
     earth = EarthBad()
+    with pytest.raises(TypeError):
+        await Resolver(context={'count': 10}).resolve(earth)
+
+@pytest.mark.asyncio
+async def test_5():
+    earth = EarthBad2()
     with pytest.raises(TypeError):
         await Resolver(context={'count': 10}).resolve(earth)

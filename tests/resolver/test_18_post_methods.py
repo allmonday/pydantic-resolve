@@ -66,13 +66,13 @@ class Root(BaseModel):
             {"name": "noone", "age": 19}, 
         ]
     hello: str = ''
-    def post_default_handler(self):
-        self.hello = 'hello'
+    def post_default_handler(self, context):
+        self.hello = f'hello, {context["world"]}'
 
 @pytest.mark.asyncio
 async def test_post_methods():
     root = Root()
-    root = await Resolver().resolve(root)
+    root = await Resolver(context={"world": "new world"}).resolve(root)
     dct = root.dict()
     assert dct == {'users': [{'age': 19,
                      'has_cash': True,
@@ -81,4 +81,4 @@ async def test_post_methods():
                      'name': 'tangkikodo'},
                      {'name': 'noone', 'age': 19, 'friends': [], 'has_cash':False }
                      ],
-                    'hello': 'hello'}
+                    'hello': 'hello, new world'}
