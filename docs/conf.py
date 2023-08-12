@@ -37,3 +37,6 @@ html_theme_options = {
     # "stickysidebar": True
 }
 html_static_path = ['_static']
+html_css_files = [
+    'css/customrize.css'
+]

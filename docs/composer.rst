@@ -11,7 +11,7 @@
 
    import asyncio
    from pydantic import BaseModel
-   from pydantic_resolve import resolve
+   from pydantic_resolve import Resolver
 
    async def search_friend(name: str):
          await asyncio.sleep(1)  # search friends of tangkikodo
@@ -30,7 +30,7 @@
 
    async def main():
       user = User(name="tangkikodo", age=20)
-      user = await resolve(user)
+      user = await Resolver().resolve(user)
       print(user.json())
       
 .. code-block:: shell
@@ -55,7 +55,7 @@ postponed 计算
 
    import asyncio
    from pydantic import BaseModel
-   from pydantic_resolve import resolve
+   from pydantic_resolve import Resolver
 
    async def search_friend(name: str):
          await asyncio.sleep(1)  # search friends of tangkikodo
@@ -82,7 +82,7 @@ postponed 计算
 
    async def main():
       user = User(name="tangkikodo", age=20)
-      user = await resolve(user)
+      user = await Resolver().resolve(user)
       print(user.json())
       
 .. code-block:: shell

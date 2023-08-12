@@ -64,6 +64,8 @@ source: https://github.com/allmonday/pydantic-resolve
 2. 在Task类型上添加 comments: List[Comment] = []
 3. 使用Resolver执行解析
 
+pydantic-resolve 会自动处理orm对象到schema对象的转换。只要字段内容一致，并且符合pydantic的用法。
+
 .. code-block:: python
    :linenos:
    :emphasize-lines: 1-5, 32-34, 43
@@ -239,7 +241,7 @@ source: https://github.com/allmonday/pydantic-resolve
 
 * :ref:`composer`
 * :ref:`context`
-
+* :ref:`filter`
 
 
 更多：
