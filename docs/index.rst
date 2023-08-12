@@ -1,8 +1,9 @@
 Pydantic-resolve 使用手册  / Manual
 ====
 
-Pydantic-resolve 是一个轻量级的工具库，用来快速构建多层嵌套结构的数据。
-设计之初的目的是为了提升FastAPI 返回schema 的开发体验。
+Pydantic-resolve 是一个轻量级的工具库， 用来构建多层嵌套结构的数据。
+
+它能通过上层的数据字段获取并关联下层的数据。 也能在获取数据之后执行post方法进行额外计算。
 
 安装
 ----
@@ -11,14 +12,14 @@ Pydantic-resolve 是一个轻量级的工具库，用来快速构建多层嵌套
 
    pip install pydantic-resolve
    
-   # or
-   pip install "pydantic-resolve[dataloader]"  # install with aiodataloader
 
 source: https://github.com/allmonday/pydantic-resolve
 
 
 我们用FastAPI应用场景来举例， Tasks 接口
 ----
+
+这个场景的目的是生成一个 task -> comment -> feedback 的三层嵌套数据
 
 假设我们现在有一个API接口， get_tasks
 
@@ -54,18 +55,20 @@ source: https://github.com/allmonday/pydantic-resolve
       { "id": 2, "name": "initial project" },
    ]
       
-额外的Comments
+通过task_id查找 task 关联的 comments
 ----
 
 现在我们需要为每个task 对象关联一些comments, 操作步骤
 
-1. dataloader, 用来关联数据
-2. 在schema 上添加关联类型
+1. 添加 dataloader, 传入需要task ids, 返回每个task id 关联的comments
+2. 在Task类型上添加 comments: List[Comment] = []
 3. 使用Resolver执行解析
+
+pydantic-resolve 会自动处理orm对象到schema对象的转换。只要字段内容一致，并且符合pydantic的用法。
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 1-5, 32-35, 44
+   :emphasize-lines: 1-5, 32-34, 43
 
    async def comment_batch_load_fn(task_ids):
       async with db.async_session() as session:
@@ -99,7 +102,6 @@ source: https://github.com/allmonday/pydantic-resolve
       name: str
 
       comments: List[CommentSchema] = [] 
-      @mapper(CommentSchema)
       def resolve_comments(self, comment_loader=LoaderDepend(comment_batch_load_fn)):
          return comment_loader.load(self.id)
 
@@ -127,14 +129,17 @@ source: https://github.com/allmonday/pydantic-resolve
       ] },
    ]
 
-为Comment添加Feedback
+通过 comment_id 为 comment 添加关联的 feedback
 ----
 
-我们照着这个模式，继续为每个comment对象关联一些comments.
+我们照着这个模式，继续为每个comment对象关联一些 feedbacks.
+
+1. 添加 dataloader, 传入需要comment ids, 返回每个comment id 关联的 feedbacks
+2. 在 Comment类型上添加 feedbacks: List[Feedback] = []
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 7-12, 46-49
+   :emphasize-lines: 7-12, 46-48
 
    async def comment_batch_load_fn(task_ids):
       async with db.async_session() as session:
@@ -182,7 +187,6 @@ source: https://github.com/allmonday/pydantic-resolve
       task_id: int
       content: str
       feedbacks: List[FeedbackSchema] = [] 
-      @mapper(FeedbackSchema)
       def resolve_feedbacks(self, feedback_loader=LoaderDepend(feedback_batch_load_fn)):
          return feedback_loader.load(self.id)
 
@@ -194,7 +198,6 @@ source: https://github.com/allmonday/pydantic-resolve
       name: str
 
       comments: List[CommentSchema] = [] 
-      @mapper(CommentSchema)
       def resolve_comments(self, comment_loader=LoaderDepend(comment_batch_load_fn)):
          return comment_loader.load(self.id)
 
@@ -230,27 +233,20 @@ source: https://github.com/allmonday/pydantic-resolve
 
 .. attention:: 
 
-   所有的关联添加，都没有对老代码的侵入和改动。
+   从代码上我们能看到，所有的额外关联，都没有对代码的侵入和改动。
 
 
-完整样例
-----
-
-查看结合了db 和 fastapi的完整样例：
-https://github.com/allmonday/pydantic-resolve/tree/master/examples/fastapi_demo
-
-
-场景和使用方法：
+其他使用方法：
 ====
 
-.. * :ref:`modindex`
 * :ref:`composer`
-* :ref:`dataloader`
+* :ref:`context`
+* :ref:`filter`
 
 
 更多：
 ====
 
 * :ref:`search`
-* :ref:`changelog`
+.. * :ref:`changelog`
 
