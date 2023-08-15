@@ -12,7 +12,33 @@
 
 
 [Change log](./changelog.md)
+## TR;DR
 
+```python
+class Team(BaseModel):
+    id: int
+    name: str
+
+    members: List[Member] = []
+    def resolve_members(self, loader=LoaderDepend(members_batch_load_fn)):
+        return loader.load(self.id)
+
+class Department(BaseModel):
+    id: int
+    name: str
+    teams: List[Team] = []
+    def resolve_teams(self, loader=LoaderDepend(teams_batch_load_fn)):
+        return loader.load(self.id)
+
+class Result(BaseModel):
+    departments: List[Department] = []
+    def resolve_departments(self):
+        return departments
+
+async def main():
+    result = Result()
+    result = await Resolver().resolve(result)
+```
 
 ## Install
 
