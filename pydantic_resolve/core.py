@@ -9,6 +9,7 @@ T = TypeVar("T")
 def is_list(target) -> bool:
     return isinstance(target, (list, tuple))
 
+
 def is_acceptable_type(target):
     """
     Check whether target is Pydantic object or Dataclass object

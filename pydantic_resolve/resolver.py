@@ -1,4 +1,6 @@
 import asyncio
+from collections import defaultdict
+import contextvars
 from dataclasses import is_dataclass
 import inspect
 from inspect import iscoroutine
@@ -42,6 +44,9 @@ class Resolver:
             ):
         self.loader_instance_cache = {}
 
+        self.ancestor_vars = {}
+        self.ancestor_vars_checker = defaultdict(set)  # expose_field_name: set(kls fullpath) if len > 1, raise error
+
         # for dataloader which has class attributes, you can assign the value at here
         self.loader_filters = loader_filters or {}
 
@@ -54,6 +59,42 @@ class Resolver:
         self.ensure_type = ensure_type
         self.annotation_class = annotation_class
         self.context = MappingProxyType(context) if context else None
+
+
+    def _add_expose_fields(self, target):
+        """
+        1. check whether expose to descendant existed
+        2. add fields into contextvars (ancestor_vars_checker)
+        2.1 check overwrite by another class(which is forbidden)
+        2.2 check field exists
+        """
+        dct: Optional[dict] = getattr(target, const.EXPOSE_TO_DESCENDANT, None)
+        # 1
+        if dct:
+            if type(dct) is not dict:
+                raise AttributeError(f'{const.EXPOSE_TO_DESCENDANT} is not dict')
+
+            # 2
+            for field, alias in dct.items():  # eg: name, bar_name
+                # 2.1
+                self.ancestor_vars_checker[alias].add(self._get_kls_full_path(target.__class__))
+                if len(self.ancestor_vars_checker[alias]) > 1:
+                    conflict_modules = ', '.join(list(self.ancestor_vars_checker[alias]))
+                    raise AttributeError(f'alias name conflicts, please check: {conflict_modules}')
+
+                if not self.ancestor_vars.get(alias):
+                    self.ancestor_vars[alias] = contextvars.ContextVar(alias)
+                val = getattr(target, field, None)
+
+                # 2.2
+                if not val:
+                    raise AttributeError(f'{field} does not existed')
+                self.ancestor_vars[alias].set(val)
+    
+
+    def _build_ancestor_context(self):
+        """get values from contextvars and put into a dict"""
+        return { k: v.get()  for k, v in self.ancestor_vars.items()}
     
 
     def _validate_loader_instance(self, loader_instances: Dict[Any, Any]):
@@ -63,6 +104,10 @@ class Resolver:
             if not isinstance(loader, cls):
                 raise AttributeError(f'{loader.__name__} is not instance of {cls.__name__}')
         return True
+    
+
+    def _get_kls_full_path(self, kls):
+        return f'{kls.__module__}.{kls.__name__}'
     
 
     def _execute_resolver_method(self, method):
@@ -84,6 +129,11 @@ class Resolver:
                 raise AttributeError('Resolver.context is missing')
             params['context'] = self.context
 
+        if signature.parameters.get('ancestor_context'):
+            if self.ancestor_vars is None:
+                raise AttributeError(f'there is not class has {const.EXPOSE_TO_DESCENDANT} configed')
+            params['ancestor_context'] = self._build_ancestor_context()
+
         # manage the creation of loader instances
         for k, v in signature.parameters.items():
             # >>> 2
@@ -98,7 +148,7 @@ class Resolver:
                     continue
 
                 # module.kls to avoid same kls name from different module
-                cache_key = f'{v.default.dependency.__module__}.{v.default.dependency.__name__}'
+                cache_key = self._get_kls_full_path(v.default.dependency)
                 hit = self.loader_instance_cache.get(cache_key)
                 if hit:
                     loader = hit
@@ -136,10 +186,16 @@ class Resolver:
     def _execute_post_method(self, method):
         signature = inspect.signature(method)
         params = {}
+
         if signature.parameters.get('context'):
             if self.context is None:
                 raise AttributeError('Post.context is missing')
             params['context'] = self.context
+
+        if signature.parameters.get('ancestor_context'):
+            if self.ancestor_vars is None:
+                raise AttributeError(f'there is not class has {const.EXPOSE_TO_DESCENDANT} configed')
+            params['ancestor_context'] = self._build_ancestor_context()
         return method(**params)
 
 
@@ -194,6 +250,7 @@ class Resolver:
 
         # >>> 2
         if core.is_acceptable_type(target):
+            self._add_expose_fields(target)
             tasks = []
             # >>> 2.1
             for field, attr, _type in core.iter_over_object_resolvers_and_acceptable_fields(target):

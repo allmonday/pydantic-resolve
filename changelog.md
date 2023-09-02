@@ -1,5 +1,39 @@
 # Changelog
 
+## v.1.7.0 (2023.9.2)
+
+- add a port in ancestor class to expose value of specific field to its descendants.
+- resolve_field and post_field of descendant class can read those from `ancestor_context`
+- DO NOT EXPOSE resolver_fields (eg Bar.kars, Kar.desc), it is empty by default.
+
+```python
+class Kar(BaseModel):
+    name: str
+
+    desc: str = ''
+    def resolve_desc(self, ancestor_context):
+        return f"{self.name} - {ancestor_context['bar_num']}"  # read ancestor value from 'ancestor_context'
+
+
+class Bar(BaseModel):
+    __pydantic_resolve_expose__ = {'num': 'bar_num'}  # expose {'bar_num': val }
+
+    num: int
+
+    kars: List[Kar] = []
+    def resolve_kars(self):
+        return [{'name': n} for n in ['a', 'b', 'c']]
+
+
+class Foo(BaseModel):
+    nums:List[int]
+    bars: List[Bar] = []
+
+    def resolve_bars(self):
+        return [{'num': n} for n in self.nums]
+
+```
+
 ## v.1.6.5 (2023.8.12)
 
 - `post_field` method and `post_default_handler` now can read context (setting in Resolver)
