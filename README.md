@@ -9,10 +9,15 @@
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
 
-
-
 [Change log](./changelog.md)
+
+
 ## TR;DR
+`pydantic-resolve` helps you resolve all `resolve_field` methods inside a pydantic object.
+
+It attempts to convert the data returned from `resolve_field` methods to the type target field announced.
+
+for example: 
 
 ```python
 class Team(BaseModel):
@@ -20,24 +25,89 @@ class Team(BaseModel):
     name: str
 
     members: List[Member] = []
-    def resolve_members(self, loader=LoaderDepend(members_batch_load_fn)):
+    def resolve_members(self, loader=LoaderDepend(members_batch_load_fn)):  # 3
         return loader.load(self.id)
+```
+
+`resolve_members` method returns list of dict:
+
+```python
+[
+  {'id': 1, 'name': 'kikodo'},
+  {'id': 2, 'name': 'kimi'},
+]
+```
+ and will be transformed to `Member` instances 
+
+```python
+[
+  Member(id=1, name='kikodo'),
+  Member(id=2, name='kimi')
+]
+```
+and then assigned it to team.members:
+
+
+```python
+"""
+expected schema:
+
+{
+  departments[] {
+    id
+    name
+    teams[] {
+      id
+      name
+      members[] {
+        id
+        name
+      }
+    }
+  }
+}
+"""
+
+class Member(BaseModel):
+    id: int
+    name: str
+
+
+# 1. define schema fields
+# 2. define resolvable fields
+# 3. declare depend loader
+class Team(BaseModel):
+    # 1 
+    id: int
+    name: str
+
+    # 2
+    members: List[Member] = []
+    def resolve_members(self, loader=LoaderDepend(members_batch_load_fn)):  # 3
+        return loader.load(self.id)
+
 
 class Department(BaseModel):
     id: int
     name: str
+
     teams: List[Team] = []
     def resolve_teams(self, loader=LoaderDepend(teams_batch_load_fn)):
         return loader.load(self.id)
+
 
 class Result(BaseModel):
     departments: List[Department] = []
     def resolve_departments(self):
         return departments
 
+
+
+# 3. user Resolver to resolve all fields.
 async def main():
     result = Result()
-    result = await Resolver().resolve(result)
+    await Resolver().resolve(result)
+    return result
 ```
 
 ## Install
