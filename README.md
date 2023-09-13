@@ -45,8 +45,10 @@ class Team(BaseModel):
   Member(id=2, name='kimi')
 ]
 ```
-and then assigned it to team.members:
+and then assigned it back to team.members.
 
+
+Full example:
 
 ```python
 """
