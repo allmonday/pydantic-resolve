@@ -12,10 +12,10 @@
 [Change log](./changelog.md)
 
 
-## TR;DR
-`pydantic-resolve` helps you resolve all `resolve_field` methods inside a pydantic object.
+## Introduction
+`pydantic-resolve` helps you resolve all `resolve_field` methods defined inside a pydantic object.
 
-It attempts to convert the data returned from `resolve_field` methods to the type target field announced.
+It will attempt to convert the data returned from `resolve_field` methods to the type target field announced.
 
 for example: 
 
