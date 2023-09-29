@@ -1,6 +1,7 @@
 ![img](doc/imgs/resolver.png)
 
-> A small yet powerful package which can run resolvers to generate deep nested datasets.
+> A small package which can execute resolvers to generate deep nested datasets.
+> and a powerful package to batch load children data (avoid N+1 query) and attach your custom post_methods.
 
 [![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
 [![Downloads](https://static.pepy.tech/personalized-badge/pydantic-resolve?period=month&units=abbreviation&left_color=grey&right_color=orange&left_text=Downloads)](https://pepy.tech/project/pydantic-resolve)
