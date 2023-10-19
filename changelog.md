@@ -1,5 +1,16 @@
 # Changelog
 
+## v.1.7.1 (2023.10.19)
+
+- fix raising error when `__pydantic_resolve_exposed__` field value is None
+
+```python
+class Bar(BaseModel):
+    __pydantic_resolve_expose__ = {'num': 'bar_num'}  # expose {'bar_num': val }
+
+    num: Optional[int]  # may be None
+```
+
 ## v.1.7.0 (2023.9.2)
 
 - add a port in ancestor class to expose value of specific field to its descendants.
