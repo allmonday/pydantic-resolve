@@ -84,11 +84,12 @@ class Resolver:
 
                 if not self.ancestor_vars.get(alias):
                     self.ancestor_vars[alias] = contextvars.ContextVar(alias)
-                val = getattr(target, field, None)
-
-                # 2.2
-                if not val:
+                
+                try:
+                    val = getattr(target, field)
+                except AttributeError:
                     raise AttributeError(f'{field} does not existed')
+
                 self.ancestor_vars[alias].set(val)
     
 
