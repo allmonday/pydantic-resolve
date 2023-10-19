@@ -3,7 +3,7 @@ from collections import defaultdict
 import contextvars
 from dataclasses import is_dataclass
 import inspect
-from inspect import Attribute, iscoroutine
+from inspect import iscoroutine
 from typing import Type, TypeVar, Dict
 from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingAnnotationError
 from typing import Any, Callable, Optional
