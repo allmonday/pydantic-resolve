@@ -1,8 +1,3 @@
-![img](doc/imgs/resolver.png)
-
-> A small package which can execute resolvers to generate deep nested datasets.
-> and a powerful package to batch load children data (avoid N+1 query) and attach your custom post_methods.
-
 [![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
 [![Downloads](https://static.pepy.tech/personalized-badge/pydantic-resolve?period=month&units=abbreviation&left_color=grey&right_color=orange&left_text=Downloads)](https://pepy.tech/project/pydantic-resolve)
 ![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
@@ -10,108 +5,105 @@
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
 
-[Change log](./changelog.md)
+![img](doc/imgs/resolver.png)
+
+
+[Change Log](./changelog.md)
 
 
 ## Introduction
-`pydantic-resolve` helps you resolve all `resolve_field` methods defined inside a pydantic object.
 
-It will attempt to convert the data returned from `resolve_field` methods to the type target field announced.
+Building related data has always been a troublesome thing, whether through ORM or manually constructing it, especially when you need to build data that combines data from multiple kind of sources.
 
-for example: 
+for example, if I want to provide a blog list with recent 10 comment, 5 edit histories and author info, however:
+- blogs and comments are stored in the DB
+- edit histories are stored as files
+- author details are provided by some 3rd party user service module.  
 
-```python
-class Team(BaseModel):
-    id: int
-    name: str
+> this is merely hypothetical
 
-    members: List[Member] = []
-    def resolve_members(self, loader=LoaderDepend(members_batch_load_fn)):  # 3
-        return loader.load(self.id)
-```
+```mermaid
+---
+title: data from different sources
+---
 
-`resolve_members` method returns list of dict:
+erDiagram
+    Blog ||--o{ Comment : has
+    Blog ||--o{ EditHistory : has 
+    Blog ||--|| Author : belongs_to
 
-```python
-[
-  {'id': 1, 'name': 'kikodo'},
-  {'id': 2, 'name': 'kimi'},
-]
-```
- and will be transformed to `Member` instances 
-
-```python
-[
-  Member(id=1, name='kikodo'),
-  Member(id=2, name='kimi')
-]
-```
-and then assigned it back to team.members.
-
-
-Full example:
-
-```python
-"""
-expected schema:
-
-{
-  departments[] {
-    id
-    name
-    teams[] {
-      id
-      name
-      members[] {
-        id
-        name
-      }
+    Blog {
+      binary uuid
+      binary author_id
+      string title
+      string content
+      source db_table_blog
     }
-  }
-}
-"""
-
-class Member(BaseModel):
-    id: int
-    name: str
-
-
-# 1. define schema fields
-# 2. define resolvable fields
-# 3. declare depend loader
-class Team(BaseModel):
-    # 1 
-    id: int
-    name: str
-
-    # 2
-    members: List[Member] = []
-    def resolve_members(self, loader=LoaderDepend(members_batch_load_fn)):  # 3
-        return loader.load(self.id)
-
-
-class Department(BaseModel):
-    id: int
-    name: str
-
-    teams: List[Team] = []
-    def resolve_teams(self, loader=LoaderDepend(teams_batch_load_fn)):
-        return loader.load(self.id)
-
-
-class Result(BaseModel):
-    departments: List[Department] = []
-    def resolve_departments(self):
-        return departments
-
-
-
-# 3. user Resolver to resolve all fields.
-async def main():
-    result = Result()
-    await Resolver().resolve(result)
-    return result
+    Comment {
+      binary uuid
+      binary blog_id
+      string content
+      binary author_id
+      source db_table_comment
+    }
+    EditHistory {
+      binary uuid
+      binary blog_id
+      string content
+      source provider_oss
+    }
+    Author {
+      binary uuid
+      string name
+      string email
+      source provider_azure_user
+    }
 ```
+
+`pydantic-resolve` provides a unified approach to stitching together various data sources, all you need is to define `DataLoader` for each data source. 
+
+```python
+class Blog(BaseModel):
+    id: int
+    name: str
+    author_id: str
+
+    # 1 : 1
+    author: Optional[Author] = None  
+    def resolve_author(self, user_loader: LoaderDepend(UserDataLoader)):
+        return user_loader.load(self.author_id)  # service: api handler
+
+    # 1 : n
+    comments: List[Comment] = []  
+    def resolve_comments(self, comment_loader: LoaderDepend(CommentDataLoader)):
+        return comment_loader.load(self.id)  # service: db handler
+
+    # 1 : n
+    edit_histories: List[EditHistory] = []  
+    def resolve_edit_histories(self, history_loader: LoaderDepend(EditHistoryDataLoader)):
+        return history_loader.load(self.id)  # service: file handler
+```
+
+In addition, it can help you do some extra calculations after resolving the data.
+
+```python
+class Blog(BaseModel):
+    ...
+    
+    comments_count: int = 0
+    def post_comments_count(self):
+        return len(self.comments)
+```
+
+After schema is done, you only need to query for the base data (blogs), after which `pydantic-resolve` will load all the related data for you.
+
+
+```python
+blogs = await query_blogs()
+blogs = await Resolver().resolve(blogs)
+return blogs
+```
+
 
 ## Install
 
@@ -119,7 +111,7 @@ async def main():
 pip install pydantic-resolve
 ```
 
-## Quick start
+## Demo
 
 Assume we have 3 tables: `departments`, `teams` and `members`, which have `1:N relationship` from left to right. 
 
@@ -176,8 +168,8 @@ and we want to generate nested json base on these 3 tables. the output should be
 We will shows how to make it with `pydantic-resolve` which has 4 steps:
 
 1. get data
-2. group children with parent_id in dataloader function
-3. define pydantic schema, bind with dataloader
+2. group children with parent_id by dataloader
+3. define pydantic schema, use dataloaders
 4. resolve
 
 
@@ -234,11 +226,20 @@ members = [
 # 2. define dataloader
 async def teams_batch_load_fn(department_ids):
     """ return teams grouped by department_id """
-    return build_list(teams, department_ids, lambda t: t['department_id'])
+    # visit [aiodataloader](https://github.com/syrusakbary/aiodataloader) to know how to define `DataLoader`
+
+    dct = defaultdict(list)
+    _teams = team_service.batch_query_by_department_ids(department_ids)  # assume data is exposed by service
+    for team in _teams:
+        dct[team['department_id']].append(team)
+
+    return [dct.get(did, []) for did in department_ids]
 
 async def members_batch_load_fn(team_ids):
     """ return members grouped by team_id """
-    return build_list(members, team_ids, lambda t: t['team_id'])
+    _members = member_service.batch_query_by_team_ids(team_ids)
+
+    return build_list(_members, team_ids, lambda t: t['team_id'])  # build_list is helper fun
 
 # 3. define pydantic types
 class Member(BaseModel):
@@ -252,6 +253,10 @@ class Team(BaseModel):
     members: List[Member] = []
     def resolve_members(self, loader=LoaderDepend(members_batch_load_fn)):
         return loader.load(self.id)
+    
+    member_count: int = 0
+    def post_member_count(self):
+        return len(self.members)
 
 class Department(BaseModel):
     id: int
@@ -259,6 +264,10 @@ class Department(BaseModel):
     teams: List[Team] = []
     def resolve_teams(self, loader=LoaderDepend(teams_batch_load_fn)):
         return loader.load(self.id)
+
+    member_count: int = 0
+    def post_member_count(self):
+        return sum([team.member_count for team in self.teams])
 
 class Result(BaseModel):
     departments: List[Department] = []
@@ -274,7 +283,7 @@ async def main():
 asyncio.run(main())
 ```
 
-then we got:
+then we got the output (display the first item for demostration)
 
 ```json
 {
@@ -282,10 +291,12 @@ then we got:
     {
       "id": 1,
       "name": "INFRA",
+      "member_count": 5,
       "teams": [
         {
           "id": 1,
           "name": "K8S",
+          "member_count": 2,
           "members": [
             {
               "id": 1,
@@ -300,6 +311,7 @@ then we got:
         {
           "id": 2,
           "name": "MONITORING",
+          "member_count": 2,
           "members": [
             {
               "id": 3,
@@ -314,6 +326,7 @@ then we got:
         {
           "id": 3,
           "name": "Jenkins",
+          "member_count": 1,
           "members": [
             {
               "id": 5,
@@ -323,110 +336,6 @@ then we got:
         }
       ]
     },
-    {
-      "id": 2,
-      "name": "DevOps",
-      "teams": [
-        {
-          "id": 5,
-          "name": "Frontend",
-          "members": [
-            {
-              "id": 7,
-              "name": "Ava"
-            }
-          ]
-        },
-        {
-          "id": 6,
-          "name": "Bff",
-          "members": [
-            {
-              "id": 8,
-              "name": "Lucas"
-            },
-            {
-              "id": 9,
-              "name": "Isabella"
-            },
-            {
-              "id": 10,
-              "name": "Mason"
-            }
-          ]
-        },
-        {
-          "id": 7,
-          "name": "Backend",
-          "members": [
-            {
-              "id": 11,
-              "name": "Mia"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "id": 3,
-      "name": "Sales",
-      "teams": [
-        {
-          "id": 8,
-          "name": "CAT",
-          "members": [
-            {
-              "id": 12,
-              "name": "Ethan"
-            },
-            {
-              "id": 13,
-              "name": "Amelia"
-            }
-          ]
-        },
-        {
-          "id": 9,
-          "name": "Account",
-          "members": [
-            {
-              "id": 14,
-              "name": "Oliver"
-            },
-            {
-              "id": 15,
-              "name": "Charlotte"
-            }
-          ]
-        },
-        {
-          "id": 10,
-          "name": "Operation",
-          "members": [
-            {
-              "id": 16,
-              "name": "Jacob"
-            },
-            {
-              "id": 17,
-              "name": "Abigail"
-            },
-            {
-              "id": 18,
-              "name": "Daniel"
-            },
-            {
-              "id": 19,
-              "name": "Emily"
-            },
-            {
-              "id": 20,
-              "name": "Ella"
-            }
-          ]
-        }
-      ]
-    }
   ]
 }
 ```
