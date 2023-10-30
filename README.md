@@ -100,6 +100,7 @@ After schema is done, you only need to query for the base data (blogs), after wh
 
 ```python
 blogs = await query_blogs()
+blogs = [Blog(**blog) for blog in blogs]
 blogs = await Resolver().resolve(blogs)
 return blogs
 ```
