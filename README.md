@@ -10,6 +10,7 @@
 
 [Change Log](./changelog.md)
 
+> if you are using pydantic v2, please use pydantic2-resolve instead.
 
 ## Introduction
 
