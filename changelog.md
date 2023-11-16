@@ -1,5 +1,9 @@
 # Changelog
 
+## v.1.7.2 (2023.11.16)
+
+- fix overwriting BaseModel.Config.schema_extra in `@input`
+
 ## v.1.7.1 (2023.10.19)
 
 - fix raising error when `__pydantic_resolve_exposed__` field value is None
