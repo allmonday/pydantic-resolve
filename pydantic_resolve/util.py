@@ -76,13 +76,11 @@ def output(kls):
 
     if issubclass(kls, BaseModel):
 
-        def build():
-            def schema_extra(schema: Dict[str, Any], model) -> None:
-                fnames = get_required_fields(model)
-                schema['required'] = fnames
-            return schema_extra
+        def _schema_extra(schema: Dict[str, Any], model) -> None:
+            fnames = get_required_fields(model)
+            schema['required'] = fnames
 
-        kls.Config.schema_extra = staticmethod(build())
+        kls.__config__.schema_extra = staticmethod(_schema_extra)
 
     else:
         raise AttributeError(f'target class {kls.__name__} is not BaseModel')
@@ -136,7 +134,7 @@ def get_mapping_rule(target, source) -> Optional[Callable]:
 
     # pydantic
     if issubclass(target, BaseModel):
-        if target.Config.orm_mode:
+        if target.__config__.orm_mode:
             if isinstance(source, dict):
                 raise AttributeError(f"{type(source)} -> {target.__name__}: pydantic from_orm can't handle dict object")
             else:
