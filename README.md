@@ -14,7 +14,9 @@
 
 ## Introduction
 
-Building related data has always been a troublesome thing, whether through ORM or manually constructing it, especially when you need to build data that combines data from multiple kind of sources.
+Building related data has always been a troublesome thing, whether through ORM or manually constructing it, especially when you need to build data that combines data from multiple kind of sources. (and at the same time, avoid N+1 Queries)
+
+> GraphQL is a good idea, but you need to introduce a FRAMEWORK (strawberry, graphene..) to make it, it's too heavy, I don't want frontend's extra job to adapt to it, and... dataloader management is also annoying
 
 for example, if I want to provide a blog list with recent 10 comment, 5 edit histories and author info, however:
 - blogs and comments are stored in the DB
@@ -61,7 +63,7 @@ erDiagram
     }
 ```
 
-`pydantic-resolve` provides a unified approach to stitching together various data sources, all you need is to define `DataLoader` for each data source. 
+`pydantic-resolve` provides a unified approach to stitching together various data sources, all you need is to define `DataLoader` for each data source.  
 
 ```python
 class Blog(BaseModel):
