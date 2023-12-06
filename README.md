@@ -73,17 +73,17 @@ class Blog(BaseModel):
 
     # 1 : 1
     author: Optional[Author] = None  
-    def resolve_author(self, user_loader: LoaderDepend(UserDataLoader)):
+    def resolve_author(self, user_loader=LoaderDepend(UserDataLoader)):
         return user_loader.load(self.author_id)  # service: api handler
 
     # 1 : n
     comments: List[Comment] = []  
-    def resolve_comments(self, comment_loader: LoaderDepend(CommentDataLoader)):
+    def resolve_comments(self, comment_loader=LoaderDepend(CommentDataLoader)):
         return comment_loader.load(self.id)  # service: db handler
 
     # 1 : n
     edit_histories: List[EditHistory] = []  
-    def resolve_edit_histories(self, history_loader: LoaderDepend(EditHistoryDataLoader)):
+    def resolve_edit_histories(self, history_loader=LoaderDepend(EditHistoryDataLoader)):
         return history_loader.load(self.id)  # service: file handler
 ```
 
