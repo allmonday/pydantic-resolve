@@ -10,7 +10,14 @@
 
 [Change Log](./changelog.md)
 
-> if you are using pydantic v2, please use pydantic2-resolve instead.
+> a small yet powerful tool to extend your pydantic schema with no pain.
+>
+> It is the key to the realm of composable development pattern
+>
+> [Attention] If you are using pydantic v2, please use pydantic2-resolve instead.
+
+
+What is composable pattarn? https://github.com/allmonday/composable-development-pattern
 
 ## Introduction
 
