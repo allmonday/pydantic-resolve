@@ -10,7 +10,7 @@
 
 [Change Log](./changelog.md)
 
-> a small yet powerful tool to extend your pydantic schema with no pain.
+> A small yet powerful tool to extend your pydantic schema with no pain.
 >
 > It is the key to the realm of composable development pattern
 >
