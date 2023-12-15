@@ -7,8 +7,7 @@ from pydantic import BaseModel, parse_obj_as, ValidationError
 from inspect import iscoroutine, isfunction
 from typing import Any, DefaultDict, Sequence, Type, TypeVar, List, Callable, Optional, Mapping, Union, Iterator, Dict, get_type_hints
 import pydantic_resolve.constant as const
-
-
+from aiodataloader import DataLoader
 
 def get_class_field_annotations(cls: Type):
     anno = cls.__dict__.get('__annotations__') or {}
@@ -29,7 +28,6 @@ def build_object(items: Sequence[T], keys: List[V], get_pk: Callable[[T], V]) ->
     results = (dct.get(k, None) for k in keys)
     return results
 
-
 def build_list(items: Sequence[T], keys: List[V], get_pk: Callable[[T], V]) -> Iterator[List[T]]:
     """
     helper function to build return list data required by aiodataloader
@@ -40,7 +38,6 @@ def build_list(items: Sequence[T], keys: List[V], get_pk: Callable[[T], V]) -> I
         dct[_key].append(item)
     results = (dct.get(k, []) for k in keys)
     return results
-
 
 def replace_method(cls: Type, cls_name: str, func_name: str, func: Callable):
     KLS = type(cls_name, (cls,), {func_name: func})
@@ -64,18 +61,14 @@ def get_required_fields(kls: BaseModel):
         if f.startswith(const.POST_PREFIX):
             if isfunction(getattr(kls, f)):
                 required_fields.append(f.replace(const.POST_PREFIX, ''))
-    
-    return required_fields
 
+    return required_fields
 
 def output(kls):
     """
-    set required as True for all fields
-    make typescript code gen result friendly to use
+    set required as True for all fields, make typescript code gen result friendly to use
     """
-
     if issubclass(kls, BaseModel):
-
         def _schema_extra(schema: Dict[str, Any], model) -> None:
             fnames = get_required_fields(model)
             schema['required'] = fnames
@@ -85,7 +78,6 @@ def output(kls):
     else:
         raise AttributeError(f'target class {kls.__name__} is not BaseModel')
     return kls
-
 
 def mapper(func_or_class: Union[Callable, Type]):
     """
@@ -116,18 +108,17 @@ def mapper(func_or_class: Union[Callable, Type]):
                 # auto mapping
                 if isinstance(retVal, list):
                     if retVal:
-                        rule = get_mapping_rule(func_or_class, retVal[0])
-                        return apply_rule(rule, func_or_class, retVal, True)
+                        rule = _get_mapping_rule(func_or_class, retVal[0])
+                        return _apply_rule(rule, func_or_class, retVal, True)
                     else:
                         return retVal  # return []
                 else:
-                    rule = get_mapping_rule(func_or_class, retVal)
-                    return apply_rule(rule, func_or_class, retVal, False)
+                    rule = _get_mapping_rule(func_or_class, retVal)
+                    return _apply_rule(rule, func_or_class, retVal, False)
         return wrap
     return inner
 
-
-def get_mapping_rule(target, source) -> Optional[Callable]:
+def _get_mapping_rule(target, source) -> Optional[Callable]:
     # do noting
     if isinstance(source, target):
         return None
@@ -145,16 +136,15 @@ def get_mapping_rule(target, source) -> Optional[Callable]:
 
         else:
             raise AttributeError(f"{type(source)} -> {target.__name__}: pydantic can't handle non-dict data")
-    
+
     # dataclass
     if is_dataclass(target):
         if isinstance(source, dict):
             return lambda t, s: t(**s)
-    
+
     raise NotImplementedError(f"{type(source)} -> {target.__name__}: faild to get auto mapping rule and execut mapping, use your own rule instead.")
 
-
-def apply_rule(rule: Optional[Callable], target, source: Any, is_list: bool):
+def _apply_rule(rule: Optional[Callable], target, source: Any, is_list: bool):
     if not rule:  # no change
         return source
 
@@ -162,7 +152,6 @@ def apply_rule(rule: Optional[Callable], target, source: Any, is_list: bool):
         return [rule(target, s) for s in source]
     else:
         return rule(target, source)
-    
 
 def ensure_subset(base):
     """
@@ -182,34 +171,38 @@ def ensure_subset(base):
                         raise AttributeError(f'{k} not existed in {base.__name__}.')
                     if base_field and base_field.type_ != field.type_:
                         raise AttributeError(f'type of {k} not consistent with {base.__name__}'  )
-            return  kls
+            return kls
         return inner()
     return wrap
 
+def update_forward_refs(kls):
+    def update_pydantic_forward_refs(kls: Type[BaseModel]):
+        """
+        recursively update refs.
+        """
+        if getattr(kls, const.PYDANTIC_FORWARD_REF_UPDATED, False):
+            return
+        kls.update_forward_refs()
+        setattr(kls, const.PYDANTIC_FORWARD_REF_UPDATED, True)
 
-def update_forward_refs(kls: Type[BaseModel]):
-    """
-    recursively update refs.
-    """
-    kls.update_forward_refs()
-    setattr(kls, const.PYDANTIC_FORWARD_REF_UPDATED, True)
-
-    for field in kls.__fields__.values():
-        if issubclass(field.type_, BaseModel):
+        for field in kls.__fields__.values():
             update_forward_refs(field.type_)
 
+    def update_dataclass_forward_refs(kls):
+        if not getattr(kls, const.DATACLASS_FORWARD_REF_UPDATED, False):
+            anno = get_type_hints(kls)
+            kls.__annotations__ = anno
+            setattr(kls, const.DATACLASS_FORWARD_REF_UPDATED, True)
 
-def update_dataclass_forward_refs(kls):
-    if not getattr(kls, const.DATACLASS_FORWARD_REF_UPDATED, False):
-        anno = get_type_hints(kls)
-        kls.__annotations__ = anno
-        setattr(kls, const.DATACLASS_FORWARD_REF_UPDATED, True)
+            for _, v in kls.__annotations__.items():
+                t = shelling_type(v)
+                update_forward_refs(t)
 
-        for _, v in kls.__annotations__.items():
-            t = shelling_type(v)
-            if is_dataclass(t):
-                update_dataclass_forward_refs(t)
+    if issubclass(kls, BaseModel):
+        update_pydantic_forward_refs(kls)
 
+    if is_dataclass(kls):
+        update_dataclass_forward_refs(kls)
 
 def try_parse_data_to_target_field_type(target, field_name, data):
     """
@@ -239,21 +232,58 @@ def try_parse_data_to_target_field_type(target, field_name, data):
         except ValidationError as e:
             print(f'Warning: type mismatch, pls check the return type for "{field_name}", expected: {field_type}')
             raise e
-    
     else:
         return data  #noqa
 
-
-def is_optional(annotation):
+def _is_optional(annotation):
     annotation_origin = getattr(annotation, "__origin__", None)
     return annotation_origin == Union \
         and len(annotation.__args__) == 2 \
         and annotation.__args__[1] == type(None)  # noqa
 
-def is_list(annotation):
+def _is_list(annotation):
     return getattr(annotation, "__origin__", None) == list
 
 def shelling_type(type):
-    while is_optional(type) or is_list(type):
+    while _is_optional(type) or _is_list(type):
         type = type.__args__[0]
     return type
+
+def get_kls_full_path(kls):
+    return f'{kls.__module__}.{kls.__qualname__}'
+
+def copy_dataloader_kls(name, loader_kls):
+    """
+    quickly copy from an existed DataLoader class
+    usage:
+    SeniorMemberLoader = copy_dataloader('SeniorMemberLoader', ul.UserByLevelLoader)
+    JuniorMemberLoader = copy_dataloader('JuniorMemberLoader', ul.UserByLevelLoader)
+    """
+    return type(name, loader_kls.__bases__, dict(loader_kls.__dict__))
+
+class StrictEmptyLoader(DataLoader):
+    async def batch_load_fn(self, keys):
+        """it should not be triggered, otherwise will raise Exception"""
+        raise ValueError('EmptyLoader should load from pre loaded data')
+
+class ListEmptyLoader(DataLoader):
+    async def batch_load_fn(self, keys):
+        dct = {}
+        return [dct.get(k, []) for k in keys]
+
+class SingleEmptyLoader(DataLoader):
+    async def batch_load_fn(self, keys):
+        dct = {}
+        return [dct.get(k, None) for k in keys]
+
+def generate_strict_empty_loader(name):
+    """generated Loader will raise ValueError if not found"""
+    return type(name, StrictEmptyLoader.__bases__, dict(StrictEmptyLoader.__dict__))  #noqa
+
+def generate_list_empty_loader(name):
+    """generated Loader will return [] if not found"""
+    return type(name, ListEmptyLoader.__bases__, dict(ListEmptyLoader.__dict__))  #noqa
+
+def generate_single_empty_loader(name):
+    """generated Loader will return None if not found"""
+    return type(name, SingleEmptyLoader.__bases__, dict(SingleEmptyLoader.__dict__))  #noqa

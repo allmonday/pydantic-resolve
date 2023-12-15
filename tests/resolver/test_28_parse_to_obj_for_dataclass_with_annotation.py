@@ -21,6 +21,7 @@ class Student():
     name: str
 
     books: List[Book] = field(default_factory=list)
+
     def resolve_books(self, loader=LoaderDepend(batch_load_fn)):
         return loader.load(self.id)
 
@@ -28,6 +29,7 @@ class Student():
 class ClassRoom():
     students: List[Student]
     info: Optional[Info] = None
+
     def resolve_info(self):
         return dict(content='kikodo')
 
@@ -41,9 +43,8 @@ class Info():
 
 @pytest.mark.asyncio
 async def test_loader_depends_1():
-
     students = [Student(id=1, name="jack"), Student(id=2, name="mike"), Student(id=3, name="wiki")]
     classroom = ClassRoom(students=students)
-    res = await Resolver(annotation_class=ClassRoom).resolve(classroom)
+    res = await Resolver().resolve(classroom)
     assert isinstance(res.students[0].books[0], Book)
     assert isinstance(res.info, Info)

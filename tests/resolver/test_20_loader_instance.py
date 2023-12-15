@@ -41,17 +41,19 @@ class User(BaseModel):
     age: int
 
     friends: List[Friend] = []
+
     @mapper(lambda names: [Friend(name=name) for name in names])
     def resolve_friends(self, friend_loader=LoaderDepend(FriendLoader)):
         return friend_loader.load(self.name)
 
 class Root(BaseModel):
     users: List[User] = []
+
     @mapper(lambda items: [User(**item) for item in items])
     def resolve_users(self):
         return [
-            {"name": "tangkikodo", "age": 19}, 
-            {"name": "john", "age": 19}, 
+            {"name": "tangkikodo", "age": 19},
+            {"name": "john", "age": 19},
         ]
 
 @pytest.mark.asyncio
@@ -98,8 +100,9 @@ async def test_loader_instance_4():
     root = Root()
     loader = FriendLoader()
     await loader.load_many(['tangkikodo'])
+
     class A:
-        name= 'a'
+        name = 'a'
 
     with pytest.raises(AttributeError):
         await Resolver(loader_instances={A: loader}).resolve(root)
