@@ -12,6 +12,13 @@ from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
 from pydantic_resolve import Resolver, LoaderDepend, mapper, build_list
 
+engine = create_async_engine(
+    "sqlite+aiosqlite://",
+    echo=False,
+)
+
+async_session = async_sessionmaker(engine, expire_on_commit=False)
+
 class Base(DeclarativeBase):
     pass
 
@@ -33,14 +40,59 @@ class Feedback(Base):
     comment_id: Mapped[int] = mapped_column()
     content: Mapped[str]
 
+counter = Counter()
+class FeedbackLoader(DataLoader):
+    async def batch_load_fn(self, comment_ids):
+        counter['load-feedback'] += 1
+        async with async_session() as session:
+            res = await session.execute(select(Feedback).where(Feedback.comment_id.in_(comment_ids)))
+            rows = res.scalars().all()
+            return build_list(rows, comment_ids, lambda x: x.comment_id)
+
+class CommentLoader(DataLoader):
+    async def batch_load_fn(self, task_ids):
+        counter['load-comment'] += 1
+        async with async_session() as session:
+            res = await session.execute(select(Comment).where(Comment.task_id.in_(task_ids)))
+            rows = res.scalars().all()
+            return build_list(rows, task_ids, lambda x: x.task_id)
+
+class FeedbackSchema(BaseModel):
+    id: int
+    comment_id: int
+    content: str
+
+    class Config:
+        orm_mode = True
+
+class CommentSchema(BaseModel):
+    id: int
+    task_id: int
+    content: str
+    feedbacks: List[FeedbackSchema] = []
+
+    @mapper(FeedbackSchema)
+    def resolve_feedbacks(self, loader=LoaderDepend(FeedbackLoader)):
+        return loader.load(self.id)
+
+    class Config:
+        orm_mode = True
+
+class TaskSchema(BaseModel):
+    id: int
+    name: str
+    comments: List[CommentSchema] = []
+
+    @mapper(CommentSchema)
+    def resolve_comments(self, loader=LoaderDepend(CommentLoader)):
+        return loader.load(self.id)
+
+    class Config:
+        orm_mode = True
+
+
 @pytest.mark.asyncio
 async def test_sqlite_and_dataloader():
-    counter = Counter()
-    engine = create_async_engine(
-        "sqlite+aiosqlite://",
-        echo=False,
-    )
-    async_session = async_sessionmaker(engine, expire_on_commit=False)
 
     async def insert_objects() -> None:
         async with async_session() as session:
@@ -60,53 +112,6 @@ async def test_sqlite_and_dataloader():
                         Feedback(id=3, comment_id=1, content="feedback-1 for comment-1"),
                     ]
                 )
-
-    class FeedbackLoader(DataLoader):
-        async def batch_load_fn(self, comment_ids):
-            counter['load-feedback'] += 1
-            async with async_session() as session:
-                res = await session.execute(select(Feedback).where(Feedback.comment_id.in_(comment_ids)))
-                rows = res.scalars().all()
-                return build_list(rows, comment_ids, lambda x: x.comment_id)
-
-    class CommentLoader(DataLoader):
-        async def batch_load_fn(self, task_ids):
-            counter['load-comment'] += 1
-            async with async_session() as session:
-                res = await session.execute(select(Comment).where(Comment.task_id.in_(task_ids)))
-                rows = res.scalars().all()
-                return build_list(rows, task_ids, lambda x: x.task_id)
-
-    class FeedbackSchema(BaseModel):
-        id: int
-        comment_id: int
-        content: str
-
-        class Config:
-            orm_mode = True
-
-    class CommentSchema(BaseModel):
-        id: int
-        task_id: int
-        content: str
-        feedbacks: List[FeedbackSchema]  = []
-        @mapper(FeedbackSchema)
-        def resolve_feedbacks(self, loader=LoaderDepend(FeedbackLoader)):
-            return loader.load(self.id)
-
-        class Config:
-            orm_mode = True
-
-    class TaskSchema(BaseModel):
-        id: int
-        name: str
-        comments: List[CommentSchema]  = []
-        @mapper(CommentSchema)
-        def resolve_comments(self, loader=LoaderDepend(CommentLoader)):
-            return loader.load(self.id)
-
-        class Config:
-            orm_mode = True
 
     async def init():
         async with engine.begin() as conn:

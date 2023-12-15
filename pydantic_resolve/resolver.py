@@ -1,11 +1,13 @@
 import asyncio
 from collections import defaultdict
+import functools
 import contextvars
 from dataclasses import is_dataclass
 import inspect
 from inspect import iscoroutine
 from typing import Type, TypeVar, Dict
 from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingAnnotationError
+from .util import get_kls_full_path
 from typing import Any, Callable, Optional
 from pydantic_resolve import core
 from aiodataloader import DataLoader
@@ -23,7 +25,7 @@ def LoaderDepend(  # noqa: N802
 
 class Depends:
     def __init__(
-        self, 
+        self,
         dependency: Optional[Callable[..., Any]] = None,
     ):
         self.dependency = dependency
@@ -35,13 +37,12 @@ class Resolver:
     Entrypoint of a resolve action
     """
     def __init__(
-            self, 
+            self,
             loader_filters: Optional[Dict[Any, Dict[str, Any]]] = None, 
             loader_instances: Optional[Dict[Any, Any]] = None,
             annotation_class: Optional[Type] = None,
             ensure_type=False,
-            context: Optional[Dict[str, Any]] = None
-            ):
+            context: Optional[Dict[str, Any]] = None):
         self.loader_instance_cache = {}
 
         self.ancestor_vars = {}
@@ -59,7 +60,7 @@ class Resolver:
         self.ensure_type = ensure_type
         self.annotation_class = annotation_class
         self.context = MappingProxyType(context) if context else None
-
+        self.kls_attr_map = {}
 
     def _add_expose_fields(self, target):
         """
@@ -91,12 +92,10 @@ class Resolver:
                     raise AttributeError(f'{field} does not existed')
 
                 self.ancestor_vars[alias].set(val)
-    
 
     def _build_ancestor_context(self):
         """get values from contextvars and put into a dict"""
-        return { k: v.get()  for k, v in self.ancestor_vars.items()}
-    
+        return {k: v.get() for k, v in self.ancestor_vars.items()}
 
     def _validate_loader_instance(self, loader_instances: Dict[Any, Any]):
         for cls, loader in loader_instances.items():
@@ -105,11 +104,9 @@ class Resolver:
             if not isinstance(loader, cls):
                 raise AttributeError(f'{loader.__name__} is not instance of {cls.__name__}')
         return True
-    
 
     def _get_kls_full_path(self, kls):
-        return f'{kls.__module__}.{kls.__name__}'
-    
+        return get_kls_full_path(kls)
 
     def _execute_resolver_method(self, method):
         """
@@ -175,14 +172,13 @@ class Resolver:
                     # >>> 2.2
                     # build loader from batch_load_fn, filters config is impossible
                     else:
-                        loader = DataLoader(batch_load_fn=Loader) # type:ignore
+                        loader = DataLoader(batch_load_fn=Loader)  # type:ignore
 
                     self.loader_instance_cache[cache_key] = loader
                 params[k] = loader
 
         # 3
         return method(**params)
-
 
     def _execute_post_method(self, method):
         signature = inspect.signature(method)
@@ -198,7 +194,6 @@ class Resolver:
                 raise AttributeError(f'there is not class has {const.EXPOSE_TO_DESCENDANT} configed')
             params['ancestor_context'] = self._build_ancestor_context()
         return method(**params)
-
 
     async def _resolve_obj_field(self, target, field, attr):
         """
@@ -234,7 +229,6 @@ class Resolver:
         # >>> 4
         setattr(target, target_attr_name, val)
 
-
     async def _resolve(self, target: T) -> T:
         """ 
         resolve object (pydantic, dataclass) or list.
@@ -254,15 +248,19 @@ class Resolver:
             self._add_expose_fields(target)
             tasks = []
             # >>> 2.1
-            for field, attr, _type in core.iter_over_object_resolvers_and_acceptable_fields(target):
-                if _type == const.ATTRIBUTE: tasks.append(self._resolve(attr))
-                if _type == const.RESOLVER: tasks.append(self._resolve_obj_field(target, field, attr))
+            for field, attr, _type in core.iter_over_object_resolvers_and_acceptable_fields2(target, self.kls_attr_map):
+            # for field, attr, _type in core.iter_over_object_resolvers_and_acceptable_fields(target):
+                if _type == const.ATTRIBUTE:
+                    tasks.append(self._resolve(attr))
+                if _type == const.RESOLVER:
+                    tasks.append(self._resolve_obj_field(target, field, attr))
 
             await asyncio.gather(*tasks)
 
             # >>> 2.2
-            # execute post methods, if context declared, self.context will be injected into it. 
-            for post_key in core.iter_over_object_post_methods(target):
+            # execute post methods, if context declared, self.context will be injected into it.
+            for post_key in core.iter_over_object_post_methods2(target, self.kls_attr_map):
+            # for post_key in core.iter_over_object_post_methods(target):
                 post_attr_name = post_key.replace(const.POST_PREFIX, '')
                 if not hasattr(target, post_attr_name):
                     raise ResolverTargetAttrNotFound(f"fail to run {post_key}(), attribute {post_attr_name} not found")
@@ -278,7 +276,6 @@ class Resolver:
 
         return target
 
-
     async def resolve(self, target: T) -> T:
         # if raise forwardref related error, use this
         if self.annotation_class:
@@ -287,6 +284,8 @@ class Resolver:
 
             if is_dataclass(self.annotation_class):
                 util.update_dataclass_forward_refs(self.annotation_class)
-
+        self.kls_attr_map = core.get_all_fields(target)
+        import json
+        print(json.dumps(self.kls_attr_map, indent=2))
         await self._resolve(target)
         return target 

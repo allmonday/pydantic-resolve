@@ -41,31 +41,35 @@ class Friend(BaseModel):
     def post_has_cash(self):
         # self.has_cash = self.cash is not None
         return self.cash is not None
-
-    
+   
 
 class User(BaseModel):
     name: str
     age: int
 
     friends: List[Friend] = []
+
     @mapper(lambda names: [Friend(name=name) for name in names])
     def resolve_friends(self, friend_loader=LoaderDepend(friends_batch_load_fn)):
         return friend_loader.load(self.name)
-    
+
     has_cash: bool = False
+
     def post_has_cash(self):
         return any([f.has_cash for f in self.friends])
 
 class Root(BaseModel):
     users: List[User] = []
+
     @mapper(lambda items: [User(**item) for item in items])
     def resolve_users(self):
         return [
-            {"name": "tangkikodo", "age": 19}, 
-            {"name": "noone", "age": 19}, 
+            {"name": "tangkikodo", "age": 19},
+            {"name": "noone", "age": 19},
         ]
+
     hello: str = ''
+
     def post_default_handler(self, context):
         self.hello = f'hello, {context["world"]}'
 
@@ -74,11 +78,12 @@ async def test_post_methods():
     root = Root()
     root = await Resolver(context={"world": "new world"}).resolve(root)
     dct = root.dict()
-    assert dct == {'users': [{'age': 19,
-                     'has_cash': True,
-                     'friends': [{'has_cash': False,'cash': None, 'name': 'tom'},
-                                 {'has_cash': True, 'cash': {'number': 200}, 'name': 'jerry'}],
-                     'name': 'tangkikodo'},
-                     {'name': 'noone', 'age': 19, 'friends': [], 'has_cash':False }
-                     ],
-                    'hello': 'hello, new world'}
+    assert dct == {
+                   'users': [{'age': 19,
+                   'has_cash': True,
+                   'friends': [{'has_cash': False, 'cash': None, 'name': 'tom'},
+                               {'has_cash': True, 'cash': {'number': 200}, 'name': 'jerry'}],
+                   'name': 'tangkikodo'},
+                   {'name': 'noone', 'age': 19, 'friends': [], 'has_cash':False }
+                   ],
+                   'hello': 'hello, new world'}

@@ -8,8 +8,6 @@ from inspect import iscoroutine, isfunction
 from typing import Any, DefaultDict, Sequence, Type, TypeVar, List, Callable, Optional, Mapping, Union, Iterator, Dict, get_type_hints
 import pydantic_resolve.constant as const
 
-
-
 def get_class_field_annotations(cls: Type):
     anno = cls.__dict__.get('__annotations__') or {}
     return anno.keys()
@@ -182,7 +180,7 @@ def ensure_subset(base):
                         raise AttributeError(f'{k} not existed in {base.__name__}.')
                     if base_field and base_field.type_ != field.type_:
                         raise AttributeError(f'type of {k} not consistent with {base.__name__}'  )
-            return  kls
+            return kls
         return inner()
     return wrap
 
@@ -250,10 +248,16 @@ def is_optional(annotation):
         and len(annotation.__args__) == 2 \
         and annotation.__args__[1] == type(None)  # noqa
 
+
 def is_list(annotation):
     return getattr(annotation, "__origin__", None) == list
+
 
 def shelling_type(type):
     while is_optional(type) or is_list(type):
         type = type.__args__[0]
     return type
+
+
+def get_kls_full_path(kls):
+    return f'{kls.__module__}.{kls.__qualname__}'

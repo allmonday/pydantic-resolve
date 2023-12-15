@@ -1,6 +1,7 @@
 PREFIX = 'resolve_'
 POST_PREFIX = 'post_'
 RESOLVER = 'RESOLVER'
+POSTER = 'POSTER'
 ATTRIBUTE = 'ATTRIBUTE'
 PYDANTIC_FORWARD_REF_UPDATED = '__pydantic_resolve_forward_refs_updated__'
 DATACLASS_FORWARD_REF_UPDATED = '__pydantic_resolve_dataclass_forward_refs_updated__'
