@@ -1,5 +1,12 @@
 # Changelog
 
+## v.1.8.0 (2023.12.15)
+
+- internal refactor: performance improvement
+- remove Resolver.annotation_class, it will be processed automatically
+- new helper function `copy_dataloader_kls` to generate a copy of DataLoader
+- `pydantic_resolve.utils` provide several internal `generate_loader` functions.
+
 ## v.1.7.2 (2023.11.16)
 
 - fix overwriting BaseModel.Config.schema_extra in `@input`

@@ -13,9 +13,6 @@ class Book(BaseModel):
     name: str
     published: bool = False
 
-    class Config:
-        orm_mode = True
-
 async def batch_load_fn(keys):
     return [[Bo(name=f'book-{k}')] for k in keys]
 
@@ -25,15 +22,17 @@ class Student(BaseModel):
     name: str
 
     books: List[Book] = []
+
     @mapper(Book)
     def resolve_books(self, loader=LoaderDepend(batch_load_fn)):
         return loader.load(self.id)
 
 @pytest.mark.asyncio
-async def test_mapper_7():
+async def test_mapper_6():
     """
     pydantic to pydantic
     """
+
     students = [Student(id=1, name="jack")]
     result = await Resolver().resolve(students)
-    assert result[0].dict() == {'id': 1, 'name': "jack", 'books': [{'name': "book-1", 'published':False}]}
+    assert result[0].dict() == {'id': 1, 'name': "jack", 'books': [{'name': "book-1", 'published': False}]}

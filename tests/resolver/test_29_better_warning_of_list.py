@@ -30,26 +30,26 @@ department_lead = [
 ]
 
 members = [
-  dict(id=1, team_id=1, name="Sophia", gender='female'),
-  dict(id=2, team_id=1, name="Jackson", gender='male'),
-  dict(id=3, team_id=2, name="Olivia", gender='female'),
-  dict(id=4, team_id=2, name="Liam", gender='male'),
-  dict(id=5, team_id=3, name="Emma", gender='female'),
-  dict(id=6, team_id=4, name="Noah", gender='male'),
-  dict(id=7, team_id=5, name="Ava", gender='female'),
-  dict(id=8, team_id=6, name="Lucas", gender='male'),
-  dict(id=9, team_id=6, name="Isabella", gender='female'),
-  dict(id=10, team_id=6, name="Mason", gender='male'),
-  dict(id=11, team_id=7, name="Mia", gender='female'),
-  dict(id=12, team_id=8, name="Ethan", gender='male'),
-  dict(id=13, team_id=8, name="Amelia", gender='female'),
-  dict(id=14, team_id=9, name="Oliver", gender='male'),
-  dict(id=15, team_id=9, name="Charlotte", gender='female'),
-  dict(id=16, team_id=10, name="Jacob", gender='male'),
-  dict(id=17, team_id=10, name="Abigail", gender='female'),
-  dict(id=18, team_id=10, name="Daniel", gender='male'),
-  dict(id=19, team_id=10, name="Emily", gender='female'),
-  dict(id=20, team_id=10, name="Ella", gender='female')
+    dict(id=1, team_id=1, name="Sophia", gender='female'),
+    dict(id=2, team_id=1, name="Jackson", gender='male'),
+    dict(id=3, team_id=2, name="Olivia", gender='female'),
+    dict(id=4, team_id=2, name="Liam", gender='male'),
+    dict(id=5, team_id=3, name="Emma", gender='female'),
+    dict(id=6, team_id=4, name="Noah", gender='male'),
+    dict(id=7, team_id=5, name="Ava", gender='female'),
+    dict(id=8, team_id=6, name="Lucas", gender='male'),
+    dict(id=9, team_id=6, name="Isabella", gender='female'),
+    dict(id=10, team_id=6, name="Mason", gender='male'),
+    dict(id=11, team_id=7, name="Mia", gender='female'),
+    dict(id=12, team_id=8, name="Ethan", gender='male'),
+    dict(id=13, team_id=8, name="Amelia", gender='female'),
+    dict(id=14, team_id=9, name="Oliver", gender='male'),
+    dict(id=15, team_id=9, name="Charlotte", gender='female'),
+    dict(id=16, team_id=10, name="Jacob", gender='male'),
+    dict(id=17, team_id=10, name="Abigail", gender='female'),
+    dict(id=18, team_id=10, name="Daniel", gender='male'),
+    dict(id=19, team_id=10, name="Emily", gender='female'),
+    dict(id=20, team_id=10, name="Ella", gender='female')
 ]
 
 class DepartmentBase(BaseModel):
@@ -82,15 +82,18 @@ class Result(BaseModel):
 
 class Department(DepartmentBase):
     teams: List[Team] = []
+
     def resolve_teams(self, loader=LoaderDepend(teams_batch_load_fn)):
         return loader.load(self.id)
 
     lead: Optional[Lead] = None
+
     def resolve_lead(self, loader=LoaderDepend(lead_batch_load_fn)):
         return loader.load(self.id)
 
 class Team(TeamBase):
     members: List[Member] = []
+
     def resolve_members(self, loader=LoaderDepend(members_batch_load_fn)):
         return loader.load(self.id)
 
@@ -108,9 +111,9 @@ async def test_error():
     1. generate data from departments to members  (top to bottom)
     """
     Result.update_forward_refs()
-    department_ids = {2,3}
+    department_ids = {2, 3}
     _departments = [Department(**d) for d in departments if d['id'] in department_ids] 
     result = Result(departments=_departments)
     with pytest.raises(ValidationError):
-        await Resolver(annotation_class=Result).resolve(result)
+        await Resolver().resolve(result)
 
