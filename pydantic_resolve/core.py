@@ -4,7 +4,7 @@ from dataclasses import is_dataclass, fields as dc_fields
 from typing import TypeVar
 from pydantic_resolve.util import get_kls_full_path
 from .constant import POSTER, PREFIX, POST_PREFIX, RESOLVER, ATTRIBUTE, POST_DEFAULT_HANDLER
-from .util import shelling_type, update_dataclass_forward_refs, update_forward_refs
+from .util import common_update_forward_refs, shelling_type
 from .exceptions import ResolverTargetAttrNotFound
 
 T = TypeVar("T")
@@ -33,16 +33,11 @@ def get_all_fields(target):
 
     root = _get_class(target)
 
-    if issubclass(root, BaseModel):
-        update_forward_refs(root)
-
-    if is_dataclass(root):
-        update_dataclass_forward_refs(root)
+    common_update_forward_refs(root)
 
     dct = {}
 
     def walker(kls):
-        print(kls)
         kls_name = get_kls_full_path(kls)
 
         hit = dct.get(kls_name)
@@ -59,7 +54,6 @@ def get_all_fields(target):
         attribute_list = []
         object_list = []
         post_list = []
-
         if issubclass(kls, BaseModel):
             all_attrs = set(kls.__fields__.keys())
             object_list = list(_get_pydantic_attrs(kls))  # dive and recursively analysis
@@ -96,8 +90,10 @@ def get_all_fields(target):
             'post': post_list,  # to post
             'attribute': attribute_list  # object without resolvable field
         }
+        print(dct)
 
         for obj in object_list:
+            print(obj)
             walker(obj[1])
 
     walker(root)

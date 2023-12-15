@@ -4,7 +4,7 @@ from .exceptions import (
     LoaderFieldNotProvidedError,
     MissingAnnotationError)
 from .resolver import Resolver, LoaderDepend
-from .util import build_list, build_object, mapper, ensure_subset, update_forward_refs, output
+from .util import build_list, build_object, mapper, ensure_subset, output
 
 __all__ = [
     'Resolver',
@@ -17,6 +17,5 @@ __all__ = [
     'build_object',
     'mapper',
     'ensure_subset',
-    'update_forward_refs',
     'output'
 ]

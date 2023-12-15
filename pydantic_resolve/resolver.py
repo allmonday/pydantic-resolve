@@ -278,14 +278,8 @@ class Resolver:
 
     async def resolve(self, target: T) -> T:
         # if raise forwardref related error, use this
-        if self.annotation_class:
-            if issubclass(self.annotation_class, BaseModel):
-                util.update_forward_refs(self.annotation_class)
-
-            if is_dataclass(self.annotation_class):
-                util.update_dataclass_forward_refs(self.annotation_class)
         self.kls_attr_map = core.get_all_fields(target)
         import json
         print(json.dumps(self.kls_attr_map, indent=2))
         await self._resolve(target)
-        return target 
+        return target

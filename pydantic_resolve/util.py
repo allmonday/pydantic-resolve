@@ -185,28 +185,36 @@ def ensure_subset(base):
     return wrap
 
 
-def update_forward_refs(kls: Type[BaseModel]):
-    """
-    recursively update refs.
-    """
-    kls.update_forward_refs()
-    setattr(kls, const.PYDANTIC_FORWARD_REF_UPDATED, True)
+def common_update_forward_refs(kls):
 
-    for field in kls.__fields__.values():
-        if issubclass(field.type_, BaseModel):
-            update_forward_refs(field.type_)
+    def update_forward_refs(kls: Type[BaseModel]):
+        """
+        recursively update refs.
+        """
+        if getattr(kls, const.PYDANTIC_FORWARD_REF_UPDATED, False):
+            return
+        kls.update_forward_refs()
+        setattr(kls, const.PYDANTIC_FORWARD_REF_UPDATED, True)
 
+        for field in kls.__fields__.values():
+            common_update_forward_refs(field.type_)
 
-def update_dataclass_forward_refs(kls):
-    if not getattr(kls, const.DATACLASS_FORWARD_REF_UPDATED, False):
-        anno = get_type_hints(kls)
-        kls.__annotations__ = anno
-        setattr(kls, const.DATACLASS_FORWARD_REF_UPDATED, True)
+    def update_dataclass_forward_refs(kls):
+        if not getattr(kls, const.DATACLASS_FORWARD_REF_UPDATED, False):
+            anno = get_type_hints(kls)
+            kls.__annotations__ = anno
+            setattr(kls, const.DATACLASS_FORWARD_REF_UPDATED, True)
 
-        for _, v in kls.__annotations__.items():
-            t = shelling_type(v)
-            if is_dataclass(t):
-                update_dataclass_forward_refs(t)
+            for _, v in kls.__annotations__.items():
+                t = shelling_type(v)
+                if is_dataclass(t):
+                    common_update_forward_refs(t)
+
+    if issubclass(kls, BaseModel):
+        update_forward_refs(kls)
+
+    if is_dataclass(kls):
+        update_dataclass_forward_refs(kls)
 
 
 def try_parse_data_to_target_field_type(target, field_name, data):

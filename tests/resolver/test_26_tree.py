@@ -16,6 +16,7 @@ class Tree(BaseModel):
     id: int
     content: str
     children: List[Tree] = []
+
     def resolve_children(self, loader=LoaderDepend(DummyLoader)):
         return loader.load(self.id)
     
@@ -24,6 +25,7 @@ class DTree:
     id: int
     content: str
     children: List[DTree] = field(default_factory=list)
+
     def resolve_children(self, loader=LoaderDepend(DummyLoader)):
         return loader.load(self.id)
 
