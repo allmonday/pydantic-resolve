@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, List
 from pydantic import BaseModel
-from pydantic_resolve.core import get_all_fields
+from pydantic_resolve.core import scan_and_store_required_fields
 
 @dataclass
 class Book:
@@ -18,7 +18,7 @@ class Student(BaseModel):
 
 
 def test_get_all_fields():
-    result = get_all_fields(Student())
+    result = scan_and_store_required_fields(Student())
     assert result == {
         'test_field_mix.Student': {
             'resolve': ['resolve_books'],

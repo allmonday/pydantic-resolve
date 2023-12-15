@@ -1,16 +1,15 @@
-from inspect import isfunction, ismethod
+from inspect import isfunction
 from pydantic import BaseModel
 from dataclasses import is_dataclass, fields as dc_fields
 from typing import TypeVar
 from pydantic_resolve.util import get_kls_full_path
-from .constant import POSTER, PREFIX, POST_PREFIX, RESOLVER, ATTRIBUTE, POST_DEFAULT_HANDLER
-from .util import common_update_forward_refs, shelling_type
+from .constant import PREFIX, POST_PREFIX, POST_DEFAULT_HANDLER
+from .util import update_forward_refs, shelling_type
 from .exceptions import ResolverTargetAttrNotFound
 
-T = TypeVar("T")
+# core.py contains all Resolver required functions.
 
-def is_list(target) -> bool:
-    return isinstance(target, (list, tuple))
+T = TypeVar("T")
 
 def _get_class(target):
     if isinstance(target, list):
@@ -29,31 +28,29 @@ def _get_dataclass_attrs(kls):
         if is_acceptable_kls(t):
             yield (name, t)
 
-def get_all_fields(target):
-
+def scan_and_store_required_fields(target):
     root = _get_class(target)
+    update_forward_refs(root)
 
-    common_update_forward_refs(root)
-
-    dct = {}
+    scan_result = {}
 
     def walker(kls):
         kls_name = get_kls_full_path(kls)
 
-        hit = dct.get(kls_name)
+        hit = scan_result.get(kls_name)
         if hit:
             return
 
-        resolver_fields = set()
+        resolver_fields = set()  # resolve_name --> name
         fields = dir(kls)
 
-        resolvers = [f for f in fields if f.startswith(PREFIX)]
-        posts = [f for f in fields if f.startswith(POST_PREFIX)]
+        raw_resolve_methods = (f for f in fields if f.startswith(PREFIX))
+        raw_post_methods = (f for f in fields if f.startswith(POST_PREFIX))
 
-        resolve_list = []
-        attribute_list = []
-        object_list = []
-        post_list = []
+        resolve_methods, post_methods = [], []
+        attribute_list = []  # all attributes of class without resolve
+        object_list = []  # all attributes of class
+
         if issubclass(kls, BaseModel):
             all_attrs = set(kls.__fields__.keys())
             object_list = list(_get_pydantic_attrs(kls))  # dive and recursively analysis
@@ -61,127 +58,68 @@ def get_all_fields(target):
         elif is_dataclass(kls):
             all_attrs = set([f.name for f in dc_fields(kls)])
             object_list = list(_get_dataclass_attrs(kls))
-
         else:
-            raise AttributeError('invalid type: should be pydantic object or dataclass object')  # noqa
+            raise AttributeError('invalid type: should be pydantic object or dataclass object')  #noqa
 
-        for field in resolvers:
+        for field in raw_resolve_methods:
             attr = getattr(kls, field)
             if isfunction(attr):
                 resolve_field = field.replace(PREFIX, '')
                 if resolve_field not in all_attrs:
                     raise ResolverTargetAttrNotFound(f"attribute {resolve_field} not found")
                 resolver_fields.add(resolve_field)
-                resolve_list.append(field)
+                resolve_methods.append(field)
 
         attribute_list = [a[0] for a in object_list if a[0] not in resolver_fields]
 
-        for field in posts:
+        for field in raw_post_methods:
             attr = getattr(kls, field)
             if isfunction(attr) and field != POST_DEFAULT_HANDLER:
                 post_field = field.replace(POST_PREFIX, '')
                 if post_field not in all_attrs:
-                    # raise ResolverTargetAttrNotFound('missing field')  # noqa
                     raise ResolverTargetAttrNotFound(f"attribute {post_field} not found")
-                post_list.append(field)
+                post_methods.append(field)
 
-        dct[kls_name] = {
-            'resolve': resolve_list,  # to resolve
-            'post': post_list,  # to post
+        scan_result[kls_name] = {
+            'resolve': resolve_methods,  # to resolve
+            'post': post_methods,  # to post
             'attribute': attribute_list  # object without resolvable field
         }
-        print(dct)
 
         for obj in object_list:
-            print(obj)
             walker(obj[1])
-
     walker(root)
-    return dct
+
+    return scan_result
 
 def is_acceptable_kls(kls):
     return issubclass(kls, BaseModel) or is_dataclass(kls)
 
-
-def is_acceptable_type(target):
-    """
-    Check whether target is Pydantic object or Dataclass object
-
-    :param target: object
-    :type target: BaseModel or Dataclass 
-    :rtype: bool
-
-    """
+def is_acceptable_instance(target):
+    """ check whether target is Pydantic object or Dataclass object """
     return isinstance(target, BaseModel) or is_dataclass(target)
 
-def iter_over_object_resolvers_and_acceptable_fields2(target, attr_map):
-    ...
+def iter_over_object_resolvers_and_acceptable_fields(target, attr_map):
     kls = _get_class(target)
     attr_info = attr_map.get(get_kls_full_path(kls))
-    pile = []
+
+    resolve, attribute = [], []
 
     for attr_name in attr_info['resolve']:
-        attr = target.__getattribute__(attr_name)
-        pile.append((attr_name, attr, RESOLVER))
+        attr = getattr(target, attr_name)
+        resolve.append((attr_name, attr))
 
     for attr_name in attr_info['attribute']:
-        attr = target.__getattribute__(attr_name)
-        pile.append((attr_name, attr, ATTRIBUTE))
+        attr = getattr(target, attr_name)
+        attribute.append((attr_name, attr))
 
-    return pile
+    return resolve, attribute
 
-def iter_over_object_post_methods2(target, attr_map):
+def iter_over_object_post_methods(target, attr_map):
     """get method starts with post_"""
-    for k in dir(target):
-        if k == POST_DEFAULT_HANDLER:  # skip
-            continue
-        if k.startswith(POST_PREFIX) and ismethod(target.__getattribute__(k)):
-            yield k
-
     kls = _get_class(target)
     attr_info = attr_map.get(get_kls_full_path(kls))
-    pile = []
+
     for attr_name in attr_info['post']:
-        pile.append(attr_name)
+        yield attr_name
 
-
-def iter_over_object_resolvers_and_acceptable_fields(target):
-    """
-        return 
-        1. method starts with resolve_,  eg: resolve_name, resolve_age
-        2. field of pydantic or dataclass, which is not resolved by step1. (if `resolve_name` already exists, it will skip `name` )
-    """
-    resolver_fields = set()
-    fields = dir(target)
-    resolvers = [f for f in fields if f.startswith(PREFIX)]
-    
-    pile = []
-
-    if isinstance(target, BaseModel):
-        attributes = list(target.__fields__.keys())
-    elif is_dataclass(target):
-        attributes = [f.name for f in dc_fields(target)]
-    else:
-        raise AttributeError('invalid type: should be pydantic object or dataclass object')  # noqa
-
-    for field in resolvers:
-        attr = target.__getattribute__(field)
-        if ismethod(attr):
-            resolver_fields.add(field.replace(PREFIX, ''))
-            pile.append((field, attr, RESOLVER))
-
-    for field in attributes: 
-        if (field in resolver_fields):  # skip field of resolve_[field]
-            continue
-        attr = target.__getattribute__(field)
-        if is_acceptable_type(attr) or is_list(attr):
-            pile.append((field, attr, ATTRIBUTE))
-    return pile
-
-def iter_over_object_post_methods(target):
-    """get method starts with post_"""
-    for k in dir(target):
-        if k == POST_DEFAULT_HANDLER:  # skip
-            continue
-        if k.startswith(POST_PREFIX) and ismethod(target.__getattribute__(k)):
-            yield k

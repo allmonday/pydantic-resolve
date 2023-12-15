@@ -1,16 +1,14 @@
 from __future__ import annotations
 from collections import defaultdict
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from typing import List
 from pydantic import BaseModel
-from pydantic_resolve import Resolver, LoaderDepend, mapper
-from aiodataloader import DataLoader
+from pydantic_resolve import Resolver, LoaderDepend
+from pydantic_resolve.util import generate_list_empty_loader
 import pytest
 
-class DummyLoader(DataLoader):
-    async def batch_load_fn(self, keys):
-        d = dict()
-        return [d.get(k, []) for k in keys]
+
+DummyLoader = generate_list_empty_loader('DummyLoader')
 
 class Tree(BaseModel):
     id: int
@@ -19,7 +17,7 @@ class Tree(BaseModel):
 
     def resolve_children(self, loader=LoaderDepend(DummyLoader)):
         return loader.load(self.id)
-    
+
 @dataclass
 class DTree:
     id: int
@@ -53,10 +51,10 @@ async def test_1():
         'id': 1, 'content': '1', 'children': [
             {
                 'id': 2, 'content': '2', 'children': [
-                    { 'id': 4, 'content': '4', 'children': [] }
+                    {'id': 4, 'content': '4', 'children': []}
                 ]
             },
-            {'id': 3, 'content': '3', 'children': [] },
+            {'id': 3, 'content': '3', 'children': []},
         ],
     }
     assert tree.dict() == expected
@@ -82,6 +80,4 @@ async def test_2():
 
     tree = DTree(id=1, content='1')
     with pytest.raises(RecursionError):
-        await Resolver(
-            annotation_class=DTree,
-            loader_instances={DummyLoader: loader}).resolve(tree)
+        await Resolver(loader_instances={DummyLoader: loader}).resolve(tree)

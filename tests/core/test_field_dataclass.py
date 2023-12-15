@@ -1,7 +1,7 @@
 # from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, List
-from pydantic_resolve.core import get_all_fields
+from pydantic_resolve.core import scan_and_store_required_fields
 
 @dataclass
 class Queue:
@@ -35,7 +35,7 @@ class Student:
 
 
 def test_get_all_fields():
-    result = get_all_fields(Student())
+    result = scan_and_store_required_fields(Student())
     assert result == {
         'test_field_dataclass.Student': {
             'resolve': ['resolve_name', 'resolve_zeta'],
