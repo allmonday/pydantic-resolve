@@ -13,7 +13,9 @@ class Student(BaseModel):
     def post_name(self):
         return '.'
 
-    zone: Optional[Zone] = None
+    zones: List[Optional[Zone]] = [None]
+    zones2: List[Zone] = []
+    zone: Optional[Optional[Zone]] = None
 
     zeta: Optional[Zeta] = None
 
@@ -38,7 +40,7 @@ def test_get_all_fields():
         'test_field_pydantic.Student': {
             'resolve': ['resolve_name', 'resolve_zeta'],
             'post': ['post_name'],
-            'attribute': ['zone']
+            'attribute': ['zones', 'zones2', 'zone']
         },
         'test_field_pydantic.Zone': {
             'resolve': [],

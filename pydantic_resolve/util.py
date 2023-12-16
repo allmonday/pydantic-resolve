@@ -186,7 +186,8 @@ def update_forward_refs(kls):
         setattr(kls, const.PYDANTIC_FORWARD_REF_UPDATED, True)
 
         for field in kls.__fields__.values():
-            update_forward_refs(field.type_)
+            shelled_type = shelling_type(field.type_)
+            update_forward_refs(shelled_type)
 
     def update_dataclass_forward_refs(kls):
         if not getattr(kls, const.DATACLASS_FORWARD_REF_UPDATED, False):
@@ -195,8 +196,8 @@ def update_forward_refs(kls):
             setattr(kls, const.DATACLASS_FORWARD_REF_UPDATED, True)
 
             for _, v in kls.__annotations__.items():
-                t = shelling_type(v)
-                update_forward_refs(t)
+                shelled_type = shelling_type(v)
+                update_forward_refs(shelled_type)
 
     if issubclass(kls, BaseModel):
         update_pydantic_forward_refs(kls)

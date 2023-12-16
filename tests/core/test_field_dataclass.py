@@ -1,5 +1,5 @@
 # from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, List
 from pydantic_resolve.core import scan_and_store_required_fields
 
@@ -28,6 +28,9 @@ class Student:
     def post_name(self):
         return '.'
 
+    zeta2: Optional[List[Zeta]] = None
+    zetas2: List[Optional[Zeta]] = field(default_factory=list)
+
     zeta: Optional[Zeta] = None
 
     def resolve_zeta(self):
@@ -40,7 +43,7 @@ def test_get_all_fields():
         'test_field_dataclass.Student': {
             'resolve': ['resolve_name', 'resolve_zeta'],
             'post': ['post_name'],
-            'attribute': ['zone']
+            'attribute': ['zone', 'zeta2', 'zetas2']
         },
         'test_field_dataclass.Zone': {
             'resolve': [],
