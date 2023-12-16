@@ -1,5 +1,9 @@
 # Changelog
 
+## v.1.8.1 (2023.12.16)
+
+- fix scan exceptions caused from pydantic `.type_` value of `List[Optional[T]]`
+
 ## v.1.8.0 (2023.12.15)
 
 - internal refactor: performance improvement

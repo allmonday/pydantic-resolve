@@ -19,14 +19,15 @@ def _get_class(target):
 
 def _get_pydantic_attrs(kls):
     for k, v in kls.__fields__.items():
-        if is_acceptable_kls(v.type_):
-            yield (k, v.type_)  # type_ is the most inner type
+        shelled_type = shelling_type(v.type_)
+        if is_acceptable_kls(shelled_type):
+            yield (k, shelled_type)  # type_ is the most inner type
 
 def _get_dataclass_attrs(kls):
     for name, v in kls.__annotations__.items():
-        t = shelling_type(v)
-        if is_acceptable_kls(t):
-            yield (name, t)
+        shelled_type = shelling_type(v)
+        if is_acceptable_kls(shelled_type):
+            yield (name, shelled_type)
 
 def scan_and_store_required_fields(target):
     root = _get_class(target)
