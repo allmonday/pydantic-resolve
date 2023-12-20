@@ -267,6 +267,9 @@ class Resolver:
         return target
 
     async def resolve(self, target: T) -> T:
+        # do nothing
+        if isinstance(target, list) and target == []: return target
+
         self.scan_data = core.scan_and_store_required_fields(target)
 
         await self._resolve(target)
