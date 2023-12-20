@@ -1,5 +1,9 @@
 # Changelog
 
+## v.1.8.2 (2023.12.20)
+
+- fix corner case of empty list input. `tests/core/test_input.py`
+
 ## v.1.8.1 (2023.12.16)
 
 - fix scan exceptions caused from pydantic `.type_` value of `List[Optional[T]]`
