@@ -36,10 +36,8 @@ async def main():
     1. generate data from departments to members  (top to bottom)
     """
     Result.update_forward_refs()
-    department_ids = {2,3}
-    departments = [Department(**d) for d in datum.departments if d['id'] in department_ids] 
-    result = Result(departments=departments)
-    data = await Resolver(annotation_class=Result).resolve(result)
+    result = Result(departments=datum.departments)
+    data = await Resolver().resolve(result)
     print(json.dumps(data.dict(), indent=2))
 
 asyncio.run(main())
