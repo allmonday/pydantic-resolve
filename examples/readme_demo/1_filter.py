@@ -45,7 +45,6 @@ async def main():
     departments = [Department(**d) for d in datum.departments if d['id'] in department_ids] 
     result = Result(departments=departments)
     resolver = Resolver(
-        annotation_class=Result,
         loader_filters={
             MemberDataLoader: {'gender': 'female'}
         })
