@@ -9,3 +9,6 @@ class LoaderFieldNotProvidedError(Exception):
 
 class MissingAnnotationError(Exception):
     pass
+
+class GlobalLoaderFieldOverlappedError(Exception):
+    pass
