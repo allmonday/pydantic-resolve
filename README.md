@@ -126,7 +126,7 @@ python -m readme_demo.7_single
 
 ## API
 
-### Resolver(loader_filters, loader_instances, ensure_type, context)
+### Resolver(loader_filters, global_loader_filter, loader_instances, ensure_type, context)
 
 - loader_filters: `dict`
 
