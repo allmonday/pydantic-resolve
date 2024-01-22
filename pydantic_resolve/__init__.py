@@ -2,7 +2,8 @@ from .exceptions import (
     ResolverTargetAttrNotFound,
     DataloaderDependCantBeResolved,
     LoaderFieldNotProvidedError,
-    MissingAnnotationError)
+    MissingAnnotationError,
+    GlobalLoaderFieldOverlappedError)
 from .resolver import Resolver, LoaderDepend
 from .util import (
     build_list,
@@ -16,10 +17,13 @@ from .util import (
 __all__ = [
     'Resolver',
     'LoaderDepend',
+
     'ResolverTargetAttrNotFound',
     'DataloaderDependCantBeResolved',
     'LoaderFieldNotProvidedError',
     'MissingAnnotationError',
+    'GlobalLoaderFieldOverlappedError',
+
     'build_list',
     'build_object',
     'mapper',

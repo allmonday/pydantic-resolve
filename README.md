@@ -128,13 +128,21 @@ python -m readme_demo.7_single
 
 ## API
 
-### Resolver(loader_filters, loader_instances, ensure_type, annotation_class, context)
+### Resolver(loader_filters, global_loader_filter, loader_instances, ensure_type, context)
 
 - loader_filters: `dict`
 
   provide extra query filters along with loader key.
 
   reference: [6_sqlalchemy_loaderdepend_global_filter.py](examples/6_sqlalchemy_loaderdepend_global_filter.py) L55, L59
+
+- global_loader_filter: `dict`
+
+  provide global filter config for all dataloader instances
+
+  it will raise exception if some fields are duplicated with specific loader filter config in `loader_filters`
+
+  reference: [test_33_global_loader_filter.py](tests/resolver/test_33_global_loader_filter.py) L55, L59
 
 - loader_instances: `dict`
 

@@ -36,6 +36,7 @@ class Resolver:
     def __init__(
             self,
             loader_filters: Optional[Dict[Any, Dict[str, Any]]] = None,
+            global_loader_filter: Optional[Dict[str, Any]] = None,
             loader_instances: Optional[Dict[Any, Any]] = None,
             ensure_type=False,
             context: Optional[Dict[str, Any]] = None):
@@ -46,6 +47,10 @@ class Resolver:
 
         # for dataloader which has class attributes, you can assign the value at here
         self.loader_filters = loader_filters or {}
+
+        # keys in global_loader_filter are mutually exclusive with key-value pairs in loader_filters
+        # eg: Resolver(global_loader_filter={'key_a': 1}, loader_filters={'key_a': 1}) will raise exception
+        self.global_loader_filter = global_loader_filter or {}
 
         # now you can pass your loader instance, Resolver will check `isinstance``
         if loader_instances and self._validate_loader_instance(loader_instances):
@@ -149,7 +154,9 @@ class Resolver:
                         # if extra transform provides
                         loader = Loader()
 
-                        filter_config = self.loader_filters.get(Loader, {})
+                        filter_config = util.merge_dicts(
+                            self.global_loader_filter,
+                            self.loader_filters.get(Loader, {}))
 
                         for field in util.get_class_field_annotations(Loader):
                         # >>> 2.1.1
