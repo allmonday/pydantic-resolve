@@ -10,7 +10,7 @@
 
 A small yet powerful tool to extend your pydantic schema, and then resolve all **descendants** automatically.
 
-It's also the key to the realm of composable development pattern (wip)
+It's also the key to the realm of composition-oriented-development-pattern (wip)
 
 > What is composable pattarn? https://github.com/allmonday/composable-development-pattern
 
