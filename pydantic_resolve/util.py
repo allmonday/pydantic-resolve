@@ -40,6 +40,7 @@ def build_list(items: Sequence[T], keys: List[V], get_pk: Callable[[T], V]) -> I
     return results
 
 def replace_method(cls: Type, cls_name: str, func_name: str, func: Callable):
+    """test-only"""
     KLS = type(cls_name, (cls,), {func_name: func})
     return KLS
 
@@ -78,6 +79,47 @@ def output(kls):
     else:
         raise AttributeError(f'target class {kls.__name__} is not BaseModel')
     return kls
+
+def schema_config(hidden_fields: Optional[List[str]]=None, default_required: bool = True):
+    """
+    - hidden_fields: fields want to hide
+    - default_required: 
+        if resolve field has default value, it will not be listed in schema['required']
+        set default_required=True to add it into required list.
+    """
+    def wrapper(kls):
+        if issubclass(kls, BaseModel):
+            def _schema_extra(schema: Dict[str, Any], model) -> None:
+                if hidden_fields:
+                    # validate
+                    for f in hidden_fields:
+                        if f not in kls.__fields__.keys():
+                            raise KeyError(f'{f} is not valid')
+
+                    # hidden in schema
+                    props = {}
+                    for k, v in schema.get('properties', {}).items():
+                        if k not in hidden_fields:
+                            props[k] = v
+                    schema['properties'] = props
+
+                    # exclude in dict()
+                    excludes_fields = kls.__exclude_fields__ or {}
+                    hiddens_fields = {k: True for k in hidden_fields}
+                    kls.__exclude_fields__ = {**excludes_fields, **hiddens_fields}
+
+                if default_required:
+                    fnames = get_required_fields(model)
+                    if hidden_fields:
+                        fnames = [n for n in fnames if n not in hidden_fields]
+                    schema['required'] = fnames
+
+
+            kls.__config__.schema_extra = staticmethod(_schema_extra)
+        else:
+            raise AttributeError(f'target class {kls.__name__} is not BaseModel')
+        return kls
+    return wrapper
 
 def mapper(func_or_class: Union[Callable, Type]):
     """

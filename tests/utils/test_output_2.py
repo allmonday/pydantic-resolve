@@ -1,6 +1,6 @@
 from pydantic_resolve.util import output
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Optional
 
 def test_output():
     """
