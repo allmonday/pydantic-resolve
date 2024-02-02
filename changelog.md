@@ -1,7 +1,14 @@
 # Changelog
 
+## v.1.9.1 (2024.02.02)
+
+- add new decorator `schema_config`:
+  - control hidden fields (for schema() and dict())
+  - built-in required (same like `output` deco)
+
 ## v.1.9.0 (2024.01.22)
-- add `global_loader_filter` for convinence.  (thanks Dambre)
+
+- add `global_loader_filter` for convinence. (thanks Dambre)
 
 ## v.1.8.2 (2023.12.20)
 

@@ -203,6 +203,13 @@ python -m readme_demo.7_single
 
   reference: [test_2_ensure_subset.py](tests/utils/test_2_ensure_subset.py)
 
+### schema_config(hidden_fields: list[str], default_required: bool)
+
+- hidden_fields: list the field names you don't want to expose.
+- default_required: if True, fields with default values will also in schema['required']
+
+  reference: [test_schema_config.py](tests/utils/test_schema_config.py)
+
 ## Run FastAPI example
 
 ```shell
