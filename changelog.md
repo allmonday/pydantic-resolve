@@ -1,5 +1,8 @@
 # Changelog
 
+## v.1.9.0 (2024.01.22)
+- add `global_loader_filter` for convinence.  (thanks Dambre)
+
 ## v.1.8.2 (2023.12.20)
 
 - fix corner case of empty list input. `tests/core/test_input.py`

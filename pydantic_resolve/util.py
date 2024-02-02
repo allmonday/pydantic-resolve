@@ -7,6 +7,7 @@ from pydantic import BaseModel, parse_obj_as, ValidationError
 from inspect import iscoroutine, isfunction
 from typing import Any, DefaultDict, Sequence, Type, TypeVar, List, Callable, Optional, Mapping, Union, Iterator, Dict, get_type_hints
 import pydantic_resolve.constant as const
+from pydantic_resolve.exceptions import GlobalLoaderFieldOverlappedError
 from aiodataloader import DataLoader
 
 def get_class_field_annotations(cls: Type):
@@ -16,6 +17,13 @@ def get_class_field_annotations(cls: Type):
 
 T = TypeVar("T")
 V = TypeVar("V")
+
+def merge_dicts(a: Dict[str, Any], b: Dict[str, Any]):
+    overlap = set(a.keys()) & set(b.keys())
+    if overlap:
+        raise GlobalLoaderFieldOverlappedError(f'loader_filters and global_loader_filter have duplicated key(s): {",".join(overlap)}')
+    else:
+        return {**a, **b}
 
 def build_object(items: Sequence[T], keys: List[V], get_pk: Callable[[T], V]) -> Iterator[Optional[T]]:
     """
