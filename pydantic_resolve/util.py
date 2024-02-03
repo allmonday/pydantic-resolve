@@ -88,7 +88,7 @@ def output(kls):
         raise AttributeError(f'target class {kls.__name__} is not BaseModel')
     return kls
 
-def schema_config(hidden_fields: Optional[List[str]]=None, default_required: bool = True):
+def model_config(hidden_fields: Optional[List[str]]=None, default_required: bool = True):
     """
     - hidden_fields: fields want to hide
     - default_required: 
@@ -104,15 +104,16 @@ def schema_config(hidden_fields: Optional[List[str]]=None, default_required: boo
                         if f not in kls.__fields__.keys():
                             raise KeyError(f'{f} is not valid')
 
-                    # hidden in schema
+                    excludes_fields = kls.__exclude_fields__ or {}
+
+                    # hidden in schema (openapi)
                     props = {}
                     for k, v in schema.get('properties', {}).items():
-                        if k not in hidden_fields:
+                        if k not in hidden_fields and k not in excludes_fields.keys():
                             props[k] = v
                     schema['properties'] = props
 
                     # exclude in dict()
-                    excludes_fields = kls.__exclude_fields__ or {}
                     hiddens_fields = {k: True for k in hidden_fields}
                     kls.__exclude_fields__ = {**excludes_fields, **hiddens_fields}
 

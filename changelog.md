@@ -2,9 +2,9 @@
 
 ## v.1.9.1 (2024.02.02)
 
-- add new decorator `schema_config`:
+- add new decorator `model_config`:
   - control hidden fields (for schema() and dict())
-  - built-in required (same like `output` deco)
+  - built-in required in schema
 
 ## v.1.9.0 (2024.01.22)
 
