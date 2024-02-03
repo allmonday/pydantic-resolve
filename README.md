@@ -105,6 +105,7 @@ async def simple():
     people = [Person(name=n) for n in ['kikodo', 'John', '老王']]
     people = await Resolver().resolve(people)
     print(people)
+
     # query query kikodo,John,老王 (N+1 query fixed)
     # [Person(name='kikodo', age=21, is_adult=True), Person(name='John', age=14, is_adult=False), Person(name='老王', age=40, is_adult=True)]
 
@@ -128,7 +129,7 @@ python -m readme_demo.7_single
 
 ## API
 
-### Resolver(loader_filters, global_loader_filter, loader_instances, ensure_type, context)
+### Resolver(loader_filters, global_loader_filter, loader_instances, context)
 
 - loader_filters: `dict`
 
@@ -142,7 +143,7 @@ python -m readme_demo.7_single
 
   it will raise exception if some fields are duplicated with specific loader filter config in `loader_filters`
 
-  reference: [test_33_global_loader_filter.py](tests/resolver/test_33_global_loader_filter.py) L55, L59
+  reference: [test_33_global_loader_filter.py](tests/resolver/test_33_global_loader_filter.py) L47, L49
 
 - loader_instances: `dict`
 
@@ -150,18 +151,11 @@ python -m readme_demo.7_single
 
   reference: [test_20_loader_instance.py](tests/resolver/test_20_loader_instance.py), L62, L63
 
-- ensure_type: `bool`
-
-  if `True`, resolve method is restricted to be annotated.
-
-  reference: [test_13_check_wrong_type.py](tests/resolver/test_13_check_wrong_type.py)
-
 - context: `dict`
 
   context can carry setting into each single resolver methods.
 
   ```python
-
   class Earth(BaseModel):
       humans: List[Human] = []
       def resolve_humans(self, context):
@@ -195,13 +189,24 @@ python -m readme_demo.7_single
 
   reference: [test_16_mapper.py](tests/resolver/test_16_mapper.py)
 
-### ensure_subset(base_class)
+  > you may need it if there has some reuseable transforming params.
 
-- base_class: `class`
+### ensure_subset(target_model)
+
+- target_model: `class`
 
   it will raise exception if fields of decorated class has field not existed in `base_class`.
 
+  this provide a validation to ensure your schema's field is a subset of targe schema.
+
   reference: [test_2_ensure_subset.py](tests/utils/test_2_ensure_subset.py)
+
+### model_config(hidden_fields: list[str], default_required: bool) (new in v1.9.1)
+
+- hidden_fields: list the field names you don't want to expose.
+- default_required: if True, fields with default values will also in schema['required']
+
+  reference: [test_schema_config.py](tests/utils/test_schema_config.py)
 
 ## Run FastAPI example
 

@@ -11,6 +11,7 @@ from .util import (
     mapper,
     ensure_subset,
     output,
+    model_config,
     copy_dataloader_kls)
 
 
@@ -29,5 +30,6 @@ __all__ = [
     'mapper',
     'ensure_subset',
     'output',
+    'model_config',
     'copy_dataloader_kls',
 ]
