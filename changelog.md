@@ -1,5 +1,10 @@
 # Changelog
 
+## v.1.9.2 (2024.02.03)
+
+- bugfix for model_config
+  - setting `__exclude_fields__` should not put in schema_extra.
+
 ## v.1.9.1 (2024.02.02)
 
 - add new decorator `model_config`:

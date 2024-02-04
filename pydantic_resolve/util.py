@@ -97,33 +97,43 @@ def model_config(hidden_fields: Optional[List[str]]=None, default_required: bool
     """
     def wrapper(kls):
         if issubclass(kls, BaseModel):
+            # handle __exclude_fields__ 
+            if hidden_fields:
+                # validate
+                for f in hidden_fields:
+                    if f not in kls.__fields__.keys():
+                        raise KeyError(f'{f} is not valid')
+
+                # exclude in dict()
+                excludes_fields = kls.__exclude_fields__ or {}
+                hiddens_fields = {k: True for k in hidden_fields}
+                kls.__exclude_fields__ = {**excludes_fields, **hiddens_fields}
+                
+            # override schema_extra method
             def _schema_extra(schema: Dict[str, Any], model) -> None:
+                # define schema.properties
+                excludes = set()
+
                 if hidden_fields:
-                    # validate
-                    for f in hidden_fields:
-                        if f not in kls.__fields__.keys():
-                            raise KeyError(f'{f} is not valid')
+                    for hf in hidden_fields:
+                        excludes.add(hf)
 
-                    excludes_fields = kls.__exclude_fields__ or {}
+                if kls.__exclude_fields__:
+                    for k in kls.__exclude_fields__.keys():
+                        excludes.add(k)
 
-                    # hidden in schema (openapi)
-                    props = {}
-                    for k, v in schema.get('properties', {}).items():
-                        if k not in hidden_fields and k not in excludes_fields.keys():
-                            props[k] = v
-                    schema['properties'] = props
+                props = {}
+                for k, v in schema.get('properties', {}).items():
+                    if k not in excludes:
+                        props[k] = v
+                schema['properties'] = props
 
-                    # exclude in dict()
-                    hiddens_fields = {k: True for k in hidden_fields}
-                    kls.__exclude_fields__ = {**excludes_fields, **hiddens_fields}
-
+                # define schema.required
                 if default_required:
                     fnames = get_required_fields(model)
                     if hidden_fields:
                         fnames = [n for n in fnames if n not in hidden_fields]
                     schema['required'] = fnames
-
-
             kls.__config__.schema_extra = staticmethod(_schema_extra)
         else:
             raise AttributeError(f'target class {kls.__name__} is not BaseModel')

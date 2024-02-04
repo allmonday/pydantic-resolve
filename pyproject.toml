@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pydantic-resolve"
-version = "1.9.1"
+version = "1.9.2"
 description = "create nested data structure easily"
 authors = ["tangkikodo <allmonday@126.com>"]
 readme = "README.md"
@@ -11,7 +11,7 @@ packages = [{include = "pydantic_resolve"}]
 
 [tool.poetry.dependencies]
 python = "^3.7"
-pydantic = "^1.10.4"
+pydantic = "1.10.14"
 aiodataloader = "^0.4.0"
 
 [tool.poetry.group.dev.dependencies]
