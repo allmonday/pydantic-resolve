@@ -204,9 +204,17 @@ python -m readme_demo.7_single
 ### model_config(hidden_fields: list[str], default_required: bool) (new in v1.9.1)
 
 - hidden_fields: list the field names you don't want to expose.
+  - It will hide your fields in both schema and dump function (dict(), json())
+  - It also support Field(exclude=True)
 - default_required: if True, fields with default values will also in schema['required']
 
-  reference: [test_schema_config.py](tests/utils/test_schema_config.py)
+> In FastAPI, if you use hidden_fields only, the hidden fields are still visible with their default value.
+>
+> because `__exclude_fields__` will be reset during the second process of dict() in FastAPI.
+>
+> To avoid this behavior, use Field(default='your value', exclude=True) instead
+
+reference: [test_schema_config.py](tests/utils/test_schema_config.py)
 
 ## Run FastAPI example
 
