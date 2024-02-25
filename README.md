@@ -18,7 +18,8 @@ It's also the key to the realm of composition-oriented-development-pattern (wip)
 
 [discord](https://discord.com/channels/1197929379951558797/1197929379951558800)
 
-![](./doc/imgs/resolve_data.png)
+4 steps from root data to view data
+![](./doc/imgs/concept.png)
 
 ## Install
 
