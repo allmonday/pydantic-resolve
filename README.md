@@ -16,6 +16,7 @@ It's also the key to the realm of composition-oriented-development-pattern (wip)
 
 [Change Logs](./changelog.md)
 
+
 [discord](https://discord.com/channels/1197929379951558797/1197929379951558800)
 
 4 steps from root data to view data
