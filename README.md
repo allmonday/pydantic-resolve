@@ -6,7 +6,7 @@
 
 ![img](doc/imgs/resolver.png)
 
-**If you are using pydantic v2, please use pydantic2-resolve instead.**
+**If you are using pydantic v2, please use [pydantic2-resolve](https://github.com/allmonday/pydantic2-resolve) instead.**
 
 A small yet powerful tool to extend your pydantic schema, and then resolve all **descendants** automatically.
 
