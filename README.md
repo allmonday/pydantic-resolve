@@ -8,19 +8,14 @@
 
 **If you are using pydantic v2, please use [pydantic2-resolve](https://github.com/allmonday/pydantic2-resolve) instead.**
 
-A small yet powerful tool to extend your pydantic schema, and then resolve all **descendants** automatically.
+A hierarchical solution for data fetching and processing
 
-It's also the key to the realm of composition-oriented-development-pattern (wip)
+> It is the key to composition-oriented-development-pattern (wip) 
+> https://github.com/allmonday/composition-oriented-development-pattern
 
-> What is composable pattarn? https://github.com/allmonday/composable-development-pattern
+[Discord](https://discord.com/channels/1197929379951558797/1197929379951558800)
 
 [Change Logs](./changelog.md)
-
-
-[discord](https://discord.com/channels/1197929379951558797/1197929379951558800)
-
-4 steps from root data to view data
-![](./doc/imgs/concept.png)
 
 ## Install
 
@@ -28,10 +23,28 @@ It's also the key to the realm of composition-oriented-development-pattern (wip)
 pip install pydantic-resolve
 ```
 
+## Concept
 
-## Code snippets
+It taks 5 steps to convert from root data into view data.
+
+1. define schema of root data and descdants & load root data
+2. forward-resolve all descdants data
+3. backward-process the data
+4. tree shake the data marked as exclude=True
+5. get the output
+
+![](./doc/imgs/concept.jpeg)
+
+How resolve works, level by level:
+
+![](./doc/imgs/forward.jpeg)
+
+
+## Quick start
 
 1. basic usage, resolve your fields.
+
+> `N+1` query will happens in list
 
 ```python
 import asyncio
@@ -70,10 +83,15 @@ async def simple():
     people = await Resolver().resolve(people)
     print(people)
     # Oops!! the issue of N+1 query happens
+    # 
     # query kikodo
     # query John
     # query 老王
-    # [Person(name='kikodo', age=21, is_adult=True), Person(name='John', age=14, is_adult=False), Person(name='老王', age=40, is_adult=True)]
+    # [
+    #   Person(name='kikodo', age=21, is_adult=True), 
+    #   Person(name='John', age=14, is_adult=False), 
+    #   Person(name='老王', age=40, is_adult=True)
+    # ]
 
 asyncio.run(simple())
 ```
@@ -111,13 +129,19 @@ async def simple():
     people = await Resolver().resolve(people)
     print(people)
 
-    # query query kikodo,John,老王 (N+1 query fixed)
-    # [Person(name='kikodo', age=21, is_adult=True), Person(name='John', age=14, is_adult=False), Person(name='老王', age=40, is_adult=True)]
+    # query kikodo,John,老王 (N+1 query fixed)
+    # [
+    #   Person(name='kikodo', age=21, is_adult=True),
+    #   Person(name='John', age=14, is_adult=False), 
+    #   Person(name='老王', age=40, is_adult=True)
+    # ]
 
 asyncio.run(simple())
 ```
 
-## More examples:
+## Simple demo:
+
+[Introduction](./examples/readme_demo/readme.md)
 
 ```shell
 cd examples
@@ -131,6 +155,12 @@ python -m readme_demo.5_subset
 python -m readme_demo.6_mapper
 python -m readme_demo.7_single
 ```
+
+
+## Advanced demo:
+
+https://github.com/allmonday/composition-oriented-development-pattern
+
 
 ## API
 

@@ -52,7 +52,6 @@ async def main():
     """
     result = Result()
     resolver = Resolver(
-        annotation_class=Result,
         context={
             'department_id': 0,
             'team_id': 1,

@@ -45,7 +45,7 @@ async def main():
     2. use ensure_subset to pick the necessary fields
     """
     result = Result()
-    data = await Resolver(annotation_class=Result).resolve(result)
+    data = await Resolver().resolve(result)
     print(json.dumps(data.dict(), indent=2))
 
 asyncio.run(main())

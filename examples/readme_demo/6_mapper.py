@@ -47,7 +47,7 @@ async def main():
     3. use @mapper to manually handle the mapping logic
     """
     result = Result()
-    data = await Resolver(annotation_class=Result).resolve(result)
+    data = await Resolver().resolve(result)
     print(json.dumps(data.dict(), indent=2))
 
 asyncio.run(main())
