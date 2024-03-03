@@ -2,37 +2,52 @@ import asyncio
 from pydantic import BaseModel
 from pydantic_resolve import Resolver
 
-async def query_age(name):
-    print(f'query {name}')
-    await asyncio.sleep(1)
-    _map = {
-        'kikodo': 21,
-        'John': 14,
-        '老王': 40,
-    }
-    return _map.get(name)
+comments_table = [
+    dict(id=1, blog_id=1, content='its interesting'),
+    dict(id=2, blog_id=1, content='i dont understand'),
+    dict(id=3, blog_id=2, content='why? how?'),
+    dict(id=4, blog_id=2, content='wow!'),
+]
 
-class Person(BaseModel):
-    name: str
+async def query_comments(blog_id: int):
+    print(f'run query - {blog_id}')
+    return [c for c in comments_table if c['blog_id'] == blog_id]
 
-    age: int = 0
-    async def resolve_age(self):
-        return await query_age(self.name)
+class Comment(BaseModel):
+    id: int
+    content: str
 
-    is_adult: bool = False
-    def post_is_adult(self):
-        return self.age > 18
+class Blog(BaseModel):
+    id: int
+    title: str
 
-async def simple():
-    p = Person(name='kikodo')
-    p = await Resolver().resolve(p)
-    print(p)
-    # Person(name='kikodo', age=21, is_adult=True)
+    comments: list[Comment] = []
+    async def resolve_comments(self):
+        return await query_comments(self.id)
 
-    people = [Person(name=n) for n in ['kikodo', 'John', '老王']]
-    people = await Resolver().resolve(people)
-    print(people)
-    # issue of N+1 query
-    # [Person(name='kikodo', age=21, is_adult=True), Person(name='John', age=14, is_adult=False), Person(name='老王', age=40, is_adult=True)]
+class MyBlogSite(BaseModel):
+    blogs: list[Blog]
 
-asyncio.run(simple())
+
+async def single():
+    blog = Blog(id=1, title='what is pydantic-resolve')
+    blog = await Resolver().resolve(blog)
+    print(blog)
+
+
+async def batch():
+    my_blog_site = MyBlogSite(
+        blogs = [
+            Blog(id=1, title='what is pydantic-resolve'),
+            Blog(id=2, title='what is composition oriented development pattarn'),
+        ]
+    )
+    my_blog_site = await Resolver().resolve(my_blog_site)
+    print(my_blog_site.json(indent=4))
+
+
+async def main():
+    await single()
+    await batch()
+
+asyncio.run(main())

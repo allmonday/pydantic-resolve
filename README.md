@@ -6,9 +6,14 @@
 
 ![img](doc/imgs/resolver.png)
 
-**If you are using pydantic v2, please use [pydantic2-resolve](https://github.com/allmonday/pydantic2-resolve) instead.**
-
 A hierarchical solution for data fetching and processing
+
+1. use declaretive way to define view data, easy to maintain and develop
+2. use main query and loader query to break down complex queries, and better reuse
+3. provide various tools to precisely construct view data, no overhead
+
+
+> If you are using pydantic v2, please use [pydantic2-resolve](https://github.com/allmonday/pydantic2-resolve) instead.
 
 > It is the key to composition-oriented-development-pattern (wip) 
 > https://github.com/allmonday/composition-oriented-development-pattern
@@ -42,101 +47,167 @@ How resolve works, level by level:
 
 ## Quick start
 
-1. basic usage, resolve your fields.
+Basic usage, resolve your fields.  (`N+1` query will happens in batch scenario)
 
-> `N+1` query will happens in list
+Let's build a blog site with blogs and comments.
+
+[0_demo.py](./examples/0_demo.py)
 
 ```python
 import asyncio
 from pydantic import BaseModel
 from pydantic_resolve import Resolver
 
-async def query_age(name):
-    print(f'query {name}')
-    await asyncio.sleep(1)
-    _map = {
-        'kikodo': 21,
-        'John': 14,
-        '老王': 40,
-    }
-    return _map.get(name)
+comments_table = [
+    dict(id=1, blog_id=1, content='its interesting'),
+    dict(id=2, blog_id=1, content='i dont understand'),
+    dict(id=3, blog_id=2, content='why? how?'),
+    dict(id=4, blog_id=2, content='wow!')]
 
-class Person(BaseModel):
+async def query_comments(blog_id: int):
+    print(f'run query - {blog_id}')
+    return [c for c in comments_table if c['blog_id'] == blog_id]
+
+class Comment(BaseModel):
+    id: int
+    content: str
+
+class Blog(BaseModel):
+    id: int
+    title: str
+
+    comments: list[Comment] = []
+    async def resolve_comments(self):
+        return await query_comments(self.id)
+
+class MyBlogSite(BaseModel):
+    blogs: list[Blog]
     name: str
 
-    age: int = 0
-    async def resolve_age(self):
-        return await query_age(self.name)
+async def single():
+    blog = Blog(id=1, title='what is pydantic-resolve')
+    blog = await Resolver().resolve(blog)
+    print(blog)
 
-    is_adult: bool = False
-    def post_is_adult(self):
-        return self.age > 18
+async def batch():
+    my_blog_site = MyBlogSite(
+        name: "tangkikodo's blog"
+        blogs = [
+            Blog(id=1, title='what is pydantic-resolve'),
+            Blog(id=2, title='what is composition oriented development pattarn'),
+        ]
+    )
+    my_blog_site = await Resolver().resolve(my_blog_site)
+    print(my_blog_site.json(indent=4))
 
-async def simple():
-    p = Person(name='kikodo')
-    p = await Resolver().resolve(p)
-    print(p)
-    # query kikodo
-    # Person(name='kikodo', age=21, is_adult=True)
 
-    people = [Person(name=n) for n in ['kikodo', 'John', '老王']]
-    people = await Resolver().resolve(people)
-    print(people)
-    # Oops!! the issue of N+1 query happens
-    # 
-    # query kikodo
-    # query John
-    # query 老王
-    # [
-    #   Person(name='kikodo', age=21, is_adult=True), 
-    #   Person(name='John', age=14, is_adult=False), 
-    #   Person(name='老王', age=40, is_adult=True)
-    # ]
+async def main():
+    await single()
+    # query_comments():
+    # >> run query - 1
 
-asyncio.run(simple())
+    await batch()
+    # query_comments(): Ooops!, N+1 happens
+    # >> run query - 1
+    # >> run query - 2
+
+asyncio.run(main())
 ```
 
-2. optimize `N+1` with dataloader
+output of my_blog_site:
+```json
+{
+    "name": "tangkikodo's blog",
+    "blogs": [
+        {
+            "id": 1,
+            "title": "what is pydantic-resolve",
+            "comments": [
+                {
+                    "id": 1,
+                    "content": "its interesting"
+                },
+                {
+                    "id": 2,
+                    "content": "i dont understand"
+                }
+            ]
+        },
+        {
+            "id": 2,
+            "title": "what is composition oriented development pattarn",
+            "comments": [
+                {
+                    "id": 3,
+                    "content": "why? how?"
+                },
+                {
+                    "id": 4,
+                    "content": "wow!"
+                }
+            ]
+        }
+    ]
+}
+```
+
+Optimize `N+1` with dataloader
+
+[0_demo_loader.py](./examples/0_demo_loader.py)
+
+- change `query_comments` to `blog_to_comments_loader` (loader function)
+- user loader in `resolve_comments`
 
 ```python
 import asyncio
-from typing import List
 from pydantic import BaseModel
-from pydantic_resolve import Resolver, LoaderDepend as LD
+from pydantic_resolve import Resolver, build_list, LoaderDepend
 
-async def batch_person_age_loader(names: List[str]):
-    print(names)
-    _map = {
-        'kikodo': 21,
-        'John': 14,
-        '老王': 40,
-    }
-    return [_map.get(n) for n in names]
+comments_table = [
+    dict(id=1, blog_id=1, content='its interesting'),
+    dict(id=2, blog_id=1, content='i dont understand'),
+    dict(id=3, blog_id=2, content='why? how?'),
+    dict(id=4, blog_id=2, content='wow!'),
+]
 
-class Person(BaseModel):
-    name: str
+async def blog_to_comments_loader(blog_ids: list[int]):
+    print(blog_ids)
+    return build_list(comments_table, blog_ids, lambda c: c['blog_id'])
 
-    age: int = 0
-    def resolve_age(self, loader=LD(batch_person_age_loader)):
-        return loader.load(self.name)
 
-    is_adult: bool = False
-    def post_is_adult(self):
-        return self.age > 18
+class Comment(BaseModel):
+    id: int
+    content: str
 
-async def simple():
-    people = [Person(name=n) for n in ['kikodo', 'John', '老王']]
-    people = await Resolver().resolve(people)
-    print(people)
+class Blog(BaseModel):
+    id: int
+    title: str
 
-    # query kikodo,John,老王 (N+1 query fixed)
-    # [
-    #   Person(name='kikodo', age=21, is_adult=True),
-    #   Person(name='John', age=14, is_adult=False), 
-    #   Person(name='老王', age=40, is_adult=True)
-    # ]
+    comments: list[Comment] = []
+    def resolve_comments(self, loader=LoaderDepend(blog_to_comments_loader)):
+        return loader.load(self.id)
 
-asyncio.run(simple())
+class MyBlogSite(BaseModel):
+    blogs: list[Blog]
+
+async def batch():
+    my_blog_site = MyBlogSite(
+        blogs = [
+            Blog(id=1, title='what is pydantic-resolve'),
+            Blog(id=2, title='what is composition oriented development pattarn'),
+        ]
+    )
+    my_blog_site = await Resolver().resolve(my_blog_site)
+    print(my_blog_site.json(indent=4))
+
+
+async def main():
+    await batch()
+    # blog_to_comments_loader():
+    # >> [1, 2]
+    # N+1 fixed
+
+asyncio.run(main())
 ```
 
 ## Simple demo:
