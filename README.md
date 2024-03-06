@@ -143,7 +143,8 @@ output of my_blog_site:
                     "id": 2,
                     "content": "i dont understand"
                 }
-            ]
+            ],
+            "comment_count": 2
         },
         {
             "id": 2,
@@ -157,9 +158,11 @@ output of my_blog_site:
                     "id": 4,
                     "content": "wow!"
                 }
-            ]
+            ],
+            "comment_count": 2
         }
-    ]
+    ],
+    "comment_count": 4
 }
 ```
 
