@@ -44,27 +44,16 @@ class A(BaseModel):
 @pytest.mark.asyncio
 async def test_case_0():
     data = [A(val=n) for n in range(3)]
-    data = await Resolver(global_loader_param={'power': 2}, 
-                          loader_params={LoaderC:{'add': 1}}).resolve(data)
-    assert data[2].a == 4
-    assert data[2].b == 4
-    assert data[2].c == 5
+    with pytest.warns(DeprecationWarning):
+        data = await Resolver(global_loader_filter={'power': 2}, 
+                            loader_filters={LoaderC:{'add': 1}}).resolve(data)
 
 
 @pytest.mark.asyncio
 async def test_case_1():
     data = [A(val=n) for n in range(3)]
-    data = await Resolver(loader_params={LoaderA:{'power': 2}, 
-                                          LoaderB:{'power': 3},
-                                          LoaderC:{'power': 3, 'add': 1}}).resolve(data)
-    assert data[2].a == 4
-    assert data[2].b == 8
-    assert data[2].c == 9
+    with pytest.warns(DeprecationWarning):
+        data = await Resolver(loader_filters={LoaderA:{'power': 2}, 
+                                            LoaderB:{'power': 3},
+                                            LoaderC:{'power': 3, 'add': 1}}).resolve(data)
 
-
-@pytest.mark.asyncio
-async def test_case_3():
-    data = [A(val=n) for n in range(3)]
-    with pytest.raises(GlobalLoaderFieldOverlappedError):
-        data = await Resolver(global_loader_param={'power': 2}, 
-                            loader_params={LoaderC:{'add': 1, 'power': 3}}).resolve(data)

@@ -8,7 +8,7 @@
 4. 为了满足权限控制的需要，通过RESTful定义一个个API 会比全局一个Query，Mutation 控制起来更加清晰直接。
 5. Pydantic-resolve 恰好满足了`灵活构建嵌套结构`的需求，它不需要像GraphQL一样引入一系列概念和设置，它非常轻量级，没有任何侵入，所有的功能通过简单`resolve`一下就实现。
 6. Pydantic-resolve 在保持轻量级的同时，可以隐藏 Dataloader 的初始化逻辑，避免了GraphQL中在多处维护dataloader的麻烦。
-7. Pydantic-resolve 还提供了对 global `loader filters` 的支持，在一些业务逻辑下可以简化很多代码。如果把Dataloader 的 keys 等价视为 relationship的 join on 条件的话， 那么 `loader_filters` 就类似在别处的其他过滤条件。
+7. Pydantic-resolve 还提供了对 global `loader filters` 的支持，在一些业务逻辑下可以简化很多代码。如果把Dataloader 的 keys 等价视为 relationship的 join on 条件的话， 那么 `loader_params` 就类似在别处的其他过滤条件。
 
 > 结论：
 >

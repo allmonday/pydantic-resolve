@@ -225,9 +225,9 @@ https://github.com/allmonday/composition-oriented-development-pattern
 
 ## API
 
-### Resolver(loader_filters, global_loader_filter, loader_instances, context)
+### Resolver(loader_params, global_loader_filter, loader_instances, context)
 
-- loader_filters: `dict`
+- loader_params: `dict`
 
   provide extra query filters along with loader key.
 
@@ -237,7 +237,7 @@ https://github.com/allmonday/composition-oriented-development-pattern
 
   provide global filter config for all dataloader instances
 
-  it will raise exception if some fields are duplicated with specific loader filter config in `loader_filters`
+  it will raise exception if some fields are duplicated with specific loader filter config in `loader_params`
 
   reference: [test_33_global_loader_filter.py](tests/resolver/test_33_global_loader_filter.py) L47, L49
 

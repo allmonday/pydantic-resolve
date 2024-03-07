@@ -139,7 +139,7 @@ async def query_tasks(private_comment=True):
         task_objs = [TaskSchema.from_orm(t) for t in tasks]
 
         # !!!============= resolve =============!!!
-        resolver = Resolver(loader_filters={FeedbackLoader: {'private': private_comment}},
+        resolver = Resolver(loader_params={FeedbackLoader: {'private': private_comment}},
                             ensure_type=True)   # <----- global filter
         resolved_results = await resolver.resolve(task_objs)
 

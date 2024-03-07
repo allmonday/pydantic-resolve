@@ -31,6 +31,6 @@ async def get_tasks(private:bool= Query(default=True),
                     session: AsyncSession = Depends(db.get_session)):
     tasks = (await session.execute(select(md.Task))).scalars().all()
     task_objs = [sc.TaskSchema.from_orm(t) for t in tasks]
-    resolver = Resolver(loader_filters={ld.FeedbackLoader: {'private': private}}, ensure_type=True)
+    resolver = Resolver(loader_params={ld.FeedbackLoader: {'private': private}}, ensure_type=True)
     results = await resolver.resolve(task_objs)
     return results
