@@ -24,6 +24,7 @@ sqlalchemy = {extras = ["asyncio"], version = "^2.0.7"}
 pytest-asyncio = "^0.21.0"
 fastapi = "^0.96.0"
 uvicorn = "^0.22.0"
+mkdocs-material = "9.*"
 
 [build-system]
 requires = ["poetry-core"]

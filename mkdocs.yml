@@ -1,0 +1,13 @@
+site_name: Pydantic-resolve
+theme:
+  name: material
+  icon:
+    repo: fontawesome/brands/github
+
+repo_name: allmonday/pydantic-resolve
+repo_url: https://github.com/allmonday/pydantic-resolve
+edit_uri: ""
+
+markdown_extensions:
+  - markdown.extensions.codehilite:
+      guess_lang: false
