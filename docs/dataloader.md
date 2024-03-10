@@ -12,7 +12,7 @@ In this phase, we'll fix the `N+1` query with the help of dataloader.
 
 > In pydantic-resolve, you can decleare and use dataloader in anywhere, without worring about the mess of context which happens in graphql
 
-```python linenums="1" hl_lines="3 15-17 31-32"
+```python linenums="1" hl_lines="3 15-18 32-33"
 import asyncio
 from pydantic import BaseModel
 from pydantic_resolve import Resolver, build_list, LoaderDepend

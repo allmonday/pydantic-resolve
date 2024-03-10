@@ -160,7 +160,7 @@ run-query - 2
 }
 ```
 
-We have fetched and tweak the view data we want, but wait, there still has some problem, let's have a look of the printed info from `query_comments`, it was called twice.
+We have fetched and tweaked the view data we want, but wait, there still has a problem, let's have a look of the printed info from `query_comments`, it was called by twice!
 
 This is a typical N+1 query which will have performance issue if we have a big number of blogs.
 
