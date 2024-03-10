@@ -151,7 +151,7 @@ async def task_query(task_id = 1):
     async with async_session() as session:
         tasks = (await session.execute(select(Task).where(Task.id == task_id))).scalars().all()
         task_objs = [TaskSchema.from_orm(t) for t in tasks]
-        resolved_results = await Resolver(loader_filters={FeedbackLoader: {'private': True}}).resolve(task_objs)
+        resolved_results = await Resolver(loader_params={FeedbackLoader: {'private': True}}).resolve(task_objs)
         to_dict_arr = [r.dict() for r in resolved_results]
         return to_dict_arr
 

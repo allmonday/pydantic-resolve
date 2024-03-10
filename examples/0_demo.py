@@ -4,10 +4,9 @@ from pydantic_resolve import Resolver
 
 comments_table = [
     dict(id=1, blog_id=1, content='its interesting'),
-    dict(id=2, blog_id=1, content='i dont understand'),
-    dict(id=3, blog_id=2, content='why? how?'),
-    dict(id=4, blog_id=2, content='wow!'),
-]
+    dict(id=2, blog_id=1, content='i need more example'),
+    dict(id=3, blog_id=2, content='what problem does it solved?'),
+    dict(id=4, blog_id=2, content='interesting')]
 
 async def query_comments(blog_id: int):
     print(f'run query - {blog_id}')
@@ -54,7 +53,7 @@ async def single():
 async def batch():
     my_blog_site = MyBlogSite()
     my_blog_site = await Resolver().resolve(my_blog_site)
-    print(my_blog_site.json(indent=4))
+    print(my_blog_site.json(indent=2))
 
 
 async def main():

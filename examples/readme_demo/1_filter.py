@@ -45,7 +45,7 @@ async def main():
     departments = [Department(**d) for d in datum.departments if d['id'] in department_ids] 
     result = Result(departments=departments)
     resolver = Resolver(
-        loader_filters={
+        loader_params={
             MemberDataLoader: {'gender': 'female'}
         })
     data = await resolver.resolve(result)

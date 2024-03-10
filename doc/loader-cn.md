@@ -182,11 +182,11 @@ class AbsenseLoader(DataLoader):
 期望的设置方式为：
 
 ```python
-loader_filters = {
+loader_params = {
     AbsenseLoader: {'sprint_id': 10}, 
     OtherLoader: {field: 'value_x'}
 }
-results = await Resolver(loader_filters=loader_filters).resolve(users)
+results = await Resolver(loader_params=loader_params).resolve(users)
 ```
 
 > 如果需要filter但是却没有设置, 该情况下要抛异常

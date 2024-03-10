@@ -186,11 +186,11 @@ class AbsenseLoader(DataLoader):
 What we expected to have：
 
 ```python
-loader_filters = {
+loader_params = {
     AbsenseLoader: {'sprint_id': 10}, 
     OtherLoader: {field: 'value_x'}
 }
-results = await Resolver(loader_filters=loader_filters).resolve(users)
+results = await Resolver(loader_params=loader_params).resolve(users)
 ```
 
 > If filtering is required but not set, an exception should be thrown.

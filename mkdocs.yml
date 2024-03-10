@@ -1,0 +1,20 @@
+site_name: Pydantic-resolve
+theme:
+  name: material
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+
+repo_name: allmonday/pydantic-resolve
+repo_url: https://github.com/allmonday/pydantic-resolve
+edit_uri: ""
+
+nav:
+  - Quick Start: index.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences

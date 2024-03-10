@@ -21,7 +21,7 @@ V = TypeVar("V")
 def merge_dicts(a: Dict[str, Any], b: Dict[str, Any]):
     overlap = set(a.keys()) & set(b.keys())
     if overlap:
-        raise GlobalLoaderFieldOverlappedError(f'loader_filters and global_loader_filter have duplicated key(s): {",".join(overlap)}')
+        raise GlobalLoaderFieldOverlappedError(f'loader_params and global_loader_param have duplicated key(s): {",".join(overlap)}')
     else:
         return {**a, **b}
 

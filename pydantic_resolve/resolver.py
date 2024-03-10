@@ -2,6 +2,7 @@ import asyncio
 from collections import defaultdict
 import contextvars
 import inspect
+import warnings
 from inspect import iscoroutine
 from typing import TypeVar, Dict
 from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingAnnotationError
@@ -35,8 +36,10 @@ class Resolver:
     """
     def __init__(
             self,
-            loader_filters: Optional[Dict[Any, Dict[str, Any]]] = None,
-            global_loader_filter: Optional[Dict[str, Any]] = None,
+            loader_filters: Optional[Dict[Any, Dict[str, Any]]] = None,  # deprecated
+            loader_params: Optional[Dict[Any, Dict[str, Any]]] = None,
+            global_loader_filter: Optional[Dict[str, Any]] = None,  # deprecated
+            global_loader_param: Optional[Dict[str, Any]] = None,
             loader_instances: Optional[Dict[Any, Any]] = None,
             ensure_type=False,
             context: Optional[Dict[str, Any]] = None):
@@ -46,11 +49,19 @@ class Resolver:
         self.ancestor_vars_checker = defaultdict(set)  # expose_field_name: set(kls fullpath) if len > 1, raise error
 
         # for dataloader which has class attributes, you can assign the value at here
-        self.loader_filters = loader_filters or {}
+        if loader_filters:
+            warnings.warn('loader_filters is deprecated, use loader_params instead.', DeprecationWarning)
+            self.loader_params = loader_filters
+        else:
+            self.loader_params = loader_params or {}
 
         # keys in global_loader_filter are mutually exclusive with key-value pairs in loader_filters
         # eg: Resolver(global_loader_filter={'key_a': 1}, loader_filters={'key_a': 1}) will raise exception
-        self.global_loader_filter = global_loader_filter or {}
+        if global_loader_filter:
+            warnings.warn('global_loader_filter is deprecated, use global_loader_param instead.', DeprecationWarning)
+            self.global_loader_param = global_loader_filter or {}
+        else:
+            self.global_loader_param = global_loader_param or {}
 
         # now you can pass your loader instance, Resolver will check `isinstance``
         if loader_instances and self._validate_loader_instance(loader_instances):
@@ -110,7 +121,7 @@ class Resolver:
         1. inspect method, atttach context if declared in method
         2. if params includes LoaderDepend, create instance and cache it.
             2.1 create from DataLoader class
-                2.1.1 apply loader_filters into dataloader instance
+                2.1.1 apply loader_params into dataloader instance
             2.2 ceate from batch_load_fn
         3. execute method
         """
@@ -154,22 +165,22 @@ class Resolver:
                         # if extra transform provides
                         loader = Loader()
 
-                        filter_config = util.merge_dicts(
-                            self.global_loader_filter,
-                            self.loader_filters.get(Loader, {}))
+                        param_config = util.merge_dicts(
+                            self.global_loader_param,
+                            self.loader_params.get(Loader, {}))
 
                         for field in util.get_class_field_annotations(Loader):
-                        # >>> 2.1.1
-                        # class ExampleLoader(DataLoader):
-                        #     filtar_x: bool  <--------------- set this field
+                            # >>> 2.1.1
+                            # class ExampleLoader(DataLoader):
+                            #     param_a: bool  <-- set this field
                             try:
-                                value = filter_config[field]
+                                value = param_config[field]
                                 setattr(loader, field, value)
                             except KeyError:
                                 raise LoaderFieldNotProvidedError(f'{cache_key}.{field} not found in Resolver()')
 
                     # >>> 2.2
-                    # build loader from batch_load_fn, filters config is impossible
+                    # build loader from batch_load_fn, params config is impossible
                     else:
                         loader = DataLoader(batch_load_fn=Loader)  # type:ignore
 
@@ -192,7 +203,8 @@ class Resolver:
             if self.ancestor_vars is None:
                 raise AttributeError(f'there is not class has {const.EXPOSE_TO_DESCENDANT} configed')
             params['ancestor_context'] = self._build_ancestor_context()
-        return method(**params)
+        ret_val = method(**params)
+        return ret_val
 
     async def _resolve_obj_field(self, target, target_field, attr):
         """
@@ -222,6 +234,7 @@ class Resolver:
         # >>> 3
         if not getattr(attr, const.HAS_MAPPER_FUNCTION, False):  # defined in util.mapper
             val = util.try_parse_data_to_target_field_type(target, target_attr_name, val)
+            # else: it will be handled by mapper func
 
         val = await self._resolve(val)
 
