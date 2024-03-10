@@ -19,7 +19,7 @@ comments_table = [
 ```
 
 Let's describe it in form of graphql query for clarity.
-> btw, reverse aggregation / filtering is a challenge in graphql, may you'll need graphql-lodash
+> btw, reverse aggregation / filtering is a challenge in graphql, maybe you'll need the help of graphql-lodash
 
 ```graphql linenums="1"
 query {
@@ -67,10 +67,10 @@ class MyBlogSite(BaseModel):
 
 And then add some `resolve` & `post` methods, for example `resolve_comments` will fetch data and then assigned it to `comments` field.
 
-- resolve: it will run your query function to fetch data of children
-- post: after descendant fields are all resolved, post will be called to calculate comment count.
+- **resolve**: it will run your query function to fetch data of children
+- **post**: after descendant fields are all resolved, post will be called to calculate comment count.
 
-```python linenums="1" hl_lines="10-11 14-15 22-23 26-27"
+```python linenums="1" hl_lines="10-11 14-15 22-23 26-28"
 class Comment(BaseModel):
     id: int
     content: str
@@ -119,7 +119,7 @@ async def main():
 ```
 
 
-```shell linenums="1" hl_lines="16 31 34"
+```shell linenums="1" hl_lines="19 34 37"
 run-query - 1
 run-query - 2
 
