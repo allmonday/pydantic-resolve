@@ -12,7 +12,9 @@ repo_url: https://github.com/allmonday/pydantic-resolve
 edit_uri: ""
 
 nav:
-  - Quick Start: index.md
+  - Quick Start:
+      - Let's go: index.md
+      - Dataloader: dataloader.md
 
 markdown_extensions:
   - pymdownx.highlight:

@@ -119,7 +119,10 @@ async def main():
 ```
 
 
-```json linenums="1" hl_lines="16 31 34"
+```shell linenums="1" hl_lines="16 31 34"
+run-query - 1
+run-query - 2
+
 {
   "blogs": [
     {
@@ -157,13 +160,8 @@ async def main():
 }
 ```
 
+We have fetched and tweak the view data we want, but wait, there still has some problem, let's have a look of the printed info from `query_comments`, it was called twice.
 
+This is a typical N+1 query which will have performance issue if we have a big number of blogs.
 
-
-
-## Project layout
-
-    mkdocs.yml    # The configuration file.
-    docs/
-        index.md  # The documentation homepage.
-        ...       # Other markdown pages, images and other files.
+Let's fix it in next phase.
