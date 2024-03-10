@@ -29,6 +29,7 @@ comments_table = [
 
 async def blog_to_comments_loader(blog_ids: list[int]):
     print(blog_ids)
+    # group the searched comments by blog_id.
     return build_list(comments_table, blog_ids, lambda c: c['blog_id'])
 
 async def get_blogs():
