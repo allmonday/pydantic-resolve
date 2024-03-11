@@ -226,94 +226,10 @@ python -m readme_demo.7_single
 https://github.com/allmonday/composition-oriented-development-pattern
 
 
-## API
+## API Reference
 
-### Resolver(loader_params, global_loader_filter, loader_instances, context)
+https://allmonday.github.io/pydantic-resolve/reference_api/
 
-- loader_params: `dict`
-
-  provide extra query filters along with loader key.
-
-  reference: [6_sqlalchemy_loaderdepend_global_filter.py](examples/6_sqlalchemy_loaderdepend_global_filter.py) L55, L59
-
-- global_loader_filter: `dict`
-
-  provide global filter config for all dataloader instances
-
-  it will raise exception if some fields are duplicated with specific loader filter config in `loader_params`
-
-  reference: [test_33_global_loader_filter.py](tests/resolver/test_33_global_loader_filter.py) L47, L49
-
-- loader_instances: `dict`
-
-  provide pre-created loader instance, with can `prime` data into loader cache.
-
-  reference: [test_20_loader_instance.py](tests/resolver/test_20_loader_instance.py), L62, L63
-
-- context: `dict`
-
-  context can carry setting into each single resolver methods.
-
-  ```python
-  class Earth(BaseModel):
-      humans: List[Human] = []
-      def resolve_humans(self, context):
-          return [dict(name=f'man-{i}') for i in range(context['count'])]
-
-  earth = await Resolver(context={'count': 10}).resolve(earth)
-  ```
-
-### LoaderDepend(loader_fn)
-
-- loader_fn: `subclass of DataLoader or batch_load_fn`. [detail](https://github.com/syrusakbary/aiodataloader#dataloaderbatch_load_fn-options)
-
-  declare dataloader dependency, `pydantic-resolve` will take the care of lifecycle of dataloader.
-
-### build_list(rows, keys, fn), build_object(rows, keys, fn)
-
-- rows: `list`, query result
-- keys: `list`, batch_load_fn:keys
-- fn: `lambda`, define the way to get primary key
-
-  helper function to generate return value required by `batch_load_fn`. read the code for details.
-
-  reference: [test_utils.py](tests/utils/test_utils.py), L32
-
-### mapper(param)
-
-- param: `class of pydantic or dataclass, or a lambda`
-
-  `pydantic-resolve` will trigger the fn in `mapper` after inner future is resolved. it exposes an interface to change return schema even from the same dataloader.
-  if param is a class, it will try to automatically transform it.
-
-  reference: [test_16_mapper.py](tests/resolver/test_16_mapper.py)
-
-  > you may need it if there has some reuseable transforming params.
-
-### ensure_subset(target_model)
-
-- target_model: `class`
-
-  it will raise exception if fields of decorated class has field not existed in `base_class`.
-
-  this provide a validation to ensure your schema's field is a subset of targe schema.
-
-  reference: [test_2_ensure_subset.py](tests/utils/test_2_ensure_subset.py)
-
-### model_config(hidden_fields: list[str], default_required: bool) (new in v1.9.1)
-
-- hidden_fields: list the field names you don't want to expose.
-  - It will hide your fields in both schema and dump function (dict(), json())
-  - It also support Field(exclude=True)
-- default_required: if True, fields with default values will also in schema['required']
-
-> In FastAPI, if you use hidden_fields only, the hidden fields are still visible with their default value.
->
-> because `__exclude_fields__` will be reset during the second process of dict() in FastAPI.
->
-> To avoid this behavior, use Field(default='your value', exclude=True) instead
-
-reference: [test_schema_config.py](tests/utils/test_schema_config.py)
 
 ## Run FastAPI example
 
