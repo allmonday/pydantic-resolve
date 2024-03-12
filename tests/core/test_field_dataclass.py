@@ -19,6 +19,7 @@ class Zeta:
 
 @dataclass
 class Student:
+    __pydantic_resolve_expose__ = {'name': 'student_name'}
     zone: Optional[Zone] = None
     name: str = ''
 
@@ -43,21 +44,29 @@ def test_get_all_fields():
         'test_field_dataclass.Student': {
             'resolve': ['resolve_name', 'resolve_zeta'],
             'post': ['post_name'],
-            'attribute': ['zone', 'zeta2', 'zetas2']
+            'attribute': ['zone', 'zeta2', 'zetas2'],
+            'expose_dict': {'name': 'student_name'},
+            'collect_dict': {}
         },
         'test_field_dataclass.Zone': {
             'resolve': [],
             'post': [],
-            'attribute': ['qs']
+            'attribute': ['qs'],
+            'expose_dict': {},
+            'collect_dict': {}
         },
         'test_field_dataclass.Queue': {
             'resolve': [],
             'post': [],
-            'attribute': []
+            'attribute': [],
+            'expose_dict': {},
+            'collect_dict': {}
         },
         'test_field_dataclass.Zeta': {
             'resolve': [],
             'post': [],
-            'attribute': []
+            'attribute': [],
+            'expose_dict': {},
+            'collect_dict': {}
         }
     }

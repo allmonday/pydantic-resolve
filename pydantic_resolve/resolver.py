@@ -42,7 +42,6 @@ class Resolver:
         self.loader_instance_cache = {}
 
         self.ancestor_vars = {}
-        self.ancestor_vars_checker = defaultdict(set)  # expose_field_name: set(kls fullpath) if len > 1, raise error
 
         # for dataloader which has class attributes, you can assign the value at here
         if loader_filters:
@@ -73,30 +72,15 @@ class Resolver:
         """
         1. check whether expose to descendant existed
         2. add fields into contextvars (ancestor_vars_checker)
-        2.1 check overwrite by another class (multiple classes has same expose_field is forbidden )
-        2.2 check field exists
+
+        tips: validation has been handled by scan_and_store_matadata()
         """
         expose_dct: Optional[dict] = getattr(target, const.EXPOSE_TO_DESCENDANT, None)
-        # 1
         if expose_dct:
-            if type(expose_dct) is not dict:
-                raise AttributeError(f'{const.EXPOSE_TO_DESCENDANT} is not dict')
-                # TODO: move to scan
-
-            # 2
             for field, alias in expose_dct.items():  # eg: name, bar_name
-                # 2.1
-                full_path = util.get_kls_full_path(target.__class__)
-                self.ancestor_vars_checker[alias].add(full_path)
-
-                # TODO: move to scan
-                if len(self.ancestor_vars_checker[alias]) > 1:
-                    conflict_modules = ', '.join(list(self.ancestor_vars_checker[alias]))
-                    raise AttributeError(f'alias name conflicts, please check: {conflict_modules}')
-
                 if not self.ancestor_vars.get(alias):
                     self.ancestor_vars[alias] = contextvars.ContextVar(alias)
-                
+
                 try:
                     val = getattr(target, field)
                 except AttributeError:

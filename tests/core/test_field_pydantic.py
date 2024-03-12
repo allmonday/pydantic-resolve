@@ -17,6 +17,7 @@ class Student(BaseModel):
     zones: List[Optional[Zone]] = [None]
     zones2: List[Zone] = []
     zone: Optional[Optional[Zone]] = None
+    z: str # ignored in attributes
 
     zeta: Optional[Zeta] = None
 
@@ -41,21 +42,28 @@ def test_get_all_fields():
             'resolve': ['resolve_name', 'resolve_zeta'],
             'post': ['post_name'],
             'attribute': ['zones', 'zones2', 'zone'],
-            'expose': {'name': 'student_name'}
+            'expose_dict': {'name': 'student_name'},
+            'collect_dict': {}
         },
         'test_field_pydantic.Zone': {
             'resolve': [],
             'post': [],
-            'attribute': ['qs']
+            'attribute': ['qs'],
+            'expose_dict': {},
+            'collect_dict': {}
         },
         'test_field_pydantic.Queue': {
             'resolve': [],
             'post': [],
-            'attribute': []
+            'attribute': [],
+            'expose_dict': {},
+            'collect_dict': {}
         },
         'test_field_pydantic.Zeta': {
             'resolve': [],
             'post': [],
-            'attribute': []
+            'attribute': [],
+            'expose_dict': {},
+            'collect_dict': {}
         }
     }

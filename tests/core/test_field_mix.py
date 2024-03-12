@@ -9,6 +9,7 @@ class Book:
     name: str
 
 class Student(BaseModel):
+    __pydantic_resolve_expose__ = {'name': 's_name'}
     name: str = ''
 
     books: List[Book] = []
@@ -23,11 +24,15 @@ def test_get_all_fields():
         'test_field_mix.Student': {
             'resolve': ['resolve_books'],
             'post': [],
-            'attribute': []
+            'attribute': [],
+            'expose_dict': {'name': 's_name'},
+            'collect_dict': {}
         },
         'test_field_mix.Book': {
             'resolve': [],
             'post': [],
-            'attribute': []
+            'attribute': [],
+            'expose_dict': {},
+            'collect_dict': {}
         },
     }
