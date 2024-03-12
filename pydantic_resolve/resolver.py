@@ -1,12 +1,11 @@
 import asyncio
-from collections import defaultdict
 import contextvars
 import inspect
 import warnings
 from inspect import iscoroutine
 from typing import TypeVar, Dict
+from collections import defaultdict
 from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingAnnotationError
-from .util import get_kls_full_path
 from typing import Any, Callable, Optional
 from pydantic_resolve import core
 from aiodataloader import DataLoader
@@ -31,9 +30,6 @@ class Depends:
 T = TypeVar("T")
 
 class Resolver:
-    """
-    Entrypoint of a resolve action
-    """
     def __init__(
             self,
             loader_filters: Optional[Dict[Any, Dict[str, Any]]] = None,  # deprecated
@@ -71,25 +67,29 @@ class Resolver:
 
         self.ensure_type = ensure_type
         self.context = MappingProxyType(context) if context else None
-        self.scan_data = {}
+        self.metadata = {}
 
     def _add_expose_fields(self, target):
         """
         1. check whether expose to descendant existed
         2. add fields into contextvars (ancestor_vars_checker)
-        2.1 check overwrite by another class(which is forbidden)
+        2.1 check overwrite by another class (multiple classes has same expose_field is forbidden )
         2.2 check field exists
         """
-        dct: Optional[dict] = getattr(target, const.EXPOSE_TO_DESCENDANT, None)
+        expose_dct: Optional[dict] = getattr(target, const.EXPOSE_TO_DESCENDANT, None)
         # 1
-        if dct:
-            if type(dct) is not dict:
+        if expose_dct:
+            if type(expose_dct) is not dict:
                 raise AttributeError(f'{const.EXPOSE_TO_DESCENDANT} is not dict')
+                # TODO: move to scan
 
             # 2
-            for field, alias in dct.items():  # eg: name, bar_name
+            for field, alias in expose_dct.items():  # eg: name, bar_name
                 # 2.1
-                self.ancestor_vars_checker[alias].add(get_kls_full_path(target.__class__))
+                full_path = util.get_kls_full_path(target.__class__)
+                self.ancestor_vars_checker[alias].add(full_path)
+
+                # TODO: move to scan
                 if len(self.ancestor_vars_checker[alias]) > 1:
                     conflict_modules = ', '.join(list(self.ancestor_vars_checker[alias]))
                     raise AttributeError(f'alias name conflicts, please check: {conflict_modules}')
@@ -154,7 +154,7 @@ class Resolver:
                     continue
 
                 # module.kls to avoid same kls name from different module
-                cache_key = get_kls_full_path(v.default.dependency)
+                cache_key = util.get_kls_full_path(v.default.dependency)
                 hit = self.loader_instance_cache.get(cache_key)
                 if hit:
                     loader = hit
@@ -257,10 +257,12 @@ class Resolver:
 
         # >>> 2
         if core.is_acceptable_instance(target):
+            # TODO:
+            # if metadata has expose, add_expose_fields
             self._add_expose_fields(target)
             tasks = []
             # >>> 2.1
-            resolve_list, attribute_list = core.iter_over_object_resolvers_and_acceptable_fields(target, self.scan_data)
+            resolve_list, attribute_list = core.iter_over_object_resolvers_and_acceptable_fields(target, self.metadata)
             for field, attr in resolve_list:
                 tasks.append(self._resolve_obj_field(target, field, attr))
             for field, attr in attribute_list:
@@ -270,7 +272,7 @@ class Resolver:
 
             # >>> 2.2
             # execute post methods, if context declared, self.context will be injected into it.
-            for post_key in core.iter_over_object_post_methods(target, self.scan_data):
+            for post_key in core.iter_over_object_post_methods(target, self.metadata):
                 post_attr_name = post_key.replace(const.POST_PREFIX, '')
                 if not hasattr(target, post_attr_name):
                     raise ResolverTargetAttrNotFound(f"fail to run {post_key}(), attribute {post_attr_name} not found")
@@ -291,7 +293,8 @@ class Resolver:
         # do nothing
         if isinstance(target, list) and target == []: return target
 
-        self.scan_data = core.scan_and_store_required_fields(target)
+        root_class = core.get_class(target)
+        self.metadata = core.scan_and_store_metadata(root_class)
 
         await self._resolve(target)
         return target

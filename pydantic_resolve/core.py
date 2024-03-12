@@ -11,12 +11,6 @@ from .exceptions import ResolverTargetAttrNotFound
 
 T = TypeVar("T")
 
-def _get_class(target):
-    if isinstance(target, list):
-        return target[0].__class__
-    else:
-        return target.__class__
-
 def _get_pydantic_attrs(kls):
     for k, v in kls.__fields__.items():
         shelled_type = shelling_type(v.type_)
@@ -29,16 +23,21 @@ def _get_dataclass_attrs(kls):
         if is_acceptable_kls(shelled_type):
             yield (name, shelled_type)
 
-def scan_and_store_required_fields(target):
-    root = _get_class(target)
-    update_forward_refs(root)
+def get_class(target):
+    if isinstance(target, list):
+        return target[0].__class__
+    else:
+        return target.__class__
 
-    scan_result = {}
+def scan_and_store_metadata(root_class):
+    update_forward_refs(root_class)
+
+    metadata = {}
 
     def walker(kls):
         kls_name = get_kls_full_path(kls)
 
-        hit = scan_result.get(kls_name)
+        hit = metadata.get(kls_name)
         if hit:
             return
 
@@ -49,7 +48,7 @@ def scan_and_store_required_fields(target):
         raw_post_methods = (f for f in fields if f.startswith(POST_PREFIX))
 
         resolve_methods, post_methods = [], []
-        attribute_list = []  # all attributes of class without resolve
+        attribute_list = []  # all attributes of class (dataclass or pydantic) without resolve
         object_list = []  # all attributes of class
 
         if issubclass(kls, BaseModel):
@@ -81,7 +80,7 @@ def scan_and_store_required_fields(target):
                     raise ResolverTargetAttrNotFound(f"attribute {post_field} not found")
                 post_methods.append(field)
 
-        scan_result[kls_name] = {
+        metadata[kls_name] = {
             'resolve': resolve_methods,  # to resolve
             'post': post_methods,  # to post
             'attribute': attribute_list  # object without resolvable field
@@ -89,9 +88,9 @@ def scan_and_store_required_fields(target):
 
         for obj in object_list:
             walker(obj[1])
-    walker(root)
+    walker(root_class)
 
-    return scan_result
+    return metadata
 
 def is_acceptable_kls(kls):
     return issubclass(kls, BaseModel) or is_dataclass(kls)
@@ -101,7 +100,7 @@ def is_acceptable_instance(target):
     return isinstance(target, BaseModel) or is_dataclass(target)
 
 def iter_over_object_resolvers_and_acceptable_fields(target, attr_map):
-    kls = _get_class(target)
+    kls = get_class(target)
     attr_info = attr_map.get(get_kls_full_path(kls))
 
     resolve, attribute = [], []
@@ -118,7 +117,7 @@ def iter_over_object_resolvers_and_acceptable_fields(target, attr_map):
 
 def iter_over_object_post_methods(target, attr_map):
     """get method starts with post_"""
-    kls = _get_class(target)
+    kls = get_class(target)
     attr_info = attr_map.get(get_kls_full_path(kls))
 
     for attr_name in attr_info['post']:

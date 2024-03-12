@@ -1,9 +1,10 @@
 from __future__ import annotations
 from typing import Optional, List
 from pydantic import BaseModel
-from pydantic_resolve.core import scan_and_store_required_fields
+from pydantic_resolve.core import scan_and_store_metadata
 
 class Student(BaseModel):
+    __pydantic_resolve_expose__ = {'name': 'student_name'}
     name: str = ''
     resolve_hello: str = ''
 
@@ -22,7 +23,6 @@ class Student(BaseModel):
     def resolve_zeta(self):
         return dict(name='z')
 
-
 class Zone(BaseModel):
     name: str
     qs: List[Queue]
@@ -35,12 +35,13 @@ class Zeta(BaseModel):
 
 
 def test_get_all_fields():
-    result = scan_and_store_required_fields(Student())
+    result = scan_and_store_metadata(Student)
     assert result == {
         'test_field_pydantic.Student': {
             'resolve': ['resolve_name', 'resolve_zeta'],
             'post': ['post_name'],
-            'attribute': ['zones', 'zones2', 'zone']
+            'attribute': ['zones', 'zones2', 'zone'],
+            'expose': {'name': 'student_name'}
         },
         'test_field_pydantic.Zone': {
             'resolve': [],

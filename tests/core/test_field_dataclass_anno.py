@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional, List
-from pydantic_resolve.core import scan_and_store_required_fields
+from pydantic_resolve.core import scan_and_store_metadata
 
 @dataclass
 class Student:
@@ -33,7 +33,7 @@ class Zeta:
 
 
 def test_get_all_fields():
-    result = scan_and_store_required_fields(Student())
+    result = scan_and_store_metadata(Student)
     assert result == {
         'test_field_dataclass_anno.Student': {
             'resolve': ['resolve_name', 'resolve_zeta'],
