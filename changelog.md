@@ -1,5 +1,12 @@
 # Changelog
 
+## v.1.9.3 (2024.03.12)
+
+- rename loader_filter -> loader_params
+- rename global_loader_filter -> global_loader_param
+
+using old params will have warning messages.
+
 ## v.1.9.2 (2024.02.03)
 
 - bugfix for model_config
