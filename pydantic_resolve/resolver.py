@@ -277,6 +277,7 @@ class Resolver:
 
                 post_method = getattr(target, post_key)
                 calc_result = self._execute_post_method(post_method)
+                calc_result = util.try_parse_data_to_target_field_type(target, post_attr_name, calc_result)
                 setattr(target, post_attr_name, calc_result)
 
             # finally, if post_default_handler is declared, run it.
