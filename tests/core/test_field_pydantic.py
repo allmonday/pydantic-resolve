@@ -1,14 +1,19 @@
 from __future__ import annotations
 from typing import Optional, List
 from pydantic import BaseModel
+from aiodataloader import DataLoader
 from pydantic_resolve.core import scan_and_store_metadata
+from pydantic_resolve import LoaderDepend
+
+async def loader_fn(keys):
+    return keys
 
 class Student(BaseModel):
     __pydantic_resolve_expose__ = {'name': 'student_name'}
     name: str = ''
     resolve_hello: str = ''
 
-    def resolve_name(self):
+    def resolve_name(self, context, ancestor_context, loader=LoaderDepend(loader_fn)):
         return '.'
 
     def post_name(self):
@@ -37,7 +42,7 @@ class Zeta(BaseModel):
 
 def test_get_all_fields():
     result = scan_and_store_metadata(Student)
-    assert result == {
+    expect = {
         'test_field_pydantic.Student': {
             'resolve': ['resolve_name', 'resolve_zeta'],
             'post': ['post_name'],
@@ -67,3 +72,33 @@ def test_get_all_fields():
             'collect_dict': {}
         }
     }
+    for k, v in result.items():
+        assert expect[k].items() <= v.items()
+
+
+def test_resolve_params():
+    result = scan_and_store_metadata(Student)
+    expect = {
+        'test_field_pydantic.Student': {
+            'resolve_params': {
+                'resolve_name': {
+                    'context': True,
+                    'ancestor_context': True,
+                    'dataloaders': [
+                        {
+                            'param': 'loader',
+                            'kls': loader_fn,
+                            'path': 'test_field_pydantic.loader_fn'
+                        }
+                    ],
+                }, 
+                'resolve_zeta': {
+                    'context': False,
+                    'ancestor_context': False,
+                    'dataloaders': [],
+                }
+            },
+        }
+    }
+    key = 'test_field_pydantic.Student'
+    assert expect[key].items() <= result[key].items()

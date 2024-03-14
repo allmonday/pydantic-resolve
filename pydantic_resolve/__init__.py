@@ -4,7 +4,8 @@ from .exceptions import (
     LoaderFieldNotProvidedError,
     MissingAnnotationError,
     GlobalLoaderFieldOverlappedError)
-from .resolver import Resolver, LoaderDepend
+from .resolver import Resolver
+from .core import LoaderDepend
 from .util import (
     build_list,
     build_object,

@@ -4,9 +4,8 @@ import inspect
 import warnings
 from inspect import iscoroutine
 from typing import TypeVar, Dict
-from collections import defaultdict
 from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingAnnotationError
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 from pydantic_resolve import core
 from aiodataloader import DataLoader
 from inspect import isclass
@@ -14,18 +13,6 @@ from types import MappingProxyType
 import pydantic_resolve.constant as const
 import pydantic_resolve.util as util
 
-
-def LoaderDepend(  # noqa: N802
-    dependency: Optional[Callable[..., Any]] = None,
-) -> Any:
-    return Depends(dependency=dependency)
-
-class Depends:
-    def __init__(
-        self,
-        dependency: Optional[Callable[..., Any]] = None,
-    ):
-        self.dependency = dependency
 
 T = TypeVar("T")
 
@@ -62,7 +49,7 @@ class Resolver:
         if loader_instances and self._validate_loader_instance(loader_instances):
             self.loader_instances = loader_instances
         else:
-            self.loader_instances = None
+            self.loader_instances = {}
 
         self.ensure_type = ensure_type
         self.context = MappingProxyType(context) if context else None
@@ -127,12 +114,12 @@ class Resolver:
         # manage the creation of loader instances
         for k, v in signature.parameters.items():
             # >>> 2
-            if isinstance(v.default, Depends):
+            if isinstance(v.default, core.Depends):
                 # Base: DataLoader or batch_load_fn
                 Loader = v.default.dependency
 
                 # check loader_instance first, if already defined in Resolver param, just take it.
-                if self.loader_instances and self.loader_instances.get(Loader):
+                if self.loader_instances.get(Loader):
                     loader = self.loader_instances.get(Loader)
                     params[k] = loader
                     continue

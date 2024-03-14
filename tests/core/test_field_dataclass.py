@@ -40,7 +40,7 @@ class Student:
 
 def test_get_all_fields():
     result = scan_and_store_metadata(Student)
-    assert result == {
+    expect = {
         'test_field_dataclass.Student': {
             'resolve': ['resolve_name', 'resolve_zeta'],
             'post': ['post_name'],
@@ -70,3 +70,5 @@ def test_get_all_fields():
             'collect_dict': {}
         }
     }
+    for k, v in result.items():
+        assert expect[k].items() <= v.items()
