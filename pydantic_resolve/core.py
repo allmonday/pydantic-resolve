@@ -4,7 +4,6 @@ from typing import Any, Callable, Optional
 from aiodataloader import DataLoader
 from pydantic import BaseModel
 from dataclasses import is_dataclass, fields as dc_fields
-from typing import TypeVar
 import pydantic_resolve.util as util
 import pydantic_resolve.constant as const
 from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError
@@ -21,7 +20,23 @@ class Depends:
     ):
         self.dependency = dependency
 
-T = TypeVar("T")
+class Collector:
+    def __init__(self, alias: str, flat: bool=False):
+        self.alias = alias
+        self.flat = flat
+        self.val = []
+    
+    def add(self, val):
+        if self.flat:
+            if isinstance(val, list):
+                self.val.extend(val)
+            else:
+                raise AttributeError('if flat, target should be list')
+        else:
+            self.val.append(val)
+
+    def values(self):
+        return self.val
 
 def _get_pydantic_attrs(kls):
     for k, v in kls.__fields__.items():
@@ -56,20 +71,21 @@ def _scan_resolve_method(method):
     if signature.parameters.get('ancestor_context'):
         result['ancestor_context'] = True
 
-    for k, v in signature.parameters.items():
-        if isinstance(v.default, Depends):
+    for name, param in signature.parameters.items():
+        if isinstance(param.default, Depends):
             info = { 
-                'param': k,
-                'kls': v.default.dependency,  # for later initialization
-                'path': util.get_kls_full_path(v.default.dependency) }
+                'param': name,
+                'kls': param.default.dependency,  # for later initialization
+                'path': util.get_kls_full_path(param.default.dependency) }
             result['dataloaders'].append(info)
     return result
 
 
-def _scan_post_method(method):
+def _scan_post_method(method, field):
     result = {
         'context': False,
         'ancestor_context': False,
+        'collectors': []
     }
     signature = inspect.signature(method)
 
@@ -78,11 +94,20 @@ def _scan_post_method(method):
 
     if signature.parameters.get('ancestor_context'):
         result['ancestor_context'] = True
+    
+    for name, param in signature.parameters.items():
+        if isinstance(param.default, Collector):
+            info = {
+                'field': field,
+                'param': name,
+                'instance': param.default,
+                'alias': param.default.alias }
+            result['collectors'].append(info)
             
     return result
 
 
-def _validate_and_create_instance(
+def validate_and_create_loader_instance(
         loader_params,
         global_loader_param,
         loader_instances,
@@ -147,8 +172,6 @@ def _validate_and_create_instance(
 
     return cache
 
-                    
-
 
 def scan_and_store_metadata(root_class):
     """
@@ -156,7 +179,7 @@ def scan_and_store_metadata(root_class):
     - test_field_dataclass_anno.py
     - test_field_pydantic.py
 
-    metadata:
+    metadata struct:
     - resolve
     - resolve_params
         - [resolve_field]
@@ -177,9 +200,9 @@ def scan_and_store_metadata(root_class):
     - collect_dict
 
     rules:
-    - dataloader and it's params
-    - context & ancestor_context are provided
-    - collector should be defined in ancestor of collect schemas.
+    - [x] dataloader and it's params
+    - [ ] context & ancestor_context are provided
+    - [ ] collector should be defined in ancestor of collect schemas.
     """
 
     util.update_forward_refs(root_class)
@@ -198,15 +221,15 @@ def scan_and_store_metadata(root_class):
         hit = metadata.get(kls_name)
         if hit: return
 
-        fields_with_resolver = set()  # resolve_name --> name
         fields = dir(kls)
 
         resolve_fields = [f for f in fields if f.startswith(const.PREFIX) and isfunction(getattr(kls, f))]
         post_fields = [f for f in fields if f.startswith(const.POST_PREFIX) 
                                                 and f != const.POST_DEFAULT_HANDLER
                                                 and isfunction(getattr(kls, f))]
+        fields_with_resolver = { field.replace(const.PREFIX, '') for field in resolve_fields }
 
-        # get all fields and object fields
+        # - get all fields and object fields
         if issubclass(kls, BaseModel):
             all_fields = set(kls.__fields__.keys())
             object_fields = list(_get_pydantic_attrs(kls))  # dive and recursively analysis
@@ -216,14 +239,13 @@ def scan_and_store_metadata(root_class):
         else:
             raise AttributeError('invalid type: should be pydantic object or dataclass object')  #noqa
 
-        # validate resolve target field
+        #  - validate resolve target field
         for field in resolve_fields:
             resolve_field = field.replace(const.PREFIX, '')
             if resolve_field not in all_fields:
                 raise ResolverTargetAttrNotFound(f"attribute {resolve_field} not found")
-            fields_with_resolver.add(resolve_field)
 
-        # validate post target field
+        # - validate post target field
         for field in post_fields:
             post_field = field.replace(const.POST_PREFIX, '')
             if post_field not in all_fields:
@@ -231,7 +253,7 @@ def scan_and_store_metadata(root_class):
 
         object_fields_without_resolver = [a[0] for a in object_fields if a[0] not in fields_with_resolver] 
 
-        # <-- start of validate expose and collect
+        # - start of validate expose and collect
         expose_dict = getattr(kls, const.EXPOSE_TO_DESCENDANT, {})
         collect_dict = getattr(kls, const.COLLECT_FROM_ANCESTOR, {})
 
@@ -248,13 +270,13 @@ def scan_and_store_metadata(root_class):
             if v in collect_set:
                 raise AttributeError(f'collect alias name conflicts, please check: {kls_name}')
             collect_set.add(v)
-        # end of validate expose and collect -->
+        # - end of validate expose and collect
 
         resolve_params = {
             field: _scan_resolve_method(getattr(kls, field)) for field in resolve_fields
         }
         post_params = {
-            field: _scan_post_method(getattr(kls, field)) for field in post_fields
+            field: _scan_post_method(getattr(kls, field), field) for field in post_fields
         }
 
         metadata[kls_name] = {
@@ -280,27 +302,26 @@ def is_acceptable_instance(target):
     """ check whether target is Pydantic object or Dataclass object """
     return isinstance(target, BaseModel) or is_dataclass(target)
 
-def iter_over_object_resolvers_and_acceptable_fields(target, attr_map):
+def iter_over_object_resolvers_and_acceptable_fields(target, metadata):
     kls = get_class(target)
-    attr_info = attr_map.get(util.get_kls_full_path(kls))
+    kls_meta = metadata.get(util.get_kls_full_path(kls))
 
     resolve, attribute = [], []
 
-    for attr_name in attr_info['resolve']:
-        attr = getattr(target, attr_name)
-        resolve.append((attr_name, attr))
+    for resolve_field in kls_meta['resolve']:  # eg: resolve_name
+        attr = getattr(target, resolve_field)
+        resolve.append((resolve_field, attr))
 
-    for attr_name in attr_info['attribute']:
+    for attr_name in kls_meta['attribute']:
         attr = getattr(target, attr_name)
         attribute.append((attr_name, attr))
 
     return resolve, attribute
 
-def iter_over_object_post_methods(target, attr_map):
+def iter_over_object_post_methods(target, metadata):
     """get method starts with post_"""
     kls = get_class(target)
-    attr_info = attr_map.get(util.get_kls_full_path(kls))
+    attr_info = metadata.get(util.get_kls_full_path(kls))
 
     for attr_name in attr_info['post']:
         yield attr_name
-

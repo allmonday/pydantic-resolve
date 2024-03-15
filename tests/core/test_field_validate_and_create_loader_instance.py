@@ -3,7 +3,7 @@ import pytest
 from typing import Optional, List
 from pydantic import BaseModel
 from aiodataloader import DataLoader
-from pydantic_resolve.core import scan_and_store_metadata, _validate_and_create_instance
+from pydantic_resolve.core import scan_and_store_metadata, validate_and_create_loader_instance
 from pydantic_resolve import LoaderDepend, LoaderFieldNotProvidedError
 
 async def loader_fn(keys):
@@ -59,7 +59,7 @@ global_loader_param = {
 @pytest.mark.asyncio
 async def test_instance_1():
     meta = scan_and_store_metadata(Student)
-    loader_instance = _validate_and_create_instance(loader_params, {}, {}, meta)
+    loader_instance = validate_and_create_loader_instance(loader_params, {}, {}, meta)
 
     assert isinstance(loader_instance['test_field_validate_and_create_loader_instance.loader_fn'] , DataLoader)
     assert isinstance(loader_instance['test_field_validate_and_create_loader_instance.MyLoader'] , MyLoader)
@@ -68,7 +68,7 @@ async def test_instance_1():
 async def test_instance_2():
     """ test cache works """
     meta = scan_and_store_metadata(Student)
-    loader_instance = _validate_and_create_instance(loader_params, {}, {}, meta)
+    loader_instance = validate_and_create_loader_instance(loader_params, {}, {}, meta)
 
     assert len(loader_instance) == 2
 
@@ -76,7 +76,7 @@ async def test_instance_2():
 async def test_instance_3():
     """test global param"""
     meta = scan_and_store_metadata(Student)
-    loader_instance = _validate_and_create_instance({}, global_loader_param, {}, meta)
+    loader_instance = validate_and_create_loader_instance({}, global_loader_param, {}, meta)
 
     assert isinstance(loader_instance['test_field_validate_and_create_loader_instance.loader_fn'] , DataLoader)
     assert len(loader_instance) == 2
@@ -87,4 +87,4 @@ async def test_instance_4():
     meta = scan_and_store_metadata(Student)
 
     with pytest.raises(LoaderFieldNotProvidedError):
-        loader_instance = _validate_and_create_instance({}, {}, {}, meta)
+        loader_instance = validate_and_create_loader_instance({}, {}, {}, meta)

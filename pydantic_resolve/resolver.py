@@ -3,12 +3,12 @@ import contextvars
 import inspect
 import warnings
 from inspect import iscoroutine
+from collections import defaultdict
 from typing import TypeVar, Dict
-from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingAnnotationError
+from .exceptions import MissingAnnotationError
 from typing import Any, Optional
 from pydantic_resolve import core
 from aiodataloader import DataLoader
-from inspect import isclass
 from types import MappingProxyType
 import pydantic_resolve.constant as const
 import pydantic_resolve.util as util
@@ -29,6 +29,7 @@ class Resolver:
         self.loader_instance_cache = {}
 
         self.ancestor_vars = {}
+        self.collector_vars = defaultdict(dict)
 
         # for dataloader which has class attributes, you can assign the value at here
         if loader_filters:
@@ -54,6 +55,28 @@ class Resolver:
         self.ensure_type = ensure_type
         self.context = MappingProxyType(context) if context else None
         self.metadata = {}
+    
+    def _add_collector(self, target):
+        """
+        1. get kls from metadata, read post/collector
+        2. use alias + kls name as key pairs
+            - specific by kls, post_method name, params
+        3. store in to contextvars
+        """
+        # TODO: simplify
+        kls = core.get_class(target)
+        kls_path = util.get_kls_full_path(kls)
+        kls_meta = self.metadata.get(kls_path, {})
+        post_params = kls_meta['post_params']
+
+        for _, param in post_params.items():
+            for collector in param['collectors']:
+                collector_instance = collector['instance']
+                alias = collector['alias']
+                if not self.collector_vars.get(alias):
+                    self.collector_vars[alias] = {}
+                self.collector_vars[alias][kls_path] = contextvars.ContextVar(f'{alias}-{kls_path}')
+                self.collector_vars[alias][kls_path].set(collector_instance)
 
     def _add_expose_fields(self, target):
         """
@@ -62,9 +85,9 @@ class Resolver:
 
         tips: validation has been handled by scan_and_store_matadata()
         """
-        expose_dct: Optional[dict] = getattr(target, const.EXPOSE_TO_DESCENDANT, None)
-        if expose_dct:
-            for field, alias in expose_dct.items():  # eg: name, bar_name
+        expose_dict: Optional[dict] = getattr(target, const.EXPOSE_TO_DESCENDANT, None)
+        if expose_dict:
+            for field, alias in expose_dict.items():  # eg: {'name': 'bar_name'}
                 if not self.ancestor_vars.get(alias):
                     self.ancestor_vars[alias] = contextvars.ContextVar(alias)
 
@@ -88,16 +111,8 @@ class Resolver:
         return True
 
     def _execute_resolver_method(self, method):
-        """
-        1. inspect method, atttach context if declared in method
-        2. if params includes LoaderDepend, create instance and cache it.
-            2.1 create from DataLoader class
-                2.1.1 apply loader_params into dataloader instance
-            2.2 ceate from batch_load_fn
-        3. execute method
-        """
+        """pre-set context, ancestor_context and loaders"""
 
-        # >>> 1
         signature = inspect.signature(method)
         params = {}
 
@@ -111,54 +126,12 @@ class Resolver:
                 raise AttributeError(f'there is not class has {const.EXPOSE_TO_DESCENDANT} configed')
             params['ancestor_context'] = self._build_ancestor_context()
 
-        # manage the creation of loader instances
         for k, v in signature.parameters.items():
-            # >>> 2
             if isinstance(v.default, core.Depends):
-                # Base: DataLoader or batch_load_fn
-                Loader = v.default.dependency
-
-                # check loader_instance first, if already defined in Resolver param, just take it.
-                if self.loader_instances.get(Loader):
-                    loader = self.loader_instances.get(Loader)
-                    params[k] = loader
-                    continue
-
-                # module.kls to avoid same kls name from different module
                 cache_key = util.get_kls_full_path(v.default.dependency)
-                hit = self.loader_instance_cache.get(cache_key)
-                if hit:
-                    loader = hit
-                else:
-                    # >>> 2.1
-                    # create loader instance 
-                    if isclass(Loader):
-                        # if extra transform provides
-                        loader = Loader()
-
-                        param_config = util.merge_dicts(
-                            self.global_loader_param,
-                            self.loader_params.get(Loader, {}))
-
-                        for field in util.get_class_field_annotations(Loader):
-                            # >>> 2.1.1
-                            # class ExampleLoader(DataLoader):
-                            #     param_a: bool  <-- set this field
-                            try:
-                                value = param_config[field]
-                                setattr(loader, field, value)
-                            except KeyError:
-                                raise LoaderFieldNotProvidedError(f'{cache_key}.{field} not found in Resolver()')
-
-                    # >>> 2.2
-                    # build loader from batch_load_fn, params config is impossible
-                    else:
-                        loader = DataLoader(batch_load_fn=Loader)  # type:ignore
-
-                    self.loader_instance_cache[cache_key] = loader
+                loader = self.loader_instance_cache[cache_key]
                 params[k] = loader
 
-        # 3
         return method(**params)
 
     def _execute_post_method(self, method):
@@ -180,36 +153,35 @@ class Resolver:
     async def _resolve_obj_field(self, target, target_field, attr):
         """
         resolve each single object field
-
+        0. set collector
         1. validate the target field of resolver method existed.
         2. exec methods
         3. parse to target type and then continue resolve it
         4. set back value to field
         """
+        # - 0
+        self._add_collector(target)
 
-        # >>> 1
+        # - 1
         target_attr_name = str(target_field).replace(const.PREFIX, '')
-
-        if not hasattr(target, target_attr_name):
-            raise ResolverTargetAttrNotFound(f"attribute {target_attr_name} not found")
 
         if self.ensure_type:
             if not attr.__annotations__:
                 raise MissingAnnotationError(f'{target_field}: return annotation is required')
 
-        # >>> 2
+        # - 2
         val = self._execute_resolver_method(attr)
         while iscoroutine(val) or asyncio.isfuture(val):
             val = await val
 
-        # >>> 3
+        # - 3
         if not getattr(attr, const.HAS_MAPPER_FUNCTION, False):  # defined in util.mapper
             val = util.try_parse_data_to_target_field_type(target, target_attr_name, val)
             # else: it will be handled by mapper func
 
         val = await self._resolve(val)
 
-        # >>> 4
+        # - 4
         setattr(target, target_attr_name, val)
 
     async def _resolve(self, target: T) -> T:
@@ -228,35 +200,47 @@ class Resolver:
 
         # >>> 2
         if core.is_acceptable_instance(target):
-            # TODO:
-            # if metadata has expose, add_expose_fields
             self._add_expose_fields(target)
             tasks = []
+
             # >>> 2.1
             resolve_list, attribute_list = core.iter_over_object_resolvers_and_acceptable_fields(target, self.metadata)
-            for field, attr in resolve_list:
-                tasks.append(self._resolve_obj_field(target, field, attr))
-            for field, attr in attribute_list:
-                tasks.append(self._resolve(attr))
+            for field, method in resolve_list:
+                tasks.append(self._resolve_obj_field(target, field, method))
+            for field, attr_object in attribute_list:
+                tasks.append(self._resolve(attr_object))
 
             await asyncio.gather(*tasks)
 
             # >>> 2.2
             # execute post methods, if context declared, self.context will be injected into it.
             for post_key in core.iter_over_object_post_methods(target, self.metadata):
-                post_attr_name = post_key.replace(const.POST_PREFIX, '')
-                if not hasattr(target, post_attr_name):
-                    raise ResolverTargetAttrNotFound(f"fail to run {post_key}(), attribute {post_attr_name} not found")
-
+                post_field_name = post_key.replace(const.POST_PREFIX, '')
                 post_method = getattr(target, post_key)
-                calc_result = self._execute_post_method(post_method)
-                calc_result = util.try_parse_data_to_target_field_type(target, post_attr_name, calc_result)
-                setattr(target, post_attr_name, calc_result)
+                result = self._execute_post_method(post_method)
+                result = util.try_parse_data_to_target_field_type(target, post_field_name, result)
+                setattr(target, post_field_name, result)
 
             # finally, if post_default_handler is declared, run it.
             default_post_method = getattr(target, const.POST_DEFAULT_HANDLER, None)
             if default_post_method:
                 self._execute_post_method(default_post_method)
+
+            #TODO: after all done, add target into collector
+            # read collect fields
+            # add into collector_vars
+            kls = core.get_class(target)
+            kls_path = util.get_kls_full_path(kls)
+            kls_meta = self.metadata.get(kls_path, {})
+            collect_dict = kls_meta['collect_dict']
+            for field, alias in collect_dict.items():
+                # TODO: error
+                for kls, instance_ctx in self.collector_vars[alias].items():
+                    collector = instance_ctx.get()
+                    val = getattr(target, field)
+                    print(val)
+                    collector.add(val)
+
 
         return target
 
@@ -266,6 +250,11 @@ class Resolver:
 
         root_class = core.get_class(target)
         self.metadata = core.scan_and_store_metadata(root_class)
+        self.loader_instance_cache = core.validate_and_create_loader_instance(
+            self.loader_params,
+            self.global_loader_param,
+            self.loader_instances,
+            self.metadata)
 
         await self._resolve(target)
         return target

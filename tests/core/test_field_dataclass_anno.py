@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional, List
 from pydantic_resolve.core import scan_and_store_metadata
-from pydantic_resolve import LoaderDepend
+from pydantic_resolve import LoaderDepend, Collector
 
 
 async def loader_fn(keys):
@@ -26,6 +26,7 @@ class Student:
 
 @dataclass
 class Queue:
+    __pydantic_resolve_collect__ = {"name": "queue_name"}
     name: str
 
 @dataclass
@@ -60,7 +61,7 @@ def test_get_all_fields():
             'post': [],
             'attribute': [],
             'expose_dict': {},
-            'collect_dict': {}
+            'collect_dict': {'name': 'queue_name'}
         },
         'test_field_dataclass_anno.Zeta': {
             'resolve': [],
