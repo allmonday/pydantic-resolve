@@ -56,32 +56,22 @@ class Resolver:
         self.context = MappingProxyType(context) if context else None
         self.metadata = {}
     
-    def _add_collector(self, target):
+    def _prepare_collectors(self, target):
         """
         1. get kls from metadata, read post/collector
         2. use alias + kls name as key pairs
             - specific by kls, post_method name, params
         3. store in to contextvars
         """
-        # TODO: simplify
-        kls = core.get_class(target)
-        kls_path = util.get_kls_full_path(kls)
-        kls_meta = self.metadata.get(kls_path, {})
-        post_params = kls_meta['post_params']
+        for alias, collector_instance, sign in core.get_collectors(target, self.metadata):
+            if not self.collector_vars.get(alias):
+                self.collector_vars[alias] = {}
 
-        for _, param in post_params.items():
-            for collector in param['collectors']:
-                collector_instance = collector['instance']
-                alias = collector['alias']
-                if not self.collector_vars.get(alias):
-                    self.collector_vars[alias] = {}
+            if sign not in self.collector_vars[alias]:
+                self.collector_vars[alias][sign] = contextvars.ContextVar('-'.join(sign))
 
-                sign = (kls_path, collector['field'], collector['param'])
-                sign_name = '-'.join(sign)
+            self.collector_vars[alias][sign].set(collector_instance)
 
-                if sign not in self.collector_vars[alias]:
-                    self.collector_vars[alias][sign] = contextvars.ContextVar(sign_name)
-                self.collector_vars[alias][sign].set(collector_instance)
 
     def _add_expose_fields(self, target):
         """
@@ -154,6 +144,13 @@ class Resolver:
             params['ancestor_context'] = self._build_ancestor_context()
         ret_val = method(**params)
         return ret_val
+    
+    def _add_values_to_collectors(self, target):
+        for field, alias in core.iter_over_collectable_fields(target, self.metadata):
+            for _, instance_ctx in self.collector_vars[alias].items():
+                collector = instance_ctx.get()
+                val = getattr(target, field)
+                collector.add(val)
 
     async def _resolve_obj_field(self, target, target_field, attr):
         """
@@ -165,10 +162,11 @@ class Resolver:
         4. set back value to field
         """
         # - 0
-        self._add_collector(target)
+        self._prepare_collectors(target)
 
         # - 1
-        target_attr_name = str(target_field).replace(const.PREFIX, '')
+        # TODO: pre-calc
+        target_attr_name = target_field.replace(const.PREFIX, '')
 
         if self.ensure_type:
             if not attr.__annotations__:
@@ -197,29 +195,30 @@ class Resolver:
         2. resolve object
             2.1 resolve each single resolver fn and object fields
             2.2 execute post fn
+            2.3 add to collector
         """
-
-        # >>> 1
+        # - 1
         if isinstance(target, (list, tuple)):
             await asyncio.gather(*[self._resolve(t) for t in target])
 
-        # >>> 2
+        # - 2
         if core.is_acceptable_instance(target):
             self._add_expose_fields(target)
+
             tasks = []
 
-            # >>> 2.1
+            # - 2.1
             resolve_list, attribute_list = core.iter_over_object_resolvers_and_acceptable_fields(target, self.metadata)
             for field, method in resolve_list:
                 tasks.append(self._resolve_obj_field(target, field, method))
             for field, attr_object in attribute_list:
                 tasks.append(self._resolve(attr_object))
-
             await asyncio.gather(*tasks)
 
-            # >>> 2.2
+            # - 2.2
             # execute post methods, if context declared, self.context will be injected into it.
             for post_key in core.iter_over_object_post_methods(target, self.metadata):
+                # TODO: pre calc
                 post_field_name = post_key.replace(const.POST_PREFIX, '')
                 post_method = getattr(target, post_key)
                 result = self._execute_post_method(post_method)
@@ -231,18 +230,8 @@ class Resolver:
             if default_post_method:
                 self._execute_post_method(default_post_method)
 
-            #TODO: after all done, add target into collector
-            # read collect fields
-            # add into collector_vars
-            kls = core.get_class(target)
-            kls_path = util.get_kls_full_path(kls)
-            kls_meta = self.metadata.get(kls_path, {})
-            collect_dict = kls_meta['collect_dict']
-            for field, alias in collect_dict.items():
-                for kls, instance_ctx in self.collector_vars[alias].items():
-                    collector = instance_ctx.get()
-                    val = getattr(target, field)
-                    collector.add(val)
+            # - 2.3
+            self._add_values_to_collectors(target)
 
         return target
 

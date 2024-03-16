@@ -325,3 +325,28 @@ def iter_over_object_post_methods(target, metadata):
 
     for attr_name in attr_info['post']:
         yield attr_name
+
+def get_collectors(target, metadata):
+    """
+    1. get kls from metadata, read post/collector
+    2. use alias + kls name as key pairs
+        - specific by kls, post_method name, params
+    """
+    kls = get_class(target)
+    kls_path = util.get_kls_full_path(kls)
+    kls_meta = metadata.get(kls_path, {})
+    post_params = kls_meta['post_params']
+
+    for _, param in post_params.items():
+        for collector in param['collectors']:
+            sign = (kls_path, collector['field'], collector['param'])
+            yield collector['alias'], collector['instance'], sign
+    
+def iter_over_collectable_fields(target, metadata):
+    kls = get_class(target)
+    kls_path = util.get_kls_full_path(kls)
+    kls_meta = metadata.get(kls_path, {})
+    collect_dict = kls_meta['collect_dict']
+
+    for field, alias in collect_dict.items():
+        yield field, alias
