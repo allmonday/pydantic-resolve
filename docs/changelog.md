@@ -1,5 +1,13 @@
 # Changelog
 
+## v.1.10 (2024.3.16)
+
+- add new feature: `collector`
+- internal refactor
+    - optimize scan process.
+    - prepare for debug feature.
+    - create dataloader instance before resolving
+
 ## v.1.9.3 (2024.03.12)
 
 - rename loader_filter -> loader_params
@@ -125,7 +133,7 @@ class Foo(BaseModel):
 
 - fix the order of auto map, which will break the resolve chain
 
-## v1.5.0 (2023.7.9) [has bug, do not use]
+## v1.5.0 (2023.7.9) yanked
 
 - new feature. the return value from resolve_method will be automatically converted to the type of target field, which means mapper with params of type is not required any more.
 - if you `fromt __future__ import annotations` at top, make sure you define schemas in global scopes.

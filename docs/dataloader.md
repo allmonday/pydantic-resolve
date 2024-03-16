@@ -12,7 +12,8 @@ In this phase, we'll fix the `N+1` query with the help of dataloader.
 
 > In pydantic-resolve, you can decleare and use dataloader in anywhere, without worring about the mess of context which happens in graphql
 
-```python linenums="1" hl_lines="3 15-18 32-33"
+```python linenums="1" hl_lines="4 19 38-39"
+from __future__ import annotations
 import asyncio
 from pydantic import BaseModel
 from pydantic_resolve import Resolver, build_list, LoaderDepend
@@ -35,9 +36,14 @@ async def blog_to_comments_loader(blog_ids: list[int]):
 async def get_blogs():
     return blogs_table
 
-class Comment(BaseModel):
-    id: int
-    content: str
+class MyBlogSite(BaseModel):
+    blogs: list[Blog] = []
+    async def resolve_blogs(self):
+        return await get_blogs()
+
+    comment_count: int = 0
+    def post_comment_count(self):
+        return sum([b.comment_count for b in self.blogs])
 
 class Blog(BaseModel):
     id: int
@@ -51,15 +57,10 @@ class Blog(BaseModel):
     def post_comment_count(self):
         return len(self.comments)
 
+class Comment(BaseModel):
+    id: int
+    content: str
 
-class MyBlogSite(BaseModel):
-    blogs: list[Blog] = []
-    async def resolve_blogs(self):
-        return await get_blogs()
-
-    comment_count: int = 0
-    def post_comment_count(self):
-        return sum([b.comment_count for b in self.blogs])
 
 async def main():
     my_blog_site = MyBlogSite()

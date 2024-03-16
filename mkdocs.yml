@@ -17,6 +17,8 @@ nav:
       - Dataloader: dataloader.md
   - Reference:
       - API: reference_api.md
+  - Change log:
+      - pydantic-resolve: changelog.md
 
 markdown_extensions:
   - pymdownx.highlight:

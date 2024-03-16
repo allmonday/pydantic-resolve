@@ -52,13 +52,13 @@ class Blog(BaseModel):
 ```
 
 
-## Context
+## Contexts
 
 pydantic-resolve provides 2 kinds of contexts for different scenarios
 
-### context
+### Context
 
-context is a global context, after setting it in Resolver, resolve_field and post_field can use `context` param to get it.
+context is a global context, after setting it in Resolver, resolve_field and post_field can use `context` param to **read** it.
 
 ```python hl_lines="5 9"
 class Blog(BaseModel):
@@ -79,27 +79,24 @@ blog = await Resolver(context={'prefix': 'my', 'limit': 1}).resolve(blog)
 
 output
 
-```
+```python
 Blog(id=1, 
      comments=['my-comment-1', 'my-comment-2'], 
      post_comments=['my-comment-2'])
 ```
 
-### ancestor_context and expose
+### Ancestor context
 
-By using `ancestor_context` param, descendants can read all fields defined in `__pydantic_resolve_expose__` (must be ancestor)
+In some scenario, descendants need to read value from it's direct ancestor.
+
+![](./images/expose.jpeg)
+
+You can use `__pydantic_resolve_expose__` to define the field and it's alias for descendants,
+and then read it from `ancestor_context`, using alias as the key.
 
 this example shows the blog title can read from it's descendant comment.
 
-```python hl_lines="4 10"
-class Comment(BaseModel):
-    id: int
-    content: str
-    def post_content(self, ancestor_context):
-        blog_title = ancestor_context['blog_title']
-        return f'[{blog_title}] - {self.content}'
-
-
+```python hl_lines="2 17"
 class Blog(BaseModel):
     __pydantic_resolve_expose__ = {'title': 'blog_title' }
     id: int
@@ -112,9 +109,16 @@ class Blog(BaseModel):
     comment_count: int = 0
     def post_comment_count(self):
         return len(self.comments)
+
+class Comment(BaseModel):
+    id: int
+    content: str
+    def post_content(self, ancestor_context):
+        blog_title = ancestor_context['blog_title']
+        return f'[{blog_title}] - {self.content}'
 ```
 
-```
+```json hl_lines="9 13 24 28"
 {
     "blogs": [
         {
@@ -151,6 +155,109 @@ class Blog(BaseModel):
 }
 ```
 
+### Collector
+
+![](./images/collect.jpeg)
+
+Another scenario, ancestor nodes may want to collect some specific fields from it's descendants, where you can use `Collector` and `__pydantic_resolve_collect__`.
+
+> Collector can only be used in post methods, it happens in reverse traversal stages
+
+for example, let's collect all comments into all_comments at top level:
+
+```python hl_lines="13 18"
+form pydantic_resolve import Collector
+
+class MyBlogSite(BaseModel):
+    blogs: list[Blog] = []
+    async def resolve_blogs(self):
+        return await get_blogs()
+
+    comment_count: int = 0
+    def post_comment_count(self):
+        return sum([b.comment_count for b in self.blogs])
+
+    all_comments: list[Comment] = []
+    def post_all_comments(self, collector=Collector(alias='blog_comments', flat=True)):
+        return collector.values()
+
+class Blog(BaseModel):
+    __pydantic_resolve_expose__ = {'title': 'blog_title' }
+    __pydantic_resolve_collect__ = {'comments': 'blog_comments' }
+    id: int
+    title: str
+
+    comments: list[Comment] = []
+    def resolve_comments(self, loader=LoaderDepend(blog_to_comments_loader)):
+        return loader.load(self.id)
+    
+    comment_count: int = 0
+    def post_comment_count(self):
+        return len(self.comments)
+
+class Comment(BaseModel):
+    id: int
+    content: str
+    def post_content(self, ancestor_context):
+        blog_title = ancestor_context['blog_title']
+        return f'[{blog_title}] - {self.content}'
+```
+
+output of all_comments fields:
+```json
+{
+    "all_comments": [
+        {
+            "id": 1,
+            "content": "[what is pydantic-resolve] - its interesting"
+        },
+        {
+            "id": 2,
+            "content": "[what is pydantic-resolve] - i dont understand"
+        },
+        {
+            "id": 3,
+            "content": "[what is composition oriented development pattarn] - why? how?"
+        },
+        {
+            "id": 4,
+            "content": "[what is composition oriented development pattarn] - wow!"
+        }
+    ]
+}
+```
+
+values of `__pydantic_resolve_collect__` must be global unique.
+
+**Usages**:
+
+1. Using multiple collectors is of course supported
+```python
+def post_all_comments(self, 
+                      collector=Collector(alias='blog_comments', flat=True),
+                      collector_2=Collector(alias='comment_content', flat=True)):
+    return collector.values()
+```
+
+2. Using `flat=True` will cal `list.extend` inside, use it if your source field is `List[T]`
+3. You can inherit `ICollector` and define your own `Collector`, for example, a counter collector. `self.alias` is **required**.
+```python
+from pydantic_resolve import ICollector
+
+class CounterCollector(ICollector):
+    def __init__(self, alias):
+        self.alias = alias
+        self.counter = 0
+
+    def add(self, val):
+        self.counter = self.counter + len(val)
+    
+    def values(self):
+        return self.counter
+```
+
+
+
 ## Dataloader
 
 ### LoaderDepend
@@ -175,15 +282,15 @@ class Blog(BaseModel):
 
 You are free to define Dataloader with some fields and set these fields with `loader_params` in Resolver
 
-```python hl_lines="2"
+```python hl_lines="2 7"
 class LoaderA(DataLoader):
     power: int
     async def batch_load_fn(self, keys: List[int]):
         return [ k** self.power for k in keys ]
 
-data = [A(val=n) for n in range(3)]
-with pytest.warns(DeprecationWarning):
-    data = await Resolver(loader_filters={LoaderA:{'power': 2}}).resolve(data)
+data = await Resolver(loader_filters={
+    LoaderA:{'power': 2}
+    }).resolve(data)
 ```
 
 
@@ -191,7 +298,7 @@ with pytest.warns(DeprecationWarning):
 
 If Dataloaders shares some common params, it is possible to declare them by `global_loader_param`
 
-```python hl_lines="39"
+```python hl_lines="40"
 class LoaderA(DataLoader):
     power: int
     async def batch_load_fn(self, keys: List[int]):
@@ -230,9 +337,24 @@ class A(BaseModel):
 async def test_case_0():
     data = [A(val=n) for n in range(3)]
     with pytest.warns(DeprecationWarning):
-        data = await Resolver(global_loader_filter={'power': 2}, 
-                              loader_filters={LoaderC:{'add': 1}}).resolve(data)
+        data = await Resolver(
+            global_loader_filter={'power': 2}, 
+            loader_filters={LoaderC:{'add': 1}}).resolve(data)
 ```
+
+### Loader instance
+
+You can provide loader instance by `loader_instances`, so that internally pydantic-resolve will use it instead of creating from loader class.
+
+```python
+loader = SomeLoader()
+loader.prime('tangkikodo', ['tom', 'jerry'])
+loader.prime('john', ['mike', 'wallace'])
+data = await Resolver(loader_instances={SomeLoader: loader}).resolve(data)
+```
+
+references: [loader methods](https://github.com/syrusakbary/aiodataloader#primekey-value)
+
 
 ### build_list, build_object
 
@@ -290,11 +412,11 @@ class Z(BaseModel):
 
 ```ts
 interface Y {
-    id?: number
+    id?: number // bad
 }
 
 interface Z {
-    id: number
+    id: number // good
 }
 ```
 
@@ -315,8 +437,3 @@ class Y(BaseModel):
     def resolve_password(self):
         return 'confidential'
 ```
-
-
-## Loader instance
-
-to be continue

@@ -1,5 +1,5 @@
-import inspect
 import abc
+import inspect
 from inspect import isfunction, isclass
 from typing import Any, Callable, Optional
 from aiodataloader import DataLoader
@@ -96,8 +96,12 @@ def _scan_resolve_method(method, field: str):
                 'kls': param.default.dependency,  # for later initialization
                 'path': util.get_kls_full_path(param.default.dependency) }
             result['dataloaders'].append(info)
-    return result
 
+    for name, param in signature.parameters.items():
+        if isinstance(param.default, ICollector):
+            raise AttributeError("Collector is not available in resolve_method")
+
+    return result
 
 def _scan_post_method(method, field):
     result = {

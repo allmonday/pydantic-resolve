@@ -1,6 +1,7 @@
+import pytest
 from aiodataloader import DataLoader
 from pydantic import BaseModel
-from pydantic_resolve.core import _scan_resolve_method, LoaderDepend
+from pydantic_resolve.core import _scan_resolve_method, LoaderDepend, Collector
 
 def test_scan_resolve_method_1():
     class A(BaseModel):
@@ -59,3 +60,12 @@ def test_scan_resolve_method_3():
         ]
     }
 
+
+def test_scan_resolve_method_4():
+    class A(BaseModel):
+        a: str
+        def resolve_a(self, c=Collector('some_field')):
+            return c.values()
+        
+    with pytest.raises(AttributeError):
+        _scan_resolve_method(A.resolve_a, 'resolve_a')

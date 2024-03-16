@@ -68,10 +68,10 @@ class C(BaseModel):
     details: List[str] = []
     def resolve_details(self):
         return [f'{self.detail}-detail-1', f'{self.detail}-detail-2']
-     
+
 
 @pytest.mark.asyncio
-async def test_collector_2():
+async def test_collector_1():
     a = A()
     a = await Resolver().resolve(a)
     assert a.names == ['b1', 'b2']

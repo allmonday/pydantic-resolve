@@ -29,7 +29,7 @@ class Resolver:
         self.loader_instance_cache = {}
 
         self.ancestor_vars = {}
-        self.collector_vars = defaultdict(dict)
+        self.collector_contextvars = {}
 
         # for dataloader which has class attributes, you can assign the value at here
         if loader_filters:
@@ -55,31 +55,33 @@ class Resolver:
         self.ensure_type = ensure_type
         self.context = MappingProxyType(context) if context else None
         self.metadata = {}
+
+    def _validate_loader_instance(self, loader_instances: Dict[Any, Any]):
+        for cls, loader in loader_instances.items():
+            if not issubclass(cls, DataLoader):
+                raise AttributeError(f'{cls.__name__} must be subclass of DataLoader')
+            if not isinstance(loader, cls):
+                raise AttributeError(f'{loader.__name__} is not instance of {cls.__name__}')
+        return True
     
     def _prepare_collectors(self, target):
-        """
-        1. get kls from metadata, read post/collector
-        2. use alias + kls name as key pairs
-            - specific by kls, post_method name, params
-        3. store in to contextvars
-        """
         for alias, collector_instance, sign in core.get_collectors(target, self.metadata):
-            if not self.collector_vars.get(alias):
-                self.collector_vars[alias] = {}
+            if not self.collector_contextvars.get(alias):
+                self.collector_contextvars[alias] = {}
 
-            if sign not in self.collector_vars[alias]:
-                self.collector_vars[alias][sign] = contextvars.ContextVar('-'.join(sign))
+            if sign not in self.collector_contextvars[alias]:
+                self.collector_contextvars[alias][sign] = contextvars.ContextVar('-'.join(sign))
 
-            self.collector_vars[alias][sign].set(collector_instance)
+            self.collector_contextvars[alias][sign].set(collector_instance)
 
+    def _add_values_into_collectors(self, target):
+        for field, alias in core.iter_over_collectable_fields(target, self.metadata):
+            for _, instance_ctx in self.collector_contextvars[alias].items():
+                collector = instance_ctx.get()
+                val = getattr(target, field)
+                collector.add(val)
 
     def _add_expose_fields(self, target):
-        """
-        1. check whether expose to descendant existed
-        2. add fields into contextvars (ancestor_vars_checker)
-
-        tips: validation has been handled by scan_and_store_matadata()
-        """
         expose_dict: Optional[dict] = getattr(target, const.EXPOSE_TO_DESCENDANT, None)
         if expose_dict:
             for field, alias in expose_dict.items():  # eg: {'name': 'bar_name'}
@@ -93,21 +95,10 @@ class Resolver:
 
                 self.ancestor_vars[alias].set(val)
 
-    def _build_ancestor_context(self):
-        """get values from contextvars and put into a dict"""
+    def _prepare_ancestor_context(self):
         return {k: v.get() for k, v in self.ancestor_vars.items()}
 
-    def _validate_loader_instance(self, loader_instances: Dict[Any, Any]):
-        for cls, loader in loader_instances.items():
-            if not issubclass(cls, DataLoader):
-                raise AttributeError(f'{cls.__name__} must be subclass of DataLoader')
-            if not isinstance(loader, cls):
-                raise AttributeError(f'{loader.__name__} is not instance of {cls.__name__}')
-        return True
-
     def _execute_resolver_method(self, method):
-        """pre-set context, ancestor_context and loaders"""
-
         signature = inspect.signature(method)
         params = {}
 
@@ -119,7 +110,7 @@ class Resolver:
         if signature.parameters.get('ancestor_context'):
             if self.ancestor_vars is None:
                 raise AttributeError(f'there is not class has {const.EXPOSE_TO_DESCENDANT} configed')
-            params['ancestor_context'] = self._build_ancestor_context()
+            params['ancestor_context'] = self._prepare_ancestor_context()
 
         for k, v in signature.parameters.items():
             if isinstance(v.default, core.Depends):
@@ -141,28 +132,12 @@ class Resolver:
         if signature.parameters.get('ancestor_context'):
             if self.ancestor_vars is None:
                 raise AttributeError(f'there is not class has {const.EXPOSE_TO_DESCENDANT} configed')
-            params['ancestor_context'] = self._build_ancestor_context()
+            params['ancestor_context'] = self._prepare_ancestor_context()
+
         ret_val = method(**params)
         return ret_val
     
-    def _add_values_to_collectors(self, target):
-        for field, alias in core.iter_over_collectable_fields(target, self.metadata):
-            for _, instance_ctx in self.collector_vars[alias].items():
-                print(_)
-                collector = instance_ctx.get()
-                val = getattr(target, field)
-                collector.add(val)
-
     async def _resolve_obj_field(self, target, field, trim_field, attr):
-        """
-        resolve each single object field
-        1. validate the target field of resolver method existed.
-        2. exec methods
-        3. parse to target type and then continue resolve it
-        4. set back value to field
-        """
-        # TODO: pre-calc
-
         if self.ensure_type:
             if not attr.__annotations__:
                 raise MissingAnnotationError(f'{field}: return annotation is required')
@@ -174,31 +149,22 @@ class Resolver:
         if not getattr(attr, const.HAS_MAPPER_FUNCTION, False):  # defined in util.mapper
             val = util.try_parse_data_to_target_field_type(target, trim_field, val)
 
+        # continue dive deeper
         val = await self._resolve(val)
+
         setattr(target, trim_field, val)
 
     async def _resolve(self, target: T) -> T:
-        """ 
-        resolve object (pydantic, dataclass) or list.
-
-        1. iterate over elements if list
-        2. resolve object
-            2.1 resolve each single resolver fn and object fields
-            2.2 execute post fn
-            2.3 add to collector
-        """
-        # - 1
         if isinstance(target, (list, tuple)):
             await asyncio.gather(*[self._resolve(t) for t in target])
 
-        # - 2
         if core.is_acceptable_instance(target):
             self._prepare_collectors(target)
             self._add_expose_fields(target)
 
             tasks = []
 
-            # - 2.1
+            # traversal and fetching data by resolve methods
             resolve_list, attribute_list = core.iter_over_object_resolvers_and_acceptable_fields(target, self.metadata)
             for field, resolve_trim_field, method in resolve_list:
                 tasks.append(self._resolve_obj_field(target, field, resolve_trim_field, method))
@@ -206,28 +172,23 @@ class Resolver:
                 tasks.append(self._resolve(attr_object))
             await asyncio.gather(*tasks)
 
-            # - 2.2
-            # execute post methods, if context declared, self.context will be injected into it.
+            # reverse traversal and run post methods
             for post_key, post_trim_field in core.iter_over_object_post_methods(target, self.metadata):
-                # TODO: pre calc
-                post_trim_field = post_key.replace(const.POST_PREFIX, '')
                 post_method = getattr(target, post_key)
                 result = self._execute_post_method(post_method)
                 result = util.try_parse_data_to_target_field_type(target, post_trim_field, result)
                 setattr(target, post_trim_field, result)
 
-            # finally, if post_default_handler is declared, run it.
             default_post_method = getattr(target, const.POST_DEFAULT_HANDLER, None)
             if default_post_method:
                 self._execute_post_method(default_post_method)
 
-            # - 2.3
-            self._add_values_to_collectors(target)
+            # collect after all done
+            self._add_values_into_collectors(target)
 
         return target
 
     async def resolve(self, target: T) -> T:
-        # do nothing
         if isinstance(target, list) and target == []: return target
 
         root_class = core.get_class(target)
