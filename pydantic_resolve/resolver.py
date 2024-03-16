@@ -153,7 +153,7 @@ class Resolver:
                 val = getattr(target, field)
                 collector.add(val)
 
-    async def _resolve_obj_field(self, target, target_field, attr):
+    async def _resolve_obj_field(self, target, field, trim_field, attr):
         """
         resolve each single object field
         1. validate the target field of resolver method existed.
@@ -162,21 +162,20 @@ class Resolver:
         4. set back value to field
         """
         # TODO: pre-calc
-        target_attr_name = target_field.replace(const.RESOLVE_PREFIX, '')
 
         if self.ensure_type:
             if not attr.__annotations__:
-                raise MissingAnnotationError(f'{target_field}: return annotation is required')
+                raise MissingAnnotationError(f'{field}: return annotation is required')
 
         val = self._execute_resolver_method(attr)
         while iscoroutine(val) or asyncio.isfuture(val):
             val = await val
 
         if not getattr(attr, const.HAS_MAPPER_FUNCTION, False):  # defined in util.mapper
-            val = util.try_parse_data_to_target_field_type(target, target_attr_name, val)
+            val = util.try_parse_data_to_target_field_type(target, trim_field, val)
 
         val = await self._resolve(val)
-        setattr(target, target_attr_name, val)
+        setattr(target, trim_field, val)
 
     async def _resolve(self, target: T) -> T:
         """ 
@@ -201,21 +200,21 @@ class Resolver:
 
             # - 2.1
             resolve_list, attribute_list = core.iter_over_object_resolvers_and_acceptable_fields(target, self.metadata)
-            for field, method in resolve_list:
-                tasks.append(self._resolve_obj_field(target, field, method))
+            for field, resolve_trim_field, method in resolve_list:
+                tasks.append(self._resolve_obj_field(target, field, resolve_trim_field, method))
             for field, attr_object in attribute_list:
                 tasks.append(self._resolve(attr_object))
             await asyncio.gather(*tasks)
 
             # - 2.2
             # execute post methods, if context declared, self.context will be injected into it.
-            for post_key in core.iter_over_object_post_methods(target, self.metadata):
+            for post_key, post_trim_field in core.iter_over_object_post_methods(target, self.metadata):
                 # TODO: pre calc
-                post_field_name = post_key.replace(const.POST_PREFIX, '')
+                post_trim_field = post_key.replace(const.POST_PREFIX, '')
                 post_method = getattr(target, post_key)
                 result = self._execute_post_method(post_method)
-                result = util.try_parse_data_to_target_field_type(target, post_field_name, result)
-                setattr(target, post_field_name, result)
+                result = util.try_parse_data_to_target_field_type(target, post_trim_field, result)
+                setattr(target, post_trim_field, result)
 
             # finally, if post_default_handler is declared, run it.
             default_post_method = getattr(target, const.POST_DEFAULT_HANDLER, None)

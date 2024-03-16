@@ -300,7 +300,8 @@ def iter_over_object_resolvers_and_acceptable_fields(target, metadata):
 
     for resolve_field in kls_meta['resolve']:  # eg: resolve_name
         attr = getattr(target, resolve_field)
-        resolve.append((resolve_field, attr))
+        trim_field = kls_meta['resolve_params'][resolve_field]['trim_field']
+        resolve.append((resolve_field, trim_field, attr))
 
     for attr_name in kls_meta['attribute']:
         attr = getattr(target, attr_name)
@@ -312,10 +313,11 @@ def iter_over_object_resolvers_and_acceptable_fields(target, metadata):
 def iter_over_object_post_methods(target, metadata):
     """get method starts with post_"""
     kls = get_class(target)
-    attr_info = metadata.get(util.get_kls_full_path(kls))
+    kls_meta = metadata.get(util.get_kls_full_path(kls))
 
-    for attr_name in attr_info['post']:
-        yield attr_name
+    for post_field in kls_meta['post']:
+        trim_field = kls_meta['post_params'][post_field]['trim_field']
+        yield post_field, trim_field
 
 
 def get_collectors(target, metadata):
