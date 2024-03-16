@@ -148,6 +148,7 @@ class Resolver:
     def _add_values_to_collectors(self, target):
         for field, alias in core.iter_over_collectable_fields(target, self.metadata):
             for _, instance_ctx in self.collector_vars[alias].items():
+                print(_)
                 collector = instance_ctx.get()
                 val = getattr(target, field)
                 collector.add(val)
@@ -155,16 +156,11 @@ class Resolver:
     async def _resolve_obj_field(self, target, target_field, attr):
         """
         resolve each single object field
-        0. set collector
         1. validate the target field of resolver method existed.
         2. exec methods
         3. parse to target type and then continue resolve it
         4. set back value to field
         """
-        # - 0
-        self._prepare_collectors(target)
-
-        # - 1
         # TODO: pre-calc
         target_attr_name = target_field.replace(const.PREFIX, '')
 
@@ -203,6 +199,7 @@ class Resolver:
 
         # - 2
         if core.is_acceptable_instance(target):
+            self._prepare_collectors(target)
             self._add_expose_fields(target)
 
             tasks = []
@@ -246,6 +243,6 @@ class Resolver:
             self.global_loader_param,
             self.loader_instances,
             self.metadata)
-
+            
         await self._resolve(target)
         return target

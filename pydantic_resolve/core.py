@@ -1,4 +1,5 @@
 import inspect
+import abc
 from inspect import isfunction, isclass
 from typing import Any, Callable, Optional
 from aiodataloader import DataLoader
@@ -20,7 +21,20 @@ class Depends:
     ):
         self.dependency = dependency
 
-class Collector:
+class ICollector(metaclass=abc.ABCMeta):
+    @abc.abstractmethod
+    def __init__(self, alias: str):
+        self.alias = alias  # required, must have
+
+    @abc.abstractmethod
+    def add(self, val):
+        """how to add new element(s)"""
+
+    @abc.abstractmethod
+    def values(self, val):
+        """get result"""
+
+class Collector(ICollector):
     def __init__(self, alias: str, flat: bool=False):
         self.alias = alias
         self.flat = flat
@@ -38,17 +52,20 @@ class Collector:
     def values(self):
         return self.val
 
+
 def _get_pydantic_attrs(kls):
     for k, v in kls.__fields__.items():
         shelled_type = util.shelling_type(v.type_)
         if is_acceptable_kls(shelled_type):
             yield (k, shelled_type)  # type_ is the most inner type
 
+
 def _get_dataclass_attrs(kls):
     for name, v in kls.__annotations__.items():
         shelled_type = util.shelling_type(v)
         if is_acceptable_kls(shelled_type):
             yield (name, shelled_type)
+
 
 def get_class(target):
     if isinstance(target, list):
@@ -96,7 +113,7 @@ def _scan_post_method(method, field):
         result['ancestor_context'] = True
     
     for name, param in signature.parameters.items():
-        if isinstance(param.default, Collector):
+        if isinstance(param.default, ICollector):
             info = {
                 'field': field,
                 'param': name,
@@ -111,7 +128,7 @@ def validate_and_create_loader_instance(
         loader_params,
         global_loader_param,
         loader_instances,
-        meta):
+        metadata):
     """
     return loader_instance_cache
 
@@ -123,8 +140,8 @@ def validate_and_create_loader_instance(
             - has param
     """
     # fetch all loaders
-    def _get_all_loaders_from_meta(meta):
-        for kls_name, kls_info in meta.items():
+    def _get_all_loaders_from_meta(metadata):
+        for kls_name, kls_info in metadata.items():
             for resolve_field, resolve_info in kls_info['resolve_params'].items():
                 for loader in resolve_info['dataloaders']:
                     # param, kls, path
@@ -155,19 +172,13 @@ def validate_and_create_loader_instance(
     
     cache = {}
     
-    for loader in _get_all_loaders_from_meta(meta):
-        # check
-        # - cache exists
-        # - from loader_instance
-        # - create_instance
+    for loader in _get_all_loaders_from_meta(metadata):
         loader_kls, path = loader['kls'], loader['path']
-        if path in cache:
-            continue
 
+        if path in cache: continue
         if loader_instances.get(loader_kls):
             cache[path] = loader_instances.get(loader_kls)
             continue
-            
         cache[path] = _create_instance(loader)    
 
     return cache
@@ -209,7 +220,6 @@ def scan_and_store_metadata(root_class):
     expose_set = set()
     collect_set = set()
     metadata = {}
-
 
     def walker(kls):
         """

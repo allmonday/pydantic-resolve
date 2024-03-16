@@ -4,14 +4,19 @@ from typing import List
 from pydantic_resolve import Resolver, Collector
 import pytest
 
+from pydantic_resolve.core import LoaderDepend
+
 class SubCollector(Collector):
     def add(self, val):  # replace with your implementation
         print('add')
         self.val.append(val)
 
+async def c_loader_fn(keys):
+    return [[C(detail=f'{k}-1'), C(detail=f'{k}-2')] for k in keys]
+
 class A(BaseModel):
     b_list: List[B] = []
-    def resolve_b_list(self):
+    async def resolve_b_list(self):
         return [dict(name='b1'), dict(name='b2')]
 
     names: List[str] = []
@@ -51,8 +56,8 @@ class B(BaseModel):
         return collector.values()
 
     c_list: List[C] = []
-    def resolve_c_list(self):
-        return [C(detail=f'{self.name}-1'), C(detail=f'{self.name}-2')]
+    async def resolve_c_list(self, loader=LoaderDepend(c_loader_fn)):
+        return loader.load(self.name)
 
 class C(BaseModel):
     __pydantic_resolve_collect__ = {
