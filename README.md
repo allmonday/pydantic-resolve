@@ -20,8 +20,6 @@ A hierarchical solution for data fetching and processing
 
 [Discord](https://discord.com/channels/1197929379951558797/1197929379951558800)
 
-[Change Logs](./changelog.md)
-
 ## Install
 
 ```shell

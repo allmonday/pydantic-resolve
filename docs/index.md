@@ -1,6 +1,6 @@
 # Welcome to Pydantic-resolve
 
-pydantic-resolve is a hierarchical solution focus on data fetching and processing.
+Pydantic-resolve is a hierarchical solution focus on data fetching and processing.
 
 For example, we want to build a view data named `MyBlogSite` which is required by a blog site page, it contains blogs, and it's comments, we also want to calculate **total comments count of both blog level and site level**.
 
@@ -43,7 +43,8 @@ First, we can easily transform that into pydantic, so that the output schema wil
 
 > use default value if this field is unknown on initialization.
 
-```python linenums="1" hl_lines="12 13 18 19"
+```python linenums="1" hl_lines="13 14 19 20"
+from __future__ import annotations 
 import asyncio
 from pydantic import BaseModel
 
@@ -70,10 +71,20 @@ And then add some `resolve` & `post` methods, for example `resolve_comments` wil
 - **resolve**: it will run your query function to fetch data of children
 - **post**: after descendant fields are all resolved, post will be called to calculate comment count.
 
-```python linenums="1" hl_lines="10-11 14-15 22-23 26-28"
-class Comment(BaseModel):
-    id: int
-    content: str
+```python linenums="1" hl_lines="7-8 11-13 20-21 24-25"
+from __future__ import annotations 
+
+class MyBlogSite(BaseModel):
+    name: str
+
+    blogs: list[Blog] = []
+    async def resolve_blogs(self):
+        return await get_blogs()
+
+    comment_count: int = 0
+    def post_comment_count(self):
+        # >> it will wait until all blogs are resolved
+        return sum([b.comment_count for b in self.blogs])
 
 class Blog(BaseModel):
     id: int
@@ -87,18 +98,11 @@ class Blog(BaseModel):
     def post_comment_count(self):
         return len(self.comments)
 
+class Comment(BaseModel):
+    id: int
+    content: str
 
-class MyBlogSite(BaseModel):
-    name: str
 
-    blogs: list[Blog] = []
-    async def resolve_blogs(self):
-        return await get_blogs()
-
-    comment_count: int = 0
-    def post_comment_count(self):
-        # >> it will wait until all blogs are resolved
-        return sum([b.comment_count for b in self.blogs])
 
 async def query_comments(blog_id: int):
     print(f'run query - {blog_id}')

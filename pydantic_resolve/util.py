@@ -63,9 +63,9 @@ def get_required_fields(kls: BaseModel):
 
     # 2. get resolve_ and post_ target fields
     for f in dir(kls):
-        if f.startswith(const.PREFIX):
+        if f.startswith(const.RESOLVE_PREFIX):
             if isfunction(getattr(kls, f)):
-                required_fields.append(f.replace(const.PREFIX, ''))
+                required_fields.append(f.replace(const.RESOLVE_PREFIX, ''))
 
         if f.startswith(const.POST_PREFIX):
             if isfunction(getattr(kls, f)):
