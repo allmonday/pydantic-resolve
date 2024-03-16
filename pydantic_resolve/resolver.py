@@ -75,8 +75,13 @@ class Resolver:
                 alias = collector['alias']
                 if not self.collector_vars.get(alias):
                     self.collector_vars[alias] = {}
-                self.collector_vars[alias][kls_path] = contextvars.ContextVar(f'{alias}-{kls_path}')
-                self.collector_vars[alias][kls_path].set(collector_instance)
+
+                sign = (kls_path, collector['field'], collector['param'])
+                sign_name = '-'.join(sign)
+
+                if sign not in self.collector_vars[alias]:
+                    self.collector_vars[alias][sign] = contextvars.ContextVar(sign_name)
+                self.collector_vars[alias][sign].set(collector_instance)
 
     def _add_expose_fields(self, target):
         """
@@ -234,13 +239,10 @@ class Resolver:
             kls_meta = self.metadata.get(kls_path, {})
             collect_dict = kls_meta['collect_dict']
             for field, alias in collect_dict.items():
-                # TODO: error
                 for kls, instance_ctx in self.collector_vars[alias].items():
                     collector = instance_ctx.get()
                     val = getattr(target, field)
-                    print(val)
                     collector.add(val)
-
 
         return target
 
