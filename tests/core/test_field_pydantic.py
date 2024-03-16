@@ -1,9 +1,8 @@
 from __future__ import annotations
 from typing import Optional, List
 from pydantic import BaseModel
-from aiodataloader import DataLoader
 from pydantic_resolve.core import scan_and_store_metadata
-from pydantic_resolve import LoaderDepend
+from pydantic_resolve import LoaderDepend, Collector
 
 async def loader_fn(keys):
     return keys
@@ -49,6 +48,7 @@ def test_get_all_fields():
             'attribute': ['zones', 'zones2', 'zone'],
             'expose_dict': {'name': 'student_name'},
             'collect_dict': {}
+            # ... others
         },
         'test_field_pydantic.Zone': {
             'resolve': [],
@@ -56,6 +56,7 @@ def test_get_all_fields():
             'attribute': ['qs'],
             'expose_dict': {},
             'collect_dict': {}
+            # ... others
         },
         'test_field_pydantic.Queue': {
             'resolve': [],
@@ -63,6 +64,7 @@ def test_get_all_fields():
             'attribute': [],
             'expose_dict': {},
             'collect_dict': {}
+            # ... others
         },
         'test_field_pydantic.Zeta': {
             'resolve': [],
@@ -70,6 +72,7 @@ def test_get_all_fields():
             'attribute': [],
             'expose_dict': {},
             'collect_dict': {}
+            # ... others
         }
     }
     for k, v in result.items():
@@ -80,8 +83,10 @@ def test_resolve_params():
     result = scan_and_store_metadata(Student)
     expect = {
         'test_field_pydantic.Student': {
+            # ... others
             'resolve_params': {
                 'resolve_name': {
+                    'trim_field': 'name',
                     'context': True,
                     'ancestor_context': True,
                     'dataloaders': [
@@ -93,6 +98,7 @@ def test_resolve_params():
                     ],
                 }, 
                 'resolve_zeta': {
+                    'trim_field': 'zeta',
                     'context': False,
                     'ancestor_context': False,
                     'dataloaders': [],

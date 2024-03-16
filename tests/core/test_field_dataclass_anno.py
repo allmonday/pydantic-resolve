@@ -80,6 +80,7 @@ def test_resolve_params():
         'test_field_dataclass_anno.Student': {
             'resolve_params': {
                 'resolve_name': {
+                    'trim_field': 'name',
                     'context': True,
                     'ancestor_context': True,
                     'dataloaders': [
@@ -91,6 +92,7 @@ def test_resolve_params():
                     ],
                 }, 
                 'resolve_zeta': {
+                    'trim_field': 'zeta',
                     'context': False,
                     'ancestor_context': False,
                     'dataloaders': [],

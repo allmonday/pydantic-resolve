@@ -11,6 +11,7 @@ def test_scan_post_method_1():
     result = _scan_post_method(A.post_a, 'post_a')
 
     assert result == {
+        'trim_field': 'a',
         'context': False,
         'ancestor_context': False,
         'collectors': []
@@ -26,6 +27,7 @@ def test_scan_post_method_2():
     result = _scan_post_method(A.post_a, 'post_a')
 
     assert result == {
+        'trim_field': 'a',
         'context': True,
         'ancestor_context': True,
         'collectors': []

@@ -162,25 +162,20 @@ class Resolver:
         4. set back value to field
         """
         # TODO: pre-calc
-        target_attr_name = target_field.replace(const.PREFIX, '')
+        target_attr_name = target_field.replace(const.RESOLVE_PREFIX, '')
 
         if self.ensure_type:
             if not attr.__annotations__:
                 raise MissingAnnotationError(f'{target_field}: return annotation is required')
 
-        # - 2
         val = self._execute_resolver_method(attr)
         while iscoroutine(val) or asyncio.isfuture(val):
             val = await val
 
-        # - 3
         if not getattr(attr, const.HAS_MAPPER_FUNCTION, False):  # defined in util.mapper
             val = util.try_parse_data_to_target_field_type(target, target_attr_name, val)
-            # else: it will be handled by mapper func
 
         val = await self._resolve(val)
-
-        # - 4
         setattr(target, target_attr_name, val)
 
     async def _resolve(self, target: T) -> T:

@@ -8,9 +8,10 @@ def test_scan_resolve_method_1():
         def resolve_a(self):
             return 2 * self.a
         
-    result = _scan_resolve_method(A.resolve_a)
+    result = _scan_resolve_method(A.resolve_a, 'resolve_a')
 
     assert result == {
+        'trim_field': 'a',
         'context': False,
         'ancestor_context': False,
         'dataloaders': []
@@ -23,9 +24,10 @@ def test_scan_resolve_method_2():
         def resolve_a(self, context, ancestor_context):
             return 2 * self.a
         
-    result = _scan_resolve_method(A.resolve_a)
+    result = _scan_resolve_method(A.resolve_a, 'resolve_a')
 
     assert result == {
+        'trim_field': 'a',
         'context': True,
         'ancestor_context': True,
         'dataloaders': []
@@ -42,15 +44,18 @@ def test_scan_resolve_method_3():
         def resolve_a(self, context, ancestor_context, loader=LoaderDepend(Loader)):
             return 2 * self.a
         
-    result = _scan_resolve_method(A.resolve_a)
+    result = _scan_resolve_method(A.resolve_a, 'resolve_a')
 
     assert result == {
+        'trim_field': 'a',
         'context': True,
         'ancestor_context': True,
         'dataloaders': [
             {
                 'param': 'loader',
                 'kls': Loader,
-                'path': 'test_scan_resolve_method.test_scan_resolve_method_3.<locals>.Loader' }]
+                'path': 'test_scan_resolve_method.test_scan_resolve_method_3.<locals>.Loader' 
+            }
+        ]
     }
 

@@ -74,8 +74,9 @@ def get_class(target):
         return target.__class__
 
 
-def _scan_resolve_method(method):
+def _scan_resolve_method(method, field: str):
     result = {
+        'trim_field': field.replace(const.RESOLVE_PREFIX, ''),
         'context': False,
         'ancestor_context': False,
         'dataloaders': []  # collect func or class, do not create instance
@@ -100,6 +101,7 @@ def _scan_resolve_method(method):
 
 def _scan_post_method(method, field):
     result = {
+        'trim_field': field.replace(const.POST_PREFIX, ''),
         'context': False,
         'ancestor_context': False,
         'collectors': []
@@ -185,61 +187,20 @@ def validate_and_create_loader_instance(
 
 
 def scan_and_store_metadata(root_class):
-    """
-    see:
+    """ see output data schema example in:
     - test_field_dataclass_anno.py
     - test_field_pydantic.py
-
-    metadata struct:
-    - resolve
-    - resolve_params
-        - [resolve_field]
-            - context
-            - ancestor_context
-            - dataloaders
-                - param
-                - kls
-                - path
-    - post
-    - post_params
-        - [post_field]
-            - context
-            - ancestor_context
-            - collector (TBD)
-    - attribute
-    - expose_dict
-    - collect_dict
 
     rules:
     - [x] dataloader and it's params
     - [ ] context & ancestor_context are provided
-    - [ ] collector should be defined in ancestor of collect schemas.
-    """
-
+    - [ ] collector should be defined in ancestor of collect schemas.  """
     util.update_forward_refs(root_class)
-    expose_set = set()
-    collect_set = set()
+    expose_set = set()  # for validation
+    collect_set = set()  # for validation
     metadata = {}
 
-    def walker(kls):
-        """
-        1. collect fields
-            1.1 validate context and 
-        2. collect expose and 'collect'
-        """
-        kls_name = util.get_kls_full_path(kls)
-        hit = metadata.get(kls_name)
-        if hit: return
-
-        fields = dir(kls)
-
-        resolve_fields = [f for f in fields if f.startswith(const.PREFIX) and isfunction(getattr(kls, f))]
-        post_fields = [f for f in fields if f.startswith(const.POST_PREFIX) 
-                                                and f != const.POST_DEFAULT_HANDLER
-                                                and isfunction(getattr(kls, f))]
-        fields_with_resolver = { field.replace(const.PREFIX, '') for field in resolve_fields }
-
-        # - get all fields and object fields
+    def _get_all_fields_and_object_fields(kls):
         if issubclass(kls, BaseModel):
             all_fields = set(kls.__fields__.keys())
             object_fields = list(_get_pydantic_attrs(kls))  # dive and recursively analysis
@@ -248,46 +209,62 @@ def scan_and_store_metadata(root_class):
             object_fields = list(_get_dataclass_attrs(kls))
         else:
             raise AttributeError('invalid type: should be pydantic object or dataclass object')  #noqa
+        return all_fields, object_fields
+    
+    def _get_resolve_and_post_fields(kls):
+        fields = dir(kls)
 
-        #  - validate resolve target field
+        resolve_fields = [f for f in fields if f.startswith(const.RESOLVE_PREFIX) and isfunction(getattr(kls, f))]
+        post_fields = [f for f in fields if f.startswith(const.POST_PREFIX) 
+                                                and f != const.POST_DEFAULT_HANDLER
+                                                and isfunction(getattr(kls, f))]
+        fields_with_resolver = { field.replace(const.RESOLVE_PREFIX, '') for field in resolve_fields }
+        return resolve_fields, post_fields, fields_with_resolver
+    
+    def _validate_resolve_and_post_fields(resolve_fields, post_fields, all_fields):
         for field in resolve_fields:
-            resolve_field = field.replace(const.PREFIX, '')
+            resolve_field = field.replace(const.RESOLVE_PREFIX, '')
             if resolve_field not in all_fields:
                 raise ResolverTargetAttrNotFound(f"attribute {resolve_field} not found")
 
-        # - validate post target field
         for field in post_fields:
             post_field = field.replace(const.POST_PREFIX, '')
             if post_field not in all_fields:
                 raise ResolverTargetAttrNotFound(f"attribute {post_field} not found")
 
-        object_fields_without_resolver = [a[0] for a in object_fields if a[0] not in fields_with_resolver] 
-
-        # - start of validate expose and collect
-        expose_dict = getattr(kls, const.EXPOSE_TO_DESCENDANT, {})
-        collect_dict = getattr(kls, const.COLLECT_FROM_ANCESTOR, {})
-
+    def _validate_expose_and_collect(expose_dict, collect_dict, kls_name):
         if type(expose_dict) is not dict:
             raise AttributeError(f'{const.EXPOSE_TO_DESCENDANT} is not dict')
         for _, v in expose_dict.items():
             if v in expose_set:
-                raise AttributeError(f'expose alias name conflicts, please check: {kls_name}')
+                raise AttributeError(f'Expose alias name conflicts, please check: {kls_name}')
             expose_set.add(v)
 
         if type(collect_dict) is not dict:
             raise AttributeError(f'{const.COLLECT_FROM_ANCESTOR} is not dict')
         for _, v in collect_dict.items():
             if v in collect_set:
-                raise AttributeError(f'collect alias name conflicts, please check: {kls_name}')
+                raise AttributeError(f'Collect alias name conflicts, please check: {kls_name}')
             collect_set.add(v)
-        # - end of validate expose and collect
 
-        resolve_params = {
-            field: _scan_resolve_method(getattr(kls, field)) for field in resolve_fields
-        }
-        post_params = {
-            field: _scan_post_method(getattr(kls, field), field) for field in post_fields
-        }
+    def walker(kls):
+        kls_name = util.get_kls_full_path(kls)
+        hit = metadata.get(kls_name)
+        if hit: return
+
+        # - prepare fields, with resolve_, post_ reserved
+        all_fields, object_fields = _get_all_fields_and_object_fields(kls)
+        resolve_fields, post_fields, fields_with_resolver = _get_resolve_and_post_fields(kls)
+        _validate_resolve_and_post_fields(resolve_fields, post_fields, all_fields)
+        object_fields_without_resolver = [a[0] for a in object_fields if a[0] not in fields_with_resolver] 
+
+        # - scan expose and collect (__pydantic_resolve_xxx__)
+        expose_dict = getattr(kls, const.EXPOSE_TO_DESCENDANT, {})
+        collect_dict = getattr(kls, const.COLLECT_FROM_ANCESTOR, {})
+        _validate_expose_and_collect(expose_dict, collect_dict, kls_name)
+
+        resolve_params = {field: _scan_resolve_method(getattr(kls, field), field) for field in resolve_fields}
+        post_params = {field: _scan_post_method(getattr(kls, field), field) for field in post_fields}
 
         metadata[kls_name] = {
             'resolve': resolve_fields,
@@ -305,12 +282,15 @@ def scan_and_store_metadata(root_class):
     walker(root_class)
     return metadata
 
+
 def is_acceptable_kls(kls):
     return issubclass(kls, BaseModel) or is_dataclass(kls)
+
 
 def is_acceptable_instance(target):
     """ check whether target is Pydantic object or Dataclass object """
     return isinstance(target, BaseModel) or is_dataclass(target)
+
 
 def iter_over_object_resolvers_and_acceptable_fields(target, metadata):
     kls = get_class(target)
@@ -328,6 +308,7 @@ def iter_over_object_resolvers_and_acceptable_fields(target, metadata):
 
     return resolve, attribute
 
+
 def iter_over_object_post_methods(target, metadata):
     """get method starts with post_"""
     kls = get_class(target)
@@ -336,12 +317,8 @@ def iter_over_object_post_methods(target, metadata):
     for attr_name in attr_info['post']:
         yield attr_name
 
+
 def get_collectors(target, metadata):
-    """
-    1. get kls from metadata, read post/collector
-    2. use alias + kls name as key pairs
-        - specific by kls, post_method name, params
-    """
     kls = get_class(target)
     kls_path = util.get_kls_full_path(kls)
     kls_meta = metadata.get(kls_path, {})
@@ -351,6 +328,7 @@ def get_collectors(target, metadata):
         for collector in param['collectors']:
             sign = (kls_path, collector['field'], collector['param'])
             yield collector['alias'], collector['instance'], sign
+
     
 def iter_over_collectable_fields(target, metadata):
     kls = get_class(target)
