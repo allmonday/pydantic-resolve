@@ -105,6 +105,7 @@ def _scan_resolve_method(method, field: str):
 
     return result
 
+
 def _scan_post_method(method, field):
     result = {
         'trim_field': field.replace(const.POST_PREFIX, ''),
@@ -149,7 +150,7 @@ def validate_and_create_loader_instance(
     """
     # fetch all loaders
     def _get_all_loaders_from_meta(metadata):
-        for kls_name, kls_info in metadata.items():
+        for kls, kls_info in metadata.items():
             for resolve_field, resolve_info in kls_info['resolve_params'].items():
                 for loader in resolve_info['dataloaders']:
                     # param, kls, path
@@ -197,7 +198,7 @@ def scan_and_store_metadata(root_class):
     - test_field_dataclass_anno.py
     - test_field_pydantic.py
 
-    rules:
+    rules: TODO:
     - [x] dataloader and it's params
     - [ ] context & ancestor_context are provided
     - [ ] collector should be defined in ancestor of collect schemas.  """
@@ -279,7 +280,8 @@ def scan_and_store_metadata(root_class):
             'post_params': post_params,
             'attribute': object_fields_without_resolver,
             'expose_dict': expose_dict,
-            'collect_dict': collect_dict
+            'collect_dict': collect_dict,
+            'kls': kls,
         }
 
         for _, shelled_type in object_fields:
@@ -287,6 +289,16 @@ def scan_and_store_metadata(root_class):
 
     walker(root_class)
     return metadata
+
+
+def convert_metadata_key_as_kls(metadata):
+    """ use kls as map key for performance """
+    kls_metadata = {}
+    for k, v in metadata.items():
+        v['kls_path'] = k
+        kls_metadata[v['kls']] = v
+    
+    return kls_metadata
 
 
 def is_acceptable_kls(kls):
@@ -298,9 +310,9 @@ def is_acceptable_instance(target):
     return isinstance(target, BaseModel) or is_dataclass(target)
 
 
-def iter_over_object_resolvers_and_acceptable_fields(target, metadata):
-    kls = get_class(target)
-    kls_meta = metadata.get(util.get_kls_full_path(kls))
+def iter_over_object_resolvers_and_acceptable_fields(target, kls, metadata):
+    """metadata key is kls"""
+    kls_meta = metadata.get(kls)
 
     resolve, attribute = [], []
 
@@ -316,35 +328,31 @@ def iter_over_object_resolvers_and_acceptable_fields(target, metadata):
     return resolve, attribute
 
 
-def iter_over_object_post_methods(target, metadata):
-    """get method starts with post_"""
-    kls = get_class(target)
-    kls_meta = metadata.get(util.get_kls_full_path(kls))
+def iter_over_object_post_methods(kls, metadata):
+    """metadata key is kls"""
+    kls_meta = metadata.get(kls)
 
     for post_field in kls_meta['post']:
         trim_field = kls_meta['post_params'][post_field]['trim_field']
         yield post_field, trim_field
 
 
-def get_collectors(target, metadata):
-    kls = get_class(target)
-    kls_path = util.get_kls_full_path(kls)
-    kls_meta = metadata.get(kls_path, {})
+def get_collectors(kls, metadata):
+    kls_meta = metadata.get(kls, {})
     post_params = kls_meta['post_params']
+    kls_path = kls_meta['kls_path']
 
     alias_map = defaultdict(dict)
     for _, param in post_params.items():
         for collector in param['collectors']:
             sign = (kls_path, collector['field'], collector['param'])
-            # copied instance will be stored in resolver's
-            # self.object_collect_alias_map_store
+            # copied instance will be stored in resolver's self.object_collect_alias_map_store
             alias_map[collector['alias']][sign] = copy.deepcopy(collector['instance'])
     return alias_map
+
     
-def iter_over_collectable_fields(target, metadata):
-    kls = get_class(target)
-    kls_path = util.get_kls_full_path(kls)
-    kls_meta = metadata.get(kls_path, {})
+def iter_over_collectable_fields(kls, metadata):
+    kls_meta = metadata.get(kls, {})
     collect_dict = kls_meta['collect_dict']
 
     for field, alias in collect_dict.items():

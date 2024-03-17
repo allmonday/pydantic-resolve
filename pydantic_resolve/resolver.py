@@ -64,20 +64,21 @@ class Resolver:
                 raise AttributeError(f'{loader.__name__} is not instance of {cls.__name__}')
         return True
     
-    def _prepare_collectors(self, target):
-        alias_map = core.get_collectors(target, self.metadata)
-        self.object_collect_alias_map_store[id(target)] = alias_map
+    def _prepare_collectors(self, target, kls):
+        alias_map = core.get_collectors(kls, self.metadata)
+        if alias_map:
+            self.object_collect_alias_map_store[id(target)] = alias_map
 
-        for alias, sign_collector_pair in alias_map.items():
-            if not self.collector_contextvars.get(alias):
-                self.collector_contextvars[alias] = contextvars.ContextVar(alias, default={})
-            
-            current_pair = self.collector_contextvars[alias].get()
-            updated_pair = {**current_pair, **sign_collector_pair}
-            self.collector_contextvars[alias].set(updated_pair)
+            for alias, sign_collector_pair in alias_map.items():
+                if not self.collector_contextvars.get(alias):
+                    self.collector_contextvars[alias] = contextvars.ContextVar(alias, default={})
+                
+                current_pair = self.collector_contextvars[alias].get()
+                updated_pair = {**current_pair, **sign_collector_pair}
+                self.collector_contextvars[alias].set(updated_pair)
 
-    def _add_values_into_collectors(self, target):
-        for field, alias in core.iter_over_collectable_fields(target, self.metadata):
+    def _add_values_into_collectors(self, target, kls):
+        for field, alias in core.iter_over_collectable_fields(kls, self.metadata):
             for _, instance in self.collector_contextvars[alias].get().items():
                 collector = instance
                 val = getattr(target, field)
@@ -101,6 +102,7 @@ class Resolver:
         return {k: v.get() for k, v in self.ancestor_vars.items()}
 
     def _execute_resolver_method(self, method):
+        # TODO: optimize with metadata
         signature = inspect.signature(method)
         params = {}
 
@@ -123,6 +125,7 @@ class Resolver:
         return method(**params)
     
     def _load_post_contexts(self, method):
+        # TODO: optimize with metadata
         signature = inspect.signature(method)
         params = {}
 
@@ -142,15 +145,15 @@ class Resolver:
         ret_val = method(**params)
         return ret_val
 
-    def _execute_post_method(self, target, post_field, method):
+    def _execute_post_method(self, target, kls_path, post_field, method):
         params, signature = self._load_post_contexts(method)
 
-        kls = core.get_class(target)
-        kls_path = util.get_kls_full_path(kls)
         alias_map = self.object_collect_alias_map_store.get(id(target), {})
-        for k, v in signature.parameters.items():
-            if isinstance(v.default, core.ICollector):
-                params[k] = alias_map[v.default.alias][(kls_path, post_field, k)]
+        if alias_map:
+            for k, v in signature.parameters.items():
+                if isinstance(v.default, core.ICollector):
+                    signature = (kls_path, post_field, k)
+                    params[k] = alias_map[v.default.alias][signature]
 
         ret_val = method(**params)
         return ret_val
@@ -177,13 +180,16 @@ class Resolver:
             await asyncio.gather(*[self._resolve(t) for t in target])
 
         if core.is_acceptable_instance(target):
-            self._prepare_collectors(target)
+            kls = target.__class__
+            kls_path = util.get_kls_full_path(kls)
+
+            self._prepare_collectors(target, kls)
             self._add_expose_fields(target)
 
             tasks = []
 
             # traversal and fetching data by resolve methods
-            resolve_list, attribute_list = core.iter_over_object_resolvers_and_acceptable_fields(target, self.metadata)
+            resolve_list, attribute_list = core.iter_over_object_resolvers_and_acceptable_fields(target, kls, self.metadata)
             for field, resolve_trim_field, method in resolve_list:
                 tasks.append(self._resolve_obj_field(target, field, resolve_trim_field, method))
             for field, attr_object in attribute_list:
@@ -191,9 +197,9 @@ class Resolver:
             await asyncio.gather(*tasks)
 
             # reverse traversal and run post methods
-            for post_field, post_trim_field in core.iter_over_object_post_methods(target, self.metadata):
+            for post_field, post_trim_field in core.iter_over_object_post_methods(kls, self.metadata):
                 post_method = getattr(target, post_field)
-                result = self._execute_post_method(target, post_field, post_method)
+                result = self._execute_post_method(target, kls_path, post_field, post_method)
                 result = util.try_parse_data_to_target_field_type(target, post_trim_field, result)
                 setattr(target, post_trim_field, result)
 
@@ -202,7 +208,7 @@ class Resolver:
                 self._execute_post_default_handler(default_post_method)
 
             # collect after all done
-            self._add_values_into_collectors(target)
+            self._add_values_into_collectors(target, kls)
 
         return target
 
@@ -210,7 +216,9 @@ class Resolver:
         if isinstance(target, list) and target == []: return target
 
         root_class = core.get_class(target)
-        self.metadata = core.scan_and_store_metadata(root_class)
+        metadata = core.scan_and_store_metadata(root_class)
+        self.metadata = core.convert_metadata_key_as_kls(metadata)
+
         self.loader_instance_cache = core.validate_and_create_loader_instance(
             self.loader_params,
             self.global_loader_param,

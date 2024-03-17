@@ -41,7 +41,9 @@ data = [
 @pytest.mark.asyncio
 async def test_level():
     r = Root()
-    r = await Resolver().resolve(r)
+    resolver = Resolver()
+    r = await resolver.resolve(r)
+    # print(resolver.object_collect_alias_map_store)
     assert r.dict() == {
         "list_a": [
             {

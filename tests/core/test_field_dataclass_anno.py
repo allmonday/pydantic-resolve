@@ -47,28 +47,32 @@ def test_get_all_fields():
             'post': ['post_name'],
             'attribute': ['zone'],
             'expose_dict': {'name': 'student_name'},
-            'collect_dict': {}
+            'collect_dict': {},
+            'kls': Student
         },
         'test_field_dataclass_anno.Zone': {
             'resolve': [],
             'post': [],
             'attribute': ['qs'],
             'expose_dict': {},
-            'collect_dict': {}
+            'collect_dict': {},
+            'kls': Zone
         },
         'test_field_dataclass_anno.Queue': {
             'resolve': [],
             'post': [],
             'attribute': [],
             'expose_dict': {},
-            'collect_dict': {'name': 'queue_name'}
+            'collect_dict': {'name': 'queue_name'},
+            'kls': Queue
         },
         'test_field_dataclass_anno.Zeta': {
             'resolve': [],
             'post': [],
             'attribute': [],
             'expose_dict': {},
-            'collect_dict': {}
+            'collect_dict': {},
+            'kls': Zeta
         }
     }
     for k, v in result.items():

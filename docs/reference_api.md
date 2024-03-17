@@ -157,7 +157,7 @@ class Comment(BaseModel):
 
 ### Collector
 
-![](./images/collect.jpeg)
+![](./images/collect2.jpeg)
 
 Another scenario, ancestor nodes may want to collect some specific fields from it's descendants, where you can use `Collector` and `__pydantic_resolve_collect__`.
 
