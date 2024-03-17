@@ -3,7 +3,6 @@ import contextvars
 import inspect
 import warnings
 from inspect import iscoroutine
-from collections import defaultdict
 from typing import TypeVar, Dict
 from .exceptions import MissingAnnotationError
 from typing import Any, Optional
@@ -55,6 +54,7 @@ class Resolver:
         self.ensure_type = ensure_type
         self.context = MappingProxyType(context) if context else None
         self.metadata = {}
+        self.object_collect_alias_map_store = {}
 
     def _validate_loader_instance(self, loader_instances: Dict[Any, Any]):
         for cls, loader in loader_instances.items():
@@ -65,19 +65,21 @@ class Resolver:
         return True
     
     def _prepare_collectors(self, target):
-        for alias, collector_instance, sign in core.get_collectors(target, self.metadata):
+        alias_map = core.get_collectors(target, self.metadata)
+        self.object_collect_alias_map_store[id(target)] = alias_map
+
+        for alias, sign_collector_pair in alias_map.items():
             if not self.collector_contextvars.get(alias):
-                self.collector_contextvars[alias] = {}
-
-            if sign not in self.collector_contextvars[alias]:
-                self.collector_contextvars[alias][sign] = contextvars.ContextVar('-'.join(sign))
-
-            self.collector_contextvars[alias][sign].set(collector_instance)
+                self.collector_contextvars[alias] = contextvars.ContextVar(alias, default={})
+            
+            current_pair = self.collector_contextvars[alias].get()
+            updated_pair = {**current_pair, **sign_collector_pair}
+            self.collector_contextvars[alias].set(updated_pair)
 
     def _add_values_into_collectors(self, target):
         for field, alias in core.iter_over_collectable_fields(target, self.metadata):
-            for _, instance_ctx in self.collector_contextvars[alias].items():
-                collector = instance_ctx.get()
+            for _, instance in self.collector_contextvars[alias].get().items():
+                collector = instance
                 val = getattr(target, field)
                 collector.add(val)
 
@@ -119,8 +121,8 @@ class Resolver:
                 params[k] = loader
 
         return method(**params)
-
-    def _execute_post_method(self, method):
+    
+    def _load_post_contexts(self, method):
         signature = inspect.signature(method)
         params = {}
 
@@ -133,6 +135,22 @@ class Resolver:
             if self.ancestor_vars is None:
                 raise AttributeError(f'there is not class has {const.EXPOSE_TO_DESCENDANT} configed')
             params['ancestor_context'] = self._prepare_ancestor_context()
+        return params, signature
+
+    def _execute_post_default_handler(self, method):
+        params, _ = self._load_post_contexts(method)
+        ret_val = method(**params)
+        return ret_val
+
+    def _execute_post_method(self, target, post_field, method):
+        params, signature = self._load_post_contexts(method)
+
+        kls = core.get_class(target)
+        kls_path = util.get_kls_full_path(kls)
+        alias_map = self.object_collect_alias_map_store.get(id(target), {})
+        for k, v in signature.parameters.items():
+            if isinstance(v.default, core.ICollector):
+                params[k] = alias_map[v.default.alias][(kls_path, post_field, k)]
 
         ret_val = method(**params)
         return ret_val
@@ -173,15 +191,15 @@ class Resolver:
             await asyncio.gather(*tasks)
 
             # reverse traversal and run post methods
-            for post_key, post_trim_field in core.iter_over_object_post_methods(target, self.metadata):
-                post_method = getattr(target, post_key)
-                result = self._execute_post_method(post_method)
+            for post_field, post_trim_field in core.iter_over_object_post_methods(target, self.metadata):
+                post_method = getattr(target, post_field)
+                result = self._execute_post_method(target, post_field, post_method)
                 result = util.try_parse_data_to_target_field_type(target, post_trim_field, result)
                 setattr(target, post_trim_field, result)
 
             default_post_method = getattr(target, const.POST_DEFAULT_HANDLER, None)
             if default_post_method:
-                self._execute_post_method(default_post_method)
+                self._execute_post_default_handler(default_post_method)
 
             # collect after all done
             self._add_values_into_collectors(target)

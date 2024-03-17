@@ -33,9 +33,6 @@ class Result(BaseModel):
     # def post_total(self, collector=Collector('team_members', flat=True)):
     #     result = collector.values()
     #     return result
-    total: int = 0 
-    def post_total(self, collector=CounterCollector('team_members')):
-        return collector.values()
 
 class Department(DepartmentBase):
     teams: List[Team] = []
@@ -45,6 +42,14 @@ class Department(DepartmentBase):
     member_count: int = 0
     def post_member_count(self):
         return sum([t.member_count for t in self.teams])
+
+    total: int = 0 
+    def post_total(self, collector=CounterCollector('team_members')):
+        return collector.values()
+
+    members: List[Member] = []
+    def post_members(self, collector=Collector('team_members', flat=True)):
+        return collector.values()
 
 class Team(TeamBase):
     __pydantic_resolve_collect__ = {

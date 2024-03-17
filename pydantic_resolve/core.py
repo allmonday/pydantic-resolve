@@ -1,6 +1,8 @@
 import abc
+import copy
 import inspect
 from inspect import isfunction, isclass
+from collections import defaultdict
 from typing import Any, Callable, Optional
 from aiodataloader import DataLoader
 from pydantic import BaseModel
@@ -330,11 +332,14 @@ def get_collectors(target, metadata):
     kls_meta = metadata.get(kls_path, {})
     post_params = kls_meta['post_params']
 
+    alias_map = defaultdict(dict)
     for _, param in post_params.items():
         for collector in param['collectors']:
             sign = (kls_path, collector['field'], collector['param'])
-            yield collector['alias'], collector['instance'], sign
-
+            # copied instance will be stored in resolver's
+            # self.object_collect_alias_map_store
+            alias_map[collector['alias']][sign] = copy.deepcopy(collector['instance'])
+    return alias_map
     
 def iter_over_collectable_fields(target, metadata):
     kls = get_class(target)
