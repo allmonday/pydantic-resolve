@@ -1,8 +1,8 @@
 from __future__ import annotations
 from typing import Optional, List
 from pydantic import BaseModel
-from pydantic_resolve.core import scan_and_store_metadata
-from pydantic_resolve import LoaderDepend, Collector
+from pydantic_resolve.core import scan_and_store_metadata, convert_metadata_key_as_kls
+from pydantic_resolve import LoaderDepend
 
 async def loader_fn(keys):
     return keys
@@ -72,6 +72,55 @@ def test_get_all_fields():
             'attribute': [],
             'expose_dict': {},
             'collect_dict': {}
+            # ... others
+        }
+    }
+    for k, v in result.items():
+        assert expect[k].items() <= v.items()
+
+
+def test_convert_metadata():
+    result = scan_and_store_metadata(Student)
+    result = convert_metadata_key_as_kls(result)
+    expect = {
+        Student: {
+            'resolve': ['resolve_name', 'resolve_zeta'],
+            'post': ['post_name'],
+            'attribute': ['zones', 'zones2', 'zone'],
+            'expose_dict': {'name': 'student_name'},
+            'collect_dict': {},
+            'kls': Student,
+            'kls_path': 'test_field_pydantic.Student',
+            # ... others
+        },
+        Zone: {
+            'resolve': [],
+            'post': [],
+            'attribute': ['qs'],
+            'expose_dict': {},
+            'collect_dict': {},
+            'kls': Zone,
+            'kls_path': 'test_field_pydantic.Zone',
+            # ... others
+        },
+        Queue: {
+            'resolve': [],
+            'post': [],
+            'attribute': [],
+            'expose_dict': {},
+            'collect_dict': {},
+            'kls': Queue,
+            'kls_path': 'test_field_pydantic.Queue',
+            # ... others
+        },
+        Zeta: {
+            'resolve': [],
+            'post': [],
+            'attribute': [],
+            'expose_dict': {},
+            'collect_dict': {},
+            'kls': Zeta,
+            'kls_path': 'test_field_pydantic.Zeta',
             # ... others
         }
     }

@@ -1,6 +1,11 @@
 # Changelog
 
-## v.1.10 (2024.3.16)
+## v.1.10.1 (2024.3.17)
+- fix collect intermediate level error
+- internal refactor
+    - better metadata lookup
+
+## v.1.10.0 (2024.3.16) yanked
 
 - add new feature: `collector`
 - internal refactor
