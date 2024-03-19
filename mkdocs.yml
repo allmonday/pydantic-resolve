@@ -13,12 +13,15 @@ edit_uri: ""
 
 nav:
   - Quick Start:
-      - Let's go: index.md
+      - Install: install.md
+      - Let's start: index.md
       - Dataloader: dataloader.md
+      - Inheritance: inherit.md
   - Reference:
       - API: reference_api.md
   - Change log:
       - pydantic-resolve: changelog.md
+      - pydantic2-resolve: changelog-v2.md
 
 markdown_extensions:
   - pymdownx.highlight:
