@@ -54,7 +54,7 @@ class Blog(BaseModel):
 
 ## Contexts
 
-pydantic-resolve provides 2 kinds of contexts for different scenarios
+pydantic-resolve provides 3 kinds of contexts for different scenarios
 
 ### Context
 
@@ -282,6 +282,15 @@ class Blog(BaseModel):
 
 You are free to define Dataloader with some fields and set these fields with `loader_params` in Resolver
 
+You can treat dataloader like `JOIN` condition, and params like `Where` conditions
+```sql
+select children from parent 
+    # loader keys
+    join children on parent.id = children.pid  
+    # loader params
+    where children.age < 20  
+```
+
 ```python hl_lines="2 7"
 class LoaderA(DataLoader):
     power: int
@@ -356,7 +365,7 @@ data = await Resolver(loader_instances={SomeLoader: loader}).resolve(data)
 references: [loader methods](https://github.com/syrusakbary/aiodataloader#primekey-value)
 
 
-### build_list, build_object
+### build_list and build_object
 
 helper function, use `build_list` for O2M, use `build_object` for O2O
 
