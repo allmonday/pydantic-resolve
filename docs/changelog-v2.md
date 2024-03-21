@@ -1,6 +1,5 @@
 # Changelog
 
-# pydantic2-resolve
 
 ## v.2.0.0 (2024.02.29)
 - rename pydantic2_resolve -> pydantic_resolve to align with pydantic-resolve (v1)
@@ -306,6 +305,7 @@ def resolve_comments(self, loader=LoaderDepend(CommentLoader)):
 - support `batch_load_fn` as params for `LoaderDepend`
 - add test `tests/resolver/test_15_support_batch_load_fn.py`
 - `build_object`, `build_list` can be imported from `pydantic_resolve`
+
 
 ## v0.5.1 (2023.6.11)
 

@@ -410,7 +410,7 @@ def build_object(items: Sequence[T], keys: List[V], get_pk: Callable[[T], V]) ->
 ### model_config
 fields with default value will be converted to optional in typescript definition. add model_config decorator to avoid it.
 
-```python
+```python hl_lines="4"
 class Y(BaseModel):
     id: int = 0
 
@@ -433,7 +433,7 @@ interface Z {
 
 setting exclude=True will hide these fields, both in serilization and exporting json schema (openapi).
 
-```python hl_lines="9"
+```python hl_lines="1 9"
 @model_config()
 class Y(BaseModel):
     id: int = 0

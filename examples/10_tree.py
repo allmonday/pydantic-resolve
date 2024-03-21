@@ -7,10 +7,10 @@ from pydantic_resolve import Resolver
 class Tree(BaseModel):
     count: int
     children: List[Tree] = []
-
-    is_over_10: bool = False
-    def resolve_is_over_10(self):
-        return self.count > 10
+    
+    total: int = 0
+    def post_total(self):
+        return self.count + sum([c.total for c in self.children])
 
 
 tree = dict(count=10, children=[
@@ -21,9 +21,8 @@ tree = dict(count=10, children=[
 ])
 
 async def main():
-    print('go')
     t = await Resolver().resolve(Tree(**tree))
-    print(t)
+    print(t.json(indent=2))
 
 
 asyncio.run(main())

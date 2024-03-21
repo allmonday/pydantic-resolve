@@ -296,7 +296,7 @@ def scan_and_store_metadata(root_class):
         post_params = {field: _scan_post_method(getattr(kls, field), field) for field in post_fields}
         post_default_handler_params = _scan_post_default_handler(getattr(kls, const.POST_DEFAULT_HANDLER)) if _has_post_default_handler(kls) else None
 
-        # TODO: func
+        # check context
         resolve_context = any([p['context'] for p in resolve_params.values()])
         post_context = any([p['context'] for p in post_params.values()])
         post_default_context = post_default_handler_params['context'] if post_default_handler_params else False
