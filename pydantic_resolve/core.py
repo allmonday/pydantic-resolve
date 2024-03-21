@@ -133,6 +133,22 @@ def _scan_post_method(method, field):
     return result
 
 
+def _scan_post_default_handler(method):
+    result = {
+        'context': False,
+        'ancestor_context': False,
+    }
+    signature = inspect.signature(method)
+
+    if signature.parameters.get('context'):
+        result['context'] = True
+
+    if signature.parameters.get('ancestor_context'):
+        result['ancestor_context'] = True
+
+    return result
+
+
 def validate_and_create_loader_instance(
         loader_params,
         global_loader_param,
@@ -218,6 +234,12 @@ def scan_and_store_metadata(root_class):
             raise AttributeError('invalid type: should be pydantic object or dataclass object')  #noqa
         return all_fields, object_fields
     
+    def _has_post_default_handler(kls):
+        fields = dir(kls)
+        fields = [f for f in fields if f == const.POST_DEFAULT_HANDLER and isfunction(getattr(kls, f))]
+        return len(fields) > 0
+
+    
     def _get_resolve_and_post_fields(kls):
         fields = dir(kls)
 
@@ -272,16 +294,25 @@ def scan_and_store_metadata(root_class):
 
         resolve_params = {field: _scan_resolve_method(getattr(kls, field), field) for field in resolve_fields}
         post_params = {field: _scan_post_method(getattr(kls, field), field) for field in post_fields}
+        post_default_handler_params = _scan_post_default_handler(getattr(kls, const.POST_DEFAULT_HANDLER)) if _has_post_default_handler(kls) else None
+
+        # check context
+        resolve_context = any([p['context'] for p in resolve_params.values()])
+        post_context = any([p['context'] for p in post_params.values()])
+        post_default_context = post_default_handler_params['context'] if post_default_handler_params else False
+        has_context = resolve_context or post_context or post_default_context
 
         metadata[kls_name] = {
             'resolve': resolve_fields,
             'resolve_params': resolve_params,
             'post': post_fields,
             'post_params': post_params,
+            'post_default_handler_params': post_default_handler_params,
             'attribute': object_fields_without_resolver,
             'expose_dict': expose_dict,
             'collect_dict': collect_dict,
             'kls': kls,
+            'has_context': has_context,
         }
 
         for _, shelled_type in object_fields:
@@ -337,6 +368,21 @@ def iter_over_object_post_methods(kls, metadata):
         yield post_field, trim_field
 
 
+def get_resolve_param(kls, resolve_field, metadata):
+    kls_meta = metadata.get(kls, {})
+    return kls_meta['resolve_params'][resolve_field]
+
+
+def get_post_params(kls, post_field, metadata):
+    kls_meta = metadata.get(kls, {})
+    return kls_meta['post_params'][post_field]
+
+
+def get_post_default_handler_params(kls, metadata):
+    kls_meta = metadata.get(kls, {})
+    return kls_meta['post_default_handler_params']
+
+
 def get_collectors(kls, metadata):
     kls_meta = metadata.get(kls, {})
     post_params = kls_meta['post_params']
@@ -350,10 +396,14 @@ def get_collectors(kls, metadata):
             alias_map[collector['alias']][sign] = copy.deepcopy(collector['instance'])
     return alias_map
 
-    
+
 def iter_over_collectable_fields(kls, metadata):
     kls_meta = metadata.get(kls, {})
     collect_dict = kls_meta['collect_dict']
 
     for field, alias in collect_dict.items():
         yield field, alias
+
+
+def has_context(metadata):
+    return any([ m['has_context'] for m in metadata.values()])

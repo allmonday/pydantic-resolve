@@ -133,6 +133,7 @@ def test_resolve_params():
     expect = {
         'test_field_pydantic.Student': {
             # ... others
+            'has_context': True,
             'resolve_params': {
                 'resolve_name': {
                     'trim_field': 'name',

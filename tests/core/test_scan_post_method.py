@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from pydantic_resolve.core import _scan_post_method
+from pydantic_resolve.core import _scan_post_method, _scan_post_default_handler
 from pydantic_resolve import Collector
 
 def test_scan_post_method_1():
@@ -47,4 +47,19 @@ def test_scan_post_method_3():
     assert result['collectors'][0]['param'] == 'collector' 
     assert result['collectors'][0]['alias'] == 'c_name'
     assert isinstance(result['collectors'][0]['instance'], Collector)
+
+
+def test_scan_post_method_4():
+    class A(BaseModel):
+        a: str
+        def post_a(self, context, ancestor_context, collector=Collector(alias='c_name')):
+            return 2 * self.a
+        
+        def post_default_handler(self, context, ancestor_context):
+            return 1
+        
+    result = _scan_post_default_handler(A.post_default_handler)
+
+    assert result['context'] == True
+    assert result['ancestor_context'] == True
 

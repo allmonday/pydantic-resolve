@@ -101,73 +101,62 @@ class Resolver:
     def _prepare_ancestor_context(self):
         return {k: v.get() for k, v in self.ancestor_vars.items()}
 
-    def _execute_resolver_method(self, method):
-        # TODO: optimize with metadata
-        signature = inspect.signature(method)
+    def _execute_resolver_method(self, kls, field, method):
         params = {}
-
-        if signature.parameters.get('context'):
-            if self.context is None:
-                raise AttributeError('Resolver.context is missing')
+        resolve_param = core.get_resolve_param(kls, field, self.metadata)
+        if resolve_param['context']:
             params['context'] = self.context
-
-        if signature.parameters.get('ancestor_context'):
-            if self.ancestor_vars is None:
-                raise AttributeError(f'there is not class has {const.EXPOSE_TO_DESCENDANT} configed')
+        if resolve_param['ancestor_context']:
             params['ancestor_context'] = self._prepare_ancestor_context()
-
-        for k, v in signature.parameters.items():
-            if isinstance(v.default, core.Depends):
-                cache_key = util.get_kls_full_path(v.default.dependency)
-                loader = self.loader_instance_cache[cache_key]
-                params[k] = loader
+        
+        for loader in resolve_param['dataloaders']:
+            cache_key = loader['path']
+            loader_instance = self.loader_instance_cache[cache_key]
+            params[loader['param']] = loader_instance
 
         return method(**params)
     
-    def _load_post_contexts(self, method):
-        # TODO: optimize with metadata
-        signature = inspect.signature(method)
+    def _execute_post_method(self, target, kls, kls_path, post_field, method):
         params = {}
-
-        if signature.parameters.get('context'):
-            if self.context is None:
-                raise AttributeError('Post.context is missing')
+        post_param = core.get_post_params(kls, post_field , self.metadata)
+        if post_param['context']:
             params['context'] = self.context
 
-        if signature.parameters.get('ancestor_context'):
-            if self.ancestor_vars is None:
-                raise AttributeError(f'there is not class has {const.EXPOSE_TO_DESCENDANT} configed')
+        if post_param['ancestor_context']:
             params['ancestor_context'] = self._prepare_ancestor_context()
-        return params, signature
-
-    def _execute_post_default_handler(self, method):
-        params, _ = self._load_post_contexts(method)
-        ret_val = method(**params)
-        return ret_val
-
-    def _execute_post_method(self, target, kls_path, post_field, method):
-        params, signature = self._load_post_contexts(method)
 
         alias_map = self.object_collect_alias_map_store.get(id(target), {})
         if alias_map:
-            for k, v in signature.parameters.items():
-                if isinstance(v.default, core.ICollector):
-                    signature = (kls_path, post_field, k)
-                    params[k] = alias_map[v.default.alias][signature]
+            for collector in post_param['collectors']:
+                alias, param = collector['alias'], collector['param']
+                signature = (kls_path, post_field, param)
+                params[param] = alias_map[alias][signature]
+        
+        return method(**params)
+
+    def _execute_post_default_handler(self, kls, method):
+        params = {}
+        resolve_param = core.get_post_default_handler_params(kls, self.metadata)
+
+        if resolve_param['context']:
+            params['context'] = self.context
+
+        if resolve_param['ancestor_context']:
+            params['ancestor_context'] = self._prepare_ancestor_context()
 
         ret_val = method(**params)
         return ret_val
-    
-    async def _resolve_obj_field(self, target, field, trim_field, attr):
+
+    async def _resolve_obj_field(self, target, kls, field, trim_field, method):
         if self.ensure_type:
-            if not attr.__annotations__:
+            if not method.__annotations__:
                 raise MissingAnnotationError(f'{field}: return annotation is required')
 
-        val = self._execute_resolver_method(attr)
+        val = self._execute_resolver_method(kls, field, method)
         while iscoroutine(val) or asyncio.isfuture(val):
             val = await val
 
-        if not getattr(attr, const.HAS_MAPPER_FUNCTION, False):  # defined in util.mapper
+        if not getattr(method, const.HAS_MAPPER_FUNCTION, False):  # defined in util.mapper
             val = util.try_parse_data_to_target_field_type(target, trim_field, val)
 
         # continue dive deeper
@@ -191,7 +180,7 @@ class Resolver:
             # traversal and fetching data by resolve methods
             resolve_list, attribute_list = core.iter_over_object_resolvers_and_acceptable_fields(target, kls, self.metadata)
             for field, resolve_trim_field, method in resolve_list:
-                tasks.append(self._resolve_obj_field(target, field, resolve_trim_field, method))
+                tasks.append(self._resolve_obj_field(target, kls, field, resolve_trim_field, method))
             for field, attr_object in attribute_list:
                 tasks.append(self._resolve(attr_object))
             await asyncio.gather(*tasks)
@@ -199,13 +188,13 @@ class Resolver:
             # reverse traversal and run post methods
             for post_field, post_trim_field in core.iter_over_object_post_methods(kls, self.metadata):
                 post_method = getattr(target, post_field)
-                result = self._execute_post_method(target, kls_path, post_field, post_method)
+                result = self._execute_post_method(target, kls, kls_path, post_field, post_method)
                 result = util.try_parse_data_to_target_field_type(target, post_trim_field, result)
                 setattr(target, post_trim_field, result)
 
             default_post_method = getattr(target, const.POST_DEFAULT_HANDLER, None)
             if default_post_method:
-                self._execute_post_default_handler(default_post_method)
+                self._execute_post_default_handler(kls, default_post_method)
 
             # collect after all done
             self._add_values_into_collectors(target, kls)
@@ -224,6 +213,10 @@ class Resolver:
             self.global_loader_param,
             self.loader_instances,
             self.metadata)
+        
+        has_context = core.has_context(self.metadata)
+        if has_context and self.context is None:
+            raise AttributeError('context is missing')
             
         await self._resolve(target)
         return target

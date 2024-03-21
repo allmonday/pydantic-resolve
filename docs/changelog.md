@@ -1,5 +1,9 @@
 # Changelog
 
+## v.1.10.2 (2024.3.21)
+- internal optimization:
+    - no more inspect.signature in runtime
+
 ## v.1.10.1 (2024.3.17)
 - fix collect intermediate level error
 - internal refactor

@@ -1,7 +1,7 @@
 # Power of Inheritance
 
 
-## Create Service
+## Create service
 Let's review the `Blog` and `Comment`, this time we use them to defined the types of source data.
 
 let's split them apart as `blog_service` and `comment_service`.
