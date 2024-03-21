@@ -43,14 +43,16 @@ First, we can easily transform that into pydantic, so that the output schema wil
 
 > use default value if this field is unknown on initialization.
 
-```python linenums="1" hl_lines="13 14 19 20"
+```python linenums="1" hl_lines="8 9 15 16"
 from __future__ import annotations 
 import asyncio
 from pydantic import BaseModel
 
-class Comment(BaseModel):
-    id: int
-    content: str
+class MyBlogSite(BaseModel):
+    name: str
+
+    blogs: list[Blog] = []
+    comment_count: int = 0
 
 class Blog(BaseModel):
     id: int
@@ -59,11 +61,9 @@ class Blog(BaseModel):
     comments: list[Comment] = []
     comment_count: int = 0
 
-class MyBlogSite(BaseModel):
-    name: str
-
-    blogs: list[Blog] = []
-    comment_count: int = 0
+class Comment(BaseModel):
+    id: int
+    content: str
 ```
 
 And then add some `resolve` & `post` methods, for example `resolve_comments` will fetch data and then assigned it to `comments` field.
