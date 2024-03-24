@@ -1,5 +1,21 @@
 # Reference
 
+## Concept
+
+It taks 5 steps to convert from root data into view data.
+
+1. define schema of root data and descdants & load root data
+2. forward-resolve all descdants data
+3. backward-process the data
+4. tree shake the data marked as exclude=True
+5. get the output
+
+![](./images/concept.jpeg)
+
+resolve runs level by level:
+
+![](./images/forward.jpeg)
+
 ## Fetching
 
 resolve_field, can be async. Resolver will recursively execute `resolve_field` to fetch descendants
@@ -60,7 +76,7 @@ pydantic-resolve provides 3 kinds of contexts for different scenarios
 
 context is a global context, after setting it in Resolver, resolve_field and post_field can use `context` param to **read** it.
 
-```python hl_lines="5 9"
+```python hl_lines="5 9 14"
 class Blog(BaseModel):
     id: int
 
@@ -206,6 +222,7 @@ class Comment(BaseModel):
 output of all_comments fields:
 ```json
 {
+    "other fields": ...,
     "all_comments": [
         {
             "id": 1,
@@ -227,7 +244,7 @@ output of all_comments fields:
 }
 ```
 
-values of `__pydantic_resolve_collect__` must be global unique.
+values of `__pydantic_resolve_collect__` must be global unique, this means it is not available in tree structure.
 
 **Usages**:
 
@@ -260,7 +277,7 @@ class CounterCollector(ICollector):
 
 ## Dataloader
 
-### LoaderDepend
+### Loader Depend
 
 LoaderDepend(param) is a speical dataloader manager, it also prevent type inconsistent from DataLoader or batch_load_fn.
 
@@ -278,7 +295,7 @@ class Blog(BaseModel):
 ```
 
 
-### loader_params
+### Loader params
 
 You are free to define Dataloader with some fields and set these fields with `loader_params` in Resolver
 
@@ -303,7 +320,7 @@ data = await Resolver(loader_filters={
 ```
 
 
-### global_loader_param
+### Global loader param
 
 If Dataloaders shares some common params, it is possible to declare them by `global_loader_param`
 
@@ -365,7 +382,7 @@ data = await Resolver(loader_instances={SomeLoader: loader}).resolve(data)
 references: [loader methods](https://github.com/syrusakbary/aiodataloader#primekey-value)
 
 
-### build_list and build_object
+### Build list and object
 
 helper function, use `build_list` for O2M, use `build_object` for O2O
 
@@ -404,6 +421,17 @@ def build_object(items: Sequence[T], keys: List[V], get_pk: Callable[[T], V]) ->
     results = (dct.get(k, None) for k in keys)
     return results
 ```
+
+### Tips
+
+Get information of loaders after resolved.
+
+```python
+resolver = Resolver()
+data = await resolver.resolve(data)
+print(resolver.loader_instance_cache)
+```
+
 
 ## Visibility
 

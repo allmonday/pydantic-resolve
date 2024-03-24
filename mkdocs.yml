@@ -17,6 +17,7 @@ nav:
       - Let's start: index.md
       - Dataloader: dataloader.md
       - Inheritance: inherit.md
+      - Playing with Tree: tree.md
   - Reference:
       - API: reference_api.md
   - Change log:
