@@ -4,13 +4,16 @@
 ![Test Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/allmonday/6f1661c6310e1b31c9a10b0d09d52d11/raw/covbadge.json)
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
-![img](doc/imgs/resolver.png)
+Pydantic-resolve is a schema based, hierarchical solution for fetching and crafting data.
 
-A hierarchical solution for data fetching and processing
+It combines the advantages of restful and graphql.
+![img](docs/images/intro.jpeg)
 
+
+Advantages:
 1. use declaretive way to define view data, easy to maintain and develop
-2. use main query and loader query to break down complex queries, and better reuse
-3. provide various tools to precisely construct view data, no overhead
+2. enhance the traditional restful response, to support gql-like style data structure.
+3. provide post_method to craft resolved data.
 
 
 > If you are using pydantic v2, please use [pydantic2-resolve](https://github.com/allmonday/pydantic2-resolve) instead.
