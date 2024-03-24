@@ -1,5 +1,8 @@
 # Power of Inheritance
 
+Pydantic-resolve can plays well as a `BFF` or `Anti-corruption` layer, by meeting all view requirements but keeping service layers stable all the time.
+
+Another repository is recommended: [Composition oriented development pattern](https://github.com/allmonday/composition-oriented-development-pattern), with runnable examples
 
 ## Create service
 Let's review the `Blog` and `Comment`, this time we use them to defined the types of source data.
