@@ -7,6 +7,8 @@
 Pydantic-resolve is a schema based, hierarchical solution for fetching and crafting data.
 
 It combines the advantages of restful and graphql.
+
+
 ![img](docs/images/intro.jpeg)
 
 
@@ -25,6 +27,68 @@ Advantages:
 
 ```shell
 pip install pydantic-resolve
+```
+
+## Concepts from GraphQL to Pydantic-resolve
+
+This is how we do queries in GraphQL
+
+`comment_count` is a extra field calculated from length of comment, which is usally process by client after fetching the data because the this kind of calculation is flexible.
+
+cliend side so need to iterate over the blogs to get the length and the sum, which is boring.
+
+```gql
+query {
+    MyBlogSite {
+        name
+        blogs {
+            id
+            title
+            comments {
+                id
+                content
+            }
+            # comment_count
+        }
+        # comment_count
+    }
+}
+```
+
+In pydantic-resolve, we can process comment_count at server side, by transforming the query into pydantic schemas.
+
+schemas , query functions and loader functions are provided by each service module, so we can declare our customrized schema by simpily **INHERIT** and **EXTEND** from base schemas.
+
+> This just sounds like columns of values (inherit) and columns of foreign keys (extend).
+
+After transforming GraphQL query into pydantic schemas, post calculation become dead easy.
+
+```python
+import blog_service as bs
+import comment_service as cs
+
+class MySite(BaseModel):
+    blogs: list[MySiteBlog] = []
+    async def resolve_blogs(self):
+        return await bs.get_blogs()
+
+    comment_count: int = 0
+    def post_comment_count(self):
+        return sum([b.comment_count for b in self.blogs])
+
+# -------- inherit and extend ----------
+class MySiteBlog(bs.Blog):  
+    comments: list[cs.Comment] = []
+    def resolve_comments(self, loader=LoaderDepend(cs.blog_to_comments_loader)):
+        return loader.load(self.id)
+
+    comment_count: int = 0
+    def post_comment_count(self):
+        return len(self.comments)
+        
+async def main():
+    my_blog_site = MyBlogSite(name: "tangkikodo's blog")
+    my_blog_site = await Resolver().resolve(my_blog_site)
 ```
 
 
