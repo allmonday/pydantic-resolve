@@ -29,13 +29,8 @@ Advantages:
 pip install pydantic-resolve
 ```
 
+
 ## Concepts from GraphQL to Pydantic-resolve
-
-This is how we do queries in GraphQL
-
-`comment_count` is a extra field calculated from length of comment, which is usally process by client after fetching the data because the this kind of calculation is flexible.
-
-cliend side so need to iterate over the blogs to get the length and the sum, which is boring.
 
 ```gql
 query {
@@ -55,13 +50,14 @@ query {
 }
 ```
 
-In pydantic-resolve, we can process comment_count at server side, by transforming the query into pydantic schemas.
+This is how we do queries in GraphQL, dive by describing schema and field names.
 
-schemas , query functions and loader functions are provided by each service module, so we can declare our customrized schema by simpily **INHERIT** and **EXTEND** from base schemas.
+Assuming `comment_count` is a extra field (length of comment), which is required and calculated by client after fetching the data.
 
-> This just sounds like columns of values (inherit) and columns of foreign keys (extend).
+client side so need to iterate over the blogs to get the length and the sum, which is boring (things gets worse if the structure is deeper).
 
-After transforming GraphQL query into pydantic schemas, post calculation become dead easy.
+In pydantic-resolve, we can handle comment_count at server side, by transforming the query into pydantic schemas and attach some resolve, post methods.
+
 
 ```python
 import blog_service as bs
@@ -90,6 +86,16 @@ async def main():
     my_blog_site = MyBlogSite(name: "tangkikodo's blog")
     my_blog_site = await Resolver().resolve(my_blog_site)
 ```
+
+schemas , query functions and loader functions are provided by entity's service modules. 
+
+So that we can declare customrized schema by simpily **INHERIT** and **EXTEND** from base schemas.
+
+> This just sounds like columns of values (inherit) and of foreign keys (extend) in concept of relational database.
+
+After transforming GraphQL query into pydantic schemas, post calculation become dead easy, and no more iterations.
+
+> Collector is a powerful feature for adjusting data structures. https://allmonday.github.io/pydantic-resolve/reference_api/#collector
 
 
 ## API Reference
