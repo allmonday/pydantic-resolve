@@ -18,6 +18,12 @@ def get_class_field_annotations(cls: Type):
 T = TypeVar("T")
 V = TypeVar("V")
 
+def safe_issubclass(kls, classinfo):
+    try:
+        return issubclass(kls, classinfo)
+    except TypeError:
+        return False
+
 def merge_dicts(a: Dict[str, Any], b: Dict[str, Any]):
     overlap = set(a.keys()) & set(b.keys())
     if overlap:
@@ -77,7 +83,7 @@ def output(kls):
     """
     set required as True for all fields, make typescript code gen result friendly to use
     """
-    if issubclass(kls, BaseModel):
+    if safe_issubclass(kls, BaseModel):
         def _schema_extra(schema: Dict[str, Any], model) -> None:
             fnames = get_required_fields(model)
             schema['required'] = fnames
@@ -96,7 +102,7 @@ def model_config(hidden_fields: Optional[List[str]]=None, default_required: bool
         set default_required=True to add it into required list.
     """
     def wrapper(kls):
-        if issubclass(kls, BaseModel):
+        if safe_issubclass(kls, BaseModel):
             # handle __exclude_fields__ 
             if hidden_fields:
                 # validate
@@ -185,7 +191,7 @@ def _get_mapping_rule(target, source) -> Optional[Callable]:
         return None
 
     # pydantic
-    if issubclass(target, BaseModel):
+    if safe_issubclass(target, BaseModel):
         if target.__config__.orm_mode:
             if isinstance(source, dict):
                 raise AttributeError(f"{type(source)} -> {target.__name__}: pydantic from_orm can't handle dict object")
@@ -220,8 +226,8 @@ def ensure_subset(base):
     subset of target class
     """
     def wrap(kls):
-        assert issubclass(base, BaseModel), 'base should be pydantic class'
-        assert issubclass(kls, BaseModel), 'class should be pydantic class'
+        assert safe_issubclass(base, BaseModel), 'base should be pydantic class'
+        assert safe_issubclass(kls, BaseModel), 'class should be pydantic class'
 
         @functools.wraps(kls)
         def inner():
@@ -260,7 +266,7 @@ def update_forward_refs(kls):
                 shelled_type = shelling_type(v)
                 update_forward_refs(shelled_type)
 
-    if issubclass(kls, BaseModel):
+    if safe_issubclass(kls, BaseModel):
         update_pydantic_forward_refs(kls)
 
     if is_dataclass(kls):

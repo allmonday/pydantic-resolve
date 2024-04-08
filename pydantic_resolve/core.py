@@ -224,7 +224,7 @@ def scan_and_store_metadata(root_class):
     metadata = {}
 
     def _get_all_fields_and_object_fields(kls):
-        if issubclass(kls, BaseModel):
+        if util.safe_issubclass(kls, BaseModel):
             all_fields = set(kls.__fields__.keys())
             object_fields = list(_get_pydantic_attrs(kls))  # dive and recursively analysis
         elif is_dataclass(kls):
@@ -333,7 +333,7 @@ def convert_metadata_key_as_kls(metadata):
 
 
 def is_acceptable_kls(kls):
-    return issubclass(kls, BaseModel) or is_dataclass(kls)
+    return util.safe_issubclass(kls, BaseModel) or is_dataclass(kls)
 
 
 def is_acceptable_instance(target):

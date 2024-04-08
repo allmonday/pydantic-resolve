@@ -1,5 +1,8 @@
 # Changelog
 
+## v.1.10.3 (2024.4.8)
+- bugfix, handle TypeError from issubclass, https://github.com/allmonday/pydantic2-resolve/issues/7
+
 ## v.1.10.2 (2024.3.21)
 - internal optimization:
     - no more inspect.signature in runtime
