@@ -1,6 +1,5 @@
 import asyncio
 import contextvars
-import inspect
 import warnings
 from inspect import iscoroutine
 from typing import TypeVar, Dict
