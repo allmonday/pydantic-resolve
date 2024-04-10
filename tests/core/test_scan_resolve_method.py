@@ -15,6 +15,7 @@ def test_scan_resolve_method_1():
         'trim_field': 'a',
         'context': False,
         'ancestor_context': False,
+        'parent': False,
         'dataloaders': []
     }
 
@@ -22,7 +23,7 @@ def test_scan_resolve_method_1():
 def test_scan_resolve_method_2():
     class A(BaseModel):
         a: str
-        def resolve_a(self, context, ancestor_context):
+        def resolve_a(self, context, ancestor_context, parent):
             return 2 * self.a
         
     result = _scan_resolve_method(A.resolve_a, 'resolve_a')
@@ -31,6 +32,7 @@ def test_scan_resolve_method_2():
         'trim_field': 'a',
         'context': True,
         'ancestor_context': True,
+        'parent': True,
         'dataloaders': []
     }
 
@@ -42,7 +44,7 @@ def test_scan_resolve_method_3():
 
     class A(BaseModel):
         a: str
-        def resolve_a(self, context, ancestor_context, loader=LoaderDepend(Loader)):
+        def resolve_a(self, context, ancestor_context, parent, loader=LoaderDepend(Loader)):
             return 2 * self.a
         
     result = _scan_resolve_method(A.resolve_a, 'resolve_a')
@@ -51,6 +53,7 @@ def test_scan_resolve_method_3():
         'trim_field': 'a',
         'context': True,
         'ancestor_context': True,
+        'parent': True,
         'dataloaders': [
             {
                 'param': 'loader',
