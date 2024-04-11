@@ -12,6 +12,14 @@ class Base(BaseModel):
     def resolve_child(self):
         return Child()
 
+    children: List[Child] = []
+    def resolve_children(self):
+        return [Child()]
+    
+    parent: Optional[str] = '123'
+    def resolve_parent(self, parent):
+        return parent
+
 class Child(BaseModel):
     pname: str = ''
     def resolve_pname(self, parent: Base):
@@ -26,20 +34,25 @@ class Child(BaseModel):
 async def test_parent():
     b = Base(name='kikodo')
     b = await Resolver().resolve(b)
+    assert b.parent is None  # parent of root is none
+
     assert b.name == 'kikodo'
     assert b.child.pname == 'kikodo'
-    assert b.child.pname2 == 'kikodo'
+    assert b.child.pname2 == 'kikodo'  # work with obj
+
+    assert b.children[0].pname == 'kikodo'
+    assert b.children[0].pname2 == 'kikodo'  # work with list
 
 
 class Tree(BaseModel):
     name: str
-    children: List[Tree] = []
 
     path: str = ''
     def resolve_path(self, parent):
         if parent is not None:
             return f'{parent.path}/{self.name}'
         return self.name
+    children: List[Tree] = []
 
 @pytest.mark.asyncio
 async def test_tree():
@@ -60,3 +73,4 @@ async def test_tree():
             dict(name="c", path="a/d/c", children=[])
         ])
     ]) 
+    print(data.json(indent=2))

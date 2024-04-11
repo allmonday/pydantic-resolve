@@ -157,7 +157,6 @@ def _scan_post_default_handler(method):
 
     if signature.parameters.get('parent'):
         result['parent'] = True
-    
 
     return result
 

@@ -13,11 +13,11 @@ edit_uri: ""
 
 nav:
   - Quick Start:
-      - Install: install.md
-      - Let's start: index.md
+      - Install: index.md
+      - Let's start: about.md
       - Dataloader: dataloader.md
       - Inheritance: inherit.md
-      - Playing with Tree: tree.md
+      - Tree: tree.md
   - Reference:
       - API: reference_api.md
   - Change log:

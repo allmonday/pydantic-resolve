@@ -1,5 +1,8 @@
 # Changelog
 
+## v.1.10.4 (2024.4.11)
+- new feature: reading parent node in resolve, post and post_default_handler
+
 ## v.1.10.3 (2024.4.8)
 - bugfix, handle TypeError from issubclass, https://github.com/allmonday/pydantic2-resolve/issues/7
 

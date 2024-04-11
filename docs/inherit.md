@@ -1,15 +1,15 @@
-# Power of Inheritance
+# Power of Inheritance, better architecture.
 
-Pydantic-resolve can plays well as a `BFF` or `Anti-corruption` layer, by meeting all view requirements but keeping service layers stable all the time.
+Pydantic-resolve can plays well as a `BFF` or `Anti-corruption` layer, meeting all view requirements and keeping `service layers` stable at the same time.
 
-Another repository is recommended: [Composition oriented development pattern](https://github.com/allmonday/composition-oriented-development-pattern), with runnable examples
+It is recommended to read this repo: [Composition oriented development pattern](https://github.com/allmonday/composition-oriented-development-pattern) for details.
 
 ## Create service
 Let's review the `Blog` and `Comment`, this time we use them to defined the types of source data.
 
 let's split them apart as `blog_service` and `comment_service`.
 
-- blog-service
+- blog_service.py
 ```python
 # - schema
 class Blog(BaseModel):
@@ -25,7 +25,7 @@ async def get_blogs(): # promise to return data which matche with the Blog schem
     return blogs_table
 ```
 
-- comment-service
+- comment_service.py
 ```python
 # - schema
 class Comment(BaseModel):
@@ -55,13 +55,17 @@ Next, in `my-site` controller, we'll compose them together into `MyBlogSite` aga
 Structrues:
 
 - **controller**
-    - my-site
+    - my_site
 - **service**
-    - blog
-    - comment
-    - user (later)
+    - blog_service.py
+    - comment_service.py
+    - user_service.py (later)
 
+my_site.py
 ```python hl_lines="10"
+import service.blog_service as blog_service
+import service.comment_service as comment_service
+
 class MySite(BaseModel):
     blogs: list[MySiteBlog] = []
     async def resolve_blogs(self):
@@ -71,8 +75,8 @@ class MySite(BaseModel):
     def post_comment_count(self):
         return sum([b.comment_count for b in self.blogs])
 
-class MySiteBlog(Blog):
-    comments: list[Comment] = []
+class MySiteBlog(blog_service.Blog):
+    comments: list[comment_service.Comment] = []
     def resolve_comments(self, loader=LoaderDepend(blog_to_comments_loader)):
         return loader.load(self.id)
     
@@ -216,4 +220,6 @@ You'll get the output:
 So easy, isn't it?
 
 
-> blog_id and user_id are annoying, you can hide them with @model_config and Exclude.
+If you want to customrize(pick) fields, you can:
+- use @model_config and Exclude to hide it
+- use ensure_subset(Base)
