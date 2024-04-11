@@ -1,22 +1,26 @@
 # Reference
 
-## Concept
+## Concepts
 
-It taks 5 steps to convert from root data into view data.
+It taks several steps from root data into view data, you can manage the fetching process and tweak it after fetched.
 
 1. define schema of root data and descdants & load root data
-2. forward-resolve all descdants data
-3. backward-process the data
-4. tree shake the data marked as exclude=True
+2. forward resolve all descdants data (resolve)
+3. backward post-process the data (post)
+4. tree shake the data (model_config and exclude=True)
 5. get the output
 
 ![](./images/concept.jpeg)
 
-resolve runs level by level:
 
-![](./images/forward.jpeg)
+## Resolve
 
-## Fetching
+*Available params:*
+
+- context
+- ancestor_context
+- parent
+- **dataloaders** (multiple)
 
 resolve_field, can be async. Resolver will recursively execute `resolve_field` to fetch descendants
 
@@ -34,7 +38,14 @@ class Blog(BaseModel):
         return ['tag-1', 'tag-2']
 ```
 
-## Post-process
+## Post
+
+*Available params:*
+
+- context
+- ancestor_context
+- parent
+- **collectors** (multiple)
 
 `post_field`, can only be normal subroutine function. 
 
@@ -67,14 +78,23 @@ class Blog(BaseModel):
         return len(self.comments)
 ```
 
+### post_default_handler
 
-## Contexts
+`post_default_handler` is a special post method, it runs finally after all post_methods are done.
 
-pydantic-resolve provides 3 kinds of contexts for different scenarios
+*Available params*:
 
-### Context
+- context
+- ancestor_context
+- parent
 
-context is a global context, after setting it in Resolver, resolve_field and post_field can use `context` param to **read** it.
+
+## Method params
+
+### Context 
+> available in: resolve, post, post_default_handler
+
+A global (root) context, after set it in Resolver, resolve and post can read it.
 
 ```python hl_lines="5 9 14"
 class Blog(BaseModel):
@@ -102,8 +122,9 @@ Blog(id=1,
 ```
 
 ### Ancestor context
+> available in: resolve, post, post_default_handler
 
-In some scenario, descendants need to read value from it's direct ancestor.
+In some scenario, descendants may need to read ancestor's field, ancestor_context can help.
 
 ![](./images/expose.jpeg)
 
@@ -112,7 +133,7 @@ and then read it from `ancestor_context`, using alias as the key.
 
 this example shows the blog title can read from it's descendant comment.
 
-```python hl_lines="2 17"
+```python hl_lines="2 18"
 class Blog(BaseModel):
     __pydantic_resolve_expose__ = {'title': 'blog_title' }
     id: int
@@ -171,13 +192,76 @@ class Comment(BaseModel):
 }
 ```
 
-### Collector
+### Parent
+> available in: resolve, post, post_default_handler
+
+methods can visit parent node by reading `parent`. It's useful in tree-like structure.
+
+
+```python hl_lines="6-8"
+class Tree(BaseModel):
+    name: str
+    children: List[Tree] = []
+
+    path: str = ''
+    def resolve_path(self, parent):
+        if parent is not None:
+            return f'{parent.path}/{self.name}'
+        return self.name
+
+data = dict(name="a", children=[
+    dict(name="b", children=[
+        dict(name="c")
+    ]),
+    dict(name="d", children=[
+        dict(name="c")
+    ])
+]) 
+data = await Resolver().resolve(Tree(**data))
+```
+
+output
+
+```json hl_lines="3 7 11 18 22"
+{
+  "name": "a",
+  "path": "a",
+  "children": [
+    {
+      "name": "b",
+      "path": "a/b",
+      "children": [
+        {
+          "name": "c",
+          "path": "a/b/c",
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "d",
+      "path": "a/d",
+      "children": [
+        {
+          "name": "c",
+          "path": "a/d/c",
+          "children": []
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Collectors
+
+> available in: post
 
 ![](./images/collect2.jpeg)
 
-Another scenario, ancestor nodes may want to collect some specific fields from it's descendants, where you can use `Collector` and `__pydantic_resolve_collect__`.
+Ancestor nodes may want to collect some specific fields from it's descendants, you can use `Collector` and `__pydantic_resolve_collect__`.
 
-> Collector can only be used in post methods, it happens in reverse traversal stages
+**It is very helpful in re-organizing your data, move data from a to b**
 
 for example, let's collect all comments into all_comments at top level:
 
@@ -257,7 +341,7 @@ def post_all_comments(self,
 ```
 
 2. Using `flat=True` will cal `list.extend` inside, use it if your source field is `List[T]`
-3. You can inherit `ICollector` and define your own `Collector`, for example, a counter collector. `self.alias` is **required**.
+3. You can inherit `ICollector` and define your own `Collector`, for example, a counter collector. `self.alias` is always **required**.
 ```python
 from pydantic_resolve import ICollector
 
@@ -275,25 +359,49 @@ class CounterCollector(ICollector):
 
 
 
-## Dataloader
+### Dataloaders
+> available in: resolve
 
-### Loader Depend
-
-LoaderDepend(param) is a speical dataloader manager, it also prevent type inconsistent from DataLoader or batch_load_fn.
+`LoaderDepend` is a speical dataloader manager, it also prevent type inconsistent from DataLoader or batch_load_fn.
 
 param: can be DataLoader class or batch_load_fn function.
 
-
 ```python
+from pydantic_resolve import LoaderDepend
+
 class Blog(BaseModel):
     id: int
     title: str
 
     comments: list[Comment] = []
-    def resolve_comments(self, loader=LoaderDepend(blog_to_comments_loader)):
-        return loader.load(self.id)
+    def resolve_comments(self, loader1=LoaderDepend(blog_to_comments_loader)):
+        return loader1.load(self.id)  # return FUTURE
 ```
 
+Multiple loaders are also supported.
+
+```python
+from pydantic_resolve import LoaderDepend
+
+class Blog(BaseModel):
+    id: int
+    title: str
+
+    comments: list[Comment] = []
+    async def resolve_comments(self, 
+                         loader1=LoaderDepend(blog_to_comments_loader), 
+                         loader2=LoaderDepend(blog_to_comments_loader2)):
+        v1 = await loader1.load(self.id)  # list
+        v2 = await loader2.load(self.id)  # list
+        return v1 + v2
+```
+
+
+## DataLoader
+
+DataLoader is a important component in pydantic-resolve, it helps fetching data level by level.
+
+You can use the params below in Resolver, to configure your loaders.
 
 ### Loader params
 
@@ -304,6 +412,7 @@ You can treat dataloader like `JOIN` condition, and params like `Where` conditio
 select children from parent 
     # loader keys
     join children on parent.id = children.pid  
+
     # loader params
     where children.age < 20  
 ```
@@ -324,7 +433,7 @@ data = await Resolver(loader_filters={
 
 If Dataloaders shares some common params, it is possible to declare them by `global_loader_param`
 
-```python hl_lines="40"
+```python hl_lines="2 7 12 40"
 class LoaderA(DataLoader):
     power: int
     async def batch_load_fn(self, keys: List[int]):
@@ -362,15 +471,14 @@ class A(BaseModel):
 @pytest.mark.asyncio
 async def test_case_0():
     data = [A(val=n) for n in range(3)]
-    with pytest.warns(DeprecationWarning):
-        data = await Resolver(
-            global_loader_filter={'power': 2}, 
-            loader_filters={LoaderC:{'add': 1}}).resolve(data)
+    data = await Resolver(
+        global_loader_filter={'power': 2}, 
+        loader_filters={LoaderC:{'add': 1}}).resolve(data)
 ```
 
 ### Loader instance
 
-You can provide loader instance by `loader_instances`, so that internally pydantic-resolve will use it instead of creating from loader class.
+You can provide loader instance by `loader_instances`, and `prime` (preload) some data before use, so that internally pydantic-resolve will use it instead of creating from loader class.
 
 ```python
 loader = SomeLoader()
@@ -384,7 +492,7 @@ references: [loader methods](https://github.com/syrusakbary/aiodataloader#primek
 
 ### Build list and object
 
-helper function, use `build_list` for O2M, use `build_object` for O2O
+helper function, use `build_list` for One2Many, use `build_object` for One2One
 
 ```python
 async def members_batch_load_fn(team_ids):
@@ -435,6 +543,8 @@ print(resolver.loader_instance_cache)
 
 ## Visibility
 
+better ts definitions and hide some fields
+
 ### model_config
 fields with default value will be converted to optional in typescript definition. add model_config decorator to avoid it.
 
@@ -474,3 +584,28 @@ class Y(BaseModel):
     def resolve_password(self):
         return 'confidential'
 ```
+
+### ensure_subset(base_kls)
+
+You can create a new pydantic class by copying the original one and keep the fields you wanted.
+
+Decorating it with `ensure_subset` will validate it for you.
+
+```python
+class Base(BaseModel):
+    a: str
+    b: int
+
+@ensure_subset(Base)
+class ChildA(BaseModel):
+    a: str
+```
+
+c is not existed in Base, exception raised.
+```python
+@util.ensure_subset(Base)
+class ChildB(BaseModel):
+    a: str
+    c: int = 0  # raise AssertionError
+```
+

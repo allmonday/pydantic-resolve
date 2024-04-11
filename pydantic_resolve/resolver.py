@@ -28,6 +28,7 @@ class Resolver:
 
         self.ancestor_vars = {}
         self.collector_contextvars = {}
+        self.parent_contextvars = {}
 
         # for dataloader which has class attributes, you can assign the value at here
         if loader_filters:
@@ -82,6 +83,11 @@ class Resolver:
                 collector = instance
                 val = getattr(target, field)
                 collector.add(val)
+    
+    def _add_parent(self, target):
+        if not self.parent_contextvars.get('parent'):
+            self.parent_contextvars['parent'] = contextvars.ContextVar('parent')
+        self.parent_contextvars['parent'].set(target)
 
     def _add_expose_fields(self, target):
         expose_dict: Optional[dict] = getattr(target, const.EXPOSE_TO_DESCENDANT, None)
@@ -107,6 +113,8 @@ class Resolver:
             params['context'] = self.context
         if resolve_param['ancestor_context']:
             params['ancestor_context'] = self._prepare_ancestor_context()
+        if resolve_param['parent']:
+            params['parent'] = self.parent_contextvars['parent'].get()
         
         for loader in resolve_param['dataloaders']:
             cache_key = loader['path']
@@ -120,9 +128,10 @@ class Resolver:
         post_param = core.get_post_params(kls, post_field , self.metadata)
         if post_param['context']:
             params['context'] = self.context
-
         if post_param['ancestor_context']:
             params['ancestor_context'] = self._prepare_ancestor_context()
+        if post_param['parent']:
+            params['parent'] = self.parent_contextvars['parent'].get()
 
         alias_map = self.object_collect_alias_map_store.get(id(target), {})
         if alias_map:
@@ -135,13 +144,14 @@ class Resolver:
 
     def _execute_post_default_handler(self, kls, method):
         params = {}
-        resolve_param = core.get_post_default_handler_params(kls, self.metadata)
+        post_default_param = core.get_post_default_handler_params(kls, self.metadata)
 
-        if resolve_param['context']:
+        if post_default_param['context']:
             params['context'] = self.context
-
-        if resolve_param['ancestor_context']:
+        if post_default_param['ancestor_context']:
             params['ancestor_context'] = self._prepare_ancestor_context()
+        if post_default_param['parent']:
+            params['parent'] = self.parent_contextvars['parent'].get()
 
         ret_val = method(**params)
         return ret_val
@@ -159,13 +169,14 @@ class Resolver:
             val = util.try_parse_data_to_target_field_type(target, trim_field, val)
 
         # continue dive deeper
-        val = await self._resolve(val)
+        val = await self._resolve(val, target)
 
         setattr(target, trim_field, val)
 
-    async def _resolve(self, target: T) -> T:
+    async def _resolve(self, target: T, parent) -> T:
         if isinstance(target, (list, tuple)):
-            await asyncio.gather(*[self._resolve(t) for t in target])
+            # list should not play as parent, use original parent.
+            await asyncio.gather(*[self._resolve(t, parent) for t in target])
 
         if core.is_acceptable_instance(target):
             kls = target.__class__
@@ -173,6 +184,7 @@ class Resolver:
 
             self._prepare_collectors(target, kls)
             self._add_expose_fields(target)
+            self._add_parent(parent)
 
             tasks = []
 
@@ -181,7 +193,7 @@ class Resolver:
             for field, resolve_trim_field, method in resolve_list:
                 tasks.append(self._resolve_obj_field(target, kls, field, resolve_trim_field, method))
             for field, attr_object in attribute_list:
-                tasks.append(self._resolve(attr_object))
+                tasks.append(self._resolve(attr_object, target))
             await asyncio.gather(*tasks)
 
             # reverse traversal and run post methods
@@ -217,5 +229,5 @@ class Resolver:
         if has_context and self.context is None:
             raise AttributeError('context is missing')
             
-        await self._resolve(target)
+        await self._resolve(target, None)
         return target

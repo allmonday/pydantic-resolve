@@ -80,6 +80,7 @@ def _scan_resolve_method(method, field: str):
     result = {
         'trim_field': field.replace(const.RESOLVE_PREFIX, ''),
         'context': False,
+        'parent': False,
         'ancestor_context': False,
         'dataloaders': []  # collect func or class, do not create instance
     }
@@ -90,6 +91,9 @@ def _scan_resolve_method(method, field: str):
 
     if signature.parameters.get('ancestor_context'):
         result['ancestor_context'] = True
+
+    if signature.parameters.get('parent'):
+        result['parent'] = True
 
     for name, param in signature.parameters.items():
         if isinstance(param.default, Depends):
@@ -111,6 +115,7 @@ def _scan_post_method(method, field):
         'trim_field': field.replace(const.POST_PREFIX, ''),
         'context': False,
         'ancestor_context': False,
+        'parent': False,
         'collectors': []
     }
     signature = inspect.signature(method)
@@ -120,6 +125,9 @@ def _scan_post_method(method, field):
 
     if signature.parameters.get('ancestor_context'):
         result['ancestor_context'] = True
+
+    if signature.parameters.get('parent'):
+        result['parent'] = True
     
     for name, param in signature.parameters.items():
         if isinstance(param.default, ICollector):
@@ -137,6 +145,7 @@ def _scan_post_default_handler(method):
     result = {
         'context': False,
         'ancestor_context': False,
+        'parent': False,
     }
     signature = inspect.signature(method)
 
@@ -145,6 +154,9 @@ def _scan_post_default_handler(method):
 
     if signature.parameters.get('ancestor_context'):
         result['ancestor_context'] = True
+
+    if signature.parameters.get('parent'):
+        result['parent'] = True
 
     return result
 
