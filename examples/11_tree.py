@@ -23,11 +23,18 @@ class Loader(DataLoader):
 class Tree(BaseModel):
     id: int
     content: str
+    
+    path: str = ''
+    def resolve_path(self, parent):
+        if parent:
+            return f'{parent.path}/{self.content}'
+        else:
+            return self.content
+    
     children: List[Tree] = []
-
     def resolve_children(self, loader=LoaderDepend(Loader)):
         return loader.load(self.id)
-    
+        
 async def main():
     tree = Tree(id=1, content='root')
     tree = await Resolver(loader_params={Loader: {'records': records}}).resolve(tree)

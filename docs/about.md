@@ -75,6 +75,8 @@ And then add some `resolve` & `post` methods, for example `resolve_comments` wil
 
 ```python linenums="1" hl_lines="7-8 11-13 20-21 24-25"
 from __future__ import annotations 
+from pydantic_resolve import Resolver
+from pydantic import BaseModel
 
 class MySite(BaseModel):
     name: str

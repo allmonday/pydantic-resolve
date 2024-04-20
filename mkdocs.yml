@@ -18,6 +18,7 @@ nav:
       - Dataloader: dataloader.md
       - Inheritance: inherit.md
       - Tree: tree.md
+      - Philosophy: philosophy.md
   - Reference:
       - API: reference_api.md
   - Change log:

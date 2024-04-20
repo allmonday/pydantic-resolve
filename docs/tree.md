@@ -1,6 +1,6 @@
-# Tree
+# Tree, self-reference structure
 
-## Build a tree 
+## Build a tree with dataloader
 
 ```python
 from __future__ import annotations
@@ -73,36 +73,61 @@ asyncio.run(main())
 
 ## Construct the path with parent
 
-```python hl_lines="6"
+if we want to visit parent node to build a full path field, use the `parent`.
+
+```python hl_lines="10"
 class Tree(BaseModel):
-    name: str
+    id: int
+    content: str
     children: List[Tree] = []
 
+    def resolve_children(self, loader=LoaderDepend(Loader)):
+        return loader.load(self.id)
+    
     path: str = ''
     def resolve_path(self, parent):
-        if parent is not None:
-            return f'{parent.path}/{self.name}'
-        return self.name
+        if parent:
+            return f'{parent.path}/{self.content}'
+        else:
+            return self.content
+```
 
-@pytest.mark.asyncio
-async def test_tree():
-    data = dict(name="a", children=[
-        dict(name="b", children=[
-            dict(name="c")
-        ]),
-        dict(name="d", children=[
-            dict(name="c")
-        ])
-    ]) 
-    data = await Resolver().resolve(Tree(**data))
-    assert data.dict() ==  dict(name="a", path="a", children=[
-        dict(name="b", path="a/b", children=[
-            dict(name="c", path="a/b/c", children=[])
-        ]),
-        dict(name="d", path="a/d", children=[
-            dict(name="c", path="a/d/c", children=[])
-        ])
-    ]) 
+then it's done
+
+```json
+{
+  "id": 1,
+  "content": "root",
+  "path": "root",
+  "children": [
+    {
+      "id": 2,
+      "content": "2",
+      "path": "root/2",
+      "children": [
+        {
+          "id": 4,
+          "content": "4",
+          "path": "root/2/4",
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "content": "3",
+      "path": "root/3",
+      "children": [
+        {
+          "id": 5,
+          "content": "5",
+          "path": "root/3/5",
+          "children": []
+        }
+      ]
+    }
+  ]
+}
 ```
 
 ## Sum up from bottom to top
@@ -140,7 +165,7 @@ asyncio.run(main())
 ```
 
 
-```json hl_lines="18 21"
+```json hl_lines="7 15 18 21"
 {
   "count": 10,
   "children": [
