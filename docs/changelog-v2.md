@@ -1,5 +1,7 @@
 # Changelog
 
+## v.2.1.1 (2024.4.20)
+- new feature: reading parent node in resolve, post and post_default_handler
 
 ## v.2.1.0 (2024.04.08)
 - bugfix: https://github.com/allmonday/pydantic2-resolve/issues/7
