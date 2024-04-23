@@ -119,3 +119,10 @@ poetry run tox
 poetry run coverage run -m pytest
 poetry run coverage report -m
 ```
+
+
+## Sponsor
+
+If this code helps and you wish to support me
+
+Paypal: https://www.paypal.me/tangkikodo
