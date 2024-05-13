@@ -6,31 +6,25 @@
 
 Pydantic-resolve is a schema based, hierarchical solution for fetching and crafting data.
 
-It combines the advantages of restful and graphql.
+Features:
 
+1. By providing your pydantic schema and instance(s), resolver will recursively resolve uncertain nodes and their descendants.
+2. You can modify resolve nodes or compute new nodes based on resolved nodes, no iteration.
+3. Schemas are pluggable, easy to combine and reuse.
 
-![img](docs/images/intro.jpeg)
-
-
-Advantages:
-1. use declaretive way to define view data, easy to maintain and develop
-2. enhance the traditional restful response, to support gql-like style data structure.
-3. provide post_method and other tools to craft resolved data.
-
-
-[Discord](https://discord.com/channels/1197929379951558797/1197929379951558800)
 
 ## Install
 
-> If you are using pydantic v2, please use [pydantic2-resolve](https://github.com/allmonday/pydantic2-resolve) instead.
-
+> User of pydantic v2, please use [pydantic2-resolve](https://github.com/allmonday/pydantic2-resolve) instead.
 
 ```shell
 pip install pydantic-resolve
 ```
 
 
-## Concepts from GraphQL to Pydantic-resolve
+## For user from GraphQL
+
+This is how we make queries in GraphQL, dive by describing schema and field names.
 
 ```gql
 query {
@@ -50,18 +44,19 @@ query {
 }
 ```
 
-This is how we do queries in GraphQL, dive by describing schema and field names.
+> using query statement is flexible, but for scenarios like `API integration` it can be difficult to maintain.
 
-Assuming `comment_count` is a extra field (length of comment), which is required and calculated by client after fetching the data.
+In client, field `comment_count` is the length of each blog and also the total count (just for demo, pls ignore pagination staff), so client side need to iterate over the blogs to get the length and the sum, which is boring (things getting worse if the structure is deeper).
 
-client side so need to iterate over the blogs to get the length and the sum, which is boring (things gets worse if the structure is deeper).
+With pydantic-resolve, we can handle these calculations at server side. Let see how it works.
 
-In pydantic-resolve, we can handle comment_count at server side, by transforming the query into pydantic schemas and attach some resolve, post methods.
+By transforming the query into pydantic schemas and attach some resolve, post methods, it looks like:
 
 
 ```python
-import blog_service as bs
+from __future__ import annotations
 import comment_service as cs
+import blog_service as bs
 
 class MySite(BaseModel):
     blogs: list[MySiteBlog] = []
@@ -70,17 +65,16 @@ class MySite(BaseModel):
 
     comment_count: int = 0
     def post_comment_count(self):
-        return sum([b.comment_count for b in self.blogs])
+        return sum([b.comment_count for b in self.blogs])  # for total
 
-# -------- inherit and extend ----------
-class MySiteBlog(bs.Blog):  
+class MySiteBlog(bs.Blog):  # >>> inherit and extend <<<
     comments: list[cs.Comment] = []
     def resolve_comments(self, loader=LoaderDepend(cs.blog_to_comments_loader)):
         return loader.load(self.id)
 
     comment_count: int = 0
     def post_comment_count(self):
-        return len(self.comments)
+        return len(self.comments)  # for each blog
         
 async def main():
     my_blog_site = MyBlogSite(name: "tangkikodo's blog")
@@ -89,19 +83,20 @@ async def main():
 
 schemas , query functions and loader functions are provided by entity's service modules. 
 
-So that we can declare customrized schema by simpily **INHERIT** and **EXTEND** from base schemas.
+And then we can simpily **inherit** and **extend** from these base schemas to declare the schemas you want.
 
-> This just sounds like columns of values (inherit) and of foreign keys (extend) in concept of relational database.
+> This just like columns of values (inherit) and of foreign keys (extend) in concept of relational database.
 
 After transforming GraphQL query into pydantic schemas, post calculation become dead easy, and no more iterations.
 
-> Collector is a powerful feature for adjusting data structures. https://allmonday.github.io/pydantic-resolve/reference_api/#collector
-
 
 ## API Reference
-https://allmonday.github.io/pydantic-resolve/reference_api/
+for more details, please refer to: https://allmonday.github.io/pydantic-resolve/reference_api/
 
 ## Composition oriented development-pattern (wip)
+
+This repo introduce a pattern that balance the speed of development and the maintaince, readability of your project, based on pydantic-resolve.
+
 https://github.com/allmonday/composition-oriented-development-pattern
 
 
@@ -126,3 +121,7 @@ poetry run coverage report -m
 If this code helps and you wish to support me
 
 Paypal: https://www.paypal.me/tangkikodo
+
+
+## Others
+[Discord](https://discord.com/channels/1197929379951558797/1197929379951558800)
