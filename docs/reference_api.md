@@ -47,7 +47,7 @@ class Blog(BaseModel):
 - parent
 - **collectors** (multiple)
 
-`post_field`, can only be normal subroutine function. 
+`post_field`, can be async, but dataloader is not supported
 
 You can modify target field after descendants are all resolved.
 
