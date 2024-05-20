@@ -1,5 +1,8 @@
 # Changelog
 
+## v.1.10.5 (2024.5.20)
+- post method can be async function
+
 ## v.1.10.4 (2024.4.11)
 - new feature: reading parent node in resolve, post and post_default_handler
 

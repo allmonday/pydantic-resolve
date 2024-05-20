@@ -200,6 +200,10 @@ class Resolver:
             for post_field, post_trim_field in core.iter_over_object_post_methods(kls, self.metadata):
                 post_method = getattr(target, post_field)
                 result = self._execute_post_method(target, kls, kls_path, post_field, post_method)
+
+                while iscoroutine(result) or asyncio.isfuture(result):
+                    result = await result
+                    
                 result = util.try_parse_data_to_target_field_type(target, post_trim_field, result)
                 setattr(target, post_trim_field, result)
 
