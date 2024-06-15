@@ -2,7 +2,7 @@
 
 Pydantic-resolve is a hierarchical solution focus on data fetching and processing, from simple to complicated.
 
-For example, we want to build a view data named `MySite` which is required by a blog site page, it contains blogs, and it's comments, we also want to calculate **total comments count of both blog level and site level**.
+For example, we want to build a view data named `MySite` which is required by a blog site page, it not only contains blogs, and it's comments, but also can calculate **total comments count of both blog level and site level**.
 
 Let's describe it in form of graphql query for clarity.
 
@@ -39,9 +39,13 @@ comments_table = [
 
 Assuming `comment_count` is a extra field (length of comment), which is required and calculated by client after fetching the data.
 
-client side so need to iterate over the blogs to get the length and the sum, which is boring (things gets worse if the structure is deeper).
+> @property on @computed (in pydantic v2) can also works, just post_ method provides more context related params
 
-In pydantic-resolve, we can handle comment_count at server side, by transforming the query into pydantic schemas:
+So that client side need to iterate over the blogs to get the length and the sum, which is boring (things gets worse if the structure is deeper).
+
+In pydantic-resolve, we handle this process at schema side.
+
+## Describe by pydantic schemas:
 
 ```python linenums="1" hl_lines="8 9 15 16"
 from __future__ import annotations 
@@ -68,12 +72,14 @@ class Comment(BaseModel):
 
 We leave unresolved fields with default value to make it able to be loaded by pydantic.
 
+## Attach resolve and post
+
 And then add some `resolve` & `post` methods, for example `resolve_comments` will fetch data and then assigned it to `comments` field.
 
 - **resolve**: it will run your query function to fetch children and descendants
 - **post**: after descendant fields are all resolved, post will be called to calculate comment count.
 
-```python linenums="1" hl_lines="7-8 11-13 20-21 24-25"
+```python linenums="1" hl_lines="9-10 13-15 22-23 26-27"
 from __future__ import annotations 
 from pydantic_resolve import Resolver
 from pydantic import BaseModel
@@ -115,6 +121,8 @@ async def query_comments(blog_id: int):
 async def get_blogs():
     return blogs_table
 ```
+
+## Resolver
 
 let's start and check the output.
 
@@ -168,9 +176,9 @@ run-query - 2
 }
 ```
 
-We have fetched and tweaked the view data we want, but wait, there still has a problem
+We have fetched and tweaked the view data we want, but wait, there is a problem
 
-Let's have a look of the printed info from `query_comments`, **it was called by twice!**
+Let's have a look of the info printed from `query_comments`, **it was called by twice!**
 
 This is a typical N+1 query which will have performance issue if we have a big number of blogs.
 

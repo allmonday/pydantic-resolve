@@ -9,7 +9,7 @@ Pydantic-resolve is a schema based, hierarchical solution for fetching and craft
 Features:
 
 1. By providing your pydantic schema and instance(s), resolver will recursively resolve uncertain nodes and their descendants.
-2. You can modify resolve nodes or compute new nodes based on resolved nodes, no iteration.
+2. You can modify resolved nodes, or compute new nodes based on resolved nodes, no need of iteration.
 3. Schemas are pluggable, easy to combine and reuse.
 
 
