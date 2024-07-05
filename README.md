@@ -8,9 +8,10 @@ Pydantic-resolve is a schema based, hierarchical solution for fetching and craft
 
 Features:
 
-1. By providing your pydantic schema and instance(s), resolver will recursively resolve uncertain nodes and their descendants.
+0. The best data aggregration (bff) tool for FastAPI/Django ninja ever. 
+1. By providing/describing your pydantic schema and instance(s), resolver will recursively resolve uncertain nodes and their descendants.
 2. You can modify resolved nodes, or compute new nodes based on resolved nodes, no need of iteration.
-3. Schemas are pluggable, easy to combine and reuse.
+3. Schemas are pluggable, easy to combine together and easy to reuse.
 
 
 ## Install
