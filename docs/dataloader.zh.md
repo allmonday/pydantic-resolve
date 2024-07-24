@@ -1,18 +1,15 @@
 # Dataloader
 
-quote from [aiodataloader](https://github.com/syrusakbary/aiodataloader)
+什么是 [aiodataloader](https://github.com/syrusakbary/aiodataloader)
 
 > DataLoader is a generic utility to be used as part of your application's data fetching layer to provide a simplified and consistent API over various remote data sources such as databases or web services via batching and caching.
 
-In this phase, we'll fix the `N+1` query with the help of dataloader.
+为了解决重复查询的问题, 我们需要对代码做一些改动
 
-1. import LoaderDepend (it isolate the type info)
-2. change query_comments to a loader function
-3. declare loader in resolve_comments
+1. 改造 query_comments 方法, 名为 `blog_to_comments_loader`, 接收 `blog_ids` 为参数
+2. 使用 LoaderDepends 包装, 它会复杂 loader 的实例化
 
-> In pydantic-resolve, you can decleare and use dataloader in anywhere, without worring about the mess of context which happens in graphql
-
-```python linenums="1" hl_lines="4 19 38-39"
+```python linenums="1" hl_lines="16 34"
 from __future__ import annotations
 import asyncio
 from pydantic import BaseModel
@@ -41,10 +38,6 @@ class MyBlogSite(BaseModel):
     async def resolve_blogs(self):
         return await get_blogs()
 
-    comment_count: int = 0
-    def post_comment_count(self):
-        return sum([b.comment_count for b in self.blogs])
-
 class Blog(BaseModel):
     id: int
     title: str
@@ -52,10 +45,6 @@ class Blog(BaseModel):
     comments: list[Comment] = []
     def resolve_comments(self, loader=LoaderDepend(blog_to_comments_loader)):
         return loader.load(self.id)
-    
-    comment_count: int = 0
-    def post_comment_count(self):
-        return len(self.comments)
 
 class Comment(BaseModel):
     id: int
@@ -70,7 +59,7 @@ async def main():
 asyncio.run(main())
 ```
 
-check the output of `blog_to_comments_loader`, it only triggered once.
+这样一番改造之后, comments 的查询就便成了一个 batch 查询, 查询次数于是减少为一次
 
 ```shell
 [1, 2]

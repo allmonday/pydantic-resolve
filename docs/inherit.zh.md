@@ -1,13 +1,28 @@
-# Power of Inheritance, better architecture.
+# 使用继承优化代码结构
 
-Pydantic-resolve can plays well as a `BFF` or `Anti-corruption` layer, meeting all view requirements and keeping `service layers` stable at the same time.
+重新回顾一下代码, 会发现 Blog 和 Comment 可以被抽出来单独定义类型, 并可以由特定的方法来提供数据
 
-It is recommended to read this repo: [Composition oriented development pattern](https://github.com/allmonday/composition-oriented-development-pattern) for details.
+我们来将它封装到 service 中
+```python
+class MyBlogSite(BaseModel):
+    blogs: list[Blog] = []
+    async def resolve_blogs(self):
+        return await get_blogs()
 
-## Create service
-Let's review the `Blog` and `Comment`, this time we use them to defined the types of source data.
+class Blog(BaseModel):
+    id: int
+    title: str
 
-let's split them apart as `blog_service` and `comment_service`.
+    comments: list[Comment] = []
+    def resolve_comments(self, loader=LoaderDepend(blog_to_comments_loader)):
+        return loader.load(self.id)
+
+class Comment(BaseModel):
+    id: int
+    content: str
+```
+
+## 创建 service
 
 - blog_service.py
 ```python
@@ -45,21 +60,22 @@ async def blog_to_comments_loader(blog_ids: list[int]):
     return build_list(comments_table, blog_ids, lambda c: c['blog_id'])  
 ```
 
-`blog_service` includes schema and main query, `comment_service` includes schema and data loader.
+service 提供了: 
 
-> main query provides the root data
+- schema 定义 
+- 查询方法, 比如 get_blogs
+- dataloader 方法 (一种特殊的 batch 查询)
 
-## Create controller
-Next, in `my-site` controller, we'll compose them together into `MyBlogSite` again, but by inheritance.
 
-Structrues:
+## 创建 controller
+
+接下来我们重新组装一下 `MySite`
 
 - **controller**
-    - my_site
+    - my_site.py
 - **service**
     - blog_service.py
     - comment_service.py
-    - user_service.py (later)
 
 my_site.py
 ```python hl_lines="10"
@@ -71,26 +87,32 @@ class MySite(BaseModel):
     async def resolve_blogs(self):
         return await get_blogs()
 
-    comment_count: int = 0
-    def post_comment_count(self):
-        return sum([b.comment_count for b in self.blogs])
-
 class MySiteBlog(blog_service.Blog):
     comments: list[comment_service.Comment] = []
     def resolve_comments(self, loader=LoaderDepend(blog_to_comments_loader)):
         return loader.load(self.id)
-    
-    comment_count: int = 0
-    def post_comment_count(self):
-        return len(self.comments)
 ```
 
-We don't need to declare `id` and `title`, they now inherits from `Blog`.
+`MySiteBlog` 通过继承了 `blog_service.Blog`, 可以自动获取 Blog 的字段, 为字段复用提供了便利
 
-With the help of inheritance, we get the capability to build flexible schemas (in controller layer) based on stable base schema from services.
+在语义上, `MySiteBlog` 继承了 Blog 字段, 并额外扩展了 comments 数据
 
-## Add user service
-Let's continue adding a new service: `user-service`, it provides User schema and user data loader.
+上游只需要提供满足 Blog 的数据 (MySite中的 get_blogs()), 剩下的扩展字段通过 resolve 方法来获得
+
+使用这种方式可以灵活地扩展和组装数据
+
+接下来让我们更进一步, 为每个 comment 增加一个 user 字段吧
+
+## 添加 user service
+
+同样的, 新增一个 `user_service.py` 文件
+
+- **controller**
+    - my_site.py
+- **service**
+    - blog_service.py
+    - comment_service.py
+    - user_service.py
 
 ```python
 # - schema
@@ -108,7 +130,7 @@ async def user_loader(user_ids: list[int]):
     return build_object(_users, user_ids, lambda u: u['id'])
 ```
 
-Modify comment, add user_id into comment model
+修改 comment schema, 添加 user_id 信息
 
 ```python
 class Comment(BaseModel):
@@ -124,9 +146,7 @@ comments_table = [
     dict(id=4, blog_id=2, content='interesting', user_id=2)]
 ```
 
-## Add User into Controller
-
-after declaring `MySiteComment` with inheriting from `Comment`, and a simple user_loader.
+## 通过继承 Comment 来添加 user 字段
 
 ```python hl_lines="19"
 class MySite(BaseModel):
@@ -153,7 +173,7 @@ class MySiteComment(Comment):
         return loader.load(self.user_id)
 ```
 
-You'll get the output:
+就这样我们为每个 comment 添加了 user 信息
 
 ```json
 {
@@ -183,7 +203,6 @@ You'll get the output:
           }
         }
       ],
-      "comment_count": 2
     },
     {
       "id": 2,
@@ -210,16 +229,12 @@ You'll get the output:
           }
         }
       ],
-      "comment_count": 2
     }
   ],
-  "comment_count": 4
 }
 ```
 
-So easy, isn't it?
+这样的数据组装很简单吧?
 
 
-If you want to customrize(pick) fields, you can:
-- use @model_config and Exclude to hide it
-- use ensure_subset(Base)
+关于 pydantic-resolve 更多的功能请查看文档

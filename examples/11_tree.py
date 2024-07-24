@@ -7,12 +7,13 @@ from aiodataloader import DataLoader
 
 
 
-root = { 'id': 1, 'content': 'root' }
+roots = [{ 'id': 1, 'content': 'root' }, {'id': 6, 'content': '6'}]
 records = [
     {'id': 2, 'parent': 1, 'content': '2'},
     {'id': 3, 'parent': 1, 'content': '3'},
     {'id': 4, 'parent': 2, 'content': '4'},
     {'id': 5, 'parent': 3, 'content': '5'},
+    {'id': 7, 'parent': 6, 'content': '7'},
 ]
 
 class Loader(DataLoader):
@@ -36,9 +37,10 @@ class Tree(BaseModel):
         return loader.load(self.id)
         
 async def main():
-    tree = Tree(id=1, content='root')
-    tree = await Resolver(loader_params={Loader: {'records': records}}).resolve(tree)
-    print(tree.json(indent=2))
-
+    import json
+    trees = [Tree(id=1, content='root')]
+    trees = await Resolver(loader_params={Loader: {'records': records}}).resolve(trees)
+    trees = [t.dict() for t in trees]
+    print(json.dumps(trees, indent=2))
 
 asyncio.run(main())

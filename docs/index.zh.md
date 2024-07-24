@@ -1,23 +1,22 @@
 # Install
 
-Pydantic-resolve is a light-weight wrapper library for pydantic, it can help you build complicated view data easily.
+Pydantic-resolve 是对 pydantic 的一个轻量级封装, 它可以为你构建复杂的视图数据提供便利
 
-You only need to define your pydantic schemas/models and let resolvers/posts handle the rest.
+你只需简单地定义好pydantic schema (models), 然后让对应的resolve/ post 方法来处理剩下的事情
 
-Pydantic itself plays pretty well with OpenAPI and can seamlessly integrated with frontend with [openapi-typescript-codegen](https://github.com/ferdikoomen/openapi-typescript-codegen), so that with pydantic-resolve you'll be able to construct accurate view data and transfer it to frontend.
+Pydantic (和fastapi 一起) 对 OpenAPI 的支持非常棒, 结合 [openapi-ts](https://github.com/hey-api/openapi-ts) 之后可以在前端快速生成 client 文件
 
 
-if you are using pydantic v1:
+如果使用的是 pydantic v1
 
 ```shell
 pip install pydantic-resolve
 ```
 
-if you are using pydantic v2:
+如果使用的是 pydantic v2
 
 ```shell
 pip install pydantic2-resolve
 ```
 
-
-They share a same set of APIs
+它们的API是相同的

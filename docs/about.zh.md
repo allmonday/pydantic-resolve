@@ -1,29 +1,8 @@
 # Welcome to Pydantic-resolve
 
-Pydantic-resolve is a hierarchical solution focus on data fetching and processing, from simple to complicated.
+Pydantic-resolve 使用声明的方式来描述数据, 可以从简到繁构造各种数据, 同时使其易于维护.
 
-For example, we want to build a view data named `MySite` which is required by a blog site page, it not only contains blogs, and it's comments, but also can calculate **total comments count of both blog level and site level**.
-
-Let's describe it in form of graphql query for clarity.
-
-```graphql linenums="1"
-query {
-    MySite {
-        name
-        blogs {
-            id
-            title
-            comments {
-                id
-                content
-            }
-            # comment_count  # comments count for blog
-        }
-        # comment_count  # total comments
-    }
-}
-```
-Our source data of blogs and comments are prepared.
+以 `MySite` 为例, 它包含了 blogs 和 comments 信息
 
 ```python linenums="1"
 blogs_table = [
@@ -37,17 +16,15 @@ comments_table = [
     dict(id=4, blog_id=2, content='interesting')]
 ```
 
-Assuming `comment_count` is a extra field (length of comment), which is required and calculated by client after fetching the data.
+## 描述 schemas
 
-> @property on @computed (in pydantic v2) can also works, just post_ method provides more context related params
+借助 annotations, 我们从上到下描述了 MySite 的结构
 
-So that client side need to iterate over the blogs to get the length and the sum, which is boring (things gets worse if the structure is deeper).
+name, id, title 等是已知的字段, 之后会根据数据赋值
 
-In pydantic-resolve, we handle this process at schema side.
+blogs, comments 等数据还是未知数, 所以赋了默认值
 
-## Describe by pydantic schemas:
-
-```python linenums="1" hl_lines="8 9 15 16"
+```python linenums="1" hl_lines="8 14" 
 from __future__ import annotations 
 import asyncio
 from pydantic import BaseModel
@@ -56,30 +33,26 @@ class MySite(BaseModel):
     name: str
 
     blogs: list[Blog] = []
-    comment_count: int = 0
 
 class Blog(BaseModel):
     id: int
     title: str
 
     comments: list[Comment] = []
-    comment_count: int = 0
 
 class Comment(BaseModel):
     id: int
     content: str
 ```
 
-We leave unresolved fields with default value to make it able to be loaded by pydantic.
 
-## Attach resolve and post
+## 添加 resolve 方法
 
-And then add some `resolve` & `post` methods, for example `resolve_comments` will fetch data and then assigned it to `comments` field.
+resolve 方法描述了获取数据的具体方式
 
-- **resolve**: it will run your query function to fetch children and descendants
-- **post**: after descendant fields are all resolved, post will be called to calculate comment count.
+> resolve 方法支持异步调用
 
-```python linenums="1" hl_lines="9-10 13-15 22-23 26-27"
+```python linenums="1" hl_lines="9-10 17-18"
 from __future__ import annotations 
 from pydantic_resolve import Resolver
 from pydantic import BaseModel
@@ -91,11 +64,6 @@ class MySite(BaseModel):
     async def resolve_blogs(self):
         return await get_blogs()
 
-    comment_count: int = 0
-    def post_comment_count(self):
-        # >> it will wait until all blogs are resolved
-        return sum([b.comment_count for b in self.blogs])
-
 class Blog(BaseModel):
     id: int
     title: str
@@ -104,14 +72,9 @@ class Blog(BaseModel):
     async def resolve_comments(self):
         return await query_comments(self.id)
 
-    comment_count: int = 0
-    def post_comment_count(self):
-        return len(self.comments)
-
 class Comment(BaseModel):
     id: int
     content: str
-
 
 
 async def query_comments(blog_id: int):
@@ -124,9 +87,9 @@ async def get_blogs():
 
 ## Resolver
 
-let's start and check the output.
+万事具备, 可以开始实例化Resolver 来解析了
 
-```python linenums="1" hl_lines="2 3"
+```python linenums="1"
 
 async def main():
     my_blog_site = MySite(name: "tangkikodo's blog")
@@ -134,8 +97,10 @@ async def main():
     print(my_blog_site.json(indent=2))
 ```
 
+我们顺利获得了期望的数据
 
-```shell linenums="1" hl_lines="19 34 37"
+
+```shell linenums="1"
 run-query - 1
 run-query - 2
 
@@ -154,7 +119,6 @@ run-query - 2
           "content": "i need more example"
         }
       ],
-      "comment_count": 2
     },
     {
       "id": 2,
@@ -169,17 +133,11 @@ run-query - 2
           "content": "interesting"
         }
       ],
-      "comment_count": 2
     }
   ],
-  "comment_count": 4
 }
 ```
 
-We have fetched and tweaked the view data we want, but wait, there is a problem
+你也许注意到了, `run-query` 被打印了两次, 在获取 comments 的时候发生了重复查询. (N+1查询)
 
-Let's have a look of the info printed from `query_comments`, **it was called by twice!**
-
-This is a typical N+1 query which will have performance issue if we have a big number of blogs.
-
-Let's fix it in next phase.
+我们会在下一章节使用dataloader解决这个问题
