@@ -22,41 +22,18 @@ pip install pydantic-resolve
 ```
 
 
-## For user from GraphQL
-
-This is how we make queries in GraphQL, dive by describing schema and field names.
-
-```gql
-query {
-    MyBlogSite {
-        name
-        blogs {
-            id
-            title
-            comments {
-                id
-                content
-            }
-            # comment_count
-        }
-        # comment_count
-    }
-}
-```
-
-> using query statement is flexible, but for scenarios like `API integration` it can be difficult to maintain.
-
-In client, field `comment_count` is the length of each blog and also the total count (just for demo, pls ignore pagination staff), so client side need to iterate over the blogs to get the length and the sum, which is boring (things getting worse if the structure is deeper).
-
-With pydantic-resolve, we can handle these calculations at server side. Let see how it works.
-
-By transforming the query into pydantic schemas and attach some resolve, post methods, it looks like:
-
+## Inherit and extend schemas, then resolve
 
 ```python
 from __future__ import annotations
-import comment_service as cs
-import blog_service as bs
+
+class Blog(BaseModel):
+    id: int
+    title: str
+
+class Comment(BaseModel):
+    id: int
+    content: str
 
 class MySite(BaseModel):
     blogs: list[MySiteBlog] = []
@@ -67,27 +44,22 @@ class MySite(BaseModel):
     def post_comment_count(self):
         return sum([b.comment_count for b in self.blogs])  # for total
 
-class MySiteBlog(bs.Blog):  # >>> inherit and extend <<<
-    comments: list[cs.Comment] = []
-    def resolve_comments(self, loader=LoaderDepend(cs.blog_to_comments_loader)):
+class MySiteBlog(Blog):
+    comments: list[Comment] = []
+    def resolve_comments(self, loader=LoaderDepend(blog_to_comments_loader)):
         return loader.load(self.id)
 
     comment_count: int = 0
     def post_comment_count(self):
         return len(self.comments)  # for each blog
         
-async def main():
-    my_blog_site = MyBlogSite(name: "tangkikodo's blog")
-    my_blog_site = await Resolver().resolve(my_blog_site)
+my_blog_site = MyBlogSite(name: "tangkikodo's blog")
+my_blog_site = await Resolver().resolve(my_blog_site)
 ```
 
-schemas , query functions and loader functions are provided by entity's service modules. 
+## Full demo with FastAPI & hey-api/openapi-ts
 
-And then we can simpily **inherit** and **extend** from these base schemas to declare the schemas you want.
-
-> This just like columns of values (inherit) and of foreign keys (extend) in concept of relational database.
-
-After transforming GraphQL query into pydantic schemas, post calculation become dead easy, and no more iterations.
+https://github.com/allmonday/pydantic-resolve-demo
 
 
 ## API Reference

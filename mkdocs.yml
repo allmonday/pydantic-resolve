@@ -29,3 +29,23 @@ markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.superfences
+
+plugins:
+  - i18n:
+      docs_structure: suffix
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+        - locale: zh
+          name: 中文
+          build: true
+          nav_translations:
+            Quick Start: "快速开始"
+            Reference: "文档"
+            Change log: "变更记录"
+            Install: "安装"
+            Let's start: "开始"
+            Inheritance: "继承"
+            Philosophy: "迷思"

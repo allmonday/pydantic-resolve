@@ -25,6 +25,7 @@ pytest-asyncio = "^0.21.0"
 fastapi = "^0.96.0"
 uvicorn = "^0.22.0"
 mkdocs-material = "9.*"
+mkdocs-static-i18n = {version = "1.2.0", extras = ["material"]}
 
 [build-system]
 requires = ["poetry-core"]
