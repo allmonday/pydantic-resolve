@@ -38,9 +38,11 @@ plugins:
           default: true
           name: English
           build: true
+          link: "/pydantic-resolve/"
         - locale: zh
           name: 中文
           build: true
+          link: "/pydantic-resolve/zh/"
           nav_translations:
             Quick Start: "快速开始"
             Reference: "文档"
