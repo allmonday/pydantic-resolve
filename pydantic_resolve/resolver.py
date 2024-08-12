@@ -201,6 +201,7 @@ class Resolver:
                 post_method = getattr(target, post_field)
                 result = self._execute_post_method(target, kls, kls_path, post_field, post_method)
 
+                # TODO:  post method support async, should be gathered instead of for + await
                 while iscoroutine(result) or asyncio.isfuture(result):
                     result = await result
                     

@@ -12,3 +12,6 @@ class MissingAnnotationError(Exception):
 
 class GlobalLoaderFieldOverlappedError(Exception):
     pass
+
+class MissingCollector(Exception):
+    pass
