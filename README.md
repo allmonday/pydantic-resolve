@@ -4,14 +4,13 @@
 ![Test Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/allmonday/6f1661c6310e1b31c9a10b0d09d52d11/raw/covbadge.json)
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
-Pydantic-resolve is a schema based, hierarchical solution for fetching and crafting data.
+Pydantic-resolve is a schema based, hierarchical solution for data fetching and crafting.
 
-Features:
+**Features**:
 
-0. The best data aggregration (bff) tool for FastAPI/Django ninja ever. 
-1. By providing/describing your pydantic schema and instance(s), resolver will recursively resolve uncertain nodes and their descendants.
-2. You can modify resolved nodes, or compute new nodes based on resolved nodes, no need of iteration.
-3. Schemas are pluggable, easy to combine together and easy to reuse.
+1. with pydantic schema and instances, resolver recursively resolve uncertain nodes and their descendants.
+2. nodes could be modified during post-process
+3. plugable, easy to combine together and reuse.
 
 
 ## Install
@@ -23,70 +22,89 @@ pip install pydantic-resolve
 ```
 
 
-## Inherit and extend schemas, then resolve
+## Hello world
+
+build blogs with comments
 
 ```python
-from __future__ import annotations
-
-class Blog(BaseModel):
-    id: int
-    title: str
+import asyncio
+import json
+from pydantic import BaseModel
+from pydantic_resolve import Resolver
 
 class Comment(BaseModel):
     id: int
     content: str
 
-class MySite(BaseModel):
-    blogs: list[MySiteBlog] = []
-    async def resolve_blogs(self):
-        return await bs.get_blogs()
+class Blog(BaseModel):
+    id: int
+    title: str
+    content: str
 
-    comment_count: int = 0
-    def post_comment_count(self):
-        return sum([b.comment_count for b in self.blogs])  # for total
-
-class MySiteBlog(Blog):
     comments: list[Comment] = []
-    def resolve_comments(self, loader=LoaderDepend(blog_to_comments_loader)):
-        return loader.load(self.id)
+    def resolve_comments(self):
+        return get_comments(self.id)
 
-    comment_count: int = 0
-    def post_comment_count(self):
-        return len(self.comments)  # for each blog
-        
-my_blog_site = MyBlogSite(name: "tangkikodo's blog")
-my_blog_site = await Resolver().resolve(my_blog_site)
+
+def get_blogs():
+    return [
+        dict(id=1, title="hello world", content="hello world detail"),
+        dict(id=2, title="hello Mars", content="hello Mars detail"),
+    ]
+
+def get_comments(id):
+    comments = [
+        dict(id=1, content="world is beautiful", blog_id=1),
+        dict(id=2, content="Mars is beautiful", blog_id=2),
+        dict(id=3, content="I love Mars", blog_id=2),
+    ]
+    return [c for c in comments if c['blog_id'] == id]
+
+
+async def main():
+    blogs = [Blog.parse_obj(blog) for blog in get_blogs()]
+    blogs = await Resolver().resolve(blogs)
+    print(json.dumps(blogs, indent=2, default=lambda o: o.dict()))
+
+asyncio.run(main())
 ```
 
-## Full demo with FastAPI & hey-api/openapi-ts
-
-https://github.com/allmonday/pydantic-resolve-demo
-
-
-## API Reference
-for more details, please refer to: https://allmonday.github.io/pydantic-resolve/reference_api/
-
-## Composition oriented development-pattern (wip)
-
-This repo introduce a pattern that balance the speed of development and the maintaince, readability of your project, based on pydantic-resolve.
-
-https://github.com/allmonday/composition-oriented-development-pattern
-
-
-## Unittest
-
-```shell
-poetry run python -m unittest  # or
-poetry run pytest  # or
-poetry run tox
+```json
+[
+  {
+    "id": 1,
+    "title": "hello world",
+    "content": "hello world detail",
+    "comments": [
+      {
+        "id": 1,
+        "content": "world is beautiful"
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "title": "hello Mars",
+    "content": "hello Mars detail",
+    "comments": [
+      {
+        "id": 2,
+        "content": "Mars is beautiful"
+      },
+      {
+        "id": 3,
+        "content": "I love Mars"
+      }
+    ]
+  }
+]
 ```
 
-## Coverage
+## Documents
 
-```shell
-poetry run coverage run -m pytest
-poetry run coverage report -m
-```
+- **API**: https://allmonday.github.io/pydantic-resolve/reference_api/
+- **Demo**: https://github.com/allmonday/pydantic-resolve-demo
+- **Composition oriented pattern**: https://github.com/allmonday/composition-oriented-development-pattern
 
 
 ## Sponsor
@@ -96,5 +114,5 @@ If this code helps and you wish to support me
 Paypal: https://www.paypal.me/tangkikodo
 
 
-## Others
+## Discussion
 [Discord](https://discord.com/channels/1197929379951558797/1197929379951558800)

@@ -25,6 +25,9 @@ class B(BaseModel):
 class C(BaseModel):
     __pydantic_resolve_collect__ = {'name': 'field_name'}
     name: str
+    async def post_name(self):
+        return f'{self.name}!'
+
 
 data = [
         {'list_b': [
@@ -45,4 +48,4 @@ data = [
 async def test_collector_1():
     root = Root()
     root = await Resolver().resolve(root)
-    assert set(root.names) == {'b1', 'b2', 'b3', 'b4', 'c1', 'c4'}
+    assert set(root.names) == {'b1', 'b2', 'b3', 'b4', 'c1!', 'c4!'}
