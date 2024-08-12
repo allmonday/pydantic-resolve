@@ -1,5 +1,8 @@
 # Changelog
 
+## v.1.10.6 (2024.8.12)
+- collector now can collect from multiple sources
+
 ## v.1.10.5 (2024.5.20)
 - post method can be async function
 

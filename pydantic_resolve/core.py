@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from dataclasses import is_dataclass, fields as dc_fields
 import pydantic_resolve.util as util
 import pydantic_resolve.constant as const
-from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError
+from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingCollector
 
 def LoaderDepend(  # noqa: N802
     dependency: Optional[Callable[..., Any]] = None,
@@ -135,7 +135,8 @@ def _scan_post_method(method, field):
                 'field': field,
                 'param': name,
                 'instance': param.default,
-                'alias': param.default.alias }
+                'alias': param.default.alias 
+            }
             result['collectors'].append(info)
             
     return result
@@ -273,20 +274,27 @@ def scan_and_store_metadata(root_class):
             if post_field not in all_fields:
                 raise ResolverTargetAttrNotFound(f"attribute {post_field} not found")
 
-    def _validate_expose_and_collect(expose_dict, collect_dict, kls_name):
+    def _validate_expose(expose_dict, kls_name):
         if type(expose_dict) is not dict:
             raise AttributeError(f'{const.EXPOSE_TO_DESCENDANT} is not dict')
         for _, v in expose_dict.items():
             if v in expose_set:
                 raise AttributeError(f'Expose alias name conflicts, please check: {kls_name}')
             expose_set.add(v)
+    
+    def _add_collector_info(post_params):
+        for _, param in post_params.items():
+            for collector in param['collectors']:
+                collect_set.add(collector['alias'])
 
+    def _validate_collector(collect_dict, kls_name):
+        """collector should be declared in ancestors"""
         if type(collect_dict) is not dict:
             raise AttributeError(f'{const.COLLECT_FROM_ANCESTOR} is not dict')
+
         for _, v in collect_dict.items():
-            if v in collect_set:
-                raise AttributeError(f'Collect alias name conflicts, please check: {kls_name}')
-            collect_set.add(v)
+            if v not in collect_set:
+                raise MissingCollector(f'Collector alias name not found in ancestor, please check: {kls_name}')
 
     def walker(kls):
         kls_name = util.get_kls_full_path(kls)
@@ -302,7 +310,7 @@ def scan_and_store_metadata(root_class):
         # - scan expose and collect (__pydantic_resolve_xxx__)
         expose_dict = getattr(kls, const.EXPOSE_TO_DESCENDANT, {})
         collect_dict = getattr(kls, const.COLLECT_FROM_ANCESTOR, {})
-        _validate_expose_and_collect(expose_dict, collect_dict, kls_name)
+        _validate_expose(expose_dict, kls_name)
 
         resolve_params = {field: _scan_resolve_method(getattr(kls, field), field) for field in resolve_fields}
         post_params = {field: _scan_post_method(getattr(kls, field), field) for field in post_fields}
@@ -313,6 +321,10 @@ def scan_and_store_metadata(root_class):
         post_context = any([p['context'] for p in post_params.values()])
         post_default_context = post_default_handler_params['context'] if post_default_handler_params else False
         has_context = resolve_context or post_context or post_default_context
+
+        # check collector
+        _add_collector_info(post_params)
+        _validate_collector(collect_dict, kls_name)
 
         metadata[kls_name] = {
             'resolve': resolve_fields,
