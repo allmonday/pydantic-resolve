@@ -102,6 +102,7 @@ asyncio.run(main())
 
 ## Documents
 
+- **Quick start**: https://allmonday.github.io/pydantic-resolve/about/
 - **API**: https://allmonday.github.io/pydantic-resolve/reference_api/
 - **Demo**: https://github.com/allmonday/pydantic-resolve-demo
 - **Composition oriented pattern**: https://github.com/allmonday/composition-oriented-development-pattern
