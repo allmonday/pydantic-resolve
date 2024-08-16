@@ -33,7 +33,7 @@ class ICollector(metaclass=abc.ABCMeta):
         """how to add new element(s)"""
 
     @abc.abstractmethod
-    def values(self, val):
+    def values(self) -> Any:
         """get result"""
 
 class Collector(ICollector):
