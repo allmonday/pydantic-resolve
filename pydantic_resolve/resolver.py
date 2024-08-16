@@ -81,7 +81,10 @@ class Resolver:
         for field, alias in core.iter_over_collectable_fields(kls, self.metadata):
             for _, instance in self.collector_contextvars[alias].get().items():
                 collector = instance
-                val = getattr(target, field)
+
+                val = [getattr(target, f) for f in field]\
+                    if isinstance(field, tuple) else getattr(target, field)
+
                 collector.add(val)
     
     def _add_parent(self, target):
