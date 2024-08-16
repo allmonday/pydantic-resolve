@@ -1,5 +1,13 @@
 # Changelog
 
+## v.1.10.7 (2024.8.16)
+- collector support tuple
+
+```python
+class Item(BaseModel):
+    __pydantic_resolve_collect__ = {('field_a', 'field_b'): 'collector_name'}
+```
+
 ## v.1.10.6 (2024.8.12)
 - collector now can collect from multiple sources
 

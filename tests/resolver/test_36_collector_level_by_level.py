@@ -1,8 +1,7 @@
 from __future__ import annotations
 from pydantic import BaseModel
-from typing import List
+from typing import List, Tuple
 from pydantic_resolve import Resolver, Collector
-from pydantic_resolve.core import LoaderDepend
 import pytest
 
 
@@ -11,32 +10,37 @@ class Root(BaseModel):
     def resolve_list_a(self):
         return data
     
-    names: List[str] = []
+    names: List[Tuple[str, int]] = []
     def post_names(self, collector=Collector('b_name')):
         return collector.values()
 
 class A(BaseModel):
     list_b: List[B]
 
-    names: List[str] = []
+    names: List[Tuple[str, int]] = []
     def post_names(self, collector=Collector('b_name')):
         return collector.values()
 
 class B(BaseModel):
-    __pydantic_resolve_collect__ = {'name': 'b_name'}
+    __pydantic_resolve_collect__ = {
+        ('name', 'age'): 'b_name'
+    }
+
     name: str
+    age: int
 
 
 data = [
         {'list_b': [
-            {'name': 'b1'},
-            {'name': 'b2'},
+            {'name': 'b1', "age": 1},
+            {'name': 'b2', "age": 2},
         ]},
         {'list_b': [
-            {'name': 'b3'},
-            {'name': 'b4'},
+            {'name': 'b3', "age": 3},
+            {'name': 'b4', "age": 4},
         ]},
     ]
+    
 
 @pytest.mark.asyncio
 async def test_level():
@@ -49,36 +53,40 @@ async def test_level():
             {
             "list_b": [
                 {
-                "name": "b1"
+                "name": "b1",
+                "age": 1
                 },
                 {
-                "name": "b2"
+                "name": "b2",
+                "age": 2
                 }
             ],
             "names": [
-                "b1",
-                "b2"
+                ("b1", 1),
+                ("b2", 2)
             ]
             },
             {
             "list_b": [
                 {
-                "name": "b3"
+                "name": "b3",
+                "age": 3
                 },
                 {
-                "name": "b4"
+                "name": "b4",
+                "age": 4
                 }
             ],
             "names": [
-                "b3",
-                "b4"
+                ("b3", 3),
+                ("b4", 4)
             ]
             }
         ],
         "names": [
-            "b1",
-            "b2",
-            "b3",
-            "b4"
+            ("b1", 1),
+            ("b2", 2),
+            ("b3", 3),
+            ("b4", 4),
         ]
     }
