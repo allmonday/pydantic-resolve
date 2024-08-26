@@ -79,13 +79,16 @@ class Resolver:
 
     def _add_values_into_collectors(self, target, kls):
         for field, alias in core.iter_over_collectable_fields(kls, self.metadata):
-            for _, instance in self.collector_contextvars[alias].get().items():
-                collector = instance
-
-                val = [getattr(target, f) for f in field]\
-                    if isinstance(field, tuple) else getattr(target, field)
-
-                collector.add(val)
+            # handle two scenarios
+            # {'name': ('collector_a', 'collector_b')}
+            # {'name': 'collector_a'}
+            alias_list = alias if isinstance(alias, tuple) else (alias,)
+            
+            for alias in alias_list:
+                for _, instance in self.collector_contextvars[alias].get().items():
+                    val = [getattr(target, f) for f in field]\
+                        if isinstance(field, tuple) else getattr(target, field)
+                    instance.add(val)
     
     def _add_parent(self, target):
         if not self.parent_contextvars.get('parent'):
@@ -145,7 +148,7 @@ class Resolver:
         
         return method(**params)
 
-    def _execute_post_default_handler(self, kls, method):
+    def _execute_post_default_handler(self, target, kls, kls_path, method):
         params = {}
         post_default_param = core.get_post_default_handler_params(kls, self.metadata)
 
@@ -156,8 +159,14 @@ class Resolver:
         if post_default_param['parent']:
             params['parent'] = self.parent_contextvars['parent'].get()
 
-        ret_val = method(**params)
-        return ret_val
+        alias_map = self.object_collect_alias_map_store.get(id(target), {})
+        if alias_map:
+            for collector in post_default_param['collectors']:
+                alias, param = collector['alias'], collector['param']
+                signature = (kls_path, const.POST_DEFAULT_HANDLER, param)
+                params[param] = alias_map[alias][signature]
+
+        return method(**params)
 
     async def _resolve_obj_field(self, target, kls, field, trim_field, method):
         if self.ensure_type:
@@ -213,7 +222,7 @@ class Resolver:
 
             default_post_method = getattr(target, const.POST_DEFAULT_HANDLER, None)
             if default_post_method:
-                self._execute_post_default_handler(kls, default_post_method)
+                self._execute_post_default_handler(target, kls, kls_path, default_post_method)
 
             # collect after all done
             self._add_values_into_collectors(target, kls)
