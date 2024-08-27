@@ -50,7 +50,7 @@ class A(BaseModel):
 class B(BaseModel):
     __pydantic_resolve_collect__ = {
         'name': ('b_name', 'default_handler'),
-        'items': 'b_items',
+        'items': ['b_items'],
     }
     name: str
     items: List[str] = ['x', 'y']

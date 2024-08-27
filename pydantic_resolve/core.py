@@ -308,9 +308,9 @@ def scan_and_store_metadata(root_class):
         if type(collect_dict) is not dict:
             raise AttributeError(f'{const.COLLECT_FROM_ANCESTOR} is not dict')
 
-        for _, coll in collect_dict.items():
-            coll_tuple = coll if isinstance(coll, tuple) else (coll,)
-            for col in coll_tuple:
+        for _, collector in collect_dict.items():
+            colls = collector if isinstance(collector, (list, tuple)) else (collector,)
+            for col in colls:
                 if col not in collect_set:
                     raise MissingCollector(f'Collector alias name not found in ancestor, please check: {kls_name}')
 

@@ -82,8 +82,8 @@ class Resolver:
             # handle two scenarios
             # {'name': ('collector_a', 'collector_b')}
             # {'name': 'collector_a'}
-            alias_list = alias if isinstance(alias, tuple) else (alias,)
-            
+            alias_list = alias if isinstance(alias, (tuple, list)) else (alias,)
+
             for alias in alias_list:
                 for _, instance in self.collector_contextvars[alias].get().items():
                     val = [getattr(target, f) for f in field]\
