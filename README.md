@@ -6,12 +6,17 @@
 
 Pydantic-resolve is a schema based, hierarchical solution for data fetching and crafting.
 
+It can compose schemas together with resolver (and dataloader), and then expose typescript types and methods to client.
+
+It can be a super simple alternative solution for GraphQL
+
+![](./doc/imgs/concept.png)
+
 **Features**:
 
 1. with pydantic schema and instances, resolver recursively resolve uncertain nodes and their descendants.
 2. nodes could be modified during post-process
 3. plugable, easy to combine together and reuse.
-
 
 ## Install
 
@@ -20,7 +25,6 @@ Pydantic-resolve is a schema based, hierarchical solution for data fetching and 
 ```shell
 pip install pydantic-resolve
 ```
-
 
 ## Hello world
 
@@ -107,13 +111,12 @@ asyncio.run(main())
 - **Demo**: https://github.com/allmonday/pydantic-resolve-demo
 - **Composition oriented pattern**: https://github.com/allmonday/composition-oriented-development-pattern
 
-
 ## Sponsor
 
 If this code helps and you wish to support me
 
 Paypal: https://www.paypal.me/tangkikodo
 
-
 ## Discussion
+
 [Discord](https://discord.com/channels/1197929379951558797/1197929379951558800)
