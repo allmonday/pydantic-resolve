@@ -1,6 +1,18 @@
 # Changelog
 
+## v.1.10.8 (2024.8.27)
+
+- collector suppor tuple for value
+
+```python
+class Item(BaseModel):
+    __pydantic_resolve_collect__ = {('field_a', 'field_b'): ('collector_a', 'collector_b')}
+```
+
+this means `(Item.field_a, Item.field_b)` will be sent to both collector_a and collector_b
+
 ## v.1.10.7 (2024.8.16)
+
 - collector support tuple
 
 ```python
@@ -9,33 +21,39 @@ class Item(BaseModel):
 ```
 
 ## v.1.10.6 (2024.8.12)
+
 - collector now can collect from multiple sources
 
 ## v.1.10.5 (2024.5.20)
+
 - post method can be async function
 
 ## v.1.10.4 (2024.4.11)
+
 - new feature: reading parent node in resolve, post and post_default_handler
 
 ## v.1.10.3 (2024.4.8)
+
 - bugfix, handle TypeError from issubclass, https://github.com/allmonday/pydantic2-resolve/issues/7
 
 ## v.1.10.2 (2024.3.21)
+
 - internal optimization:
-    - no more inspect.signature in runtime
+  - no more inspect.signature in runtime
 
 ## v.1.10.1 (2024.3.17)
+
 - fix collect intermediate level error
 - internal refactor
-    - better metadata lookup
+  - better metadata lookup
 
 ## v.1.10.0 (2024.3.16) yanked
 
 - add new feature: `collector`
 - internal refactor
-    - optimize scan process.
-    - prepare for debug feature.
-    - create dataloader instance before resolving
+  - optimize scan process.
+  - prepare for debug feature.
+  - create dataloader instance before resolving
 
 ## v.1.9.3 (2024.03.12)
 

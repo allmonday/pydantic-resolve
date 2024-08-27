@@ -42,11 +42,15 @@ class A(BaseModel):
                           collector2=Collector('c_details'),
                           ):
         return collector.values() == collector2.values()
+    
+    default_names: List[str] = []
+    def post_default_handler(self, collector=Collector('default_handler')):
+        self.default_names = collector.values()
 
 class B(BaseModel):
     __pydantic_resolve_collect__ = {
-        'name': 'b_name',
-        'items': 'b_items'
+        'name': ('b_name', 'default_handler'),
+        'items': ['b_items'],
     }
     name: str
     items: List[str] = ['x', 'y']
@@ -81,5 +85,6 @@ async def test_collector_1():
                               ['b1-2-detail-1', 'b1-2-detail-2'], 
                               ['b2-1-detail-1', 'b2-1-detail-2'], 
                               ['b2-2-detail-1', 'b2-2-detail-2']]
-
+    
+    assert a.default_names == ['b1', 'b2']
     assert a.details_compare is True

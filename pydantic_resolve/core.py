@@ -147,6 +147,7 @@ def _scan_post_default_handler(method):
         'context': False,
         'ancestor_context': False,
         'parent': False,
+        'collectors': []
     }
     signature = inspect.signature(method)
 
@@ -158,6 +159,16 @@ def _scan_post_default_handler(method):
 
     if signature.parameters.get('parent'):
         result['parent'] = True
+
+    for name, param in signature.parameters.items():
+        if isinstance(param.default, ICollector):
+            info = {
+                'field': const.POST_DEFAULT_HANDLER,
+                'param': name,
+                'instance': param.default,
+                'alias': param.default.alias 
+            }
+            result['collectors'].append(info)
 
     return result
 
@@ -287,14 +298,21 @@ def scan_and_store_metadata(root_class):
             for collector in param['collectors']:
                 collect_set.add(collector['alias'])
 
+    def _add_collector_info_for_default_handler(post_default_params):
+        if post_default_params is not None:
+            for collector in post_default_params['collectors']:
+                collect_set.add(collector['alias'])
+
     def _validate_collector(collect_dict, kls_name):
         """collector should be declared in ancestors"""
         if type(collect_dict) is not dict:
             raise AttributeError(f'{const.COLLECT_FROM_ANCESTOR} is not dict')
 
-        for _, v in collect_dict.items():
-            if v not in collect_set:
-                raise MissingCollector(f'Collector alias name not found in ancestor, please check: {kls_name}')
+        for _, collector in collect_dict.items():
+            colls = collector if isinstance(collector, (list, tuple)) else (collector,)
+            for col in colls:
+                if col not in collect_set:
+                    raise MissingCollector(f'Collector alias name not found in ancestor, please check: {kls_name}')
 
     def walker(kls):
         kls_name = util.get_kls_full_path(kls)
@@ -324,6 +342,7 @@ def scan_and_store_metadata(root_class):
 
         # check collector
         _add_collector_info(post_params)
+        _add_collector_info_for_default_handler(post_default_handler_params)
         _validate_collector(collect_dict, kls_name)
 
         metadata[kls_name] = {
@@ -409,6 +428,8 @@ def get_post_default_handler_params(kls, metadata):
 
 def get_collectors(kls, metadata):
     kls_meta = metadata.get(kls, {})
+
+    # post method
     post_params = kls_meta['post_params']
     kls_path = kls_meta['kls_path']
 
@@ -418,6 +439,14 @@ def get_collectors(kls, metadata):
             sign = (kls_path, collector['field'], collector['param'])
             # copied instance will be stored in resolver's self.object_collect_alias_map_store
             alias_map[collector['alias']][sign] = copy.deepcopy(collector['instance'])
+
+    # post_default_handler
+    post_default_handler_params = kls_meta['post_default_handler_params']
+    if post_default_handler_params:
+        for collector in post_default_handler_params['collectors']:
+            sign = (kls_path, collector['field'], collector['param'])
+            alias_map[collector['alias']][sign] = copy.deepcopy(collector['instance'])
+
     return alias_map
 
 
