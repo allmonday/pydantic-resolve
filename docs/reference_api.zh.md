@@ -1,28 +1,23 @@
-# Reference
+# 文档
 
-## Concepts
+## 概念
 
-It taks several steps from root data into view data, you can manage the fetching process and tweak it after fetched.
+Pydantic-resolve 最早受到 GraphQL 和关系型数据库外键的启发， 利用 dataloader 将不同的 Schema/Entity 关联起来， 实现数据自由拼装的目的。
 
-1. define schema of root data and descdants & load root data
-2. forward resolve all descdants data (resolve)
-3. backward post-process the data (post)
-4. tree shake the data (model_config and exclude=True)
-5. get the output
+基于 pydantic 的 web 框架， 比如 FastAPI 或者 Django-ninja，可以基于 openapi.json 生成前端 sdk 方便开发。
 
-![](./images/concept.jpeg)
+## Resolve 方法
 
+resolve_field 方法可以是 async 的， Resolver 会递归的解析子节点中的所有 resolve_field 方法来获取数据
 
-## Resolve
-
-*Available params:*
+可以使用的参数 (参数具体的用途后面会详细说明)
 
 - context
 - ancestor_context
 - parent
 - **dataloaders** (multiple)
 
-resolve_field, can be async. Resolver will recursively execute `resolve_field` to fetch descendants
+样例代码：
 
 ```python
 class Blog(BaseModel):
@@ -31,27 +26,28 @@ class Blog(BaseModel):
     comments: list[str] = []
     def resolve_comments(self):
         return ['comment-1', 'comment-2']
-    
+
     tags: list[str] = []
     async def resolve_tags(self):
         await asyncio.sleep(1)
         return ['tag-1', 'tag-2']
 ```
 
-## Post
+## Post 方法
 
-*Available params:*
+post_field 方法可以为 sync 或者 async, 在子孙节点的数据处理完毕之后触发，用来对获取到的数据做后续处理。
+
+可以使用的参数:
 
 - context
 - ancestor_context
 - parent
 - **collectors** (multiple)
 
-`post_field`, can be async, but dataloader is not supported
+使用场景：
 
-You can modify target field after descendants are all resolved.
+1. 修改一个已经获取到的数据
 
-1) modify a resolved field,
 ```python
 class Blog(BaseModel):
     id: int
@@ -59,12 +55,13 @@ class Blog(BaseModel):
     comments: list[str] = []
     def resolve_comments(self):
         return ['comment-1', 'comment-2']
-    
+
     def post_comments(self):
         return self.comments[-1:] # keep the last one
 ```
 
-2) or modify a new field
+2. 修改一个初始为默认值的数据
+
 ```python
 class Blog(BaseModel):
     id: int
@@ -72,29 +69,29 @@ class Blog(BaseModel):
     comments: list[str] = []
     def resolve_comments(self):
         return ['comment-1', 'comment-2']
-    
+
     comment_count: int = 0
     def post_comment_count(self):
         return len(self.comments)
 ```
 
-### post_default_handler
+### post_default_handler 方法
 
-`post_default_handler` is a special post method, it runs finally after all post_methods are done.
+`post_default_handler` 是一个特殊的 post 方法， 他会在所有 post 方法执行完毕之后触发， 适用于对 post 结束之后的数据有依赖的场合。
 
-*Available params*:
+可以使用的参数:
 
 - context
 - ancestor_context
 - parent
 
+## 方法参数说明
 
-## Method params
+### Context
 
-### Context 
-> available in: resolve, post, post_default_handler
+> 可以用于全部方法
 
-A global (root) context, after set it in Resolver, resolve and post can read it.
+context 是一个全局上下文， 在 Resolver 方法中设置， 可以被所有方法获取到。
 
 ```python hl_lines="5 9 14"
 class Blog(BaseModel):
@@ -104,32 +101,34 @@ class Blog(BaseModel):
     def resolve_comments(self, context):
         prefix = context['prefix']
         return [f'{prefix}-{c}' for c in ['comment-1', 'comment-2']]
-    
+
     def post_comments(self, context):
         limit = context['limit']
         return self.comments[-limit:]  # get last [limit] comments
-    
+
 blog = Blog(id=1)
 blog = await Resolver(context={'prefix': 'my', 'limit': 1}).resolve(blog)
 ```
 
-output
+输出
 
 ```python
-Blog(id=1, 
-     comments=['my-comment-1', 'my-comment-2'], 
+Blog(id=1,
+     comments=['my-comment-1', 'my-comment-2'],
      post_comments=['my-comment-2'])
 ```
 
 ### Ancestor context
-> available in: resolve, post, post_default_handler
 
-In some scenario, descendants may need to read ancestor's field, ancestor_context can help.
+> 可以用于全部方法
+
+在一些场景中， 我们可能需要获取某个节点的祖先节点中的数据， 就可以通过 ancestor_context 来实现
 
 ![](./images/expose.jpeg)
 
-You can use `__pydantic_resolve_expose__` to define the field and it's alias for descendants,
-and then read it from `ancestor_context`, using alias as the key.
+首先你需要在祖先节点中添加 `__pydantic_resolve_expose__` 参数来配置要提供的字段名称和别名（层叠中发生重名）
+
+然后就能通过 ancestor_context 来读取到了。
 
 this example shows the blog title can read from it's descendant comment.
 
@@ -142,7 +141,7 @@ class Blog(BaseModel):
     comments: list[Comment] = []
     def resolve_comments(self, loader=LoaderDepend(blog_to_comments_loader)):
         return loader.load(self.id)
-    
+
     comment_count: int = 0
     def post_comment_count(self):
         return len(self.comments)
@@ -157,46 +156,46 @@ class Comment(BaseModel):
 
 ```json hl_lines="9 13 24 28"
 {
-    "blogs": [
+  "blogs": [
+    {
+      "id": 1,
+      "title": "what is pydantic-resolve",
+      "comments": [
         {
-            "id": 1,
-            "title": "what is pydantic-resolve",
-            "comments": [
-                {
-                    "id": 1,
-                    "content": "[what is pydantic-resolve] - its interesting"
-                },
-                {
-                    "id": 2,
-                    "content": "[what is pydantic-resolve] - i dont understand"
-                }
-            ],
-            "comment_count": 2
+          "id": 1,
+          "content": "[what is pydantic-resolve] - its interesting"
         },
         {
-            "id": 2,
-            "title": "what is composition oriented development pattarn",
-            "comments": [
-                {
-                    "id": 3,
-                    "content": "[what is composition oriented development pattarn] - why? how?"
-                },
-                {
-                    "id": 4,
-                    "content": "[what is composition oriented development pattarn] - wow!"
-                }
-            ],
-            "comment_count": 2
+          "id": 2,
+          "content": "[what is pydantic-resolve] - i dont understand"
         }
-    ]
+      ],
+      "comment_count": 2
+    },
+    {
+      "id": 2,
+      "title": "what is composition oriented development pattarn",
+      "comments": [
+        {
+          "id": 3,
+          "content": "[what is composition oriented development pattarn] - why? how?"
+        },
+        {
+          "id": 4,
+          "content": "[what is composition oriented development pattarn] - wow!"
+        }
+      ],
+      "comment_count": 2
+    }
+  ]
 }
 ```
 
 ### Parent
-> available in: resolve, post, post_default_handler
 
-methods can visit parent node by reading `parent`. It's useful in tree-like structure.
+> 可以用于所有方法
 
+可以获得自己的直接父节点， 在 tree 结构中特别有用
 
 ```python hl_lines="6-8"
 class Tree(BaseModel):
@@ -216,7 +215,7 @@ data = dict(name="a", children=[
     dict(name="d", children=[
         dict(name="c")
     ])
-]) 
+])
 data = await Resolver().resolve(Tree(**data))
 ```
 
@@ -255,15 +254,17 @@ output
 
 ### Collectors
 
-> available in: post
+> 可以用于: post
 
 ![](./images/collect2.jpeg)
 
-Ancestor nodes may want to collect some specific fields from it's descendants, you can use `Collector` and `__pydantic_resolve_collect__`.
+collector 可以用来跨代获取子孙节点的数据， 需要配合 `Collector` 和 `__pydantic_resolve_collect__` 参数使用
 
-**It is very helpful in re-organizing your data, move data from a to b**
+在子孙节点中定义 `__pydantic_resolve_collect__` 来指定需要提供的字段信息/收集者名字。
 
-for example, let's collect all comments into all_comments at top level:
+collector 可以让开发者灵活地调整数据结构，不需要去循环地展开子孙节点。
+
+比如， 我们可以在顶层 schema 中收集每个 blog 的 comment 信息, 集中起来。
 
 ```python hl_lines="13 18"
 form pydantic_resolve import Collector
@@ -290,7 +291,7 @@ class Blog(BaseModel):
     comments: list[Comment] = []
     def resolve_comments(self, loader=LoaderDepend(blog_to_comments_loader)):
         return loader.load(self.id)
-    
+
     comment_count: int = 0
     def post_comment_count(self):
         return len(self.comments)
@@ -303,7 +304,8 @@ class Comment(BaseModel):
         return f'[{blog_title}] - {self.content}'
 ```
 
-output of all_comments fields:
+输出的 all_comment 信息
+
 ```json
 {
     "other fields": ...,
@@ -333,8 +335,9 @@ values of `__pydantic_resolve_collect__` must be global unique, this means it is
 **Usages**:
 
 1. Using multiple collectors is of course supported
+
 ```python
-def post_all_comments(self, 
+def post_all_comments(self,
                       collector=Collector(alias='blog_comments', flat=True),
                       collector_2=Collector(alias='comment_content', flat=True)):
     return collector.values()
@@ -342,6 +345,7 @@ def post_all_comments(self,
 
 2. Using `flat=True` will cal `list.extend` inside, use it if your source field is `List[T]`
 3. You can inherit `ICollector` and define your own `Collector`, for example, a counter collector. `self.alias` is always **required**.
+
 ```python
 from pydantic_resolve import ICollector
 
@@ -352,14 +356,13 @@ class CounterCollector(ICollector):
 
     def add(self, val):
         self.counter = self.counter + len(val)
-    
+
     def values(self):
         return self.counter
 ```
 
-
-
 ### Dataloaders
+
 > available in: resolve
 
 `LoaderDepend` is a speical dataloader manager, it also prevent type inconsistent from DataLoader or batch_load_fn.
@@ -388,14 +391,13 @@ class Blog(BaseModel):
     title: str
 
     comments: list[Comment] = []
-    async def resolve_comments(self, 
-                         loader1=LoaderDepend(blog_to_comments_loader), 
+    async def resolve_comments(self,
+                         loader1=LoaderDepend(blog_to_comments_loader),
                          loader2=LoaderDepend(blog_to_comments_loader2)):
         v1 = await loader1.load(self.id)  # list
         v2 = await loader2.load(self.id)  # list
         return v1 + v2
 ```
-
 
 ## DataLoader
 
@@ -408,13 +410,14 @@ You can use the params below in Resolver, to configure your loaders.
 You are free to define Dataloader with some fields and set these fields with `loader_params` in Resolver
 
 You can treat dataloader like `JOIN` condition, and params like `Where` conditions
+
 ```sql
-select children from parent 
+select children from parent
     # loader keys
-    join children on parent.id = children.pid  
+    join children on parent.id = children.pid
 
     # loader params
-    where children.age < 20  
+    where children.age < 20
 ```
 
 ```python hl_lines="2 7"
@@ -427,7 +430,6 @@ data = await Resolver(loader_filters={
     LoaderA:{'power': 2}
     }).resolve(data)
 ```
-
 
 ### Global loader param
 
@@ -472,7 +474,7 @@ class A(BaseModel):
 async def test_case_0():
     data = [A(val=n) for n in range(3)]
     data = await Resolver(
-        global_loader_filter={'power': 2}, 
+        global_loader_filter={'power': 2},
         loader_filters={LoaderC:{'add': 1}}).resolve(data)
 ```
 
@@ -488,7 +490,6 @@ data = await Resolver(loader_instances={SomeLoader: loader}).resolve(data)
 ```
 
 references: [loader methods](https://github.com/syrusakbary/aiodataloader#primekey-value)
-
 
 ### Build list and object
 
@@ -509,7 +510,7 @@ def build_list(items: Sequence[T], keys: List[V], get_pk: Callable[[T], V]) -> I
     """
     helper function to build return list data required by aiodataloader
     """
-    dct: DefaultDict[V, List[T]] = defaultdict(list) 
+    dct: DefaultDict[V, List[T]] = defaultdict(list)
     for item in items:
         _key = get_pk(item)
         dct[_key].append(item)
@@ -540,12 +541,12 @@ data = await resolver.resolve(data)
 print(resolver.loader_instance_cache)
 ```
 
-
 ## Visibility
 
 better ts definitions and hide some fields
 
 ### model_config
+
 fields with default value will be converted to optional in typescript definition. add model_config decorator to avoid it.
 
 ```python hl_lines="4"
@@ -559,11 +560,11 @@ class Z(BaseModel):
 
 ```ts
 interface Y {
-    id?: number // bad
+  id?: number; // bad
 }
 
 interface Z {
-    id: number // good
+  id: number; // good
 }
 ```
 
@@ -602,10 +603,10 @@ class ChildA(BaseModel):
 ```
 
 c is not existed in Base, exception raised.
+
 ```python
 @util.ensure_subset(Base)
 class ChildB(BaseModel):
     a: str
     c: int = 0  # raise AssertionError
 ```
-
