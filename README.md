@@ -6,7 +6,9 @@
 
 Pydantic-resolve is a schema based, hierarchical solution for data fetching and crafting.
 
-It can compose schemas together with resolver (and dataloader), and then expose typescript types and methods to client.
+It's principle is very simple, it performs a breadth-first traversal over the data object and executes all the pre (resolve) and post methods according to the field definitions.
+
+It can compose schemas together with resolver (and dataloader), then expose typescript types and methods to client.
 
 It can be a super simple alternative solution for GraphQL
 
