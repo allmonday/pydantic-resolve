@@ -2,6 +2,10 @@ import inspect
 from typing import Any, Callable, Optional
 import pytest
 
+def test_pydantic_version():
+    from pydantic.version import VERSION
+    assert VERSION.startswith('1.')
+
 # verify the Feasibility of implement depends 
 class Loader:
     def load(self):

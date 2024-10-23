@@ -85,6 +85,14 @@ class Story(BaseModel):
     name: str
     tasks: list[Task]
 
+    total_estimated: int = 0
+    def post_total_estimated(self, counter=TotalEstimateCollector('total_estimate')):
+        return counter.values()
+
+    total_done_estimated: int = 0
+    def post_total_done_estimated(self, counter=TotalDoneEstimateCollector('done_estimate')):
+        return counter.values()
+
 class Sprint(BaseModel):
     name: str
     stories: list[Story]
@@ -103,6 +111,10 @@ class Team(BaseModel):
 
     total_estimated: int = 0
     def post_total_estimated(self, counter=TotalEstimateCollector('total_estimate')):
+        return counter.values()
+
+    total_estimated2: int = 0
+    def post_total_estimated2(self, counter=TotalEstimateCollector('total_estimate')):
         return counter.values()
 
     total_done_estimated: int = 0
