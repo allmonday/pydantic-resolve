@@ -38,12 +38,13 @@ jobs:
         if: steps.cache-deps.outputs.cache-hit != 'true'
 
       - run: poetry install --no-interaction
+      - run: pip install pydantic==1.*
 
       - name: Test with pytest
-        run: poetry run pytest
+        run: poetry run pytest tests/pydantic_v1
 
       - name: Test with pytest coverage
-        run: poetry run coverage run -m pytest
+        run: poetry run coverage run -m pytest tests/pydantic_v1
 
       - name: "Combine"
         run: |
