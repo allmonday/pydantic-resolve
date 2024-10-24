@@ -1,5 +1,10 @@
 # Changelog
 
+## v.1.11.0 (2024.10.24)
+
+- support pydantic v2
+- remove hidden_fields in model_config
+
 ## v.1.10.8 (2024.8.27)
 
 - collector suppor tuple for value
