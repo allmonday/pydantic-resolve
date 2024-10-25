@@ -1,26 +1,21 @@
 [![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
 [![Downloads](https://static.pepy.tech/personalized-badge/pydantic-resolve?period=month&units=abbreviation&left_color=grey&right_color=orange&left_text=Downloads)](https://pepy.tech/project/pydantic-resolve)
 ![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
-![Test Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/allmonday/6f1661c6310e1b31c9a10b0d09d52d11/raw/covbadge.json)
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
-Pydantic-resolve is a schema based, hierarchical solution for data fetching and crafting.
+Pydantic-resolve is a schema based solution for data management.
 
-It can compose schemas together with resolver (and dataloader), and then expose typescript types and methods to client.
-
-It can be a super simple alternative solution for GraphQL
+1. manage the deep data inside it's schema, instead of visiting if outside by manual traversal.
+2. pydantic-resolve runs a Level Order Traversal (BFS) inside and execute `resolve` and `post` during this process.
+3. describe the relationship between data in a way close to ERD (entity relationship diagram)
 
 ![](./doc/imgs/concept.png)
 
-**Features**:
-
-1. with pydantic schema and instances, resolver recursively resolve uncertain nodes and their descendants.
-2. nodes could be modified during post-process
-3. plugable, easy to combine together and reuse.
-
 ## Install
 
-> User of pydantic v2, please use [pydantic2-resolve](https://github.com/allmonday/pydantic2-resolve) instead.
+~~User of pydantic v2, please use [pydantic2-resolve](https://github.com/allmonday/pydantic2-resolve) instead.~~
+
+This lib now supports both pydantic v1 and v2 starts from v1.11.0
 
 ```shell
 pip install pydantic-resolve
@@ -28,195 +23,77 @@ pip install pydantic-resolve
 
 ## Hello world
 
-build blogs with comments
+manage your data inside the schema.
 
 ```python
-import asyncio
-import json
-from pydantic import BaseModel
-from pydantic_resolve import Resolver
-
-class Comment(BaseModel):
-    id: int
-    content: str
-
-class Blog(BaseModel):
-    id: int
-    title: str
-    content: str
-
-    comments: list[Comment] = []
-    def resolve_comments(self):
-        return get_comments(self.id)
+class Tree(BaseModel):
+    name: str
+    number: int
+    description: str = ''
+    def resolve_description(self):
+        return f"I'm {self.name}, my number is {self.number}"
+    children: list['Tree'] = []
 
 
-def get_blogs():
-    return [
-        dict(id=1, title="hello world", content="hello world detail"),
-        dict(id=2, title="hello Mars", content="hello Mars detail"),
+tree = dict(
+    name='root',
+    number=1,
+    children=[
+        dict(
+            name='child1',
+            number=2,
+            children=[
+                dict(
+                    name='child1-1',
+                    number=3,
+                ),
+                dict(
+                    name='child1-2',
+                    number=4,
+                ),
+            ]
+        )
     ]
-
-def get_comments(id):
-    comments = [
-        dict(id=1, content="world is beautiful", blog_id=1),
-        dict(id=2, content="Mars is beautiful", blog_id=2),
-        dict(id=3, content="I love Mars", blog_id=2),
-    ]
-    return [c for c in comments if c['blog_id'] == id]
-
+)
 
 async def main():
-    blogs = [Blog.parse_obj(blog) for blog in get_blogs()]
-    blogs = await Resolver().resolve(blogs)
-    print(json.dumps(blogs, indent=2, default=lambda o: o.dict()))
+    t = Tree.parse_obj(tree)
+    t = await Resolver().resolve(t)
+    print(t.json(indent=4))
 
+import asyncio
 asyncio.run(main())
 ```
+
+output
 
 ```json
-[
-  {
-    "id": 1,
-    "title": "hello world",
-    "content": "hello world detail",
-    "comments": [
-      {
-        "id": 1,
-        "content": "world is beautiful"
-      }
-    ]
-  },
-  {
-    "id": 2,
-    "title": "hello Mars",
-    "content": "hello Mars detail",
-    "comments": [
-      {
-        "id": 2,
-        "content": "Mars is beautiful"
-      },
-      {
-        "id": 3,
-        "content": "I love Mars"
-      }
-    ]
-  }
-]
-```
-
-## Communicating between ancestor and descendents
-
-getting sum of deep field without writing for loops.
-
-```python
-import asyncio
-from pydantic_resolve import Resolver, ICollector
-from pydantic import BaseModel
-
-class TotalEstimateCollector(ICollector):
-    def __init__(self, alias):
-        self.alias = alias
-        self.counter = 0
-
-    def add(self, val):
-        self.counter = self.counter + val
-
-    def values(self):
-        return self.counter
-
-class TotalDoneEstimateCollector(ICollector):
-    def __init__(self, alias):
-        self.alias = alias
-        self.counter = 0
-
-    def add(self, val):
-        done, estimate = val
-        if done:
-            self.counter = self.counter + estimate
-
-    def values(self):
-        return self.counter
-
-class Task(BaseModel):
-    __pydantic_resolve_collect__ = {
-        'estimated': 'total_estimate',
-        ('done', 'estimated'): 'done_estimate'
-    }
-    name: str
-    estimated: int
-    done: bool
-
-class Story(BaseModel):
-    name: str
-    tasks: list[Task]
-
-class Sprint(BaseModel):
-    name: str
-    stories: list[Story]
-
-class Team(BaseModel):
-    name: str
-    sprints: list[Sprint]
-
-    total_estimated: int = 0
-    def post_total_estimated(self, counter=TotalEstimateCollector('total_estimate')):
-        return counter.values()
-
-    total_done_estimated: int = 0
-    def post_total_done_estimated(self, counter=TotalDoneEstimateCollector('done_estimate')):
-        return counter.values()
-
-input = {
-    "name": "Team A",
-    "sprints": [
+{
+  "name": "root",
+  "number": 1,
+  "description": "I'm root, my number is 1",
+  "children": [
+    {
+      "name": "child1",
+      "number": 2,
+      "description": "I'm child1, my number is 2",
+      "children": [
         {
-            "name": "Sprint 1",
-            "stories": [
-                {
-                    "name": "Story 1",
-                    "tasks": [
-                        {"name": "Task 1", "estimated": 5, "done": False},
-                        {"name": "Task 2", "estimated": 3, "done": True},
-                    ]
-                },
-                {
-                    "name": "Story 2",
-                    "tasks": [
-                        {"name": "Task 3", "estimated": 2, "done": True},
-                        {"name": "Task 4", "estimated": 1, "done": True},
-                    ]
-                }
-            ]
+          "name": "child1-1",
+          "number": 3,
+          "description": "I'm child1-1, my number is 3",
+          "children": []
         },
         {
-            "name": "Sprint 2",
-            "stories": [
-                {
-                    "name": "Story 3",
-                    "tasks": [
-                        {"name": "Task 5", "estimated": 3, "done": False},
-                        {"name": "Task 6", "estimated": 2, "done": False},
-                    ]
-                },
-                {
-                    "name": "Story 4",
-                    "tasks": [
-                        {"name": "Task 7", "estimated": 1, "done": False},
-                        {"name": "Task 8", "estimated": 3, "done": False},
-                    ]
-                }
-            ]
+          "name": "child1-2",
+          "number": 4,
+          "description": "I'm child1-2, my number is 4",
+          "children": []
         }
-    ]
+      ]
+    }
+  ]
 }
-
-async def main():
-    team = Team.parse_obj(input)
-    team = await Resolver().resolve(team)
-    print(team.total_estimated)  # 20
-    print(team.total_done_estimated)  # 6
-
-asyncio.run(main())
 ```
 
 ## Documents
@@ -225,6 +102,19 @@ asyncio.run(main())
 - **API**: https://allmonday.github.io/pydantic-resolve/reference_api/
 - **Demo**: https://github.com/allmonday/pydantic-resolve-demo
 - **Composition oriented pattern**: https://github.com/allmonday/composition-oriented-development-pattern
+
+## Test and coverage
+
+```shell
+tox
+```
+
+```shell
+tox -e coverage
+python -m http.server
+```
+
+latest coverage: 98%
 
 ## Sponsor
 
