@@ -5,7 +5,7 @@
 
 Pydantic-resolve is a schema based solution for data management.
 
-1. manage the deep data inside it's schema, instead of visiting if outside by manual traversal.
+1. manage the deep data inside it's schema, instead of visiting from outside by manual traversal.
 2. pydantic-resolve runs a Level Order Traversal (BFS) inside and execute `resolve` and `post` during this process.
 3. describe the relationship between data in a way close to ERD (entity relationship diagram)
 
