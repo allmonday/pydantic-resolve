@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "pydantic-resolve"
-version = "1.10.8"
-description = "create nested data structure easily"
+version = "1.11.0"
+description = "It just provide a pair of pre & post methods around pydantic fields, the rest is up to your imagination"
 authors = ["tangkikodo <allmonday@126.com>"]
 readme = "README.md"
 repository = "https://github.com/allmonday/pydantic_resolve"
@@ -11,7 +11,6 @@ packages = [{include = "pydantic_resolve"}]
 
 [tool.poetry.dependencies]
 python = "^3.7"
-pydantic = "^1.10.4"
 aiodataloader = "^0.4.0"
 
 [tool.poetry.group.dev.dependencies]
@@ -22,7 +21,7 @@ coverage = "^7.2.1"
 aiosqlite = "^0.18.0"
 sqlalchemy = {extras = ["asyncio"], version = "^2.0.7"}
 pytest-asyncio = "^0.21.0"
-fastapi = "^0.96.0"
+fastapi = "^0.101.0"
 uvicorn = "^0.22.0"
 mkdocs-material = "9.*"
 mkdocs-static-i18n = {version = "1.2.0", extras = ["material"]}

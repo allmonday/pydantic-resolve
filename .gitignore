@@ -8,3 +8,4 @@ coverage.json
 .tox
 docs/_build
 .vscode
+cov
