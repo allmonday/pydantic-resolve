@@ -5,7 +5,6 @@ import pytest
 import json
 from typing import List
 
-@pytest.mark.skip
 @pytest.mark.asyncio
 async def test_schema_config_hidden():
 
@@ -16,17 +15,17 @@ async def test_schema_config_hidden():
     async def loader_fn(keys):
         return keys
 
-    @model_config(hidden_fields=['id', 'password', 'passwords'])
+    @model_config()
     @ensure_subset(X)
     class Y(BaseModel):
-        id: int = 0
+        id: int = Field(0, exclude=True)
         name: str
 
-        password: str = ''
+        password: str = Field('', exclude=True)
         def resolve_password(self, loader=LD(loader_fn)):
             return loader.load('xxx')
             
-        passwords: List[str] = []
+        passwords: List[str] = Field(default_factory=list, exclude=True)
         def resolve_passwords(self):
             return ['a', 'b']
 
@@ -42,20 +41,19 @@ async def test_schema_config_hidden():
     assert y.json() == json.dumps({'name': 'kikodo'})
 
 
-@pytest.mark.skip
 @pytest.mark.asyncio
 async def test_schema_config_hidden_with_field():
     """Field(exclude=True) will also work """
 
-    @model_config(hidden_fields=['id', 'password'])
+    @model_config()
     class Y(BaseModel):
-        id: int = 0
+        id: int = Field(0, exclude=True)
         def resolve_id(self):
             return 1
 
         name: str = Field(exclude=True)
 
-        password: str = ''
+        password: str = Field('', exclude=True)
         def resolve_password(self):
             return 'confidential'
 
@@ -69,7 +67,6 @@ async def test_schema_config_hidden_with_field():
 
 
 
-@pytest.mark.skip
 @pytest.mark.asyncio
 async def test_schema_config_required():
     @model_config()
@@ -88,7 +85,6 @@ async def test_schema_config_required():
     assert set(schema['required']) == {'id', 'name', 'password'}
 
 
-@pytest.mark.skip
 @pytest.mark.asyncio
 async def test_schema_config_required_false():
     @model_config(default_required=False)
@@ -106,7 +102,6 @@ async def test_schema_config_required_false():
     schema = Y.schema()
     assert set(schema['required']) == {'name'}
 
-@pytest.mark.skip
 @pytest.mark.asyncio
 async def test_nested_loader():
 
@@ -116,16 +111,16 @@ async def test_nested_loader():
     async def load_details(keys):
         return [['1', '2'] for key in keys]
 
-    @model_config(hidden_fields=['details'])
+    @model_config()
     class Item(BaseModel):
         name: str
-        details: List[str] = []
+        details: List[str] = Field(default_factory=list, exclude=True)
         def resolve_details(self, loader=LD(load_details)):
             return loader.load(self.name)
 
-    @model_config(hidden_fields=['id'])
+    @model_config()
     class Record(BaseModel):
-        id: int = 0
+        id: int = Field(0, exclude=True)
         items: List[Item] = []
         def resolve_items(self, loader=LD(load_items)):
             return loader.load(self.id)

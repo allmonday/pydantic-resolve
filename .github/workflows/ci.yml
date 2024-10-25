@@ -42,25 +42,3 @@ jobs:
 
       - name: Test with pytest
         run: poetry run pytest tests/pydantic_v1
-
-      - name: Test with pytest coverage
-        run: poetry run coverage run -m pytest tests/pydantic_v1
-
-      - name: "Combine"
-        run: |
-          poetry run coverage json
-          export TOTAL=$(python -c "import json;print(json.load(open('coverage.json'))['totals']['percent_covered_display'])")
-          echo "total=$TOTAL" >> $GITHUB_ENV
-          echo "### Total coverage: ${TOTAL}%" >> $GITHUB_STEP_SUMMARY
-
-      - name: "Make badge"
-        uses: schneegans/dynamic-badges-action@v1.6.0
-        with:
-          auth: ${{ secrets.GIST_TOKEN }}
-          gistID: 6f1661c6310e1b31c9a10b0d09d52d11 # replace with your real Gist id.
-          filename: covbadge.json
-          label: Coverage
-          message: ${{ env.total }}%
-          minColorRange: 50
-          maxColorRange: 90
-          valColorRange: ${{ env.total }}

@@ -1,34 +1,29 @@
 [![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
 [![Downloads](https://static.pepy.tech/personalized-badge/pydantic-resolve?period=month&units=abbreviation&left_color=grey&right_color=orange&left_text=Downloads)](https://pepy.tech/project/pydantic-resolve)
 ![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
-![Test Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/allmonday/6f1661c6310e1b31c9a10b0d09d52d11/raw/covbadge.json)
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
-Pydantic-resolve is a schema based, hierarchical solution for data fetching and crafting.
+Pydantic-resolve is a schema based solution for data management.
 
-It can compose schemas together with resolver (and dataloader), and then expose typescript types and methods to client.
-
-It can be a super simple alternative solution for GraphQL
+1. manage the deep data inside it's schema, instead of visiting if outside by manual traversal.
+2. pydantic-resolve runs a Level Order Traversal (BFS) inside and execute `resolve` and `post` during this process.
+3. describe the relationship between data in a way close to ERD (entity relationship diagram)
 
 ![](./doc/imgs/concept.png)
-
-**Features**:
-
-1. with pydantic schema and instances, resolver recursively resolve uncertain nodes and their descendants.
-2. nodes could be modified during post-process
-3. plugable, easy to combine together and reuse.
 
 ## Install
 
 ~~User of pydantic v2, please use [pydantic2-resolve](https://github.com/allmonday/pydantic2-resolve) instead.~~
 
-This lib supports both pydantic v1 and v2
+This lib now supports both pydantic v1 and v2 starts from v1.11.0
 
 ```shell
 pip install pydantic-resolve
 ```
 
 ## Hello world
+
+manage your data inside the schema.
 
 ```python
 class Tree(BaseModel):
@@ -70,6 +65,8 @@ import asyncio
 asyncio.run(main())
 ```
 
+output
+
 ```json
 {
   "name": "root",
@@ -105,6 +102,19 @@ asyncio.run(main())
 - **API**: https://allmonday.github.io/pydantic-resolve/reference_api/
 - **Demo**: https://github.com/allmonday/pydantic-resolve-demo
 - **Composition oriented pattern**: https://github.com/allmonday/composition-oriented-development-pattern
+
+## Test and coverage
+
+```shell
+tox
+```
+
+```shell
+tox -e coverage
+python -m http.server
+```
+
+latest coverage: 98%
 
 ## Sponsor
 
