@@ -1,5 +1,6 @@
 import copy
 import inspect
+from typing import List, Type, Dict, Optional
 from inspect import isfunction, isclass
 from collections import defaultdict
 from aiodataloader import DataLoader
@@ -12,9 +13,55 @@ from pydantic_resolve.utils.collector import ICollector
 from pydantic_resolve.utils.depend import Depends
 import pydantic_resolve.utils.params as params_util
 from pydantic_resolve.exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingCollector
+import sys
 
-def _scan_resolve_method(method, field: str):
-    result = {
+if sys.version_info >= (3, 8):
+    from typing import TypedDict
+else:
+    from typing_extensions import TypedDict
+
+class ResolveMethodType(TypedDict):
+    trim_field: str
+    context: bool
+    parent: bool
+    ancestor_context: bool
+    dataloaders: list
+
+class PostMethodType(TypedDict):
+    trim_field: str
+    context: bool
+    parent: bool
+    ancestor_context: bool
+    collectors: list
+
+class PostDefaultHandlerType(TypedDict):
+    context: bool
+    parent: bool
+    ancestor_context: bool
+    collectors: list
+
+class KlsMetaType(TypedDict):
+    resolve: List[str]
+    post: List[str]
+    resolve_params: Dict[str, ResolveMethodType]
+    post_params: Dict[str, PostMethodType]
+    post_default_handler_params: Optional[PostDefaultHandlerType]
+    attribute: List[str]
+    expose_dict: dict
+    collect_dict: dict
+    kls: Type
+    has_context: bool
+
+MetaType = Dict[str, KlsMetaType]
+
+class MappedMetaMemberType(KlsMetaType):
+    kls_path: str
+
+MappedMetaType = Dict[Type, MappedMetaMemberType]
+
+
+def _scan_resolve_method(method, field: str) -> ResolveMethodType:
+    result: ResolveMethodType = {
         'trim_field': field.replace(const.RESOLVE_PREFIX, ''),
         'context': False,
         'parent': False,
@@ -47,8 +94,8 @@ def _scan_resolve_method(method, field: str):
     return result
 
 
-def _scan_post_method(method, field):
-    result = {
+def _scan_post_method(method, field) -> PostMethodType:
+    result: PostMethodType = {
         'trim_field': field.replace(const.POST_PREFIX, ''),
         'context': False,
         'ancestor_context': False,
@@ -79,8 +126,8 @@ def _scan_post_method(method, field):
     return result
 
 
-def _scan_post_default_handler(method):
-    result = {
+def _scan_post_default_handler(method) -> PostDefaultHandlerType:
+    result: PostDefaultHandlerType = {
         'context': False,
         'ancestor_context': False,
         'parent': False,
@@ -170,19 +217,12 @@ def validate_and_create_loader_instance(
     return cache
 
 
-def scan_and_store_metadata(root_class):
-    """ see output data schema example in:
-    - test_field_dataclass_anno.py
-    - test_field_pydantic.py
+def scan_and_store_metadata(root_class: Type) -> MetaType:
 
-    rules: TODO:
-    - [x] dataloader and it's params
-    - [ ] context & ancestor_context are provided
-    - [ ] collector should be defined in ancestor of collect schemas.  """
     class_util.update_forward_refs(root_class)
     expose_set = set()  # for validation
     collect_set = set()  # for validation
-    metadata = {}
+    metadata: MetaType = {}
 
     def _get_all_fields_and_object_fields(kls):
         if class_util.safe_issubclass(kls, BaseModel):
@@ -282,7 +322,7 @@ def scan_and_store_metadata(root_class):
         _add_collector_info_for_default_handler(post_default_handler_params)
         _validate_collector(collect_dict, kls_name)
 
-        metadata[kls_name] = {
+        info: KlsMetaType = {
             'resolve': resolve_fields,
             'resolve_params': resolve_params,
             'post': post_fields,
@@ -294,6 +334,7 @@ def scan_and_store_metadata(root_class):
             'kls': kls,
             'has_context': has_context,
         }
+        metadata[kls_name] = info
 
         for _, shelled_type in object_fields:
             walker(shelled_type)
@@ -302,32 +343,33 @@ def scan_and_store_metadata(root_class):
     return metadata
 
 
-def convert_metadata_key_as_kls(metadata):
+def convert_metadata_key_as_kls(metadata: MetaType) -> MappedMetaType:
     """ use kls as map key for performance """
     kls_metadata = {}
     for k, v in metadata.items():
-        v['kls_path'] = k
-        kls_metadata[v['kls']] = v
+        kls_metadata[v['kls']] = {**v, 'kls_path':k}
     
     return kls_metadata
 
 
-def is_acceptable_kls(kls):
+def is_acceptable_kls(kls: Type):
     return class_util.safe_issubclass(kls, BaseModel) or is_dataclass(kls)
 
 
-def is_acceptable_instance(target):
+def is_acceptable_instance(target: object):
     """ check whether target is Pydantic object or Dataclass object """
     return isinstance(target, BaseModel) or is_dataclass(target)
 
 
-def iter_over_object_resolvers_and_acceptable_fields(target, kls, metadata):
+def iter_over_object_resolvers_and_acceptable_fields(target: object, kls: Type, mapped_metadata: MappedMetaType):
     """metadata key is kls"""
-    kls_meta = metadata.get(kls)
-
     resolve, attribute = [], []
+    kls_meta = mapped_metadata.get(kls)
 
-    for resolve_field in kls_meta['resolve']:  # eg: resolve_name
+    if kls_meta is None:
+        return [], []
+
+    for resolve_field in kls_meta['resolve']:
         attr = getattr(target, resolve_field)
         trim_field = kls_meta['resolve_params'][resolve_field]['trim_field']
         resolve.append((resolve_field, trim_field, attr))
@@ -339,32 +381,34 @@ def iter_over_object_resolvers_and_acceptable_fields(target, kls, metadata):
     return resolve, attribute
 
 
-def iter_over_object_post_methods(kls, metadata):
-    """metadata key is kls"""
-    kls_meta = metadata.get(kls)
+def iter_over_object_post_methods(kls: Type, mapped_metadata: MappedMetaType):
+    kls_meta = mapped_metadata.get(kls)
+
+    if kls_meta is None:
+        return []
 
     for post_field in kls_meta['post']:
         trim_field = kls_meta['post_params'][post_field]['trim_field']
         yield post_field, trim_field
 
 
-def get_resolve_param(kls, resolve_field, metadata):
-    kls_meta = metadata.get(kls, {})
+def get_resolve_param(kls, resolve_field, mapped_metadata: MappedMetaType):
+    kls_meta = mapped_metadata.get(kls, {})
     return kls_meta['resolve_params'][resolve_field]
 
 
-def get_post_params(kls, post_field, metadata):
-    kls_meta = metadata.get(kls, {})
+def get_post_params(kls, post_field, mapped_metadata: MappedMetaType):
+    kls_meta = mapped_metadata.get(kls, {})
     return kls_meta['post_params'][post_field]
 
 
-def get_post_default_handler_params(kls, metadata):
-    kls_meta = metadata.get(kls, {})
+def get_post_default_handler_params(kls, mapped_metadata: MappedMetaType):
+    kls_meta = mapped_metadata.get(kls, {})
     return kls_meta['post_default_handler_params']
 
 
-def get_collectors(kls, metadata):
-    kls_meta = metadata.get(kls, {})
+def get_collectors(kls, mapped_metadata: MappedMetaType):
+    kls_meta = mapped_metadata.get(kls, {})
 
     # post method
     post_params = kls_meta['post_params']
@@ -387,7 +431,7 @@ def get_collectors(kls, metadata):
     return alias_map
 
 
-def iter_over_collectable_fields(kls, metadata):
+def iter_over_collectable_fields(kls, metadata: MappedMetaType):
     kls_meta = metadata.get(kls, {})
     collect_dict = kls_meta['collect_dict']
 
@@ -395,5 +439,5 @@ def iter_over_collectable_fields(kls, metadata):
         yield field, alias
 
 
-def has_context(metadata):
-    return any([ m['has_context'] for m in metadata.values()])
+def has_context(mapped_metadata: MappedMetaType):
+    return any([ m['has_context'] for m in mapped_metadata.values()])
