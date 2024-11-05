@@ -352,7 +352,7 @@ def convert_metadata_key_as_kls(metadata: MetaType) -> MappedMetaType:
     return kls_metadata
 
 
-def is_acceptable_kls(kls: Type):
+def is_acceptable_kls(kls: Type) -> bool:
     return class_util.safe_issubclass(kls, BaseModel) or is_dataclass(kls)
 
 

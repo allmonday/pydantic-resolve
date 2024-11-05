@@ -154,6 +154,9 @@ class Resolver:
         params = {}
         post_default_param = analysis.get_post_default_handler_params(kls, self.metadata)
 
+        if post_default_param is None:
+            return
+
         if post_default_param['context']:
             params['context'] = self.context
         if post_default_param['ancestor_context']:
