@@ -1,5 +1,3 @@
-# Welcome to Pydantic-resolve
-
 Pydantic-resolve 使用声明的方式来描述数据, 可以从简到繁构造各种数据, 同时使其易于维护.
 
 以 `MySite` 为例, 它包含了 blogs 和 comments 信息
@@ -24,8 +22,8 @@ name, id, title 等是已知的字段, 之后会根据数据赋值
 
 blogs, comments 等数据还是未知数, 所以赋了默认值
 
-```python linenums="1" hl_lines="8 14" 
-from __future__ import annotations 
+```python linenums="1" hl_lines="8 14"
+from __future__ import annotations
 import asyncio
 from pydantic import BaseModel
 
@@ -45,7 +43,6 @@ class Comment(BaseModel):
     content: str
 ```
 
-
 ## 添加 resolve 方法
 
 resolve 方法描述了获取数据的具体方式
@@ -53,7 +50,7 @@ resolve 方法描述了获取数据的具体方式
 > resolve 方法支持异步调用
 
 ```python linenums="1" hl_lines="9-10 17-18"
-from __future__ import annotations 
+from __future__ import annotations
 from pydantic_resolve import Resolver
 from pydantic import BaseModel
 
@@ -87,7 +84,7 @@ async def get_blogs():
 
 ## Resolver
 
-万事具备, 可以开始实例化Resolver 来解析了
+万事具备, 可以开始实例化 Resolver 来解析了
 
 ```python linenums="1"
 
@@ -98,7 +95,6 @@ async def main():
 ```
 
 我们顺利获得了期望的数据
-
 
 ```shell linenums="1"
 run-query - 1
@@ -138,6 +134,6 @@ run-query - 2
 }
 ```
 
-你也许注意到了, `run-query` 被打印了两次, 在获取 comments 的时候发生了重复查询. (N+1查询)
+你也许注意到了, `run-query` 被打印了两次, 在获取 comments 的时候发生了重复查询. (N+1 查询)
 
-我们会在下一章节使用dataloader解决这个问题
+我们会在下一章节使用 dataloader 解决这个问题
