@@ -10,7 +10,6 @@ from dataclasses import is_dataclass, fields as dc_fields
 import pydantic_resolve.util as util
 import pydantic_resolve.constant as const
 from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingCollector
-from pydantic_resolve.compat import PYDANTIC_V2
 
 def LoaderDepend(  # noqa: N802
     dependency: Optional[Callable[..., Any]] = None,
@@ -57,13 +56,10 @@ class Collector(ICollector):
 
 
 def _get_pydantic_attrs(kls):
-    if PYDANTIC_V2:
-        items = kls.model_fields.items()
-    else:
-        items = kls.__fields__.items()
+    items = util.get_items(kls)
 
     for k, v in items:
-        t = v.annotation if PYDANTIC_V2 else v.type_
+        t = util.get_type(v)
 
         shelled_type = util.shelling_type(t)
         if is_acceptable_kls(shelled_type):
@@ -257,10 +253,7 @@ def scan_and_store_metadata(root_class):
 
     def _get_all_fields_and_object_fields(kls):
         if util.safe_issubclass(kls, BaseModel):
-            if PYDANTIC_V2:
-                all_fields = set(kls.model_fields.keys())
-            else:
-                all_fields = set(kls.__fields__.keys())
+            all_fields = set(util.get_keys(kls))
             object_fields = list(_get_pydantic_attrs(kls))  # dive and recursively analysis
         elif is_dataclass(kls):
             all_fields = set([f.name for f in dc_fields(kls)])

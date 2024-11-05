@@ -37,6 +37,30 @@ if PYDANTIC_V2:
                 cls.apapters[type] = new_adapter
                 return new_adapter
 
+def _get_items_v1(kls):
+    return kls.__fields__.items()
+
+def _get_items_v2(kls):
+    return kls.model_fields.items()
+
+get_items = _get_items_v2 if PYDANTIC_V2 else _get_items_v1
+
+def _get_keys_v1(kls):
+    return kls.__fields__.keys()
+
+def _get_keys_v2(kls):
+    return kls.model_fields.keys()
+
+get_keys = _get_keys_v2 if PYDANTIC_V2 else _get_keys_v1
+
+def _get_type_v1(v):
+    return v.type_
+
+def _get_type_v2(v):
+    return v.annotation
+    
+get_type = _get_type_v2 if PYDANTIC_V2 else _get_type_v1
+
 def safe_issubclass(kls, classinfo):
     try:
         return issubclass(kls, classinfo)
