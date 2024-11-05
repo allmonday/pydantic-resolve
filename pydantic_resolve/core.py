@@ -7,8 +7,10 @@ from typing import Any, Callable, Optional
 from aiodataloader import DataLoader
 from pydantic import BaseModel
 from dataclasses import is_dataclass, fields as dc_fields
-import pydantic_resolve.util as util
 import pydantic_resolve.constant as const
+import pydantic_resolve.utils.class_util as class_util
+import pydantic_resolve.utils.params as params_util
+import pydantic_resolve.utils.types as types_util
 from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingCollector
 
 def LoaderDepend(  # noqa: N802
@@ -56,19 +58,19 @@ class Collector(ICollector):
 
 
 def _get_pydantic_attrs(kls):
-    items = util.get_items(kls)
+    items = class_util.get_items(kls)
 
     for k, v in items:
-        t = util.get_type(v)
+        t = types_util.get_type(v)
 
-        shelled_type = util.shelling_type(t)
+        shelled_type = types_util.shelling_type(t)
         if is_acceptable_kls(shelled_type):
             yield (k, shelled_type)  # type_ is the most inner type
 
 
 def _get_dataclass_attrs(kls):
     for name, v in kls.__annotations__.items():
-        shelled_type = util.shelling_type(v)
+        shelled_type = types_util.shelling_type(v)
         if is_acceptable_kls(shelled_type):
             yield (name, shelled_type)
 
@@ -104,7 +106,7 @@ def _scan_resolve_method(method, field: str):
             info = { 
                 'param': name,
                 'kls': param.default.dependency,  # for later initialization
-                'path': util.get_kls_full_path(param.default.dependency) }
+                'path': class_util.get_kls_full_path(param.default.dependency) }
             result['dataloaders'].append(info)
 
     for name, param in signature.parameters.items():
@@ -208,11 +210,11 @@ def validate_and_create_loader_instance(
         loader_kls, path = loader['kls'], loader['path']
         if isclass(loader_kls):
             loader = loader_kls()
-            param_config = util.merge_dicts(
+            param_config = params_util.merge_dicts(
                 global_loader_param,
                 loader_params.get(loader_kls, {}))
 
-            for field in util.get_class_field_annotations(loader_kls):
+            for field in class_util.get_class_field_annotations(loader_kls):
                 try:
                     value = param_config[field]
                     setattr(loader, field, value)
@@ -246,14 +248,14 @@ def scan_and_store_metadata(root_class):
     - [x] dataloader and it's params
     - [ ] context & ancestor_context are provided
     - [ ] collector should be defined in ancestor of collect schemas.  """
-    util.update_forward_refs(root_class)
+    class_util.update_forward_refs(root_class)
     expose_set = set()  # for validation
     collect_set = set()  # for validation
     metadata = {}
 
     def _get_all_fields_and_object_fields(kls):
-        if util.safe_issubclass(kls, BaseModel):
-            all_fields = set(util.get_keys(kls))
+        if class_util.safe_issubclass(kls, BaseModel):
+            all_fields = set(class_util.get_keys(kls))
             object_fields = list(_get_pydantic_attrs(kls))  # dive and recursively analysis
         elif is_dataclass(kls):
             all_fields = set([f.name for f in dc_fields(kls)])
@@ -319,7 +321,7 @@ def scan_and_store_metadata(root_class):
                     raise MissingCollector(f'Collector alias name not found in ancestor, please check: {kls_name}')
 
     def walker(kls):
-        kls_name = util.get_kls_full_path(kls)
+        kls_name = class_util.get_kls_full_path(kls)
         hit = metadata.get(kls_name)
         if hit: return
 
@@ -380,7 +382,7 @@ def convert_metadata_key_as_kls(metadata):
 
 
 def is_acceptable_kls(kls):
-    return util.safe_issubclass(kls, BaseModel) or is_dataclass(kls)
+    return class_util.safe_issubclass(kls, BaseModel) or is_dataclass(kls)
 
 
 def is_acceptable_instance(target):

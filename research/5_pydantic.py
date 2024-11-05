@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import List, Optional
 from pydantic import BaseModel
-from pydantic_resolve.util import update_forward_refs
+from pydantic_resolve.utils.class_util import update_forward_refs
 
 class ClassRoom(BaseModel):
     students: List[Student]

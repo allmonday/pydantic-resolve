@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import List
 from pydantic import BaseModel
 from pydantic_resolve import Resolver, LoaderDepend
-from pydantic_resolve.util import generate_list_empty_loader
+from pydantic_resolve.utils.dataloader import generate_list_empty_loader
 import pytest
 
 

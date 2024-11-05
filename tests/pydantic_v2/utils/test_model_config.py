@@ -1,4 +1,4 @@
-from pydantic_resolve.util import model_config
+from pydantic_resolve.utils.openapi import model_config
 from pydantic import BaseModel, Field
 from pydantic_resolve import Resolver
 import pytest

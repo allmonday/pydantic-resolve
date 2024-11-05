@@ -3,13 +3,15 @@ import contextvars
 import warnings
 from inspect import iscoroutine
 from typing import TypeVar, Dict
+
+import pydantic_resolve.utils.conversion as conversion_util
 from .exceptions import MissingAnnotationError
 from typing import Any, Optional
 from pydantic_resolve import core
 from aiodataloader import DataLoader
 from types import MappingProxyType
 import pydantic_resolve.constant as const
-import pydantic_resolve.util as util
+import pydantic_resolve.utils.class_util as class_util
 
 
 T = TypeVar("T")
@@ -178,7 +180,7 @@ class Resolver:
             val = await val
 
         if not getattr(method, const.HAS_MAPPER_FUNCTION, False):  # defined in util.mapper
-            val = util.try_parse_data_to_target_field_type(target, trim_field, val)
+            val = conversion_util.try_parse_data_to_target_field_type(target, trim_field, val)
 
         # continue dive deeper
         val = await self._resolve(val, target)
@@ -192,7 +194,7 @@ class Resolver:
 
         if core.is_acceptable_instance(target):
             kls = target.__class__
-            kls_path = util.get_kls_full_path(kls)
+            kls_path = class_util.get_kls_full_path(kls)
 
             self._prepare_collectors(target, kls)
             self._add_expose_fields(target)
@@ -217,7 +219,7 @@ class Resolver:
                 while iscoroutine(result) or asyncio.isfuture(result):
                     result = await result
                     
-                result = util.try_parse_data_to_target_field_type(target, post_trim_field, result)
+                result = conversion_util.try_parse_data_to_target_field_type(target, post_trim_field, result)
                 setattr(target, post_trim_field, result)
 
             default_post_method = getattr(target, const.POST_DEFAULT_HANDLER, None)

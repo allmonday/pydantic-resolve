@@ -1,9 +1,13 @@
 import asyncio
 from dataclasses import dataclass
 from typing import List
-from pydantic_resolve import util
+from pydantic_resolve.utils import experiment
 from pydantic import BaseModel
 import pytest
+
+import pydantic_resolve.utils.class_util
+import pydantic_resolve.utils.conversion
+import pydantic_resolve.utils.dataloader
 
 def test_get_class_field_annotations():
     class C:
@@ -18,9 +22,9 @@ def test_get_class_field_annotations():
     class E(C):
         world: str
     
-    assert list(util.get_class_field_annotations(C)) == ['hello']
-    assert list(util.get_class_field_annotations(D)) == []
-    assert list(util.get_class_field_annotations(E)) == ['world']
+    assert list(pydantic_resolve.utils.class_util.get_class_field_annotations(C)) == ['hello']
+    assert list(pydantic_resolve.utils.class_util.get_class_field_annotations(D)) == []
+    assert list(pydantic_resolve.utils.class_util.get_class_field_annotations(E)) == ['world']
 
 
 class User(BaseModel):
@@ -34,7 +38,7 @@ def test_build_object():
     users = [User(id=i[0], name=i[1], age=i[2]) for i in raw]
     a, b, c = users
     ids = [2, 3, 1, 4]
-    output = util.build_object(users, ids, lambda x: x.id)
+    output = pydantic_resolve.utils.dataloader.build_object(users, ids, lambda x: x.id)
     assert list(output) == [b, c, a, None]
     
 
@@ -43,7 +47,7 @@ def test_build_list():
     users = [User(id=i[0], name=i[1], age=i[2]) for i in raw]
     a, b, c = users
     ids = [2, 3, 1, 4]
-    output = util.build_list(users, ids, lambda x: x.id)
+    output = pydantic_resolve.utils.dataloader.build_list(users, ids, lambda x: x.id)
     assert list(output) == [[b], [c], [a], []]
 
 @pytest.mark.asyncio
@@ -63,7 +67,7 @@ async def test_replace_method():
         v = await A.say(self, *args)
         return f'hello, {v}'
 
-    AA = util.replace_method(A, 'AA', 'say', kls_method)
+    AA = experiment.replace_method(A, 'AA', 'say', kls_method)
     k = AA('kimi')
     r2 = await k.say(['1', '2', '3'])
 
@@ -92,7 +96,7 @@ async def test_mapper_1():
     class A(BaseModel):
         a: int
 
-    @util.mapper(lambda x: A(**x))
+    @pydantic_resolve.utils.conversion.mapper(lambda x: A(**x))
     async def foo():
         return {'a': 1}
 
@@ -100,7 +104,7 @@ async def test_mapper_1():
         await asyncio.sleep(1)
         f.set_result({'a': 1})
 
-    @util.mapper(lambda x: A(**x))
+    @pydantic_resolve.utils.conversion.mapper(lambda x: A(**x))
     async def bar():
         lp = asyncio.get_event_loop()
         f = lp.create_future()
@@ -118,7 +122,7 @@ def test_auto_mapper_1():
         a: int
     
     params = (A, {'a': 1})
-    ret = util._get_mapping_rule(*params)(*params)  # type:ignore
+    ret = pydantic_resolve.utils.conversion._get_mapping_rule(*params)(*params)  # type:ignore
     assert ret == A(a=1)
     
     @dataclass
@@ -126,7 +130,7 @@ def test_auto_mapper_1():
         a: int
 
     params2 = (B, {'a': 1})
-    ret2 = util._get_mapping_rule(*params2)(*params2) # type:ignore
+    ret2 = pydantic_resolve.utils.conversion._get_mapping_rule(*params2)(*params2) # type:ignore
     assert ret2 == B(a=1)
 
 
@@ -141,12 +145,12 @@ def test_auto_mapper_2():
             self.a = a
     
     p1 = (A, AA(1))
-    ret = util._get_mapping_rule(*p1)(*p1)  # type: ignore
+    ret = pydantic_resolve.utils.conversion._get_mapping_rule(*p1)(*p1)  # type: ignore
     assert ret == A(a=1)
 
     p2 = (A, {'a': 1})
     with pytest.raises(AttributeError):
-        util._get_mapping_rule(*p2)  # type: ignore
+        pydantic_resolve.utils.conversion._get_mapping_rule(*p2)  # type: ignore
     
 
 def test_auto_mapper_3():
@@ -156,10 +160,10 @@ def test_auto_mapper_3():
             orm_mode=True
     
     p1 = (A, A(a=1))
-    rule = util._get_mapping_rule(*p1)  # type: ignore
+    rule = pydantic_resolve.utils.conversion._get_mapping_rule(*p1)  # type: ignore
 
     assert rule is None
-    output = util._apply_rule(rule, *p1, is_list=False)
+    output = pydantic_resolve.utils.conversion._apply_rule(rule, *p1, is_list=False)
     assert output == A(a=1)
 
 
@@ -173,5 +177,5 @@ def test_auto_mapper_4():
     
     p1 = (A, AA(a=1))
     with pytest.raises(AttributeError):
-        util._get_mapping_rule(*p1)(*p1)  # type: ignore
+        pydantic_resolve.utils.conversion._get_mapping_rule(*p1)(*p1)  # type: ignore
 
