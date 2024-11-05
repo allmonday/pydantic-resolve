@@ -7,7 +7,7 @@ from typing import TypeVar, Dict
 import pydantic_resolve.utils.conversion as conversion_util
 from .exceptions import MissingAnnotationError
 from typing import Any, Optional
-from pydantic_resolve import core
+from pydantic_resolve import analysis
 from aiodataloader import DataLoader
 from types import MappingProxyType
 import pydantic_resolve.constant as const
@@ -67,7 +67,7 @@ class Resolver:
         return True
     
     def _prepare_collectors(self, target, kls):
-        alias_map = core.get_collectors(kls, self.metadata)
+        alias_map = analysis.get_collectors(kls, self.metadata)
         if alias_map:
             self.object_collect_alias_map_store[id(target)] = alias_map
 
@@ -80,7 +80,7 @@ class Resolver:
                 self.collector_contextvars[alias].set(updated_pair)
 
     def _add_values_into_collectors(self, target, kls):
-        for field, alias in core.iter_over_collectable_fields(kls, self.metadata):
+        for field, alias in analysis.iter_over_collectable_fields(kls, self.metadata):
             # handle two scenarios
             # {'name': ('collector_a', 'collector_b')}
             # {'name': 'collector_a'}
@@ -116,7 +116,7 @@ class Resolver:
 
     def _execute_resolver_method(self, kls, field, method):
         params = {}
-        resolve_param = core.get_resolve_param(kls, field, self.metadata)
+        resolve_param = analysis.get_resolve_param(kls, field, self.metadata)
         if resolve_param['context']:
             params['context'] = self.context
         if resolve_param['ancestor_context']:
@@ -133,7 +133,7 @@ class Resolver:
     
     def _execute_post_method(self, target, kls, kls_path, post_field, method):
         params = {}
-        post_param = core.get_post_params(kls, post_field , self.metadata)
+        post_param = analysis.get_post_params(kls, post_field , self.metadata)
         if post_param['context']:
             params['context'] = self.context
         if post_param['ancestor_context']:
@@ -152,7 +152,7 @@ class Resolver:
 
     def _execute_post_default_handler(self, target, kls, kls_path, method):
         params = {}
-        post_default_param = core.get_post_default_handler_params(kls, self.metadata)
+        post_default_param = analysis.get_post_default_handler_params(kls, self.metadata)
 
         if post_default_param['context']:
             params['context'] = self.context
@@ -192,7 +192,7 @@ class Resolver:
             # list should not play as parent, use original parent.
             await asyncio.gather(*[self._resolve(t, parent) for t in target])
 
-        if core.is_acceptable_instance(target):
+        if analysis.is_acceptable_instance(target):
             kls = target.__class__
             kls_path = class_util.get_kls_full_path(kls)
 
@@ -203,7 +203,7 @@ class Resolver:
             tasks = []
 
             # traversal and fetching data by resolve methods
-            resolve_list, attribute_list = core.iter_over_object_resolvers_and_acceptable_fields(target, kls, self.metadata)
+            resolve_list, attribute_list = analysis.iter_over_object_resolvers_and_acceptable_fields(target, kls, self.metadata)
             for field, resolve_trim_field, method in resolve_list:
                 tasks.append(self._resolve_obj_field(target, kls, field, resolve_trim_field, method))
             for field, attr_object in attribute_list:
@@ -211,7 +211,7 @@ class Resolver:
             await asyncio.gather(*tasks)
 
             # reverse traversal and run post methods
-            for post_field, post_trim_field in core.iter_over_object_post_methods(kls, self.metadata):
+            for post_field, post_trim_field in analysis.iter_over_object_post_methods(kls, self.metadata):
                 post_method = getattr(target, post_field)
                 result = self._execute_post_method(target, kls, kls_path, post_field, post_method)
 
@@ -234,17 +234,17 @@ class Resolver:
     async def resolve(self, target: T) -> T:
         if isinstance(target, list) and target == []: return target
 
-        root_class = core.get_class(target)
-        metadata = core.scan_and_store_metadata(root_class)
-        self.metadata = core.convert_metadata_key_as_kls(metadata)
+        root_class = class_util.get_class(target)
+        metadata = analysis.scan_and_store_metadata(root_class)
+        self.metadata = analysis.convert_metadata_key_as_kls(metadata)
 
-        self.loader_instance_cache = core.validate_and_create_loader_instance(
+        self.loader_instance_cache = analysis.validate_and_create_loader_instance(
             self.loader_params,
             self.global_loader_param,
             self.loader_instances,
             self.metadata)
         
-        has_context = core.has_context(self.metadata)
+        has_context = analysis.has_context(self.metadata)
         if has_context and self.context is None:
             raise AttributeError('context is missing')
             

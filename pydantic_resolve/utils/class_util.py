@@ -3,6 +3,8 @@ import functools
 from typing import Type, get_type_hints
 import pydantic_resolve.constant as const
 from pydantic_resolve.compat import PYDANTIC_V2
+import pydantic_resolve.utils.class_util as class_util
+from pydantic_resolve.analysis import is_acceptable_kls
 from pydantic_resolve.utils.types import shelling_type, get_type
 
 from pydantic import BaseModel
@@ -148,3 +150,28 @@ def _get_values_v2(kls):
 
 
 get_values = _get_values_v2 if PYDANTIC_V2 else _get_values_v1
+
+
+def get_pydantic_attrs(kls):
+    items = class_util.get_items(kls)
+
+    for k, v in items:
+        t = get_type(v)
+
+        shelled_type = shelling_type(t)
+        if is_acceptable_kls(shelled_type):
+            yield (k, shelled_type)  # type_ is the most inner type
+
+
+def get_dataclass_attrs(kls):
+    for name, v in kls.__annotations__.items():
+        shelled_type = shelling_type(v)
+        if is_acceptable_kls(shelled_type):
+            yield (name, shelled_type)
+
+
+def get_class(target):
+    if isinstance(target, list):
+        return target[0].__class__
+    else:
+        return target.__class__

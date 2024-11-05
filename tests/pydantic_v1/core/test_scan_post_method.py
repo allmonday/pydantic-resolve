@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from pydantic_resolve.core import _scan_post_method, _scan_post_default_handler
+from pydantic_resolve.analysis import _scan_post_method, _scan_post_default_handler
 from pydantic_resolve import Collector
 
 def test_scan_post_method_1():

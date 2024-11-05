@@ -1,86 +1,17 @@
-import abc
 import copy
 import inspect
 from inspect import isfunction, isclass
 from collections import defaultdict
-from typing import Any, Callable, Optional
 from aiodataloader import DataLoader
 from pydantic import BaseModel
 from dataclasses import is_dataclass, fields as dc_fields
+
 import pydantic_resolve.constant as const
 import pydantic_resolve.utils.class_util as class_util
+from pydantic_resolve.utils.collector import ICollector
+from pydantic_resolve.utils.depend import Depends
 import pydantic_resolve.utils.params as params_util
-import pydantic_resolve.utils.types as types_util
-from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingCollector
-
-def LoaderDepend(  # noqa: N802
-    dependency: Optional[Callable[..., Any]] = None,
-) -> Any:
-    return Depends(dependency=dependency)
-
-class Depends:
-    def __init__(
-        self,
-        dependency: Optional[Callable[..., Any]] = None,
-    ):
-        self.dependency = dependency
-
-class ICollector(metaclass=abc.ABCMeta):
-    @abc.abstractmethod
-    def __init__(self, alias: str):
-        self.alias = alias  # required, must have
-
-    @abc.abstractmethod
-    def add(self, val):
-        """how to add new element(s)"""
-
-    @abc.abstractmethod
-    def values(self) -> Any:
-        """get result"""
-
-class Collector(ICollector):
-    def __init__(self, alias: str, flat: bool=False):
-        self.alias = alias
-        self.flat = flat
-        self.val = []
-    
-    def add(self, val):
-        if self.flat:
-            if isinstance(val, list):
-                self.val.extend(val)
-            else:
-                raise AttributeError('if flat, target should be list')
-        else:
-            self.val.append(val)
-
-    def values(self):
-        return self.val
-
-
-def _get_pydantic_attrs(kls):
-    items = class_util.get_items(kls)
-
-    for k, v in items:
-        t = types_util.get_type(v)
-
-        shelled_type = types_util.shelling_type(t)
-        if is_acceptable_kls(shelled_type):
-            yield (k, shelled_type)  # type_ is the most inner type
-
-
-def _get_dataclass_attrs(kls):
-    for name, v in kls.__annotations__.items():
-        shelled_type = types_util.shelling_type(v)
-        if is_acceptable_kls(shelled_type):
-            yield (name, shelled_type)
-
-
-def get_class(target):
-    if isinstance(target, list):
-        return target[0].__class__
-    else:
-        return target.__class__
-
+from pydantic_resolve.exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingCollector
 
 def _scan_resolve_method(method, field: str):
     result = {
@@ -256,10 +187,10 @@ def scan_and_store_metadata(root_class):
     def _get_all_fields_and_object_fields(kls):
         if class_util.safe_issubclass(kls, BaseModel):
             all_fields = set(class_util.get_keys(kls))
-            object_fields = list(_get_pydantic_attrs(kls))  # dive and recursively analysis
+            object_fields = list(class_util.get_pydantic_attrs(kls))  # dive and recursively analysis
         elif is_dataclass(kls):
             all_fields = set([f.name for f in dc_fields(kls)])
-            object_fields = list(_get_dataclass_attrs(kls))
+            object_fields = list(class_util.get_dataclass_attrs(kls))
         else:
             raise AttributeError('invalid type: should be pydantic object or dataclass object')  #noqa
         return all_fields, object_fields

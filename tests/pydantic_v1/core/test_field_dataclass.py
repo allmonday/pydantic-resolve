@@ -1,7 +1,7 @@
 # from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional, List
-from pydantic_resolve.core import scan_and_store_metadata
+from pydantic_resolve.analysis import scan_and_store_metadata
 
 @dataclass
 class Queue:
