@@ -20,25 +20,36 @@ if sys.version_info >= (3, 8):
 else:
     from typing_extensions import TypedDict
 
+class DataLoaderType(TypedDict):
+    param: str
+    kls: Type
+    path: str
+
+class CollectorType(TypedDict):
+    field: str 
+    param: str
+    instance: object
+    alias: str
+    
 class ResolveMethodType(TypedDict):
     trim_field: str
     context: bool
     parent: bool
     ancestor_context: bool
-    dataloaders: list
+    dataloaders: List[DataLoaderType]
 
 class PostMethodType(TypedDict):
     trim_field: str
     context: bool
     parent: bool
     ancestor_context: bool
-    collectors: list
+    collectors: List[CollectorType] 
 
 class PostDefaultHandlerType(TypedDict):
     context: bool
     parent: bool
     ancestor_context: bool
-    collectors: list
+    collectors: List[CollectorType]
 
 class KlsMetaType(TypedDict):
     resolve: List[str]
@@ -81,7 +92,7 @@ def _scan_resolve_method(method, field: str) -> ResolveMethodType:
 
     for name, param in signature.parameters.items():
         if isinstance(param.default, Depends):
-            info = { 
+            info: DataLoaderType = { 
                 'param': name,
                 'kls': param.default.dependency,  # for later initialization
                 'path': class_util.get_kls_full_path(param.default.dependency) }
@@ -115,7 +126,7 @@ def _scan_post_method(method, field) -> PostMethodType:
     
     for name, param in signature.parameters.items():
         if isinstance(param.default, ICollector):
-            info = {
+            info: CollectorType = {
                 'field': field,
                 'param': name,
                 'instance': param.default,
@@ -146,7 +157,7 @@ def _scan_post_default_handler(method) -> PostDefaultHandlerType:
 
     for name, param in signature.parameters.items():
         if isinstance(param.default, ICollector):
-            info = {
+            info: CollectorType = {
                 'field': const.POST_DEFAULT_HANDLER,
                 'param': name,
                 'instance': param.default,
@@ -415,18 +426,30 @@ def get_collectors(kls, mapped_metadata: MappedMetaType):
     kls_path = kls_meta['kls_path']
 
     alias_map = defaultdict(dict)
+
+    def add_collector(collector_a: CollectorType):
+        """
+        class A(BaseModel):
+            def post_name(collector=Collector('name')):
+                ...
+        kls_path: module_name.A
+        field: post_name
+        param: collector_a
+
+        sign = ('module_name.A', 'post_name', 'collector_a')
+        """
+        sign = (kls_path, collector['field'], collector['param'])
+        alias_map[collector['alias']][sign] = copy.deepcopy(collector['instance'])
+
     for _, param in post_params.items():
         for collector in param['collectors']:
-            sign = (kls_path, collector['field'], collector['param'])
-            # copied instance will be stored in resolver's self.object_collect_alias_map_store
-            alias_map[collector['alias']][sign] = copy.deepcopy(collector['instance'])
+            add_collector(collector)
 
     # post_default_handler
     post_default_handler_params = kls_meta['post_default_handler_params']
     if post_default_handler_params:
         for collector in post_default_handler_params['collectors']:
-            sign = (kls_path, collector['field'], collector['param'])
-            alias_map[collector['alias']][sign] = copy.deepcopy(collector['instance'])
+            add_collector(collector)
 
     return alias_map
 
