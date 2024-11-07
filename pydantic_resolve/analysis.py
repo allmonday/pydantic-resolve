@@ -1,6 +1,6 @@
 import copy
 import inspect
-from typing import List, Type, Dict, Optional
+from typing import List, Type, Dict, Optional, Tuple
 from inspect import isfunction, isclass
 from collections import defaultdict
 from aiodataloader import DataLoader
@@ -67,6 +67,7 @@ MetaType = Dict[str, KlsMetaType]
 
 class MappedMetaMemberType(KlsMetaType):
     kls_path: str
+    alias_map_proto: Dict[str, Dict[Tuple[str, str, str], object]]
 
 MappedMetaType = Dict[Type, MappedMetaMemberType]
 
@@ -358,9 +359,51 @@ def convert_metadata_key_as_kls(metadata: MetaType) -> MappedMetaType:
     """ use kls as map key for performance """
     kls_metadata = {}
     for k, v in metadata.items():
-        kls_metadata[v['kls']] = {**v, 'kls_path':k}
+        _kls_meta: MappedMetaMemberType = {
+            **v, 
+            'kls_path':k,
+            'alias_map_proto': {}
+        }
+        alias_map = _calc_alias_map_from_collectors(_kls_meta)
+        _kls_meta['alias_map_proto'] = alias_map
+        kls_metadata[v['kls']] = _kls_meta
     
     return kls_metadata
+
+
+def _calc_alias_map_from_collectors(kls_meta: MappedMetaMemberType):
+    post_params = kls_meta['post_params']
+    kls_path = kls_meta['kls_path']
+
+    alias_map = defaultdict(dict)
+
+    def add_collector(collector: CollectorType):
+        """
+        class A(BaseModel):
+            def post_name(collector=Collector('name')):
+                ...
+        kls_path: module_name.A
+        field: post_name
+        param: collector_a
+
+        sign = ('module_name.A', 'post_name', 'collector_a')
+
+        return { 'name': { sign: collector_instance } }
+        """
+        sign = get_collector_sign(kls_path, collector)
+        alias_map[collector['alias']][sign] = collector['instance']
+
+    for _, param in post_params.items():
+        for collector in param['collectors']:
+            add_collector(collector)
+
+    # post_default_handler
+    post_default_handler_params = kls_meta['post_default_handler_params']
+    if post_default_handler_params:
+        for collector in post_default_handler_params['collectors']:
+            add_collector(collector)
+
+    return alias_map
 
 
 def is_acceptable_kls(kls: Type) -> bool:
@@ -418,40 +461,15 @@ def get_post_default_handler_params(kls, mapped_metadata: MappedMetaType):
     return kls_meta['post_default_handler_params']
 
 
-def get_collectors(kls, mapped_metadata: MappedMetaType):
+def get_collector_sign(kls_path: str, collector: CollectorType):
+    return (kls_path, collector['field'], collector['param'])
+
+
+def generate_alias_map_with_cloned_collector(kls: Type, mapped_metadata: MappedMetaType):
     kls_meta = mapped_metadata.get(kls, {})
-
-    # post method
-    post_params = kls_meta['post_params']
-    kls_path = kls_meta['kls_path']
-
-    alias_map = defaultdict(dict)
-
-    def add_collector(collector_a: CollectorType):
-        """
-        class A(BaseModel):
-            def post_name(collector=Collector('name')):
-                ...
-        kls_path: module_name.A
-        field: post_name
-        param: collector_a
-
-        sign = ('module_name.A', 'post_name', 'collector_a')
-        """
-        sign = (kls_path, collector['field'], collector['param'])
-        alias_map[collector['alias']][sign] = copy.deepcopy(collector['instance'])
-
-    for _, param in post_params.items():
-        for collector in param['collectors']:
-            add_collector(collector)
-
-    # post_default_handler
-    post_default_handler_params = kls_meta['post_default_handler_params']
-    if post_default_handler_params:
-        for collector in post_default_handler_params['collectors']:
-            add_collector(collector)
-
-    return alias_map
+    return { alias: {
+        sign: copy.deepcopy(collector) for sign, collector in v.items()
+    } for alias, v in kls_meta['alias_map_proto'].items()}
 
 
 def iter_over_collectable_fields(kls, metadata: MappedMetaType):
