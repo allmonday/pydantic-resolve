@@ -199,44 +199,46 @@ class Resolver:
             # list should not play as parent, use original parent.
             await asyncio.gather(*[self._resolve(t, parent) for t in node])
 
-        if analysis.is_acceptable_instance(node):
-            kls = node.__class__
-            kls_path = class_util.get_kls_full_path(kls)
+        if not analysis.is_acceptable_instance(node):  # skip
+            return node
 
-            self._prepare_collectors(node, kls)
-            self._add_expose_fields(node)
-            self._add_parent(parent)
+        kls = node.__class__
+        kls_path = class_util.get_kls_full_path(kls)
 
-            tasks = []
+        self._prepare_collectors(node, kls)
+        self._add_expose_fields(node)
+        self._add_parent(parent)
 
-            # traversal and fetching data by resolve methods
-            resolve_list, attribute_list = analysis.iter_over_object_resolvers_and_acceptable_fields(node, kls, self.metadata)
-            for field, resolve_trim_field, method in resolve_list:
-                tasks.append(self._resolve_obj_field(node, kls, field, resolve_trim_field, method))
-            for field, attr_object in attribute_list:
-                tasks.append(self._resolve(attr_object, node))
-            await asyncio.gather(*tasks)
+        tasks = []
 
-            # reverse traversal and run post methods
-            for post_field, post_trim_field in analysis.iter_over_object_post_methods(kls, self.metadata):
-                post_method = getattr(node, post_field)
-                result = self._execute_post_method(node, kls, kls_path, post_field, post_method)
+        # traversal and fetching data by resolve methods
+        resolve_list, attribute_list = analysis.iter_over_object_resolvers_and_acceptable_fields(node, kls, self.metadata)
+        for field, resolve_trim_field, method in resolve_list:
+            tasks.append(self._resolve_obj_field(node, kls, field, resolve_trim_field, method))
+        for field, attr_object in attribute_list:
+            tasks.append(self._resolve(attr_object, node))
+        await asyncio.gather(*tasks)
 
-                # although post method support async, but not recommended to use 
-                while iscoroutine(result) or asyncio.isfuture(result):
-                    result = await result
-                    
-                result = conversion_util.try_parse_data_to_target_field_type(node, post_trim_field, result)
-                setattr(node, post_trim_field, result)
+        # reverse traversal and run post methods
+        for post_field, post_trim_field in analysis.iter_over_object_post_methods(kls, self.metadata):
+            post_method = getattr(node, post_field)
+            result = self._execute_post_method(node, kls, kls_path, post_field, post_method)
 
-            default_post_method = getattr(node, const.POST_DEFAULT_HANDLER, None)
-            if default_post_method:
-                self._execute_post_default_handler(node, kls, kls_path, default_post_method)
+            # although post method support async, but not recommended to use 
+            while iscoroutine(result) or asyncio.isfuture(result):
+                result = await result
+                
+            result = conversion_util.try_parse_data_to_target_field_type(node, post_trim_field, result)
+            setattr(node, post_trim_field, result)
 
-            # collect after all done
-            self._add_values_into_collectors(node, kls)
+        default_post_method = getattr(node, const.POST_DEFAULT_HANDLER, None)
+        if default_post_method:
+            self._execute_post_default_handler(node, kls, kls_path, default_post_method)
 
+        # collect after all done
+        self._add_values_into_collectors(node, kls)
         return node
+
 
     async def resolve(self, node: T) -> T:
         if isinstance(node, list) and node == []: return node
