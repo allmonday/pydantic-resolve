@@ -2,7 +2,7 @@ import asyncio
 import contextvars
 import warnings
 from inspect import iscoroutine
-from typing import TypeVar, Dict
+from typing import TypeVar, Dict, Type, Callable
 
 import pydantic_resolve.utils.conversion as conversion_util
 from .exceptions import MissingAnnotationError
@@ -66,7 +66,7 @@ class Resolver:
                 raise AttributeError(f'{loader.__name__} is not instance of {cls.__name__}')
         return True
     
-    def _prepare_collectors(self, node, kls):
+    def _prepare_collectors(self, node: object, kls: Type):
         alias_map = analysis.generate_alias_map_with_cloned_collector(kls, self.metadata)
         if alias_map:
             # store for later post methods
@@ -82,7 +82,7 @@ class Resolver:
                     updated_pair = {**current_pair, **sign_collector_kv}
                     self.collector_contextvars[alias_name].set(updated_pair)
 
-    def _add_values_into_collectors(self, node, kls):
+    def _add_values_into_collectors(self, node: object, kls: Type):
         for field, alias in analysis.iter_over_collectable_fields(kls, self.metadata):
             # handle two kinds of scenarios
             # {'name': ('collector_a', 'collector_b')}
@@ -95,12 +95,12 @@ class Resolver:
                         if isinstance(field, tuple) else getattr(node, field)
                     instance.add(val)
     
-    def _add_parent(self, node):
+    def _add_parent(self, node: object):
         if not self.parent_contextvars.get('parent'):
             self.parent_contextvars['parent'] = contextvars.ContextVar('parent')
         self.parent_contextvars['parent'].set(node)
 
-    def _add_expose_fields(self, node):
+    def _add_expose_fields(self, node: object):
         expose_dict: Optional[dict] = getattr(node, const.EXPOSE_TO_DESCENDANT, None)
         if expose_dict:
             for field, alias in expose_dict.items():  # eg: {'name': 'bar_name'}
@@ -117,7 +117,11 @@ class Resolver:
     def _prepare_ancestor_context(self):
         return {k: v.get() for k, v in self.ancestor_vars.items()}
 
-    def _execute_resolver_method(self, kls, field, method):
+    def _execute_resolver_method(
+            self,
+            kls: Type,
+            field: str,
+            method: Callable):
         params = {}
         resolve_param = analysis.get_resolve_param(kls, field, self.metadata)
         if resolve_param['context']:
@@ -134,7 +138,13 @@ class Resolver:
 
         return method(**params)
     
-    def _execute_post_method(self, node, kls, kls_path, post_field, method):
+    def _execute_post_method(
+            self,
+            node: object,
+            kls: Type,
+            kls_path: str,
+            post_field: str,
+            method: Callable):
         params = {}
         post_param = analysis.get_post_params(kls, post_field , self.metadata)
 
@@ -177,7 +187,13 @@ class Resolver:
 
         return method(**params)
 
-    async def _resolve_obj_field(self, node, kls, field, trim_field, method):
+    async def _resolve_resolve_method_field(
+            self, 
+            node: object, 
+            kls: Type,
+            field: str,
+            trim_field: str,
+            method: Callable):
         if self.ensure_type:
             if not method.__annotations__:
                 raise MissingAnnotationError(f'{field}: return annotation is required')
@@ -194,7 +210,7 @@ class Resolver:
 
         setattr(node, trim_field, val)
 
-    async def _resolve(self, node: T, parent) -> T:
+    async def _resolve(self, node: T, parent: object) -> T:
         if isinstance(node, (list, tuple)):
             # list should not play as parent, use original parent.
             await asyncio.gather(*[self._resolve(t, parent) for t in node])
@@ -214,9 +230,11 @@ class Resolver:
         # traversal and fetching data by resolve methods
         resolve_list, attribute_list = analysis.iter_over_object_resolvers_and_acceptable_fields(node, kls, self.metadata)
         for field, resolve_trim_field, method in resolve_list:
-            tasks.append(self._resolve_obj_field(node, kls, field, resolve_trim_field, method))
+            tasks.append(self._resolve_resolve_method_field(node, kls, field, resolve_trim_field, method))
+
         for field, attr_object in attribute_list:
             tasks.append(self._resolve(attr_object, node))
+
         await asyncio.gather(*tasks)
 
         # reverse traversal and run post methods
