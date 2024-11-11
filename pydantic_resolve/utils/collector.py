@@ -1,11 +1,10 @@
 import abc
-from typing import Any
-
+from typing import Any, List, Union
 
 class ICollector(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def __init__(self, alias: str):
-        self.alias = alias  # required, must have
+        self.alias = alias
 
     @abc.abstractmethod
     def add(self, val):
@@ -18,18 +17,18 @@ class ICollector(metaclass=abc.ABCMeta):
 
 class Collector(ICollector):
     def __init__(self, alias: str, flat: bool=False):
-        self.alias = alias
+        super().__init__(alias)
         self.flat = flat
         self.val = []
 
-    def add(self, val):
+    def add(self, val: Union[Any, List[Any]]) -> None:
         if self.flat:
             if isinstance(val, list):
                 self.val.extend(val)
             else:
-                raise AttributeError('if flat, target should be list')
+                raise TypeError('if flat, target should be list')
         else:
             self.val.append(val)
 
-    def values(self):
+    def values(self) -> List[Any]:
         return self.val

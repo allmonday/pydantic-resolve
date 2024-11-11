@@ -1,5 +1,4 @@
 from typing import Type, Union
-
 from pydantic_resolve.compat import PYDANTIC_V2
 
 

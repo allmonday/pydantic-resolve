@@ -1,7 +1,5 @@
-from pydantic_resolve.exceptions import GlobalLoaderFieldOverlappedError
-
-
 from typing import Any, Dict
+from pydantic_resolve.exceptions import GlobalLoaderFieldOverlappedError
 
 
 def merge_dicts(a: Dict[str, Any], b: Dict[str, Any]):

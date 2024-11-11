@@ -1,6 +1,5 @@
 from typing import Any, Callable, Optional
 
-
 class Depends:
     def __init__(
         self,

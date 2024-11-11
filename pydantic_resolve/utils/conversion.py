@@ -9,10 +9,9 @@ from pydantic_resolve.compat import PYDANTIC_V2
 import pydantic_resolve.constant as const
 from pydantic_resolve.utils.class_util import safe_issubclass
 
-if PYDANTIC_V2:
-    from pydantic import BaseModel, TypeAdapter, ValidationError
 
 if PYDANTIC_V2:
+    from pydantic import BaseModel, TypeAdapter, ValidationError
     class TypeAdapterManager:
         apapters = {}
         

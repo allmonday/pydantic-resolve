@@ -1,5 +1,5 @@
-from dataclasses import is_dataclass
 import functools
+from dataclasses import is_dataclass
 from typing import Type, get_type_hints
 import pydantic_resolve.constant as const
 from pydantic_resolve.compat import PYDANTIC_V2
@@ -175,3 +175,12 @@ def get_class(target):
         return target[0].__class__
     else:
         return target.__class__
+
+
+def _is_required_v1(field):
+    return field.required
+
+def _is_required_v2(field):
+    return field.is_required()
+
+is_required_field = _is_required_v2 if PYDANTIC_V2 else _is_required_v1

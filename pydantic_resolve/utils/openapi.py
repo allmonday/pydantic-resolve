@@ -3,27 +3,16 @@ from typing import Any, Dict
 import pydantic_resolve.constant as const
 from pydantic_resolve.compat import PYDANTIC_V2
 from inspect import isfunction
-from pydantic_resolve.utils.class_util import safe_issubclass
+from pydantic_resolve.utils.class_util import safe_issubclass, is_required_field, get_items
 
 
 def _get_required_fields(kls: BaseModel):
     required_fields = []
 
-    def _is_require(field):
-        if PYDANTIC_V2:
-            return field.is_required()
-        else:
-            return field.required
-
-    # 1. get required fields
-    if PYDANTIC_V2:
-        items = kls.model_fields.items()
-    else:
-        items = kls.__fields__.items()
-
+    items = get_items(kls)
 
     for fname, field in items:
-        if _is_require(field):
+        if is_required_field(field):
             required_fields.append(fname)
 
 
