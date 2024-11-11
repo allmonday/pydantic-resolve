@@ -10,7 +10,7 @@ class Human(BaseModel):
     lucky: bool = True
     async def resolve_lucky(self):
         print('calculating...')
-        await asyncio.sleep(1)  # mock i/o
+        await asyncio.sleep(0.1)  # mock i/o
         return random() > 0.5
     
 class Earth(BaseModel):

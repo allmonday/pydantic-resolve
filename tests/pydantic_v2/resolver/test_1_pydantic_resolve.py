@@ -13,7 +13,7 @@ class Student(BaseModel):
 
     books: List[str] = []    
     async def resolve_books(self) -> List[str]:
-        await asyncio.sleep(1)
+        await asyncio.sleep(.1)
         return ['book1', 'book2']
 
 

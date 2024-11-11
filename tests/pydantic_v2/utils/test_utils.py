@@ -101,7 +101,7 @@ async def test_mapper_1():
         return {'a': 1}
 
     async def call_later(f):
-        await asyncio.sleep(1)
+        await asyncio.sleep(.1)
         f.set_result({'a': 1})
 
     @pydantic_resolve.utils.conversion.mapper(lambda x: A(**x))
