@@ -49,7 +49,7 @@ def test_get_all_fields():
         'test_field_dataclass_anno.Student': {
             'resolve': ['resolve_name', 'resolve_zeta'],
             'post': ['post_name', 'post_queue_names'],
-            'attribute': ['zone'],
+            'object_fields': ['zone'],
             'expose_dict': {'name': 'student_name'},
             'collect_dict': {},
             'kls': Student
@@ -57,7 +57,7 @@ def test_get_all_fields():
         'test_field_dataclass_anno.Zone': {
             'resolve': [],
             'post': [],
-            'attribute': ['qs'],
+            'object_fields': ['qs'],
             'expose_dict': {},
             'collect_dict': {},
             'kls': Zone
@@ -65,7 +65,7 @@ def test_get_all_fields():
         'test_field_dataclass_anno.Queue': {
             'resolve': [],
             'post': [],
-            'attribute': [],
+            'object_fields': [],
             'expose_dict': {},
             'collect_dict': {'name': 'queue_name'},
             'kls': Queue
@@ -73,7 +73,7 @@ def test_get_all_fields():
         'test_field_dataclass_anno.Zeta': {
             'resolve': [],
             'post': [],
-            'attribute': [],
+            'object_fields': [],
             'expose_dict': {},
             'collect_dict': {},
             'kls': Zeta

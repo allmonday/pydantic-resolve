@@ -24,14 +24,14 @@ def test_get_all_fields():
         'test_field_mix.Student': {
             'resolve': ['resolve_books'],
             'post': [],
-            'attribute': [],
+            'object_fields': [],
             'expose_dict': {'name': 's_name'},
             'collect_dict': {}
         },
         'test_field_mix.Book': {
             'resolve': [],
             'post': [],
-            'attribute': [],
+            'object_fields': [],
             'expose_dict': {},
             'collect_dict': {}
         },

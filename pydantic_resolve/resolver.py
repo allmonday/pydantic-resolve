@@ -2,16 +2,15 @@ import asyncio
 import contextvars
 import warnings
 from inspect import iscoroutine
-from typing import TypeVar, Dict, Type, Callable
-
-import pydantic_resolve.utils.conversion as conversion_util
-from .exceptions import MissingAnnotationError
-from typing import Any, Optional
-from pydantic_resolve import analysis
+from typing import TypeVar, Dict, Type, Callable, Any, Optional
 from aiodataloader import DataLoader
 from types import MappingProxyType
-import pydantic_resolve.constant as const
+
+from pydantic_resolve import analysis
+from pydantic_resolve.exceptions import MissingAnnotationError
+import pydantic_resolve.utils.conversion as conversion_util
 import pydantic_resolve.utils.class_util as class_util
+import pydantic_resolve.constant as const
 
 
 T = TypeVar("T")
@@ -56,7 +55,7 @@ class Resolver:
         self.ensure_type = ensure_type
         self.context = MappingProxyType(context) if context else None
         self.metadata = {}
-        self.object_collect_alias_map_store = {}
+        self.object_level_collect_alias_map_store: Dict[int, Dict] = {}
 
     def _validate_loader_instance(self, loader_instances: Dict[Any, Any]):
         for cls, loader in loader_instances.items():
@@ -70,7 +69,7 @@ class Resolver:
         alias_map = analysis.generate_alias_map_with_cloned_collector(kls, self.metadata)
         if alias_map:
             # store for later post methods
-            self.object_collect_alias_map_store[id(node)] = alias_map  
+            self.object_level_collect_alias_map_store[id(node)] = alias_map  
 
             # expose to descendant
             for alias_name, sign_collector_kv in alias_map.items():
@@ -82,25 +81,12 @@ class Resolver:
                     updated_pair = {**current_pair, **sign_collector_kv}
                     self.collector_contextvars[alias_name].set(updated_pair)
 
-    def _add_values_into_collectors(self, node: object, kls: Type):
-        for field, alias in analysis.iter_over_collectable_fields(kls, self.metadata):
-            # handle two kinds of scenarios
-            # {'name': ('collector_a', 'collector_b')}
-            # {'name': 'collector_a'}
-            alias_list = alias if isinstance(alias, (tuple, list)) else (alias,)
-
-            for alias in alias_list:
-                for _, instance in self.collector_contextvars[alias].get().items():
-                    val = [getattr(node, f) for f in field]\
-                        if isinstance(field, tuple) else getattr(node, field)
-                    instance.add(val)
-    
-    def _add_parent(self, node: object):
+    def _prepare_parent(self, node: object):
         if not self.parent_contextvars.get('parent'):
             self.parent_contextvars['parent'] = contextvars.ContextVar('parent')
         self.parent_contextvars['parent'].set(node)
 
-    def _add_expose_fields(self, node: object):
+    def _prepare_expose_fields(self, node: object):
         expose_dict: Optional[dict] = getattr(node, const.EXPOSE_TO_DESCENDANT, None)
         if expose_dict:
             for field, alias in expose_dict.items():  # eg: {'name': 'bar_name'}
@@ -117,13 +103,15 @@ class Resolver:
     def _prepare_ancestor_context(self):
         return {k: v.get() for k, v in self.ancestor_vars.items()}
 
-    def _execute_resolver_method(
+    def _execute_resolve_method(
             self,
             kls: Type,
             field: str,
             method: Callable):
+
         params = {}
-        resolve_param = analysis.get_resolve_param(kls, field, self.metadata)
+        resolve_param = analysis.get_resolve_method_param(kls, field, self.metadata)
+
         if resolve_param['context']:
             params['context'] = self.context
         if resolve_param['ancestor_context']:
@@ -145,8 +133,9 @@ class Resolver:
             kls_path: str,
             post_field: str,
             method: Callable):
+
         params = {}
-        post_param = analysis.get_post_params(kls, post_field , self.metadata)
+        post_param = analysis.get_post_method_params(kls, post_field , self.metadata)
 
         if post_param['context']:
             params['context'] = self.context
@@ -155,7 +144,7 @@ class Resolver:
         if post_param['parent']:
             params['parent'] = self.parent_contextvars['parent'].get()
 
-        alias_map = self.object_collect_alias_map_store.get(id(node), {})
+        alias_map = self.object_level_collect_alias_map_store.get(id(node), {})
         if alias_map:
             for collector in post_param['collectors']:
                 signature = analysis.get_collector_sign(kls_path, collector)
@@ -164,7 +153,13 @@ class Resolver:
         
         return method(**params)
 
-    def _execute_post_default_handler(self, node, kls, kls_path, method):
+    def _execute_post_default_handler(
+            self,
+            node: object,
+            kls: Type,
+            kls_path: str,
+            method: Callable):
+
         params = {}
         post_default_param = analysis.get_post_default_handler_params(kls, self.metadata)
 
@@ -178,7 +173,7 @@ class Resolver:
         if post_default_param['parent']:
             params['parent'] = self.parent_contextvars['parent'].get()
 
-        alias_map = self.object_collect_alias_map_store.get(id(node), {})
+        alias_map = self.object_level_collect_alias_map_store.get(id(node), {})
         if alias_map:
             for collector in post_default_param['collectors']:
                 alias, param = collector['alias'], collector['param']
@@ -187,7 +182,19 @@ class Resolver:
 
         return method(**params)
 
-    async def _resolve_resolve_method_field(
+    def _add_values_into_collectors(self, node: object, kls: Type):
+        for field, alias in analysis.get_collector_candidates(kls, self.metadata):
+            alias_list = alias if isinstance(alias, (tuple, list)) else (alias,)
+
+            for alias in alias_list:
+                for _, instance in self.collector_contextvars[alias].get().items():
+                    if isinstance(field, tuple):  # only tuple are allowed to be key
+                        val = [getattr(node, f) for f in field]
+                    else:
+                        val = getattr(node, field)
+                    instance.add(val)
+
+    async def _execute_resolve_method_field(
             self, 
             node: object, 
             kls: Type,
@@ -198,7 +205,7 @@ class Resolver:
             if not method.__annotations__:
                 raise MissingAnnotationError(f'{field}: return annotation is required')
 
-        val = self._execute_resolver_method(kls, field, method)
+        val = self._execute_resolve_method(kls, field, method)
         while iscoroutine(val) or asyncio.isfuture(val):
             val = await val
 
@@ -206,39 +213,55 @@ class Resolver:
             val = conversion_util.try_parse_data_to_target_field_type(node, trim_field, val)
 
         # continue dive deeper
-        val = await self._resolve(val, node)
+        val = await self._traverse(val, node)
 
         setattr(node, trim_field, val)
 
-    async def _resolve(self, node: T, parent: object) -> T:
-        if isinstance(node, (list, tuple)):
-            # list should not play as parent, use original parent.
-            await asyncio.gather(*[self._resolve(t, parent) for t in node])
+    async def _traverse(self, node: T, parent: object) -> T:
+        """
+        life cycle:
+        - prepare 
+            - collectors, 
+            - ancestor expose fields 
+            - parent
+        - execute 
+            - resolve method fields/ object fields
+            - post method fields
+            - post default handler
+        - collect
+            - values into ancestor collectors
+        - return node
 
-        if not analysis.is_acceptable_instance(node):  # skip
+        TODO:
+        If the descendant of object has no more pydantic-resolve related operation, it should be skipped.
+        """
+        if isinstance(node, (list, tuple)):
+            await asyncio.gather(*[self._traverse(t, parent) for t in node])
+
+        if not analysis.is_acceptable_instance(node):
             return node
 
         kls = node.__class__
         kls_path = class_util.get_kls_full_path(kls)
 
         self._prepare_collectors(node, kls)
-        self._add_expose_fields(node)
-        self._add_parent(parent)
+        self._prepare_expose_fields(node)
+        self._prepare_parent(parent)
 
         tasks = []
 
-        # traversal and fetching data by resolve methods
-        resolve_list, attribute_list = analysis.iter_over_object_resolvers_and_acceptable_fields(node, kls, self.metadata)
-        for field, resolve_trim_field, method in resolve_list:
-            tasks.append(self._resolve_resolve_method_field(node, kls, field, resolve_trim_field, method))
+        # resolve process
+        resolve_fields, object_fields = analysis.get_resolve_fields_and_object_fields_from_object(node, kls, self.metadata)
+        for field, resolve_trim_field, method in resolve_fields:
+            tasks.append(self._execute_resolve_method_field(node, kls, field, resolve_trim_field, method))
 
-        for field, attr_object in attribute_list:
-            tasks.append(self._resolve(attr_object, node))
+        for field, attr_object in object_fields:
+            tasks.append(self._traverse(attr_object, node))
 
         await asyncio.gather(*tasks)
 
-        # reverse traversal and run post methods
-        for post_field, post_trim_field in analysis.iter_over_object_post_methods(kls, self.metadata):
+        # post process
+        for post_field, post_trim_field in analysis.get_post_methods(kls, self.metadata):
             post_method = getattr(node, post_field)
             result = self._execute_post_method(node, kls, kls_path, post_field, post_method)
 
@@ -253,10 +276,8 @@ class Resolver:
         if default_post_method:
             self._execute_post_default_handler(node, kls, kls_path, default_post_method)
 
-        # collect after all done
         self._add_values_into_collectors(node, kls)
         return node
-
 
     async def resolve(self, node: T) -> T:
         if isinstance(node, list) and node == []: return node
@@ -275,5 +296,5 @@ class Resolver:
         if has_context and self.context is None:
             raise AttributeError('context is missing')
             
-        await self._resolve(node, None)
+        await self._traverse(node, None)
         return node

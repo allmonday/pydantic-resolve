@@ -17,7 +17,7 @@ def test_get_all_fields():
         'test_specific_type.Student': {
             'resolve': [],
             'post': [],
-            'attribute': [],
+            'object_fields': [],
             'expose_dict': {},
             'collect_dict': {}
             # ... others

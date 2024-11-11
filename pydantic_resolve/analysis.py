@@ -57,7 +57,7 @@ class KlsMetaType(TypedDict):
     resolve_params: Dict[str, ResolveMethodType]
     post_params: Dict[str, PostMethodType]
     post_default_handler_params: Optional[PostDefaultHandlerType]
-    attribute: List[str]
+    object_fields: List[str]
     expose_dict: dict
     collect_dict: dict
     kls: Type
@@ -293,14 +293,26 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
                 collect_set.add(collector['alias'])
 
     def _validate_collector(collect_dict, kls_name):
-        """collector should be declared in ancestors"""
+        """
+        validate if the collector is declared in ancestor nodes.
+
+        available format of `__pydantic_resolve_collect__`
+
+        class A(BaseModel):
+            __pydantic_resolve_collect__ = {
+                'name': 'collector_a',                                  # send name to collector_a
+                ('name', 'age'): 'collector_b',                         # send ('name', 'age') to collector_b
+                'name': ('collector_c', 'collector_d'),                 # send name to both collector_c and d
+                ('name', 'age'): ('collector_e', 'collector_f'),        # send ('name', 'age') to both collector_e and f
+            }
+        """
         if type(collect_dict) is not dict:
-            raise AttributeError(f'{const.COLLECT_FROM_ANCESTOR} is not dict')
+            raise AttributeError(f'{const.COLLECTOR_CONFIGURATION} is not dict')
 
         for _, collector in collect_dict.items():
-            colls = collector if isinstance(collector, (list, tuple)) else (collector,)
-            for col in colls:
-                if col not in collect_set:
+            collectors = collector if isinstance(collector, (list, tuple)) else (collector,)
+            for c in collectors:
+                if c not in collect_set:
                     raise MissingCollector(f'Collector alias name not found in ancestor, please check: {kls_name}')
 
     def walker(kls):
@@ -316,7 +328,7 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
 
         # - scan expose and collect (__pydantic_resolve_xxx__)
         expose_dict = getattr(kls, const.EXPOSE_TO_DESCENDANT, {})
-        collect_dict = getattr(kls, const.COLLECT_FROM_ANCESTOR, {})
+        collect_dict = getattr(kls, const.COLLECTOR_CONFIGURATION, {})
         _validate_expose(expose_dict, kls_name)
 
         resolve_params = {field: _scan_resolve_method(getattr(kls, field), field) for field in resolve_fields}
@@ -340,7 +352,7 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
             'post': post_fields,
             'post_params': post_params,
             'post_default_handler_params': post_default_handler_params,
-            'attribute': object_fields_without_resolver,
+            'object_fields': object_fields_without_resolver,
             'expose_dict': expose_dict,
             'collect_dict': collect_dict,
             'kls': kls,
@@ -415,27 +427,30 @@ def is_acceptable_instance(target: object):
     return isinstance(target, BaseModel) or is_dataclass(target)
 
 
-def iter_over_object_resolvers_and_acceptable_fields(target: object, kls: Type, mapped_metadata: MappedMetaType):
-    """metadata key is kls"""
-    resolve, attribute = [], []
+def get_resolve_fields_and_object_fields_from_object(node: object, kls: Type, mapped_metadata: MappedMetaType):
+    """
+    resolve_fields: a field with resolve_field method
+    object_fields: a field without resolve_field method but is an object (should traversal)
+    """
+    resolve_fields, object_fields = [], []
     kls_meta = mapped_metadata.get(kls)
 
     if kls_meta is None:
         return [], []
 
     for resolve_field in kls_meta['resolve']:
-        attr = getattr(target, resolve_field)
+        attr = getattr(node, resolve_field)
         trim_field = kls_meta['resolve_params'][resolve_field]['trim_field']
-        resolve.append((resolve_field, trim_field, attr))
+        resolve_fields.append((resolve_field, trim_field, attr))
 
-    for attr_name in kls_meta['attribute']:
-        attr = getattr(target, attr_name)
-        attribute.append((attr_name, attr))
+    for attr_name in kls_meta['object_fields']:
+        attr = getattr(node, attr_name)
+        object_fields.append((attr_name, attr))
 
-    return resolve, attribute
+    return resolve_fields, object_fields
 
 
-def iter_over_object_post_methods(kls: Type, mapped_metadata: MappedMetaType):
+def get_post_methods(kls: Type, mapped_metadata: MappedMetaType):
     kls_meta = mapped_metadata.get(kls)
 
     if kls_meta is None:
@@ -446,12 +461,12 @@ def iter_over_object_post_methods(kls: Type, mapped_metadata: MappedMetaType):
         yield post_field, trim_field
 
 
-def get_resolve_param(kls, resolve_field, mapped_metadata: MappedMetaType):
+def get_resolve_method_param(kls: Type, resolve_field: str, mapped_metadata: MappedMetaType):
     kls_meta = mapped_metadata.get(kls, {})
     return kls_meta['resolve_params'][resolve_field]
 
 
-def get_post_params(kls, post_field, mapped_metadata: MappedMetaType):
+def get_post_method_params(kls, post_field, mapped_metadata: MappedMetaType):
     kls_meta = mapped_metadata.get(kls, {})
     return kls_meta['post_params'][post_field]
 
@@ -472,7 +487,7 @@ def generate_alias_map_with_cloned_collector(kls: Type, mapped_metadata: MappedM
     } for alias, v in kls_meta['alias_map_proto'].items()}
 
 
-def iter_over_collectable_fields(kls, metadata: MappedMetaType):
+def get_collector_candidates(kls, metadata: MappedMetaType):
     kls_meta = metadata.get(kls, {})
     collect_dict = kls_meta['collect_dict']
 
