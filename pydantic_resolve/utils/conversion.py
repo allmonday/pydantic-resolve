@@ -25,7 +25,10 @@ if PYDANTIC_V2:
                 cls.apapters[type] = new_adapter
                 return new_adapter
 
-def try_parse_data_to_target_field_type_v1(target, field_name, data):
+def try_parse_data_to_target_field_type_v1(
+        target: object,
+        field_name: str,
+        data):
     """
     parse to pydantic or dataclass object
     1. get type of target field
@@ -57,7 +60,10 @@ def try_parse_data_to_target_field_type_v1(target, field_name, data):
         return data  #noqa
 
 
-def try_parse_data_to_target_field_type_v2(target, field_name, data):
+def try_parse_data_to_target_field_type_v2(
+        target: object,
+        field_name: str,
+        data):
     """
     parse to pydantic or dataclass object
     1. get type of target field
