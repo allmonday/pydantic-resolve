@@ -13,17 +13,16 @@ edit_uri: ""
 
 nav:
   - Quick Start:
-      - Install: index.md
-      - Let's start: about.md
-      - Dataloader: dataloader.md
-      - Inheritance: inherit.md
-      - Tree: tree.md
-      - Philosophy: philosophy.md
+      - Install: ./v1/index.md
+      - Let's start: ./v1/about.md
+      - Dataloader: ./v1/dataloader.md
+      - Inheritance: ./v1/inherit.md
+      - Tree: ./v1/tree.md
+      - Philosophy: ./v1/philosophy.md
   - Reference:
-      - API: reference_api.md
+      - API: ./v1/reference_api.md
   - Change log:
-      - pydantic-resolve: changelog.md
-      - pydantic2-resolve: changelog-v2.md
+      - pydantic-resolve: ./v1/changelog.md
 
 markdown_extensions:
   - pymdownx.highlight:
