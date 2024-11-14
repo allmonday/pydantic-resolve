@@ -11,18 +11,41 @@ repo_name: allmonday/pydantic-resolve
 repo_url: https://github.com/allmonday/pydantic-resolve
 edit_uri: ""
 
+# nav:
+#   - Quick Start:
+#       - Install: ./v1/index.md
+#       - Let's start: ./v1/about.md
+#       - Dataloader: ./v1/dataloader.md
+#       - Inheritance: ./v1/inherit.md
+#       - Tree: ./v1/tree.md
+#       - Philosophy: ./v1/philosophy.md
+#   - Reference:
+#       - API: ./v1/reference_api.md
+#   - Change log:
+#       - pydantic-resolve: ./v1/changelog.md
+
 nav:
   - Quick Start:
-      - Install: ./v1/index.md
-      - Let's start: ./v1/about.md
-      - Dataloader: ./v1/dataloader.md
-      - Inheritance: ./v1/inherit.md
-      - Tree: ./v1/tree.md
-      - Philosophy: ./v1/philosophy.md
-  - Reference:
-      - API: ./v1/reference_api.md
-  - Change log:
-      - pydantic-resolve: ./v1/changelog.md
+      - Introduction: ./v2/introduction.md
+      - Schema first: ./v2/schema_first.md
+  - Scenario:
+      - Fetch: ./v2/fetching.md
+      - Modify: ./v2/modify.md
+      - Reorg: ./v2/reorg.md
+  - Advance:
+      - Tree: ./v2/tree.md
+      - Inherit and reuse: ./v2/inherit_reuse.md
+      - Dataloader: ./v2/dataloader.md
+      - Debug: ./v2/debug.md
+      - ERD: ./v2/erd.md
+  - Solution:
+      - Concept: ./v2/concept.md
+      - Develop flow: ./v2/develop_flow.md
+  - API:
+      - resolve and post: ./v2/resolve_post.md
+      - expose and collector: ./v2/expose_collector.md
+      - dataloader: ./v2/dataloader_api.md
+      - context: ./v2/context.md
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -44,6 +67,8 @@ plugins:
           link: "/pydantic-resolve/zh/"
           nav_translations:
             Quick Start: "快速开始"
+            Introduction: "简介"
+            Schema first: "先定义模型"
             Reference: "文档"
             Change log: "变更记录"
             Install: "安装"
