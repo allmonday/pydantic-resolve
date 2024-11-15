@@ -27,20 +27,12 @@ edit_uri: ""
 nav:
   - Quick Start:
       - Introduction: ./v2/introduction.md
+      - Use cases: ./v2/use_case.md
       - Schema first: ./v2/schema_first.md
-  - Scenario:
-      - Fetch: ./v2/fetching.md
-      - Modify: ./v2/modify.md
-      - Reorg: ./v2/reorg.md
-  - Advance:
-      - Tree: ./v2/tree.md
-      - Inherit and reuse: ./v2/inherit_reuse.md
+  - Features:
       - Dataloader: ./v2/dataloader.md
-      - Debug: ./v2/debug.md
+      - Inherit and reuse: ./v2/inherit_reuse.md
       - ERD: ./v2/erd.md
-  - Solution:
-      - Concept: ./v2/concept.md
-      - Develop flow: ./v2/develop_flow.md
   - API:
       - resolve and post: ./v2/resolve_post.md
       - expose and collector: ./v2/expose_collector.md
@@ -50,6 +42,11 @@ nav:
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.superfences
 
 plugins:
@@ -68,7 +65,10 @@ plugins:
           nav_translations:
             Quick Start: "快速开始"
             Introduction: "简介"
+            Use cases: "应用场景"
             Schema first: "先定义模型"
+            Features: "功能介绍"
+            Dataloader: "数据加载器"
             Reference: "文档"
             Change log: "变更记录"
             Install: "安装"
