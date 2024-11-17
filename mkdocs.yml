@@ -32,7 +32,7 @@ nav:
   - Features:
       - Dataloader: ./v2/dataloader.md
       - Inherit and reuse: ./v2/inherit_reuse.md
-      - ERD: ./v2/erd.md
+      - ERD Driven Pattern: ./v2/erd_driven.md
   - API:
       - resolve and post: ./v2/resolve_post.md
       - expose and collector: ./v2/expose_collector.md
@@ -69,7 +69,9 @@ plugins:
             Schema first: "先定义模型"
             Features: "功能介绍"
             Dataloader: "数据加载器"
+            Inherit and reuse: "继承和复用"
             Reference: "文档"
+            ERD Driven Pattern: "ERD 驱动开发"
             Change log: "变更记录"
             Install: "安装"
             Let's start: "开始"

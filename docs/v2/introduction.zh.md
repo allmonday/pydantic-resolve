@@ -17,13 +17,16 @@ class Child(BaseModel):
     def post_description(self):
         desc = ', '.join([c.name for c in self.cars])
         return f'{self.name} owns {len(self.cars)} cars, they are: {desc}'
+
+children = await Resolver.resolve([
+        Child(id=1, name="Titan"), Child(id=1, name="Siri")])
 ```
 
-resolve 方法通常用来获取数据， post 方法则可以在数据获取完毕后做后续处理。
+resolve 通常用来获取数据， post 可以在数据获取完毕后做后续处理。
 
 当定义完对象方法， 并初始化好对象后， pydantic-resolve 内部会对数据做遍历， 执行这些方法来处理数据。
 
-借助 dataloader， pydantic-resolve 避免了在多层获取数据时容易发生的 N+1 查询， 优化了性能。
+借助 dataloader， pydantic-resolve 可以避免多层获取数据时容易发生的 N+1 查询， 优化性能。
 
 除此以外它还提供了 expose 和 collector 机制为跨层的数据处理提供了便利。
 

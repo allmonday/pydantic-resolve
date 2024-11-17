@@ -6,6 +6,28 @@ DataLoader 是 pydantic-resolve 中非常重要的一个组件， 使用了一�
 
 pydantic-resolve 的内部机制和 GraphQL 有点类似， 所以可以直接使用它来负责数据加载。 对于一些简单的 DataLoader 也可以实现与其他 python GraphQL 框架间的复用。
 
+比如简介中介绍的代码, 在批量处理 `get_cars_by_child` 时就会触发多次, 引起 N+1 查询问题. 我们能通过 DataLoader 来解决.
+
+```python
+class Child(BaseModel):
+    id: int
+    name: str
+
+    cars: List[Car] = []
+    async def resolve_cars(self):
+        return await get_cars_by_child(self.id)
+
+    description: str = ''
+    def post_description(self):
+        desc = ', '.join([c.name for c in self.cars])
+        return f'{self.name} owns {len(self.cars)} cars, they are: {desc}'
+
+children = await Resolver.resolve([
+        Child(id=1, name="Titan"), Child(id=1, name="Siri")])
+``` 
+
+
+
 ## DataLoader 的创建
 
 DataLoader 对象有两种创建方法， 一种是继承：
@@ -217,6 +239,8 @@ data = await Resolver(loader_instances={SomeLoader: loader}).resolve(data)
 ```
 
 ## 查看 DataLoader 实例数据
+
+如果想知道 DataLoader 初始化了哪些实例, 获取了哪些数据, 可以打印出来查看.
 
 ```python
 resolver = Resolver()
