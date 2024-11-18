@@ -101,14 +101,80 @@ select * from post where post.user_id in (1,2,3,4) where post.created_at > '2021
 
 从设置的角度来看， keys 是一个个 User 对象通过 `loader.load(key)` 提供的， 而 `where` 条件是则是直接针对 loader 做的配置。
 
-GraphQL 本身没有方便的手段来提供 `where` 参数， 比较遗憾。
+GraphQL 本身没有方便的手段来提供通用的 `where` 参数， 这点比较遗憾。
 
-### 使用 Pydantic 来定义 ERD
+另一方面, GraphQL 对数据的描述已经非常贴近 ERD 了, 但是这个架构比较庞杂, 存在太多框架约定, 我们希望找到一个更加简洁的方式.
+
+## 使用 Pydantic 来定义 ERD
+
+pydantic 就是一个优秀的候选人, 我们可以用它来定义 Entity 和 Relationship.
 
 ```python
+class User(BaseModel):
+    id: int
+    name: str
 
+class Post(BaseModel):
+    id: int
+    user_id: int
+    title: str
+
+class PostLoader(DataLoader):
+    async def batch_load_fn(self, user_ids):
+        posts = await get_posts_by_user_ids(user_ids)
+        return build_list(posts, user_ids, lambda x: x.user_id)
 ```
 
-### 用 DataLoader 来串联起各个 Entity
+User, Post 的定义没有一点点额外代码, 是脱离了持久层的抽象表达.
+
+而 User -> Post 的关联由 DataLoader 来定义. 具体的实现交由 `get_post_by_user_ids` 来负责实现.
+
+此时一个 `session.query(UserModel).all()` 的查询, 可以被转换成一个 User 对象数组.
+
+> Usr -> Post 并未限定只能有一种 DataLoader 来建立关联, 可以有多种 DataLoader 根据实际场景来选用.
+
+### 建立关联
+
+现在我们假设有个业务需求, 要给 User 和 Post 建立关联. 通过继承 User 来复用 User 字段, 通过定义 `posts` 来联系数据.
+
+```python
+class UserWithPostsForSpecificBusiness(User):
+    posts: List[Post] = []
+    def resolve_posts(self, loader=LoaderDepend(PostLoader)):
+        return loader.load(self.id)
+```
+
+这样,  UserWithPosts 就是面向特定业务需求所建立的 User 和 Post 关联固定组合体
 
 ### 使业务 ERD 和代码高度一致
+
+现在我们得到了一个业务需求 ERD 结构高度一致的代码, 并且这段代码是专供的.
+
+也即是说, ERD 定义了一系列 Entity 和所有可能的 Relationship, 而关系的真正建立是取决于实际业务需求的.
+
+两个结构完全一样的 class, 可以拥有不相同的名字, 代表服务于不同的需求.
+
+```python
+class UserWithPostsForSpecificBusinessA(User):
+    posts: List[Post] = []
+    def resolve_posts(self, loader=LoaderDepend(PostLoader)):
+        return loader.load(self.id)
+
+class UserWithPostsForSpecificBusinessB(User):
+    posts: List[Post] = []
+    def resolve_posts(self, loader=LoaderDepend(PostLoader)):
+        return loader.load(self.id)
+```
+
+假设 `UserWithPostsForSpecificBusinessA` 的需求发生了变更, 需要只加载每个 user 最近的 3 条 posts
+
+那只需要创建好新的 DataLoader 然后替换进去即可. ( UserWithPostsForSpecificBusinessB 则完全不受影响 )
+
+```python
+class UserWithPostsForSpecificBusinessA(User):
+    posts: List[Post] = []
+    def resolve_posts(self, loader=LoaderDepend(LatestThreePostLoader)):
+        return loader.load(self.id)
+```
+
+最终, 我们实现了目标, 让代码侧的结构与产品设计侧的 ERD 结构保持高度的一致, 这使得后续的变更和调整变得更容易.

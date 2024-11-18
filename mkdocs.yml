@@ -33,6 +33,7 @@ nav:
       - Dataloader: ./v2/dataloader.md
       - Inherit and reuse: ./v2/inherit_reuse.md
       - ERD Driven Pattern: ./v2/erd_driven.md
+      - Connect to UI: ./v2/connect_to_ui.md
   - API:
       - resolve and post: ./v2/resolve_post.md
       - expose and collector: ./v2/expose_collector.md
@@ -71,6 +72,7 @@ plugins:
             Dataloader: "数据加载器"
             Inherit and reuse: "继承和复用"
             Reference: "文档"
+            Connect to UI: "连接UI"
             ERD Driven Pattern: "ERD 驱动开发"
             Change log: "变更记录"
             Install: "安装"
