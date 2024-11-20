@@ -1,6 +1,6 @@
 # 应用场景
 
-罗列一些 pydantic-resolve 可以使用的场景。
+一些 pydantic-resolve 可以使用的场景。
 
 ## 简单数据拼接
 
@@ -49,7 +49,10 @@ class Member(BaseModel):
     office_id: int
     name: str
 
-companies = [Company(id=1, name='Aston'), Compay(id=2, name="Nicc"), Company(id=3, name="Carxx")]
+companies = [
+    Company(id=1, name='Aston'),
+    Compay(id=2, name="Nicc"),
+    Company(id=3, name="Carxx")]
 companies = await Resolver().resolve(companies)
 ```
 

@@ -1,12 +1,16 @@
-# 先定义模型，再添加过程
+# 先定义模型，再描述获取方式
 
 使用 pydantic-resolve 的推荐方式是先定义模型。 将所有的操作都附加在定义好的数据对象上。
 
 当我们构建数据时， 一个很朴素的思考方式是：先定义好目标数据结构 Target， 比较当前已有的数据源结构 Source ，寻找最短的变化路径。
 
-比如我有一个 Person 的数组， 现在要为每个人增加请假信息， 原始请假数据包含年假，病假两种， 要把两者合并成一个类型。 期望的数据结构就是:
+> 更加详细的内容会在 "ERD 驱动开发" 中介绍。
+
+比如我有一个 Person 的数组， 现在要为每个人增加请假信息， 数据库中已有的请假数据包含年假，病假两种， 要把两者合并成一个类型。
 
 ## 期望的结构
+
+期望的数据结构就是 Person 和对应的 absenses, Absense 是面向业务的数据结构。
 
 ```python
 class Person(BaseModel):
@@ -22,7 +26,9 @@ class Absense(BaseModel):
 
 ## 添加数据源
 
-假设已有的数据是两个 Leave 类型以及他们根据 person_id 获取数据的 dataloader （省略）
+AnnualLeave 和 SickLeave 是已有的数据类型。
+
+分别由 AnnualLeaveLoader 和 SickLeaveLoader 提供具体数据。
 
 ```python
 class AnnualLeave(BaseModel):
@@ -36,7 +42,9 @@ class SickLeave(BaseModel):
     end_date: date
 ```
 
-那么此时我们可以把源数据和期望数据组合在一起, 定义好需要获取的数据和将要计算出来的结果。
+此时我们可以把源数据和期望数据组合在一起, 列出好需要获取的数据和将要计算出来的结果。
+
+这代表了起始数据和目标数据。
 
 配合 `exclude=True` 可以在最终输出中隐藏临时变量。
 
@@ -54,7 +62,7 @@ class Person(BaseModel):
 
 ## 加载数据
 
-然后我们为 `annual_leaves` 和 `sick_leaves` 添加 resolve 和 dataloader 来获取数据：
+然后我们为 `annual_leaves` 和 `sick_leaves` 添加 resolve 和 dataloader， 他们将为起始数据提供数据。
 
 ```python
 @model_config()
@@ -75,7 +83,7 @@ class Person(BaseModel):
 
 ## 转换数据
 
-最后， 当 `annual_leaves` 和 `sick_leaves` 在 resolve 阶段结束， 获取了数据之后， 利用 post 阶段来计算 absenses
+当 `annual_leaves` 和 `sick_leaves` 的 resolve 阶段结束时， 他们已经有实际数据了， 接下来利用 post 阶段来计算 absenses
 
 ```python
 @model_config()
@@ -104,6 +112,8 @@ class Person(BaseModel):
         return a + b
 ```
 
+## 启动整个过程
+
 当定义完整个 Person, Absense 的结构后， 我们就能通过初始化 people 来加载和计算所有数据了，只需对 people 数据执行一次 Resolver().resolve() 就能完成所有的操作。
 
 ```python
@@ -117,3 +127,5 @@ people = await Resolver().resolve(people)
 
 - annual, sick leaves 根据 person_id 聚合，生成 person_annual_map 和 person_sick_map 两个新变量
 - `for person in people` 遍历 person 对象
+
+这些过程在 pydantic-resolve 都是内部封装掉了的。

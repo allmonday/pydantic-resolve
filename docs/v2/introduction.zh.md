@@ -1,6 +1,8 @@
 # 简介
 
-pydantic-resolve 是一个基于 pydantic 的轻量级封装库， 用来简化构建数据的复杂度。
+pydantic-resolve 是一个基于 pydantic 的轻量级封装库， 可以大幅简化构建数据的复杂度。
+
+它可以为你提供 3 ~ 5 倍的开发效率提升， 减少 50% 以上的代码量。
 
 它为 pydantic 对象提供了 resolve 和 post 方法。
 
@@ -22,7 +24,7 @@ children = await Resolver.resolve([
         Child(id=1, name="Titan"), Child(id=1, name="Siri")])
 ```
 
-resolve 通常用来获取数据， post 可以在数据获取完毕后做后续处理。
+resolve 通常用来获取数据， post 可以在获取数据后做额外处理。
 
 当定义完对象方法， 并初始化好对象后， pydantic-resolve 内部会对数据做遍历， 执行这些方法来处理数据。
 

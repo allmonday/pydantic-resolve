@@ -166,7 +166,7 @@ async def main():
 asyncio.run(main())
 ```
 
-output 
+output
 
 ```json
 [
@@ -210,8 +210,6 @@ output
   }
 ]
 ```
-
-
 
 ## Documents
 
