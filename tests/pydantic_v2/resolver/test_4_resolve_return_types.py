@@ -6,7 +6,7 @@ from pydantic_resolve import Resolver
 import pytest
 
 async def set_after(fut, value):
-    await asyncio.sleep(1)
+    await asyncio.sleep(.1)
     fut.set_result(value)
 
 class Student(BaseModel):

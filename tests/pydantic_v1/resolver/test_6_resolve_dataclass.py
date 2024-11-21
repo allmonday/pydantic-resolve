@@ -14,7 +14,7 @@ class Car:
     wheels: List[Wheel] = field(default_factory=list)
 
     async def resolve_wheels(self) -> List[Wheel]:
-        await asyncio.sleep(1)
+        await asyncio.sleep(.1)
         return [Wheel(is_ok=True)]
 
 @pytest.mark.asyncio

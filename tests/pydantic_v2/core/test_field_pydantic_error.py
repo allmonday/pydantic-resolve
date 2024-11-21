@@ -2,7 +2,7 @@ from __future__ import annotations
 import pytest
 from typing import Optional
 from pydantic import BaseModel
-from pydantic_resolve.core import scan_and_store_metadata
+from pydantic_resolve.analysis import scan_and_store_metadata
 
 class A(BaseModel):
     __pydantic_resolve_expose__ = {'name': 'A_name'}

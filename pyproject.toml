@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pydantic-resolve"
-version = "1.11.0"
+version = "1.11.1"
 description = "It just provide a pair of pre & post methods around pydantic fields, the rest is up to your imagination"
 authors = ["tangkikodo <allmonday@126.com>"]
 readme = "README.md"

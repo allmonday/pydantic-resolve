@@ -1,8 +1,7 @@
 from __future__ import annotations
 from pydantic import BaseModel
 from typing import List
-from pydantic_resolve import Resolver, Collector
-from pydantic_resolve.core import LoaderDepend
+from pydantic_resolve import Resolver, Collector, LoaderDepend
 import pytest
 
 

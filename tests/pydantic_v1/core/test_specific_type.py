@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Tuple
 from pydantic import BaseModel
-from pydantic_resolve.core import scan_and_store_metadata, convert_metadata_key_as_kls
+from pydantic_resolve.analysis import scan_and_store_metadata, convert_metadata_key_as_kls
 from pydantic_resolve import LoaderDepend
 
 async def loader_fn(keys):
@@ -17,7 +17,7 @@ def test_get_all_fields():
         'test_specific_type.Student': {
             'resolve': [],
             'post': [],
-            'attribute': [],
+            'object_fields': [],
             'expose_dict': {},
             'collect_dict': {}
             # ... others

@@ -1,5 +1,5 @@
 import pytest
-from pydantic_resolve.util import merge_dicts
+from pydantic_resolve.utils.params import merge_dicts
 from pydantic_resolve.exceptions import GlobalLoaderFieldOverlappedError
 
 

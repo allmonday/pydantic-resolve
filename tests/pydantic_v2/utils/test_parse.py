@@ -1,4 +1,4 @@
-from pydantic_resolve import util
+from pydantic_resolve.utils import conversion
 from typing import Optional
 from pydantic import ConfigDict, BaseModel, ValidationError
 import pytest
@@ -9,14 +9,14 @@ def test_pydantic():
         name: Optional[str] = None
     
     a = A(name=None)
-    value = util.try_parse_data_to_target_field_type(a, 'name', '123')
+    value = conversion.try_parse_data_to_target_field_type(a, 'name', '123')
     assert value == '123'
 
-    value = util.try_parse_data_to_target_field_type(a, 'name', None)
+    value = conversion.try_parse_data_to_target_field_type(a, 'name', None)
     assert value is None
 
     with pytest.raises(ValidationError):
-        util.try_parse_data_to_target_field_type(a, 'name', [1,2,3])
+        conversion.try_parse_data_to_target_field_type(a, 'name', [1,2,3])
 
 
 def test_dataclass():
@@ -29,14 +29,14 @@ def test_dataclass():
         b: Optional[B] 
     
     a = A(b=None)
-    value = util.try_parse_data_to_target_field_type(a, 'b', None)
+    value = conversion.try_parse_data_to_target_field_type(a, 'b', None)
     assert value is None 
 
-    value = util.try_parse_data_to_target_field_type(a, 'b', {'age': 21})
+    value = conversion.try_parse_data_to_target_field_type(a, 'b', {'age': 21})
     assert value == B(age=21)
 
     with pytest.raises(ValidationError):
-        util.try_parse_data_to_target_field_type(a, 'b', [1,2,3])
+        conversion.try_parse_data_to_target_field_type(a, 'b', [1,2,3])
 
 def test_mix():
     class B(BaseModel):
@@ -47,14 +47,14 @@ def test_mix():
         b: Optional[B] 
     
     a = A(b=None)
-    value = util.try_parse_data_to_target_field_type(a, 'b', None)
+    value = conversion.try_parse_data_to_target_field_type(a, 'b', None)
     assert value is None 
 
-    value = util.try_parse_data_to_target_field_type(a, 'b', {'age': 21})
+    value = conversion.try_parse_data_to_target_field_type(a, 'b', {'age': 21})
     assert value == B(age=21)
 
     with pytest.raises(ValidationError):
-        util.try_parse_data_to_target_field_type(a, 'b', [1,2,3])
+        conversion.try_parse_data_to_target_field_type(a, 'b', [1,2,3])
 
 def test_orm():
     class B(BaseModel):
@@ -71,11 +71,11 @@ def test_orm():
 
     
     a = A(b=None)
-    value = util.try_parse_data_to_target_field_type(a, 'b', None)
+    value = conversion.try_parse_data_to_target_field_type(a, 'b', None)
     assert value is None 
 
-    value = util.try_parse_data_to_target_field_type(a, 'b', BB(age=21))
+    value = conversion.try_parse_data_to_target_field_type(a, 'b', BB(age=21))
     assert value == B(age=21)
 
     with pytest.raises(ValidationError):
-        util.try_parse_data_to_target_field_type(a, 'b', [1,2,3])
+        conversion.try_parse_data_to_target_field_type(a, 'b', [1,2,3])

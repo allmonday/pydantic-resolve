@@ -11,23 +11,42 @@ repo_name: allmonday/pydantic-resolve
 repo_url: https://github.com/allmonday/pydantic-resolve
 edit_uri: ""
 
+# nav:
+#   - Quick Start:
+#       - Install: ./v1/index.md
+#       - Let's start: ./v1/about.md
+#       - Dataloader: ./v1/dataloader.md
+#       - Inheritance: ./v1/inherit.md
+#       - Tree: ./v1/tree.md
+#       - Philosophy: ./v1/philosophy.md
+#   - Reference:
+#       - API: ./v1/reference_api.md
+#   - Change log:
+#       - pydantic-resolve: ./v1/changelog.md
+
 nav:
   - Quick Start:
-      - Install: index.md
-      - Let's start: about.md
-      - Dataloader: dataloader.md
-      - Inheritance: inherit.md
-      - Tree: tree.md
-      - Philosophy: philosophy.md
-  - Reference:
-      - API: reference_api.md
-  - Change log:
-      - pydantic-resolve: changelog.md
-      - pydantic2-resolve: changelog-v2.md
+      - Introduction: ./v2/introduction.md
+      - Use cases: ./v2/use_case.md
+      - Schema first: ./v2/schema_first.md
+  - Features:
+      - Dataloader: ./v2/dataloader.md
+      - Inherit and reuse: ./v2/inherit_reuse.md
+      - ERD Driven Pattern: ./v2/erd_driven.md
+      - Expose and collect: ./v2/expose_and_collect.md
+      - Connect to UI: ./v2/connect_to_ui.md
+  - API:
+      - Reference: ./v2/api.md
+      - Change log: ./v2/changelog.md
 
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.superfences
 
 plugins:
@@ -45,7 +64,16 @@ plugins:
           link: "/pydantic-resolve/zh/"
           nav_translations:
             Quick Start: "快速开始"
+            Introduction: "简介"
+            Use cases: "应用场景"
+            Schema first: "先定义模型"
+            Features: "功能介绍"
+            Dataloader: "数据加载器"
+            Inherit and reuse: "继承和复用"
+            Expose and collect: "提供和收集"
             Reference: "文档"
+            Connect to UI: "连接UI"
+            ERD Driven Pattern: "ERD 驱动开发"
             Change log: "变更记录"
             Install: "安装"
             Let's start: "开始"

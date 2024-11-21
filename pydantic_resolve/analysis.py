@@ -1,91 +1,79 @@
-import abc
 import copy
 import inspect
+from typing import List, Type, Dict, Optional, Tuple
 from inspect import isfunction, isclass
 from collections import defaultdict
-from typing import Any, Callable, Optional
 from aiodataloader import DataLoader
 from pydantic import BaseModel
 from dataclasses import is_dataclass, fields as dc_fields
-import pydantic_resolve.util as util
+
 import pydantic_resolve.constant as const
-from .exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingCollector
-from pydantic_resolve.compat import PYDANTIC_V2
+import pydantic_resolve.utils.class_util as class_util
+from pydantic_resolve.utils.collector import ICollector
+from pydantic_resolve.utils.depend import Depends
+import pydantic_resolve.utils.params as params_util
+from pydantic_resolve.exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingCollector
+import sys
 
-def LoaderDepend(  # noqa: N802
-    dependency: Optional[Callable[..., Any]] = None,
-) -> Any:
-    return Depends(dependency=dependency)
+if sys.version_info >= (3, 8):
+    from typing import TypedDict
+else:
+    from typing_extensions import TypedDict
 
-class Depends:
-    def __init__(
-        self,
-        dependency: Optional[Callable[..., Any]] = None,
-    ):
-        self.dependency = dependency
+class DataLoaderType(TypedDict):
+    param: str
+    kls: Type
+    path: str
 
-class ICollector(metaclass=abc.ABCMeta):
-    @abc.abstractmethod
-    def __init__(self, alias: str):
-        self.alias = alias  # required, must have
-
-    @abc.abstractmethod
-    def add(self, val):
-        """how to add new element(s)"""
-
-    @abc.abstractmethod
-    def values(self) -> Any:
-        """get result"""
-
-class Collector(ICollector):
-    def __init__(self, alias: str, flat: bool=False):
-        self.alias = alias
-        self.flat = flat
-        self.val = []
+class CollectorType(TypedDict):
+    field: str 
+    param: str
+    instance: object
+    alias: str
     
-    def add(self, val):
-        if self.flat:
-            if isinstance(val, list):
-                self.val.extend(val)
-            else:
-                raise AttributeError('if flat, target should be list')
-        else:
-            self.val.append(val)
+class ResolveMethodType(TypedDict):
+    trim_field: str
+    context: bool
+    parent: bool
+    ancestor_context: bool
+    dataloaders: List[DataLoaderType]
 
-    def values(self):
-        return self.val
+class PostMethodType(TypedDict):
+    trim_field: str
+    context: bool
+    parent: bool
+    ancestor_context: bool
+    collectors: List[CollectorType] 
+
+class PostDefaultHandlerType(TypedDict):
+    context: bool
+    parent: bool
+    ancestor_context: bool
+    collectors: List[CollectorType]
+
+class KlsMetaType(TypedDict):
+    resolve: List[str]
+    post: List[str]
+    resolve_params: Dict[str, ResolveMethodType]
+    post_params: Dict[str, PostMethodType]
+    post_default_handler_params: Optional[PostDefaultHandlerType]
+    object_fields: List[str]
+    expose_dict: dict
+    collect_dict: dict
+    kls: Type
+    has_context: bool
+
+MetaType = Dict[str, KlsMetaType]
+
+class MappedMetaMemberType(KlsMetaType):
+    kls_path: str
+    alias_map_proto: Dict[str, Dict[Tuple[str, str, str], object]]
+
+MappedMetaType = Dict[Type, MappedMetaMemberType]
 
 
-def _get_pydantic_attrs(kls):
-    if PYDANTIC_V2:
-        items = kls.model_fields.items()
-    else:
-        items = kls.__fields__.items()
-
-    for k, v in items:
-        t = v.annotation if PYDANTIC_V2 else v.type_
-
-        shelled_type = util.shelling_type(t)
-        if is_acceptable_kls(shelled_type):
-            yield (k, shelled_type)  # type_ is the most inner type
-
-
-def _get_dataclass_attrs(kls):
-    for name, v in kls.__annotations__.items():
-        shelled_type = util.shelling_type(v)
-        if is_acceptable_kls(shelled_type):
-            yield (name, shelled_type)
-
-
-def get_class(target):
-    if isinstance(target, list):
-        return target[0].__class__
-    else:
-        return target.__class__
-
-
-def _scan_resolve_method(method, field: str):
-    result = {
+def _scan_resolve_method(method, field: str) -> ResolveMethodType:
+    result: ResolveMethodType = {
         'trim_field': field.replace(const.RESOLVE_PREFIX, ''),
         'context': False,
         'parent': False,
@@ -105,10 +93,10 @@ def _scan_resolve_method(method, field: str):
 
     for name, param in signature.parameters.items():
         if isinstance(param.default, Depends):
-            info = { 
+            info: DataLoaderType = { 
                 'param': name,
                 'kls': param.default.dependency,  # for later initialization
-                'path': util.get_kls_full_path(param.default.dependency) }
+                'path': class_util.get_kls_full_path(param.default.dependency) }
             result['dataloaders'].append(info)
 
     for name, param in signature.parameters.items():
@@ -118,8 +106,8 @@ def _scan_resolve_method(method, field: str):
     return result
 
 
-def _scan_post_method(method, field):
-    result = {
+def _scan_post_method(method, field) -> PostMethodType:
+    result: PostMethodType = {
         'trim_field': field.replace(const.POST_PREFIX, ''),
         'context': False,
         'ancestor_context': False,
@@ -139,7 +127,7 @@ def _scan_post_method(method, field):
     
     for name, param in signature.parameters.items():
         if isinstance(param.default, ICollector):
-            info = {
+            info: CollectorType = {
                 'field': field,
                 'param': name,
                 'instance': param.default,
@@ -150,8 +138,8 @@ def _scan_post_method(method, field):
     return result
 
 
-def _scan_post_default_handler(method):
-    result = {
+def _scan_post_default_handler(method) -> PostDefaultHandlerType:
+    result: PostDefaultHandlerType = {
         'context': False,
         'ancestor_context': False,
         'parent': False,
@@ -170,7 +158,7 @@ def _scan_post_default_handler(method):
 
     for name, param in signature.parameters.items():
         if isinstance(param.default, ICollector):
-            info = {
+            info: CollectorType = {
                 'field': const.POST_DEFAULT_HANDLER,
                 'param': name,
                 'instance': param.default,
@@ -212,11 +200,11 @@ def validate_and_create_loader_instance(
         loader_kls, path = loader['kls'], loader['path']
         if isclass(loader_kls):
             loader = loader_kls()
-            param_config = util.merge_dicts(
+            param_config = params_util.merge_dicts(
                 global_loader_param,
                 loader_params.get(loader_kls, {}))
 
-            for field in util.get_class_field_annotations(loader_kls):
+            for field in class_util.get_class_field_annotations(loader_kls):
                 try:
                     value = param_config[field]
                     setattr(loader, field, value)
@@ -241,30 +229,20 @@ def validate_and_create_loader_instance(
     return cache
 
 
-def scan_and_store_metadata(root_class):
-    """ see output data schema example in:
-    - test_field_dataclass_anno.py
-    - test_field_pydantic.py
+def scan_and_store_metadata(root_class: Type) -> MetaType:
 
-    rules: TODO:
-    - [x] dataloader and it's params
-    - [ ] context & ancestor_context are provided
-    - [ ] collector should be defined in ancestor of collect schemas.  """
-    util.update_forward_refs(root_class)
+    class_util.update_forward_refs(root_class)
     expose_set = set()  # for validation
     collect_set = set()  # for validation
-    metadata = {}
+    metadata: MetaType = {}
 
     def _get_all_fields_and_object_fields(kls):
-        if util.safe_issubclass(kls, BaseModel):
-            if PYDANTIC_V2:
-                all_fields = set(kls.model_fields.keys())
-            else:
-                all_fields = set(kls.__fields__.keys())
-            object_fields = list(_get_pydantic_attrs(kls))  # dive and recursively analysis
+        if class_util.safe_issubclass(kls, BaseModel):
+            all_fields = set(class_util.get_keys(kls))
+            object_fields = list(class_util.get_pydantic_attrs(kls))  # dive and recursively analysis
         elif is_dataclass(kls):
             all_fields = set([f.name for f in dc_fields(kls)])
-            object_fields = list(_get_dataclass_attrs(kls))
+            object_fields = list(class_util.get_dataclass_attrs(kls))
         else:
             raise AttributeError('invalid type: should be pydantic object or dataclass object')  #noqa
         return all_fields, object_fields
@@ -315,18 +293,30 @@ def scan_and_store_metadata(root_class):
                 collect_set.add(collector['alias'])
 
     def _validate_collector(collect_dict, kls_name):
-        """collector should be declared in ancestors"""
+        """
+        validate if the collector is declared in ancestor nodes.
+
+        available format of `__pydantic_resolve_collect__`
+
+        class A(BaseModel):
+            __pydantic_resolve_collect__ = {
+                'name': 'collector_a',                                  # send name to collector_a
+                ('name', 'age'): 'collector_b',                         # send ('name', 'age') to collector_b
+                'name': ('collector_c', 'collector_d'),                 # send name to both collector_c and d
+                ('name', 'age'): ('collector_e', 'collector_f'),        # send ('name', 'age') to both collector_e and f
+            }
+        """
         if type(collect_dict) is not dict:
-            raise AttributeError(f'{const.COLLECT_FROM_ANCESTOR} is not dict')
+            raise AttributeError(f'{const.COLLECTOR_CONFIGURATION} is not dict')
 
         for _, collector in collect_dict.items():
-            colls = collector if isinstance(collector, (list, tuple)) else (collector,)
-            for col in colls:
-                if col not in collect_set:
+            collectors = collector if isinstance(collector, (list, tuple)) else (collector,)
+            for c in collectors:
+                if c not in collect_set:
                     raise MissingCollector(f'Collector alias name not found in ancestor, please check: {kls_name}')
 
     def walker(kls):
-        kls_name = util.get_kls_full_path(kls)
+        kls_name = class_util.get_kls_full_path(kls)
         hit = metadata.get(kls_name)
         if hit: return
 
@@ -338,7 +328,7 @@ def scan_and_store_metadata(root_class):
 
         # - scan expose and collect (__pydantic_resolve_xxx__)
         expose_dict = getattr(kls, const.EXPOSE_TO_DESCENDANT, {})
-        collect_dict = getattr(kls, const.COLLECT_FROM_ANCESTOR, {})
+        collect_dict = getattr(kls, const.COLLECTOR_CONFIGURATION, {})
         _validate_expose(expose_dict, kls_name)
 
         resolve_params = {field: _scan_resolve_method(getattr(kls, field), field) for field in resolve_fields}
@@ -356,18 +346,19 @@ def scan_and_store_metadata(root_class):
         _add_collector_info_for_default_handler(post_default_handler_params)
         _validate_collector(collect_dict, kls_name)
 
-        metadata[kls_name] = {
+        info: KlsMetaType = {
             'resolve': resolve_fields,
             'resolve_params': resolve_params,
             'post': post_fields,
             'post_params': post_params,
             'post_default_handler_params': post_default_handler_params,
-            'attribute': object_fields_without_resolver,
+            'object_fields': object_fields_without_resolver,
             'expose_dict': expose_dict,
             'collect_dict': collect_dict,
             'kls': kls,
             'has_context': has_context,
         }
+        metadata[kls_name] = info
 
         for _, shelled_type in object_fields:
             walker(shelled_type)
@@ -376,92 +367,127 @@ def scan_and_store_metadata(root_class):
     return metadata
 
 
-def convert_metadata_key_as_kls(metadata):
+def convert_metadata_key_as_kls(metadata: MetaType) -> MappedMetaType:
     """ use kls as map key for performance """
     kls_metadata = {}
     for k, v in metadata.items():
-        v['kls_path'] = k
-        kls_metadata[v['kls']] = v
+        _kls_meta: MappedMetaMemberType = {
+            **v, 
+            'kls_path':k,
+            'alias_map_proto': {}
+        }
+        alias_map = _calc_alias_map_from_collectors(_kls_meta)
+        _kls_meta['alias_map_proto'] = alias_map
+        kls_metadata[v['kls']] = _kls_meta
     
     return kls_metadata
 
 
-def is_acceptable_kls(kls):
-    return util.safe_issubclass(kls, BaseModel) or is_dataclass(kls)
+def _calc_alias_map_from_collectors(kls_meta: MappedMetaMemberType):
+    post_params = kls_meta['post_params']
+    kls_path = kls_meta['kls_path']
+
+    alias_map = defaultdict(dict)
+
+    def add_collector(collector: CollectorType):
+        """
+        class A(BaseModel):
+            def post_name(collector=Collector('name')):
+                ...
+        kls_path: module_name.A
+        field: post_name
+        param: collector_a
+
+        sign = ('module_name.A', 'post_name', 'collector_a')
+
+        return { 'name': { sign: collector_instance } }
+        """
+        sign = get_collector_sign(kls_path, collector)
+        alias_map[collector['alias']][sign] = collector['instance']
+
+    for _, param in post_params.items():
+        for collector in param['collectors']:
+            add_collector(collector)
+
+    # post_default_handler
+    post_default_handler_params = kls_meta['post_default_handler_params']
+    if post_default_handler_params:
+        for collector in post_default_handler_params['collectors']:
+            add_collector(collector)
+
+    return alias_map
 
 
-def is_acceptable_instance(target):
+def is_acceptable_kls(kls: Type) -> bool:
+    return class_util.safe_issubclass(kls, BaseModel) or is_dataclass(kls)
+
+
+def is_acceptable_instance(target: object):
     """ check whether target is Pydantic object or Dataclass object """
     return isinstance(target, BaseModel) or is_dataclass(target)
 
 
-def iter_over_object_resolvers_and_acceptable_fields(target, kls, metadata):
-    """metadata key is kls"""
-    kls_meta = metadata.get(kls)
+def get_resolve_fields_and_object_fields_from_object(node: object, kls: Type, mapped_metadata: MappedMetaType):
+    """
+    resolve_fields: a field with resolve_field method
+    object_fields: a field without resolve_field method but is an object (should traversal)
+    """
+    resolve_fields, object_fields = [], []
+    kls_meta = mapped_metadata.get(kls)
 
-    resolve, attribute = [], []
+    if kls_meta is None:
+        return [], []
 
-    for resolve_field in kls_meta['resolve']:  # eg: resolve_name
-        attr = getattr(target, resolve_field)
+    for resolve_field in kls_meta['resolve']:
+        attr = getattr(node, resolve_field)
         trim_field = kls_meta['resolve_params'][resolve_field]['trim_field']
-        resolve.append((resolve_field, trim_field, attr))
+        resolve_fields.append((resolve_field, trim_field, attr))
 
-    for attr_name in kls_meta['attribute']:
-        attr = getattr(target, attr_name)
-        attribute.append((attr_name, attr))
+    for attr_name in kls_meta['object_fields']:
+        attr = getattr(node, attr_name)
+        object_fields.append((attr_name, attr))
 
-    return resolve, attribute
+    return resolve_fields, object_fields
 
 
-def iter_over_object_post_methods(kls, metadata):
-    """metadata key is kls"""
-    kls_meta = metadata.get(kls)
+def get_post_methods(kls: Type, mapped_metadata: MappedMetaType):
+    kls_meta = mapped_metadata.get(kls)
+
+    if kls_meta is None:
+        return []
 
     for post_field in kls_meta['post']:
         trim_field = kls_meta['post_params'][post_field]['trim_field']
         yield post_field, trim_field
 
 
-def get_resolve_param(kls, resolve_field, metadata):
-    kls_meta = metadata.get(kls, {})
+def get_resolve_method_param(kls: Type, resolve_field: str, mapped_metadata: MappedMetaType):
+    kls_meta = mapped_metadata.get(kls, {})
     return kls_meta['resolve_params'][resolve_field]
 
 
-def get_post_params(kls, post_field, metadata):
-    kls_meta = metadata.get(kls, {})
+def get_post_method_params(kls, post_field, mapped_metadata: MappedMetaType):
+    kls_meta = mapped_metadata.get(kls, {})
     return kls_meta['post_params'][post_field]
 
 
-def get_post_default_handler_params(kls, metadata):
-    kls_meta = metadata.get(kls, {})
+def get_post_default_handler_params(kls, mapped_metadata: MappedMetaType):
+    kls_meta = mapped_metadata.get(kls, {})
     return kls_meta['post_default_handler_params']
 
 
-def get_collectors(kls, metadata):
-    kls_meta = metadata.get(kls, {})
-
-    # post method
-    post_params = kls_meta['post_params']
-    kls_path = kls_meta['kls_path']
-
-    alias_map = defaultdict(dict)
-    for _, param in post_params.items():
-        for collector in param['collectors']:
-            sign = (kls_path, collector['field'], collector['param'])
-            # copied instance will be stored in resolver's self.object_collect_alias_map_store
-            alias_map[collector['alias']][sign] = copy.deepcopy(collector['instance'])
-
-    # post_default_handler
-    post_default_handler_params = kls_meta['post_default_handler_params']
-    if post_default_handler_params:
-        for collector in post_default_handler_params['collectors']:
-            sign = (kls_path, collector['field'], collector['param'])
-            alias_map[collector['alias']][sign] = copy.deepcopy(collector['instance'])
-
-    return alias_map
+def get_collector_sign(kls_path: str, collector: CollectorType):
+    return (kls_path, collector['field'], collector['param'])
 
 
-def iter_over_collectable_fields(kls, metadata):
+def generate_alias_map_with_cloned_collector(kls: Type, mapped_metadata: MappedMetaType):
+    kls_meta = mapped_metadata.get(kls, {})
+    return { alias: {
+        sign: copy.deepcopy(collector) for sign, collector in v.items()
+    } for alias, v in kls_meta['alias_map_proto'].items()}
+
+
+def get_collector_candidates(kls, metadata: MappedMetaType):
     kls_meta = metadata.get(kls, {})
     collect_dict = kls_meta['collect_dict']
 
@@ -469,5 +495,5 @@ def iter_over_collectable_fields(kls, metadata):
         yield field, alias
 
 
-def has_context(metadata):
-    return any([ m['has_context'] for m in metadata.values()])
+def has_context(mapped_metadata: MappedMetaType):
+    return any([ m['has_context'] for m in mapped_metadata.values()])

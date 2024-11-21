@@ -9,7 +9,7 @@ class A(BaseModel):
 
     greet: str = ''
     async def post_greet(self):
-        await asyncio.sleep(1)
+        await asyncio.sleep(.1)
         return 'hello ' + self.name
 
 @pytest.mark.asyncio
