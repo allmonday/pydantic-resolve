@@ -1,5 +1,4 @@
 from __future__ import annotations
-from dataclasses import dataclass
 from typing import List
 import pytest
 from pydantic import BaseModel

@@ -1,6 +1,6 @@
 # from __future__ import annotations
 from pydantic import BaseModel
-from pydantic_resolve.core import get_class
+from pydantic_resolve.utils.class_util import get_class
 
 def test_get_class():
     class Student(BaseModel):

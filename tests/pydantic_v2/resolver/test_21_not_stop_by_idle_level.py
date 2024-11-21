@@ -19,7 +19,7 @@ class B(BaseModel):
     name: str
     c: Optional[C] = None
     async def resolve_c(self) -> Optional[C]:
-        await asyncio.sleep(1)
+        await asyncio.sleep(.1)
         return C(name='hello world')
 
 class A(BaseModel):

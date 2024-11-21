@@ -1,6 +1,5 @@
-from pydantic_resolve.util import model_config
 from pydantic import BaseModel, Field
-from pydantic_resolve import Resolver, LoaderDepend as LD, ensure_subset
+from pydantic_resolve import Resolver, LoaderDepend as LD, model_config, ensure_subset
 import pytest
 import json
 from typing import List

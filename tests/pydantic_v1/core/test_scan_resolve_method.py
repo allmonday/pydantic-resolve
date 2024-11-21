@@ -1,7 +1,8 @@
 import pytest
 from aiodataloader import DataLoader
 from pydantic import BaseModel
-from pydantic_resolve.core import _scan_resolve_method, LoaderDepend, Collector
+from pydantic_resolve.analysis import _scan_resolve_method
+from pydantic_resolve import LoaderDepend, Collector
 
 def test_scan_resolve_method_1():
     class A(BaseModel):

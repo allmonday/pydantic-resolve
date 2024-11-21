@@ -3,7 +3,7 @@ import pytest
 from typing import Optional, List
 from pydantic import BaseModel
 from aiodataloader import DataLoader
-from pydantic_resolve.core import scan_and_store_metadata, validate_and_create_loader_instance
+from pydantic_resolve.analysis import scan_and_store_metadata, validate_and_create_loader_instance
 from pydantic_resolve import LoaderDepend, LoaderFieldNotProvidedError
 
 async def loader_fn(keys):

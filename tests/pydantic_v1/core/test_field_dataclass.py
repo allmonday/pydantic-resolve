@@ -1,7 +1,7 @@
 # from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional, List
-from pydantic_resolve.core import scan_and_store_metadata
+from pydantic_resolve.analysis import scan_and_store_metadata
 
 @dataclass
 class Queue:
@@ -44,7 +44,7 @@ def test_get_all_fields():
         'test_field_dataclass.Student': {
             'resolve': ['resolve_name', 'resolve_zeta'],
             'post': ['post_name'],
-            'attribute': ['zone', 'zeta2', 'zetas2'],
+            'object_fields': ['zone', 'zeta2', 'zetas2'],
             'expose_dict': {'name': 'student_name'},
             'collect_dict': {},
             'has_context': False,
@@ -52,7 +52,7 @@ def test_get_all_fields():
         'test_field_dataclass.Zone': {
             'resolve': [],
             'post': [],
-            'attribute': ['qs'],
+            'object_fields': ['qs'],
             'expose_dict': {},
             'collect_dict': {},
             'has_context': False,
@@ -60,7 +60,7 @@ def test_get_all_fields():
         'test_field_dataclass.Queue': {
             'resolve': [],
             'post': [],
-            'attribute': [],
+            'object_fields': [],
             'expose_dict': {},
             'collect_dict': {},
             'has_context': False,
@@ -68,7 +68,7 @@ def test_get_all_fields():
         'test_field_dataclass.Zeta': {
             'resolve': [],
             'post': [],
-            'attribute': [],
+            'object_fields': [],
             'expose_dict': {},
             'collect_dict': {},
             'has_context': False,

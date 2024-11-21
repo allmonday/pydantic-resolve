@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Optional, List
 from pydantic import BaseModel
-from pydantic_resolve.core import scan_and_store_metadata, convert_metadata_key_as_kls
+from pydantic_resolve.analysis import scan_and_store_metadata, convert_metadata_key_as_kls
 from pydantic_resolve import LoaderDepend
 
 async def loader_fn(keys):
@@ -45,7 +45,7 @@ def test_get_all_fields():
         'test_field_pydantic.Student': {
             'resolve': ['resolve_name', 'resolve_zeta'],
             'post': ['post_name'],
-            'attribute': ['zones', 'zones2', 'zone'],
+            'object_fields': ['zones', 'zones2', 'zone'],
             'expose_dict': {'name': 'student_name'},
             'collect_dict': {}
             # ... others
@@ -53,7 +53,7 @@ def test_get_all_fields():
         'test_field_pydantic.Zone': {
             'resolve': [],
             'post': [],
-            'attribute': ['qs'],
+            'object_fields': ['qs'],
             'expose_dict': {},
             'collect_dict': {}
             # ... others
@@ -61,7 +61,7 @@ def test_get_all_fields():
         'test_field_pydantic.Queue': {
             'resolve': [],
             'post': [],
-            'attribute': [],
+            'object_fields': [],
             'expose_dict': {},
             'collect_dict': {}
             # ... others
@@ -69,7 +69,7 @@ def test_get_all_fields():
         'test_field_pydantic.Zeta': {
             'resolve': [],
             'post': [],
-            'attribute': [],
+            'object_fields': [],
             'expose_dict': {},
             'collect_dict': {}
             # ... others
@@ -86,7 +86,7 @@ def test_convert_metadata():
         Student: {
             'resolve': ['resolve_name', 'resolve_zeta'],
             'post': ['post_name'],
-            'attribute': ['zones', 'zones2', 'zone'],
+            'object_fields': ['zones', 'zones2', 'zone'],
             'expose_dict': {'name': 'student_name'},
             'collect_dict': {},
             'kls': Student,
@@ -96,7 +96,7 @@ def test_convert_metadata():
         Zone: {
             'resolve': [],
             'post': [],
-            'attribute': ['qs'],
+            'object_fields': ['qs'],
             'expose_dict': {},
             'collect_dict': {},
             'kls': Zone,
@@ -106,7 +106,7 @@ def test_convert_metadata():
         Queue: {
             'resolve': [],
             'post': [],
-            'attribute': [],
+            'object_fields': [],
             'expose_dict': {},
             'collect_dict': {},
             'kls': Queue,
@@ -116,7 +116,7 @@ def test_convert_metadata():
         Zeta: {
             'resolve': [],
             'post': [],
-            'attribute': [],
+            'object_fields': [],
             'expose_dict': {},
             'collect_dict': {},
             'kls': Zeta,

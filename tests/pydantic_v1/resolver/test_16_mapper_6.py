@@ -1,10 +1,8 @@
 from __future__ import annotations
-from dataclasses import dataclass
 from typing import List
 import pytest
 from pydantic import BaseModel
 from pydantic_resolve import Resolver, LoaderDepend, mapper
-from aiodataloader import DataLoader
 
 class Bo(BaseModel):
     name: str
