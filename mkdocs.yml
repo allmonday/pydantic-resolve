@@ -36,10 +36,8 @@ nav:
       - Expose and collect: ./v2/expose_and_collect.md
       - Connect to UI: ./v2/connect_to_ui.md
   - API:
-      - resolve and post: ./v2/resolve_post.md
-      - expose and collector: ./v2/expose_collector.md
-      - dataloader: ./v2/dataloader_api.md
-      - context: ./v2/context.md
+      - Reference: ./v2/api.md
+      - Change log: ./v2/changelog.md
 
 markdown_extensions:
   - pymdownx.highlight:

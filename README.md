@@ -3,12 +3,11 @@
 ![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
-Pydantic-resolve is a schema based solution for data management.
+Pydantic-resolve is a schema based solution for data composition, it can provide you with 3 ~ 5 times the increase in development efficiency and reduce the amount of code by more than 50%.
 
 1. It manages the deep data inside each schema, instead of visiting from outside by manual traversal.
 2. It runs a Level Order Traversal (BFS) inside and execute `resolve` and `post` during this process.
 3. It describes the relationship between data in a form close to ERD (entity relationship diagram)
-
 
 ## Install
 

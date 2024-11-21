@@ -4,7 +4,6 @@ from .utils.dataloader import build_list, build_object, copy_dataloader_kls
 from .utils.conversion import mapper
 from .exceptions import (
     ResolverTargetAttrNotFound,
-    DataloaderDependCantBeResolved,
     LoaderFieldNotProvidedError,
     MissingAnnotationError,
     GlobalLoaderFieldOverlappedError)
@@ -20,7 +19,6 @@ __all__ = [
     'Collector',
     'ICollector',
     'ResolverTargetAttrNotFound',
-    'DataloaderDependCantBeResolved',
     'LoaderFieldNotProvidedError',
     'MissingAnnotationError',
     'GlobalLoaderFieldOverlappedError',
