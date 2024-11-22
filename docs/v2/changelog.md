@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.11.2 (2024.11.22)
+
+- return value from post method will also be recursively traversed and resolved.
+- add dataloader params in post method
+
 ## v1.11.1 (2024.11.21)
 
 - refactor fold structure
