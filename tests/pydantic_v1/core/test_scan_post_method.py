@@ -15,6 +15,7 @@ def test_scan_post_method_1():
         'context': False,
         'ancestor_context': False,
         'parent': False,
+        'dataloaders': [],
         'collectors': []
     }
 
@@ -32,6 +33,7 @@ def test_scan_post_method_2():
         'context': True,
         'ancestor_context': True,
         'parent': True,
+        'dataloaders': [],
         'collectors': []
     }
 

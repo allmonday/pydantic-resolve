@@ -6,7 +6,8 @@ from .exceptions import (
     ResolverTargetAttrNotFound,
     LoaderFieldNotProvidedError,
     MissingAnnotationError,
-    GlobalLoaderFieldOverlappedError)
+    GlobalLoaderFieldOverlappedError,
+    MissingCollector)
 from .resolver import Resolver
 from .utils.depend import LoaderDepend
 from .utils.openapi import (
@@ -16,12 +17,15 @@ from .utils.openapi import (
 __all__ = [
     'Resolver',
     'LoaderDepend',
+
     'Collector',
     'ICollector',
+
     'ResolverTargetAttrNotFound',
     'LoaderFieldNotProvidedError',
     'MissingAnnotationError',
     'GlobalLoaderFieldOverlappedError',
+    'MissingCollector',
 
     'build_list',
     'build_object',

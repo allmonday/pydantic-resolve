@@ -36,6 +36,7 @@ post_field 方法可以为 sync 或者 async, 在子孙节点的数据处理完�
 - context
 - ancestor_context
 - parent
+- dataloaders（支持多个）
 - collectors (支持多个)
 
 ```python
@@ -238,6 +239,12 @@ class CounterCollector(ICollector):
     def values(self):
         return self.counter
 ```
+
+注意 collector 只能在 post 和 post_default_handler 中使用
+
+post 方法中可以收集 resolve 或者其他对象字段的子孙数据
+
+post_default_handler 可以额外收集 post 方法返回值的子孙数据
 
 ### dataloader
 

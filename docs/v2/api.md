@@ -36,6 +36,7 @@ Usable parameters:
 - context
 - ancestor_context
 - parent
+- dataloaders (supports multiple)
 - collectors (supports multiple)
 
 ```python
@@ -238,6 +239,13 @@ class CounterCollector(ICollector):
     def values(self):
         return self.counter
 ```
+
+collector can only be used in post and post_default_handler
+
+post methods can collect descendant data from resolve or other object fields
+
+post_default_handler can additionally collect descendant data from the return values of post methods.
+
 
 ### dataloader
 
