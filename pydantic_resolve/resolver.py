@@ -131,11 +131,11 @@ class Resolver:
             node: object,
             kls: Type,
             kls_path: str,
-            post_field: str,
+            field: str,
             method: Callable):
 
         params = {}
-        post_param = analysis.get_post_method_params(kls, post_field , self.metadata)
+        post_param = analysis.get_post_method_params(kls, field, self.metadata)
 
         if post_param['context']:
             params['context'] = self.context
@@ -143,6 +143,11 @@ class Resolver:
             params['ancestor_context'] = self._prepare_ancestor_context()
         if post_param['parent']:
             params['parent'] = self.parent_contextvars['parent'].get()
+        
+        for loader in post_param['dataloaders']:
+            cache_key = loader['path']
+            loader_instance = self.loader_instance_cache[cache_key]
+            params[loader['param']] = loader_instance
 
         alias_map = self.object_level_collect_alias_map_store.get(id(node), {})
         if alias_map:
@@ -206,15 +211,34 @@ class Resolver:
                 raise MissingAnnotationError(f'{field}: return annotation is required')
 
         val = self._execute_resolve_method(kls, field, method)
+
         while iscoroutine(val) or asyncio.isfuture(val):
             val = await val
 
         if not getattr(method, const.HAS_MAPPER_FUNCTION, False):  # defined in util.mapper
             val = conversion_util.try_parse_data_to_target_field_type(node, trim_field, val)
 
-        # continue dive deeper
         val = await self._traverse(val, node)
+        setattr(node, trim_field, val)
 
+    async def _execute_post_method_field(
+         self,   
+         node: object,
+         kls: Type,
+         kls_path: str,
+         field: str,
+         trim_field: str,
+         method: Callable
+    ):
+        val = self._execute_post_method(node, kls, kls_path, field, method)
+
+        while iscoroutine(val) or asyncio.isfuture(val):
+            val = await val
+            
+        if not getattr(method, const.HAS_MAPPER_FUNCTION, False):  # defined in util.mapper
+            val = conversion_util.try_parse_data_to_target_field_type(node, trim_field, val)
+
+        val = await self._traverse(val, node)
         setattr(node, trim_field, val)
 
     async def _traverse(self, node: T, parent: object) -> T:
@@ -249,11 +273,17 @@ class Resolver:
         self._prepare_parent(parent)
 
         tasks = []
+        post_tasks = []
 
         # resolve process
         resolve_fields, object_fields = analysis.get_resolve_fields_and_object_fields_from_object(node, kls, self.metadata)
         for field, resolve_trim_field, method in resolve_fields:
-            tasks.append(self._execute_resolve_method_field(node, kls, field, resolve_trim_field, method))
+            tasks.append(self._execute_resolve_method_field(
+                node=node, 
+                kls=kls, 
+                field=field, 
+                trim_field=resolve_trim_field, 
+                method=method))
 
         for field, attr_object in object_fields:
             tasks.append(self._traverse(attr_object, node))
@@ -261,16 +291,16 @@ class Resolver:
         await asyncio.gather(*tasks)
 
         # post process
-        for post_field, post_trim_field in analysis.get_post_methods(kls, self.metadata):
-            post_method = getattr(node, post_field)
-            result = self._execute_post_method(node, kls, kls_path, post_field, post_method)
+        for post_field, post_trim_field, method in analysis.get_post_methods(node, kls, self.metadata):
+            post_tasks.append(self._execute_post_method_field(
+                node=node, 
+                kls=kls, 
+                kls_path=kls_path, 
+                field=post_field, 
+                trim_field=post_trim_field,
+                method=method))
 
-            # although post method support async, but not recommended to use 
-            while iscoroutine(result) or asyncio.isfuture(result):
-                result = await result
-                
-            result = conversion_util.try_parse_data_to_target_field_type(node, post_trim_field, result)
-            setattr(node, post_trim_field, result)
+        await asyncio.gather(*post_tasks)
 
         default_post_method = getattr(node, const.POST_DEFAULT_HANDLER, None)
         if default_post_method:

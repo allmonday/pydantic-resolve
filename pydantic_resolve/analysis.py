@@ -43,6 +43,7 @@ class PostMethodType(TypedDict):
     context: bool
     parent: bool
     ancestor_context: bool
+    dataloaders: List[DataLoaderType]
     collectors: List[CollectorType] 
 
 class PostDefaultHandlerType(TypedDict):
@@ -112,6 +113,7 @@ def _scan_post_method(method, field) -> PostMethodType:
         'context': False,
         'ancestor_context': False,
         'parent': False,
+        'dataloaders': [],
         'collectors': []
     }
     signature = inspect.signature(method)
@@ -124,8 +126,16 @@ def _scan_post_method(method, field) -> PostMethodType:
 
     if signature.parameters.get('parent'):
         result['parent'] = True
+
     
     for name, param in signature.parameters.items():
+        if isinstance(param.default, Depends):
+            loader_info: DataLoaderType = { 
+                'param': name,
+                'kls': param.default.dependency,  # for later initialization
+                'path': class_util.get_kls_full_path(param.default.dependency) }
+            result['dataloaders'].append(loader_info)
+
         if isinstance(param.default, ICollector):
             info: CollectorType = {
                 'field': field,
@@ -134,6 +144,7 @@ def _scan_post_method(method, field) -> PostMethodType:
                 'alias': param.default.alias 
             }
             result['collectors'].append(info)
+
             
     return result
 
@@ -186,10 +197,13 @@ def validate_and_create_loader_instance(
     """
     # fetch all loaders
     def _get_all_loaders_from_meta(metadata):
-        for kls, kls_info in metadata.items():
-            for resolve_field, resolve_info in kls_info['resolve_params'].items():
+        for _, kls_info in metadata.items():
+            for _, resolve_info in kls_info['resolve_params'].items():
                 for loader in resolve_info['dataloaders']:
-                    # param, kls, path
+                    yield loader
+
+            for _, post_info in kls_info['post_params'].items():
+                for loader in post_info['dataloaders']:
                     yield loader
     
     def _create_instance(loader):
@@ -450,15 +464,16 @@ def get_resolve_fields_and_object_fields_from_object(node: object, kls: Type, ma
     return resolve_fields, object_fields
 
 
-def get_post_methods(kls: Type, mapped_metadata: MappedMetaType):
+def get_post_methods(node: object, kls: Type, mapped_metadata: MappedMetaType):
     kls_meta = mapped_metadata.get(kls)
 
     if kls_meta is None:
         return []
 
     for post_field in kls_meta['post']:
+        attr = getattr(node, post_field)
         trim_field = kls_meta['post_params'][post_field]['trim_field']
-        yield post_field, trim_field
+        yield post_field, trim_field, attr
 
 
 def get_resolve_method_param(kls: Type, resolve_field: str, mapped_metadata: MappedMetaType):
