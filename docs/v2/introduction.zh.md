@@ -2,11 +2,21 @@
 
 pydantic-resolve 是一个基于 pydantic 的轻量级封装库， 可以大幅简化构建数据的复杂度。
 
-它可以为你提供 3 ~ 5 倍的开发效率提升， 减少 50% 以上的代码量。
+借助 pydantic 它可以像 GraphQL 一样用图的关系来描述数据结构, 也能够在获取数据的同时根据业务做调整。
+
+在使用面向 ERD 的建模方式下,  它可以为你提供 3 ~ 5 倍的开发效率提升， 减少 50% 以上的代码量。
 
 它为 pydantic 对象提供了 resolve 和 post 方法。
 
+- resolve 通常用来获取数据
+- post 可以在获取数据后做额外处理。
+
 ```python
+class Car(BaseModel):
+    id: int
+    name: str
+    produced_by: str
+ 
 class Child(BaseModel):
     id: int
     name: str
@@ -21,12 +31,12 @@ class Child(BaseModel):
         return f'{self.name} owns {len(self.cars)} cars, they are: {desc}'
 
 children = await Resolver.resolve([
-        Child(id=1, name="Titan"), Child(id=1, name="Siri")])
+        Child(id=1, name="Titan"),
+        Child(id=1, name="Siri")]
+    )
 ```
 
-resolve 通常用来获取数据， post 可以在获取数据后做额外处理。
-
-当定义完对象方法， 并初始化好对象后， pydantic-resolve 内部会对数据做遍历， 执行这些方法来处理数据。
+当定义完对象方法， 并初始化好对象后， pydantic-resolve 内部会对数据做遍历， 执行这些方法来处理数据， 最终获取所有数据
 
 借助 dataloader， pydantic-resolve 可以避免多层获取数据时容易发生的 N+1 查询， 优化性能。
 

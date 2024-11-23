@@ -2,11 +2,18 @@
 
 pydantic-resolve is a lightweight wrapper library based on pydantic, which can greatly simplify the complexity of building data.
 
-It can provide you with a 3 to 5 times improvement in development efficiency and reduce more than 50% of the code.
+With the help of pydantic, it can describe data structures using graph relationships like GraphQL, and also make adjustments based on business requirements while fetching data.
+
+Using an ER-oriented modeling approach, it can provide you with a 3 to 5 times increase in development efficiency and reduce code volume by more than 50%.
 
 It offers `resolve` and `post` methods for pydantic objects.
 
 ```python
+class Car(BaseModel):
+    id: int
+    name: str
+    produced_by: str
+ 
 class Child(BaseModel):
     id: int
     name: str
