@@ -27,6 +27,7 @@ edit_uri: ""
 nav:
   - Quick Start:
       - Introduction: ./v2/introduction.md
+      - Why create it: ./v2/why.md
       - Use cases: ./v2/use_case.md
       - Schema first: ./v2/schema_first.md
   - Features:
@@ -66,6 +67,7 @@ plugins:
             Quick Start: "快速开始"
             Introduction: "简介"
             Use cases: "应用场景"
+            Why create it: "为何写个新的库?"
             Schema first: "先定义模型"
             Features: "功能介绍"
             Dataloader: "数据加载器"
