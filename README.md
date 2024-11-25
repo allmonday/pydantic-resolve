@@ -94,11 +94,11 @@ output
 }
 ```
 
-## Composing a subset from ERD definitions
+## Composing a subset from ER definitions
 
 ![](./doc/imgs/concept.png)
 
-define elements of ERD, schema (entity), dataloader (relationship).
+define elements of ER models, schema (entity), dataloader (relationship).
 
 then pick and compose them together according to your requirement and get the result.
 

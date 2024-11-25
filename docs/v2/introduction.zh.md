@@ -4,6 +4,8 @@ pydantic-resolve 是一个基于 pydantic 的轻量级封装库， 可以大幅�
 
 借助 pydantic 它可以像 GraphQL 一样用图的关系来描述数据结构, 也能够在获取数据的同时根据业务做调整。
 
+它可以和 FastAPI 轻松合作, 在后端构建出前端友好的数据结构, 以 typescript sdk 的方式提供给前端.
+
 在使用面向 ERD 的建模方式下,  它可以为你提供 3 ~ 5 倍的开发效率提升， 减少 50% 以上的代码量。
 
 它为 pydantic 对象提供了 resolve 和 post 方法。
