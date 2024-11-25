@@ -68,7 +68,7 @@ plugins:
             Introduction: "简介"
             Use cases: "应用场景"
             Why create it: "为何写个新的库?"
-            Schema first: "先定义模型"
+            Schema first: "定义数据结构"
             Features: "功能介绍"
             Dataloader: "数据加载器"
             Inherit and reuse: "继承和复用"

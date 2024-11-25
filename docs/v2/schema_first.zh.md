@@ -1,123 +1,136 @@
-# 先定义模型，再描述获取方式
+# 从 ER 模型构造期望数据结构
 
-使用 pydantic-resolve 的推荐方式是先定义模型。 将所有的操作都附加在定义好的数据对象上。
+使用 pydantic-resolve 的推荐模式是，在 ER 模型的基础上，构建出期望的数据结构。
 
-当我们构建数据时， 一个很朴素的思考方式是：先定义好目标数据结构 Target， 比较当前已有的数据源结构 Source ，寻找最短的变化路径。
+当我们构建数据时，一个很朴素的思考方式是：先定义好目标数据结构 Target，比较当前已有的数据源结构 Source，寻找最短的变化路径。
 
-> 更加详细的内容会在 "ERD 驱动开发" 中介绍。
+> 更加详细的内容会在 “ERD 驱动开发” 中介绍。
 
-比如我有一个 Person 的数组， 现在要为每个人增加请假信息， 数据库中已有的请假数据包含年假，病假两种， 要把两者合并成一个类型。
+比如我有一个 Person 的数组，现在要为每个人附加请假信息 Absense，并计算总共请假了几天。
 
 ## 期望的结构
 
-期望的数据结构就是 Person 和对应的 absenses, Absense 是面向业务的数据结构。
+当前已有的 Entity 为 Person 和 Absense，Absense 可以使用 AbsenseLoader 根据 person_id 查询到.
+
+```mermaid
+erDiagram
+    Person ||--o{ Absense : owns
+    Person {
+        int id
+        string name
+        string other_fields
+    }
+    Absense {
+        int id
+        int person_id
+        date start_date
+        date end_date
+        string other_fields
+    }
+```
 
 ```python
 class Person(BaseModel):
     id: int
     name: str
-    absenses: List[Absense]
+    other_field: str
 
 class Absense(BaseModel):
-    type: Literal['annual', 'sick']
+    id: int
+    user_id: int
     start_date: date
     end_date: date
+    other_fields: str
 ```
 
-## 添加数据源
+期望的结构需要在 Person 读取 id, name, 并且添加 absenses 和 total_duration 字段
 
-AnnualLeave 和 SickLeave 是已有的数据类型。
+在 Absense 中读取 start_date, end_date, 添加 duration 字段.
 
-分别由 AnnualLeaveLoader 和 SickLeaveLoader 提供具体数据。
+可以通过继承父类来获取字段, 并且添加所需的新字段
 
 ```python
-class AnnualLeave(BaseModel):
-    person_id: int
-    start_date: date
-    end_date: date
+class AbsenseWithDuration(Absense):
+    duration: float = 0
 
-class SickLeave(BaseModel):
-    person_id: int
-    start_date: date
-    end_date: date
+class PersonWithAbsneses(Person):
+    absenses: List[AbsenseWithDuration] = []
+    total_duration: float = 0
 ```
 
-此时我们可以把源数据和期望数据组合在一起, 列出好需要获取的数据和将要计算出来的结果。
-
-这代表了起始数据和目标数据。
-
-配合 `exclude=True` 可以在最终输出中隐藏临时变量。
+或者根据需要挑选字段,  拷贝所需字段,  添加 `ensure_subset` 来检查内容一致.
 
 ```python
-@model_config()
-class Person(BaseModel):
+@ensure_subset(Absense)
+class AbsenseWithDuration(BaseModel):
+    start_date: date
+    end_date: date
+    duration: float = 0
+
+@ensure_subset(Person)
+class PersonWithDuration(BaseModel):
+    id: int
+    name: str
+    absenses: List[AbsenseWithDuration] = []
+    total_duration: float = 0
+```
+
+于是我们得到了期望的数据结构.
+
+```mermaid
+erDiagram
+    Person ||--o{ Absense : owns
+    Person {
+        int id
+        string name
+        float total_duration
+    }
+    Absense {
+        date start_date
+        date end_date
+        float duration
+    }
+```
+
+## 获取数据, 计算数据
+
+为 abnsese 添加 DataLoader, 来获取数据
+
+定义 post_duration 来计算 duration, 定义 post_total_duration 来计算总和.
+
+```python
+@ensure_subset(Absense)
+class AbsenseWithDuration(BaseModel):
+    start_date: date
+    end_date: date
+
+    duration: float = 0
+    def post_duration(self):
+        return calc_duration(self.end_date, self.start_date)
+
+@ensure_subset(Person)
+class PersonWithDuration(BaseModel):
     id: int
     name: str
 
-    annual_leaves: List[AnnualLeave] = Field(default_factory=list, exclude=True)
-    sick_leaves: List[SickLeave] = Field(default_factory=list, exclude=True)
+    absenses: List[AbsenseWithDuration] = []
+    def resolve_absenses(self, loader=LoaderDepend(AbsenseLoader)):
+        return loader.load(self.id)
 
-    absenses: List[Absense] = []
+    total_duration: float = 0
+    def post_total_duration(self):
+        return sum([a.duration for a in self.absenses])
 ```
 
-## 加载数据
+## 启动
 
-然后我们为 `annual_leaves` 和 `sick_leaves` 添加 resolve 和 dataloader， 他们将为起始数据提供数据。
-
-```python
-@model_config()
-class Person(BaseModel):
-    id: int
-    name: str
-
-    annual_leaves: List[AnnualLeave] = Field(default_factory=list, exclude=True)
-    def resolve_annual_leaves(self, loader=LoaderDepend(AnnualLeaveLoader)):
-        return loader.load(self.id)
-
-    sick_leaves: List[SickLeave] = Field(default_factory=list, exclude=True)
-    def resolve_sick_leaves(self, loader=LoaderDepend(SickLeaveLoader)):
-        return loader.load(self.id)
-
-    absense: List[Absense] = []
-```
-
-## 转换数据
-
-当 `annual_leaves` 和 `sick_leaves` 的 resolve 阶段结束时， 他们已经有实际数据了， 接下来利用 post 阶段来计算 absenses
+当定义完整个结构后， 我们就能通过初始化 people 来加载和计算所有数据了，之后只需对 people 数据执行一次 Resolver().resolve() 就能完成所有的操作。
 
 ```python
-@model_config()
-class Person(BaseModel):
-    id: int
-    name: str
-
-    annual_leaves: List[AnnualLeave] = Field(default_factory=list, exclude=True)
-    def resolve_annual_leaves(self, loader=LoaderDepend(AnnualLeaveLoader)):
-        return loader.load(self.id)
-
-    sick_leaves: List[SickLeave] = Field(default_factory=list, exclude=True)
-    def resolve_sick_leaves(self, loader=LoaderDepend(SickLeaveLoader)):
-        return loader.load(self.id)
-
-    absenses: List[Absense] = []
-    def post_absense(self):
-        a = [Absense(
-                type='annual',
-                start_date=a.start_date,
-                end_date=a.end_date) for a in self.annual_leaves]
-        b = [Absense(
-                type='sick',
-                start_date=s.start_date,
-                end_date=s.end_date) for a in self.sick_leaves]
-        return a + b
-```
-
-## 启动整个过程
-
-当定义完整个 Person, Absense 的结构后， 我们就能通过初始化 people 来加载和计算所有数据了，只需对 people 数据执行一次 Resolver().resolve() 就能完成所有的操作。
-
-```python
-people = [Person(id=1, name='alice'), Person(id=2, name='bob')]
+people = [
+    Person(id=1, name='alice'),
+    Person(id=2, name='bob')
+]
 people = await Resolver().resolve(people)
 ```
 

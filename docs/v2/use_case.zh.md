@@ -2,7 +2,8 @@
 
 一些 pydantic-resolve 可以使用的场景。
 
-## 简单数据拼接
+
+## 数据构建
 
 从多个数据源拼接数据 （同层的请求会自动并发）。
 
@@ -22,7 +23,7 @@ retData = ReturnData()
 retData = await Resolver().resolve(retData)
 ```
 
-## 多层数据加载
+## 多层数据构建
 
 使用 dataloader 拼接多层数据， 首先提供根数据， 然后让 pydantic-resolve 拼接其他层级的数据。
 
@@ -58,7 +59,7 @@ companies = await Resolver().resolve(companies)
 
 ## 对获取的数据做处理
 
-可以对任意位置的对象做数据处理， 不用关心遍历逻辑。
+可以对任意位置的对象做数据处理，不用关心遍历逻辑。
 
 ```python
 class Owner(BaseModel):
