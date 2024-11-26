@@ -30,6 +30,103 @@ children = await Resolver.resolve([
         Child(id=1, name="Titan"), Child(id=1, name="Siri")])
 ```
 
+## Sample
+
+```mermaid
+erDiagram
+    User ||--o{ Blog : owns
+    Blog ||--o{ Comment : owns
+    User {
+        int id
+        string name
+    }
+    Blog {
+        int id
+        int user_id
+        string title
+        string content
+    }
+    Comment {
+        int id
+        int blog_id
+        int user_id
+        string content
+    }
+```
+
+```python
+import asyncio
+import json
+from typing import Optional
+from pydantic import BaseModel
+from pydantic_resolve import Resolver, build_object, build_list, LoaderDepend
+from aiodataloader import DataLoader
+
+# Schema/ Entity
+class Comment(BaseModel):
+    id: int
+    content: str
+    user_id: int
+
+class Blog(BaseModel):
+    id: int
+    title: str
+    content: str
+
+class User(BaseModel):
+    id: int
+    name: str
+
+
+# Loaders/ relationships
+class CommentLoader(DataLoader):
+    async def batch_load_fn(self, comment_ids):
+        comments = [
+            dict(id=1, content="world is beautiful", blog_id=1, user_id=1),
+            dict(id=2, content="Mars is beautiful", blog_id=2, user_id=2),
+            dict(id=3, content="I love Mars", blog_id=2, user_id=3),
+        ]
+        return build_list(comments, comment_ids, lambda c: c['blog_id'])
+
+class UserLoader(DataLoader):
+    async def batch_load_fn(self, user_ids):
+        users = [ dict(id=1, name="Alice"), dict(id=2, name="Bob"), ]
+        return build_object(users, user_ids, lambda u: u['id'])
+
+
+# Compose schemas and dataloaders together
+class CommentWithUser(Comment):
+    user: Optional[User] = None
+    def resolve_user(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.user_id)
+
+class BlogWithComments(Blog):
+    comments: list[CommentWithUser] = []
+    def resolve_comments(self, loader=LoaderDepend(CommentLoader)):
+        return loader.load(self.id)
+
+
+# Run
+async def main():
+    raw_blogs =[
+        dict(id=1, title="hello world", content="hello world detail"),
+        dict(id=2, title="hello Mars", content="hello Mars detail"),
+    ]
+    blogs = await Resolver().resolve([BlogWithComments.parse_obj(b) for b in raw_blogs])
+    print(json.dumps(blogs, indent=2, default=lambda o: o.dict()))
+
+asyncio.run(main())
+```
+
+Note:
+The purpose of this example is to demonstrate the ability to fetch related data. People often ask how to handle pagination. Generally, pagination is used when there is a large amount of root data, such as a paginated User list.
+
+If you want to paginate Blogs, one way is to treat Blogs as the root data entry and paginate using `api/blog?limit=10&offset=0`.
+
+Alternatively, you can use a single User and paginate the blogs with the `context` parameter. In this case, you cannot use DataLoader and need to replace it with a single method like `get_blogs_by_user_id_with_pagination`.
+
+Additionally, DataLoader can add range limits, such as fetching a batch of users' blogs from the last N days or comments from the last M days. This approach aligns with the data volume displayed in the UI.
+
 ## Creating a DataLoader
 
 There are two ways to create a DataLoader object. One is by inheritance:

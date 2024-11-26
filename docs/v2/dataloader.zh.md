@@ -17,7 +17,6 @@ class Child(BaseModel):
     # async def resolve_cars(self):
     #     return await get_cars_by_child(self.id)
 
-    cars: List[Car] = []
     async def resolve_cars(self, loader=LoaderDepend(CarLoader)):
         return await loader.load(self.id)
 
@@ -29,6 +28,103 @@ class Child(BaseModel):
 children = await Resolver.resolve([
         Child(id=1, name="Titan"), Child(id=1, name="Siri")])
 ```
+
+## 样例
+
+```mermaid
+erDiagram
+    User ||--o{ Blog : owns
+    Blog ||--o{ Comment : owns
+    User {
+        int id
+        string name
+    }
+    Blog {
+        int id
+        int user_id
+        string title
+        string content
+    }
+    Comment {
+        int id
+        int blog_id
+        int user_id
+        string content
+    }
+```
+
+```python
+import asyncio
+import json
+from typing import Optional
+from pydantic import BaseModel
+from pydantic_resolve import Resolver, build_object, build_list, LoaderDepend
+from aiodataloader import DataLoader
+
+# Schema/ Entity
+class Comment(BaseModel):
+    id: int
+    content: str
+    user_id: int
+
+class Blog(BaseModel):
+    id: int
+    title: str
+    content: str
+
+class User(BaseModel):
+    id: int
+    name: str
+
+
+# Loaders/ relationships
+class CommentLoader(DataLoader):
+    async def batch_load_fn(self, comment_ids):
+        comments = [
+            dict(id=1, content="world is beautiful", blog_id=1, user_id=1),
+            dict(id=2, content="Mars is beautiful", blog_id=2, user_id=2),
+            dict(id=3, content="I love Mars", blog_id=2, user_id=3),
+        ]
+        return build_list(comments, comment_ids, lambda c: c['blog_id'])
+
+class UserLoader(DataLoader):
+    async def batch_load_fn(self, user_ids):
+        users = [ dict(id=1, name="Alice"), dict(id=2, name="Bob"), ]
+        return build_object(users, user_ids, lambda u: u['id'])
+
+
+# Compose schemas and dataloaders together
+class CommentWithUser(Comment):
+    user: Optional[User] = None
+    def resolve_user(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.user_id)
+
+class BlogWithComments(Blog):
+    comments: list[CommentWithUser] = []
+    def resolve_comments(self, loader=LoaderDepend(CommentLoader)):
+        return loader.load(self.id)
+
+
+# Run
+async def main():
+    raw_blogs =[
+        dict(id=1, title="hello world", content="hello world detail"),
+        dict(id=2, title="hello Mars", content="hello Mars detail"),
+    ]
+    blogs = await Resolver().resolve([BlogWithComments.parse_obj(b) for b in raw_blogs])
+    print(json.dumps(blogs, indent=2, default=lambda o: o.dict()))
+
+asyncio.run(main())
+```
+
+备注：
+这个例子目的是展示获取关联数据的能力， 经常有人问如何处理分页， 一般来说使用分页的场景发生在根数据较多， 比如 User 列表是可以分页的。
+
+如果要对 Blog 做分页， 一种是将 Blog 作为根数据入口，`api/blog?limit=10&offset=0` 的方式来分页
+
+或者使用单个 User， 搭配 `context` 参数给 blogs 做分页， 此时无法使用 DataLoader， 需要替换成 `get_blogs_by_user_id_with_pagination` 之类的单方法。
+
+另外使用 DataLoader 可以添加范围限制， 比如获取一批用户最近 N 天的 blogs， 或者最近 M 天的评论， 诸如此类。 这样做也是符合 UI 展示的数据量的。
 
 ## DataLoader 的创建
 
