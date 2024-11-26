@@ -2,16 +2,16 @@
 
 我是个 FastAPI（以及 starlette）的使用者，在写 pydantic-resolve 之前的一段时间，我写 API 用过两种方式：
 
-- GraphQL，使用过一个小众的 python 库 pygraphy 和一个主流的库 strawberry-python
-- FastAPI 原生的 restful 风格接口，搭配 SQLAlchemy
+- GraphQL，使用过一个小众的 python 库 pygraphy 和一个主流的库 strawberry-python。
+- FastAPI 原生的 restful 风格接口，搭配 SQLAlchemy。
 
-他们有各自的优点和缺点.
+他们有各自的优点和缺点。
 
 GraphQL 和 pydantic 两者的结合产生了写 pydantic-resolve 的灵感。
 
 ## GraphQL 的启发
 
-使用 GraphQL 的初衷是为了提供灵活的后端数据接口，当定义清楚 Entity 和 Relationship 之后，用 GraphQL 就能提供许多通用的查询功能。（就像现在已经有许多工具能直接用 GraphQL 查询 db了）
+使用 GraphQL 的初衷是为了提供灵活的后端数据接口，当定义清楚 Entity 和 Relationship 之后，用 GraphQL 就能提供许多通用的查询功能。（就像现在已经有许多工具能直接用 GraphQL 查询 db 了。）
 
 在项目早期的时候，这为后端节省了许多的开发时间，当定义好数据之间的关联后，就能把所有的对象数据都提供给前端，让前端自行组合拼装。一开始合作非常的愉快。
 
@@ -66,25 +66,25 @@ query {
 这段过程给我了一些启发：
 
 - GraphQL 的数据描述方式对前端非常友好，有层级嵌套的结构可以方便数据渲染。（但容易在后端形成不可复用的 schema）
-- GraphQL 中图的模型，结合 ER 模型，可以复用大量 Entity 的查询。dataloader 能够优化 N+1 查询
-- 前端组合数据是一种错误实践，组合数据也是业务内容，业务侧统一管理才能长久维护
+- GraphQL 中图的模型，结合 ER 模型，可以复用大量 Entity 的查询。dataloader 能够优化 N+1 查询。
+- 前端组合数据是一种错误实践，组合数据也是业务内容，业务侧统一管理才能长久维护。
 - 前端查询 GraphQL query 也是一种错误实践，它会形成历史包袱，阻碍后端重构调整代码。最终两边都是脏代码。
 
 ## FastAPI 和 pydantic 的启发
 
-接触到 FastAPI 和 pydantic 之后，最让我印象深刻的是借助 pydantic 生成 openapi，然后生成前端 typescript sdk 的功能。（当然这不是 FastAPI 独有的）
+接触到 FastAPI 和 pydantic 之后，最让我印象深刻的是借助 pydantic 生成 openapi，然后生成前端 typescript sdk 的功能。（当然这不是 FastAPI 独有的。）
 
 它将前后端对接的成本直接减低了一个数量级，所有的后端接口变更都能让前端感知到。比如之前 GraphQL 虽然有了很多查询侧提供类型支持的工具，但是终究还是需要写查询。
 
 使用 FastAPI 之后前端就变成了
 
 ```js
-const projects: Project[] = await client.BusinessModuleA.getProjects()
+const projects: Project[] = await client.BusinessModuleA.getProjects();
 ```
 
 这样简单粗暴的查询了。
 
-随之而来的问题则是：**怎么构建像 GraphQL 那样的，对前端友好的数据结构**？？
+随之而来的问题则是：**怎么构建像 GraphQL 那样的，对前端友好的数据结构？？**
 
 使用 SQLAlchemy 的 relationship 能够获取到有关系结构的数据，但是往往还需要对数据做重新遍历来调整数据和结构。
 
@@ -178,11 +178,11 @@ class Author(BaseModel):
 
 我的开发模式就变成了：
 
-- 先设计业务模型，定义好 ER 模型
-- 定义好 models，定义好 pydantic 类，定义好 DataLoaders
-- 通过继承和扩展描述业务所需的数据结构，使用 DataLoader 获取数据，使用 post 方法调整数据
-- 借助 FastAPI 和 TypeScript sdk generator 把方法和类型信息传送给前端
-- 如果业务逻辑发生变化, 那么就调整或者添加申明的内容, 然后通过 sdk 把信息同步给前端
+- 先设计业务模型，定义好 ER 模型。
+- 定义好 models，定义好 pydantic 类，定义好 DataLoaders。
+- 通过继承和扩展描述业务所需的数据结构，使用 DataLoader 获取数据，使用 post 方法调整数据。
+- 借助 FastAPI 和 TypeScript sdk generator 把方法和类型信息传送给前端。
+- 如果业务逻辑发生变化, 那么就调整或者添加申明的内容, 然后通过 sdk 把信息同步给前端。
 
 这种模式对业务早期调整频繁的情况有很强的适应能力，针对数据关系的调整只需要重新申明组合，或者新增 DataLoader 就足够了。
 
@@ -196,6 +196,6 @@ class Author(BaseModel):
 
 并且数据查询和组合的过程贴近 ER 模型, 查询的可复用性高, 查询和修改分离.
 
-3-5 倍的开发效率是基于合理的，面向 ER 设计的 pydantic 类和 DataLoader, 被有效复用和组合的结果
+3-5 倍的开发效率是基于合理的，面向 ER 设计的 pydantic 类和 DataLoader, 被有效复用和组合的结果。
 
 50% 的代码量减少，是继承和节省了遍历逻辑，以及自动生成前端 sdk 的代码量。

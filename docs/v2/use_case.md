@@ -7,6 +7,7 @@ Some scenarios where pydantic-resolve can be used.
 Concatenate data from multiple data sources (requests at the same level will be automatically concurrent).
 
 ```python
+from pydantic import BaseModel
 from pydantic_resolve import Resolver
 
 class ReturnData(BaseModel):
@@ -27,6 +28,9 @@ retData = await Resolver().resolve(retData)
 Use dataloader to concatenate multi-layer data. First, provide the root data, and then let pydantic-resolve concatenate the data of other levels.
 
 ```python
+from pydantic import BaseModel
+from pydantic_resolve import Resolver, LoaderDepend
+
 class Company(BaseModel):
     id: int
     name: str
@@ -61,6 +65,9 @@ companies = await Resolver().resolve(companies)
 You can process data at any position of the object without worrying about the traversal logic.
 
 ```python
+from pydantic import BaseModel
+from pydantic_resolve import Resolver
+
 class Owner(BaseModel):
     __pydantic_resolve_expose__ = { 'name': 'owner_name' }
     name: str
@@ -88,6 +95,9 @@ Handle self-referential data types more elegantly.
 For example, use the parent parameter to concatenate the full path of the tag.
 
 ```python
+from pydantic import BaseModel
+from pydantic_resolve import Resolver
+
 class Tag(BaseModel):
     name: str
 

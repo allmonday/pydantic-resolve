@@ -2,12 +2,12 @@
 
 一些 pydantic-resolve 可以使用的场景。
 
-
 ## 数据构建
 
 从多个数据源拼接数据 （同层的请求会自动并发）。
 
 ```python
+from pydantic import BaseModel
 from pydantic_resolve import Resolver
 
 class ReturnData(BaseModel):
@@ -28,6 +28,9 @@ retData = await Resolver().resolve(retData)
 使用 dataloader 拼接多层数据， 首先提供根数据， 然后让 pydantic-resolve 拼接其他层级的数据。
 
 ```python
+from pydantic import BaseModel
+from pydantic_resolve import Resolver, DoaderDepend
+
 class Company(BaseModel):
     id: int
     name: str
@@ -62,6 +65,9 @@ companies = await Resolver().resolve(companies)
 可以对任意位置的对象做数据处理，不用关心遍历逻辑。
 
 ```python
+from pydantic import BaseModel
+from pydantic_resolve import Resolver
+
 class Owner(BaseModel):
     __pydantic_resolve_expose__ = { 'name': 'owner_name' }
     name: str
@@ -89,6 +95,9 @@ owners = await Resolver.resolve([Owner.parse_obj(o) for o in owners])
 比如使用 parent 参数拼接出 tag 的完整路径。
 
 ```python
+from pydantic import BaseModel
+from pydantic_resolve import Resolver
+
 class Tag(BaseModel):
     name: str
 
