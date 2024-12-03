@@ -3,213 +3,98 @@
 ![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
-Pydantic-resolve is a schema based solution for data composition, it can provide you with 3 ~ 5 times the increase in development efficiency and reduce the amount of code by more than 50%.
+pydantic-resolve is a lightweight wrapper library based on pydantic. It adds resolve and post methods to pydantic and dataclass objects.
 
-1. It manages the deep data inside each schema, instead of visiting from outside by manual traversal.
-2. It runs a Level Order Traversal (BFS) inside and execute `resolve` and `post` during this process.
-3. It describes the relationship between data in a form close to ERD (entity relationship diagram)
+It can reduce the code complexity in the data assembly process, making the code closer to the ER model and more maintainable.
 
-## Install
+With the help of pydantic, it can describe data structures in a graph-like relationship like GraphQL, and can also make adjustments based on business needs while fetching data.
 
-~~User of pydantic v2, please use [pydantic2-resolve](https://github.com/allmonday/pydantic2-resolve) instead.~~
+It can easily cooperate with FastAPI to build frontend friendly data structures on the backend and provide them to the front-end in the form of a TypeScript SDK.
 
-This lib now supports both pydantic v1 and v2 starts from v1.11.0
+> Using an ERD-oriented modeling approach, it can provide you with a 3 to 5 times increase in development efficiency and reduce code volume by more than 50%.
 
-```shell
+It provides resolve and post methods for pydantic objects.
+
+- resolve is usually used to fetch data
+- post can be used to do additional processing after fetching data
+
+```python hl_lines="13 17"
+from pydantic import BaseModel
+from pydantic_resolve import Resolver
+class Car(BaseModel):
+    id: int
+    name: str
+    produced_by: str
+
+class Child(BaseModel):
+    id: int
+    name: str
+
+    cars: List[Car] = []
+    async def resolve_cars(self):
+        return await get_cars_by_child(self.id)
+
+    description: str = ''
+    def post_description(self):
+        desc = ', '.join([c.name for c in self.cars])
+        return f'{self.name} owns {len(self.cars)} cars, they are: {desc}'
+
+children = await Resolver.resolve([
+        Child(id=1, name="Titan"),
+        Child(id=1, name="Siri")]
+    )
+
+```
+
+When the object methods are defined and the objects are initialized, pydantic-resolve will internally traverse the data, execute these methods to process the data, and finally obtain all the data.
+
+```python
+[
+    Child(id=1, name="Titan", cars=[
+        Car(id=1, name="Focus", produced_by="Ford")],
+        description="Titan owns 1 cars, they are: Focus"
+        ),
+    Child(id=1, name="Siri", cars=[
+        Car(id=3, name="Seal", produced_by="BYD")],
+        description="Siri owns 1 cars, they are Seal")
+]
+```
+
+Compared to procedural code, it requires traversal and additional maintenance of concurrency logic.
+
+```python
+import asyncio
+
+async def handle_child(child):
+    cars = await get_cars()
+    child.cars = cars
+
+    cars_desc = '.'.join([c.name for c in cars])
+    child.description = f'{child.name} owns {len(child.cars)} cars, they are: {car_desc}'
+
+tasks = []
+for child in children:
+    tasks.append(handle(child))
+
+await asyncio.gather(*tasks)
+```
+
+
+With DataLoader, pydantic-resolve can avoid the N+1 query problem that easily occurs when fetching data in multiple layers, optimizing performance.
+
+Using DataLoader also allows the defined class fragments to be reused in any location.
+
+In addition, it also provides expose and collector mechanisms to facilitate cross-layer data processing.
+
+
+## Installation
+
+```
 pip install pydantic-resolve
 ```
 
-## Hello world
+Starting from pydantic-resolve v1.11.0, it will be compatible with both pydantic v1 and v2.
 
-manage your data inside the schema.
-
-```python
-class Tree(BaseModel):
-    name: str
-    number: int
-    description: str = ''
-    def resolve_description(self):
-        return f"I'm {self.name}, my number is {self.number}"
-    children: list['Tree'] = []
-
-
-tree = dict(
-    name='root',
-    number=1,
-    children=[
-        dict(
-            name='child1',
-            number=2,
-            children=[
-                dict(
-                    name='child1-1',
-                    number=3,
-                ),
-                dict(
-                    name='child1-2',
-                    number=4,
-                ),
-            ]
-        )
-    ]
-)
-
-async def main():
-    t = Tree.parse_obj(tree)
-    t = await Resolver().resolve(t)
-    print(t.json(indent=4))
-
-import asyncio
-asyncio.run(main())
-```
-
-output
-
-```json
-{
-  "name": "root",
-  "number": 1,
-  "description": "I'm root, my number is 1",
-  "children": [
-    {
-      "name": "child1",
-      "number": 2,
-      "description": "I'm child1, my number is 2",
-      "children": [
-        {
-          "name": "child1-1",
-          "number": 3,
-          "description": "I'm child1-1, my number is 3",
-          "children": []
-        },
-        {
-          "name": "child1-2",
-          "number": 4,
-          "description": "I'm child1-2, my number is 4",
-          "children": []
-        }
-      ]
-    }
-  ]
-}
-```
-
-## Composing a subset from ER definitions
-
-![](./doc/imgs/concept.png)
-
-define elements of ER models, schema (entity), dataloader (relationship).
-
-then pick and compose them together according to your requirement and get the result.
-
-```python
-import asyncio
-import json
-from typing import Optional
-from pydantic import BaseModel
-from pydantic_resolve import Resolver, build_object, build_list, LoaderDepend
-from aiodataloader import DataLoader
-
-# Schema/ Entity
-class Comment(BaseModel):
-    id: int
-    content: str
-    user_id: int
-
-class Blog(BaseModel):
-    id: int
-    title: str
-    content: str
-
-class User(BaseModel):
-    id: int
-    name: str
-
-
-# Loaders/ relationships
-class CommentLoader(DataLoader):
-    async def batch_load_fn(self, comment_ids):
-        comments = [
-            dict(id=1, content="world is beautiful", blog_id=1, user_id=1),
-            dict(id=2, content="Mars is beautiful", blog_id=2, user_id=2),
-            dict(id=3, content="I love Mars", blog_id=2, user_id=3),
-        ]
-        return build_list(comments, comment_ids, lambda c: c['blog_id'])
-
-class UserLoader(DataLoader):
-    async def batch_load_fn(self, user_ids):
-        users = [ dict(id=1, name="Alice"), dict(id=2, name="Bob"), ]
-        return build_object(users, user_ids, lambda u: u['id'])
-
-
-# Compose schemas and dataloaders together
-class CommentWithUser(Comment):
-    user: Optional[User] = None
-    def resolve_user(self, loader=LoaderDepend(UserLoader)):
-        return loader.load(self.user_id)
-
-class BlogWithComments(Blog):
-    comments: list[CommentWithUser] = []
-    def resolve_comments(self, loader=LoaderDepend(CommentLoader)):
-        return loader.load(self.id)
-
-
-# Run
-async def main():
-    raw_blogs =[
-        dict(id=1, title="hello world", content="hello world detail"),
-        dict(id=2, title="hello Mars", content="hello Mars detail"),
-    ]
-    blogs = await Resolver().resolve([BlogWithComments.parse_obj(b) for b in raw_blogs])
-    print(json.dumps(blogs, indent=2, default=lambda o: o.dict()))
-
-asyncio.run(main())
-```
-
-output
-
-```json
-[
-  {
-    "id": 1,
-    "title": "hello world",
-    "content": "hello world detail",
-    "comments": [
-      {
-        "id": 1,
-        "content": "world is beautiful",
-        "user_id": 1,
-        "user": {
-          "id": 1,
-          "name": "Alice"
-        }
-      }
-    ]
-  },
-  {
-    "id": 2,
-    "title": "hello Mars",
-    "content": "hello Mars detail",
-    "comments": [
-      {
-        "id": 2,
-        "content": "Mars is beautiful",
-        "user_id": 2,
-        "user": {
-          "id": 2,
-          "name": "Bob"
-        }
-      },
-      {
-        "id": 3,
-        "content": "I love Mars",
-        "user_id": 3,
-        "user": null
-      }
-    ]
-  }
-]
-```
 
 ## Documents
 
