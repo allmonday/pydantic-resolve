@@ -9,7 +9,7 @@ It can reduce the code complexity in the data assembly process, making the code 
 
 With the help of pydantic, it can describe data structures in a graph-like relationship like GraphQL, and can also make adjustments based on business needs while fetching data.
 
-It can easily cooperate with FastAPI to build frontend friendly data structures on the backend and provide them to the front-end in the form of a TypeScript SDK.
+It can easily cooperate with FastAPI to build frontend friendly data structures on the backend and provide them to the frontend in the form of a TypeScript SDK.
 
 > Using an ERD-oriented modeling approach, it can provide you with a 3 to 5 times increase in development efficiency and reduce code volume by more than 50%.
 
