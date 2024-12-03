@@ -1,17 +1,23 @@
 # Introduction
 
-pydantic-resolve is a lightweight wrapper library based on pydantic, which can greatly simplify the complexity of building data.
+pydantic-resolve is a lightweight wrapper library based on pydantic. It adds resolve and post methods to pydantic and dataclass objects.
 
-With the help of pydantic, it can describe data structures using graph relationships like GraphQL, and also make adjustments based on business requirements while fetching data.
+It can reduce the code complexity in the data assembly process, making the code closer to the ER model and more maintainable.
 
-Using an ER-oriented modeling approach, it can provide you with a 3 to 5 times increase in development efficiency and reduce code volume by more than 50%.
+With the help of pydantic, it can describe data structures in a graph-like relationship like GraphQL, and can also make adjustments based on business needs while fetching data.
 
-It offers `resolve` and `post` methods for pydantic objects.
+It can easily cooperate with FastAPI to build frontend friendly data structures on the backend and provide them to the front-end in the form of a TypeScript SDK.
 
-```python
+> Using an ERD-oriented modeling approach, it can provide you with a 3 to 5 times increase in development efficiency and reduce code volume by more than 50%.
+
+It provides resolve and post methods for pydantic objects.
+
+- [resolve](./api.md#resolve) is usually used to fetch data
+- [post](./api.md#post) can be used to do additional processing after fetching data
+
+```python hl_lines="13 17"
 from pydantic import BaseModel
 from pydantic_resolve import Resolver
-
 class Car(BaseModel):
     id: int
     name: str
@@ -31,10 +37,13 @@ class Child(BaseModel):
         return f'{self.name} owns {len(self.cars)} cars, they are: {desc}'
 
 children = await Resolver.resolve([
-        Child(id=1, name="Titan"), Child(id=1, name="Siri")])
+        Child(id=1, name="Titan"),
+        Child(id=1, name="Siri")]
+    )
+
 ```
 
-`resolve` is usually used to fetch data, while `post` can perform additional processing after fetching the data.
+When the object methods are defined and the objects are initialized, pydantic-resolve will internally traverse the data, execute these methods to process the data, and finally obtain all the data.
 
 ```python
 [
@@ -48,11 +57,31 @@ children = await Resolver.resolve([
 ]
 ```
 
-After defining the object methods and initializing the objects, pydantic-resolve will internally traverse the data and execute these methods to process the data.
+Compared to procedural code, it requires traversal and additional maintenance of concurrency logic.
 
-With the help of dataloader, pydantic-resolve can avoid the N+1 query problem that often occurs when fetching data in multiple layers, optimizing performance.
+```python
+import asyncio
 
-In addition, it also provides `expose` and `collector` mechanisms to facilitate cross-layer data processing.
+async def handle_child(child):
+    cars = await get_cars()
+    child.cars = cars
+
+    cars_desc = '.'.join([c.name for c in cars])
+    child.description = f'{child.name} owns {len(child.cars)} cars, they are: {car_desc}'
+
+tasks = []
+for child in children:
+    tasks.append(handle(child))
+
+await asyncio.gather(*tasks)
+```
+
+
+With DataLoader, pydantic-resolve can avoid the N+1 query problem that easily occurs when fetching data in multiple layers, optimizing performance.
+
+Using DataLoader also allows the defined class fragments to be reused in any location.
+
+In addition, it also provides [expose](./api.md#ancestor_context) and [collector](./api.md#collector) mechanisms to facilitate cross-layer data processing.
 
 ## Installation
 
