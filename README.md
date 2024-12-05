@@ -3,6 +3,8 @@
 ![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
+<img style="width:420px;" src="./docs/images/resolver.png"></img>
+
 pydantic-resolve is a lightweight wrapper library based on pydantic. It adds resolve and post methods to pydantic and dataclass objects.
 
 It can reduce the code complexity in the data assembly process, making the code closer to the ER model and more maintainable.
@@ -79,13 +81,11 @@ for child in children:
 await asyncio.gather(*tasks)
 ```
 
-
 With DataLoader, pydantic-resolve can avoid the N+1 query problem that easily occurs when fetching data in multiple layers, optimizing performance.
 
 Using DataLoader also allows the defined class fragments to be reused in any location.
 
 In addition, it also provides expose and collector mechanisms to facilitate cross-layer data processing.
-
 
 ## Installation
 
@@ -94,7 +94,6 @@ pip install pydantic-resolve
 ```
 
 Starting from pydantic-resolve v1.11.0, it will be compatible with both pydantic v1 and v2.
-
 
 ## Documents
 
