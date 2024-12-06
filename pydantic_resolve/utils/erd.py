@@ -7,6 +7,7 @@ import http.server
 import socketserver
 import threading
 from pydantic import BaseModel
+from pydantic_resolve.utils.class_util import get_keys
 
 PORT = 8001
 
@@ -30,7 +31,7 @@ html_template = """
 
     <style type="text/css">
       #mynetwork {
-        width: 800px;
+        width: 1200px;
         height: 800px;
         border: 1px solid lightgray;
       }
@@ -53,14 +54,24 @@ html_template = """
                     nodes: nodes,
                     edges: edges,
                 };
-                var options = {};
+                var options = {
+                    layout: {
+                        randomSeed: '0.370981731081512:1733477712137'
+                    }
+                };
                 var network = new vis.Network(container, data, options);
+                console.log(network.getSeed())
             })
         })
     </script>
   </body>
 </html>
 """
+
+class Tree(BaseModel):
+    id: int
+    name: str
+    children: list['Tree']
 
 class Product(BaseModel):
     id: int
@@ -73,21 +84,70 @@ class Order(BaseModel):
 
 class Buyer(BaseModel):
     id: int
-    a_id: int
+    order_id: int
     name: str
 
+class Snap(BaseModel):
+    id: int
+    order_id: int
+    name: str
+
+class History(BaseModel):
+    id: int
+    product_id: int
+    name: str
 
 def get_data():
-    nodes = [
-        { 'id': 0, 'label': Product.__name__, 'shape': 'box', 'color': '#fff' },
-        { 'id': 1, 'label': Order.__name__, 'shape': 'box', 'color': '#fff' },
-        { 'id': 2, 'label': Buyer.__name__, 'shape': 'box', 'color': '#fff' },
+    counter = 1
+    definitions = [
+        dict(source=Tree, target=Tree, field='id'),
+        dict(source=Product, target=Tree, field='product_id'),
+        dict(source=Product, target=Order, field='product_id'),
+        dict(source=Product, target=History, field='product_id'),
+        dict(source=Order, target=Buyer, field='order_id'),
+        dict(source=Order, target=Snap, field='order_id'),
     ]
 
-    edges = [
-        { 'from': 0, 'to': 1, 'label': 'product_id', 'arrows': 'to', 'physics': False },
-        { 'from': 1, 'to': 2, 'label': 'order_id', 'arrows': 'to', 'physics': False },
-    ]
+    node_map = {}
+    nodes = []
+    edges = []
+
+    def get_desc(kls):
+        name = kls.__name__
+        keys = get_keys(kls)
+        keys = '\n'.join(['- ' + k for k in keys])
+        keys = '\n\n' + keys
+        return f"<b>{name}</b>{keys}"
+
+    for d in definitions:
+        source = d['source']
+        target = d['target']
+        source_name = source.__name__
+        target_name = target.__name__
+        field = d['field']
+
+        font = {
+            'font': {'multi': 'html', 'align': 'left'},
+            'shape': 'box',
+            'color': '#fff', 
+        }
+
+        if source_name not in node_map:
+            node_map[source_name] = counter
+            counter += 1
+            nodes.append({ 'id': node_map[source_name], 'label': get_desc(source), **font })
+
+        if target_name not in node_map:
+            node_map[target_name] = counter
+            counter += 1
+            nodes.append({ 'id': node_map[target_name], 'label': get_desc(target), **font })
+        
+        edges.append({ 
+            'from': node_map[source_name],
+            'to': node_map[target_name],
+            'label': field,
+            'physics': { 'springLength': 100 },
+            'arrows': { 'to': { 'enabled': True, 'type': 'arrow', 'scaleFactor': 0.4 }} })
 
     data = {
         'nodes': nodes,
