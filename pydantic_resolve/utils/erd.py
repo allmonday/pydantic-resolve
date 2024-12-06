@@ -6,6 +6,7 @@ import json
 import http.server
 import socketserver
 import threading
+from pydantic import BaseModel
 
 PORT = 8001
 
@@ -29,8 +30,8 @@ html_template = """
 
     <style type="text/css">
       #mynetwork {
-        width: 600px;
-        height: 400px;
+        width: 800px;
+        height: 800px;
         border: 1px solid lightgray;
       }
     </style>
@@ -61,21 +62,31 @@ html_template = """
 </html>
 """
 
+class Product(BaseModel):
+    id: int
+    name: str
+
+class Order(BaseModel):
+    id: int
+    product_id: int
+    name: str
+
+class Buyer(BaseModel):
+    id: int
+    a_id: int
+    name: str
+
+
 def get_data():
     nodes = [
-        { 'id': 1, 'label': "Node 1" },
-        { 'id': 2, 'label': "Node 2" },
-        { 'id': 3, 'label': "Node 3" },
-        { 'id': 4, 'label': "Node 4" },
-        { 'id': 5, 'label': "Node 5" },
+        { 'id': 0, 'label': Product.__name__, 'shape': 'box', 'color': '#fff' },
+        { 'id': 1, 'label': Order.__name__, 'shape': 'box', 'color': '#fff' },
+        { 'id': 2, 'label': Buyer.__name__, 'shape': 'box', 'color': '#fff' },
     ]
 
     edges = [
-        { 'from': 1, 'to': 3 },
-        { 'from': 1, 'to': 2 },
-        { 'from': 2, 'to': 4 },
-        { 'from': 2, 'to': 5 },
-        { 'from': 3, 'to': 3 },
+        { 'from': 0, 'to': 1, 'label': 'product_id', 'arrows': 'to', 'physics': False },
+        { 'from': 1, 'to': 2, 'label': 'order_id', 'arrows': 'to', 'physics': False },
     ]
 
     data = {
