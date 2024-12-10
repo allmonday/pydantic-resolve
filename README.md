@@ -13,7 +13,7 @@ With the help of pydantic, it can describe data structures in a graph-like relat
 
 It can easily cooperate with FastAPI to build frontend friendly data structures on the backend and provide them to the frontend in the form of a TypeScript SDK.
 
-> Using an ERD-oriented modeling approach, it can provide you with a 3 to 5 times increase in development efficiency and reduce code volume by more than 50%.
+> Using an ER oriented approach, it can provide you with a 3 to 5 times increase in development efficiency and reduce code volume by more than 50%.
 
 It provides resolve and post methods for pydantic objects.
 
@@ -23,12 +23,13 @@ It provides resolve and post methods for pydantic objects.
 ```python hl_lines="13 17"
 from pydantic import BaseModel
 from pydantic_resolve import Resolver
+
 class Car(BaseModel):
     id: int
     name: str
     produced_by: str
 
-class Child(BaseModel):
+class Person(BaseModel):
     id: int
     name: str
 
@@ -41,28 +42,25 @@ class Child(BaseModel):
         desc = ', '.join([c.name for c in self.cars])
         return f'{self.name} owns {len(self.cars)} cars, they are: {desc}'
 
-children = await Resolver.resolve([
-        Child(id=1, name="Titan"),
-        Child(id=1, name="Siri")]
-    )
-
+people = await Resolver.resolve([Person(id=1, name="Titan"), Person(id=1, name="Siri")])
 ```
 
 When the object methods are defined and the objects are initialized, pydantic-resolve will internally traverse the data, execute these methods to process the data, and finally obtain all the data.
 
 ```python
 [
-    Child(id=1, name="Titan", cars=[
+    Person(id=1, name="Titan", cars=[
         Car(id=1, name="Focus", produced_by="Ford")],
-        description="Titan owns 1 cars, they are: Focus"
-        ),
-    Child(id=1, name="Siri", cars=[
+        description="Titan owns 1 cars, they are: Focus"),
+    Person(id=1, name="Siri", cars=[
         Car(id=3, name="Seal", produced_by="BYD")],
         description="Siri owns 1 cars, they are Seal")
 ]
 ```
 
-Compared to procedural code, it requires traversal and additional maintenance of concurrency logic.
+**Compare to procedural code**, it requires traversal and additional maintenance of concurrency logic.
+
+If the data structure has more related data, the procedural code will soon be diffcult to read and maintain.
 
 ```python
 import asyncio
