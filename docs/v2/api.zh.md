@@ -89,10 +89,48 @@ class Resolver:
             context: Optional[Dict[str, Any]] = None):
 ```
 
-- `loader_params` 用来提供 DataLoader 的参数
-- `copy_dataloader_kls` 用来批量设置 DataLoader 参数
-- `loader_instances` 可以传入 DataLoader 实例 （提前写入数据）
-- `context`: 提供全局参数
+### loader_params
+
+用来提供 DataLoader 的参数
+
+```python
+resolver = Resolver(loader_params={ LoaderA: { "param_x": 1, "param_y": 2 } })
+```
+
+### global_loader_param
+
+用来全局设置 DataLoader 参数
+
+```python
+resolver = Resolver(global_loader_param={ { "param_x": 1, "param_y": 2 } })
+```
+
+注意如果参数有多种来源
+
+```python
+resolver = Resolver(
+    loader_params={ LoaderA: { "param_x": 2 } }, 
+    global_loader_param={ { "param_x": 1, "param_y": 2 } })
+```
+
+会报错.
+
+### loader_instances
+
+可以传入 DataLoader 实例 （提前写入数据）
+
+```python
+loader = LoaderA()
+loader.prime('a', [1,2,3])
+resolver = Resolver(loader_instances={ LoaderA: loader })
+```
+
+### context
+提供全局参数, 在所有的 resolve, post 方法中都可以获取到
+
+```python
+resolver = Resolver(context={'name': 'tangkikodo'})
+```
 
 ## 方法参数说明
 

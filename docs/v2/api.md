@@ -4,9 +4,9 @@
 
 ### resolve
 
-The `resolve_field` method can be async, and the Resolver will recursively resolve all `resolve_field` methods in the child nodes to obtain data.
+The `resolve_field` method can be async. The Resolver will recursively resolve all `resolve_field` methods in the child nodes to get the data.
 
-Usable parameters:
+Available parameters:
 
 - context
 - ancestor_context
@@ -29,9 +29,9 @@ class Blog(BaseModel):
 
 ### post
 
-The `post_field` method can be sync or async, and it is triggered after the data of the descendant nodes is processed, used for subsequent processing of the obtained data.
+The `post_field` method can be sync or async. It is triggered after the data of the descendant nodes is processed, and is used to perform subsequent processing on the obtained data.
 
-Usable parameters:
+Available parameters:
 
 - context
 - ancestor_context
@@ -53,11 +53,11 @@ class Blog(BaseModel):
 
 ### post_default_handler
 
-`post_default_handler` is a special post method that is executed after all post methods are executed. It is used for handling some finishing work.
+The `post_default_handler` is a special post method that is executed after all post methods have been executed. It is used to handle some finishing work.
 
 Note that this method does not have automatic assignment logic, you need to manually specify it.
 
-Usable parameters:
+Available parameters:
 
 - context
 - ancestor_context
@@ -76,7 +76,7 @@ class Blog(BaseModel):
 
 ## Resolver
 
-The entry point for pydantic-resolve execution
+The entry point for pydantic-resolve execution.
 
 ```python
 
@@ -89,16 +89,54 @@ class Resolver:
             context: Optional[Dict[str, Any]] = None):
 ```
 
-- `loader_params`: Used to provide parameters for DataLoader
-- `copy_dataloader_kls`: Used to batch set DataLoader parameters
-- `loader_instances`: Can pass in DataLoader instances (pre-filled data)
-- `context`: Provides global parameters
+### loader_params
+
+Used to provide parameters for DataLoader.
+
+```python
+resolver = Resolver(loader_params={ LoaderA: { "param_x": 1, "param_y": 2 } })
+```
+
+### global_loader_param
+
+Used to globally set DataLoader parameters.
+
+```python
+resolver = Resolver(global_loader_param={ { "param_x": 1, "param_y": 2 } })
+```
+
+Note that if there are multiple sources of parameters:
+
+```python
+resolver = Resolver(
+    loader_params={ LoaderA: { "param_x": 2 } }, 
+    global_loader_param={ { "param_x": 1, "param_y": 2 } })
+```
+
+It will report an error.
+
+### loader_instances
+
+You can pass in DataLoader instances (pre-filled with data).
+
+```python
+loader = LoaderA()
+loader.prime('a', [1,2,3])
+resolver = Resolver(loader_instances={ LoaderA: loader })
+```
+
+### context
+Provides global parameters that can be accessed in all resolve and post methods.
+
+```python
+resolver = Resolver(context={'name': 'tangkikodo'})
+```
 
 ## Method Parameter Description
 
 ### context
 
-`context` is a global context, set in the Resolver method, and can be accessed by all methods.
+`context` is a global context set in the Resolver method and can be accessed by all methods.
 
 ```python hl_lines="5 9"
 class Blog(BaseModel):
@@ -119,7 +157,7 @@ blog = await Resolver(context={'prefix': 'my', 'limit': 1}).resolve(blog)
 
 ### ancestor_context
 
-In some scenarios, we may need to obtain data from the ancestor nodes of a certain node, which can be achieved through `ancestor_context`.
+In some scenarios, we may need to get data from an ancestor node, which can be achieved through `ancestor_context`.
 
 First, you need to add the `__pydantic_resolve_expose__` parameter in the ancestor node to configure the field names and aliases to be provided (in case of name conflicts in the hierarchy).
 
@@ -175,13 +213,13 @@ data = await Resolver().resolve(Tree(**data))
 
 ### collector
 
-`collector` can be used to obtain data from descendant nodes across generations, and it needs to be used in conjunction with `Collector` and the `__pydantic_resolve_collect__` parameter.
+`collector` can be used to obtain data from descendant nodes across generations. It needs to be used in conjunction with `Collector` and the `__pydantic_resolve_collect__` parameter.
 
 Define `__pydantic_resolve_collect__` in the descendant nodes to specify the field information/collector name to be provided.
 
 `collector` allows developers to flexibly adjust the data structure without having to loop through the descendant nodes.
 
-For example, we can collect the comment information of each blog in the top-level schema.
+For example, we can collect comment information for each blog in the top-level schema.
 
 ```python hl_lines="13 18"
 form pydantic_resolve import Collector
@@ -221,9 +259,9 @@ class Comment(BaseModel):
         return f'[{blog_title}] - {self.content}'
 ```
 
-1. `collector` supports creating multiple instances
-2. `Collector` will use an array to accumulate data by default, `flat=True` will use `extend` to merge data internally
-3. You can inherit `ICollector` to create custom collectors
+1. `collector` supports creating multiple instances.
+2. `Collector` will use an array to accumulate data by default. `flat=True` will use `extend` to merge data internally.
+3. You can create custom collectors by inheriting `ICollector`.
 
 ```python
 from pydantic_resolve import ICollector
@@ -240,12 +278,11 @@ class CounterCollector(ICollector):
         return self.counter
 ```
 
-collector can only be used in post and post_default_handler
+Note that `collector` can only be used in `post` and `post_default_handler`.
 
-post methods can collect descendant data from resolve or other object fields
+In the `post` method, you can collect data from resolve or other object fields' descendants.
 
-post_default_handler can additionally collect descendant data from the return values of post methods.
-
+In `post_default_handler`, you can additionally collect data from the return values of `post` methods' descendants.
 
 ### dataloader
 
@@ -253,7 +290,7 @@ post_default_handler can additionally collect descendant data from the return va
 
 In pydantic-resolve, you need to use `LoaderDepend` to manage `DataLoader`.
 
-A method can declare multiple `DataLoader`s.
+It supports declaring multiple `DataLoader` instances in one method.
 
 ```python
 from pydantic_resolve import LoaderDepend
@@ -282,7 +319,7 @@ class LoaderA(DataLoader):
 data = await Resolver(loader_filters={LoaderA:{'power': 2}}).resolve(data)
 ```
 
-If multiple `DataLoader`s of the same type use the same parameters, you can use `global_loader_param` to simplify the parameter settings.
+If multiple instances of the same type of `DataLoader` use the same parameters, you can use `global_loader_param` to simplify parameter settings.
 
 Use with caution, as parameter maintenance may become unclear.
 
@@ -298,7 +335,7 @@ Signature: `build_list(data, keys, lambda d: d.key)`
 
 ### model_config
 
-Using `exclude` can remove fields when converting pydantic to the target data, but doing so alone will still keep the `name` field in the definition when generating `openapi.json` in FastAPI. Adding the `model_config()` decorator can remove `name`.
+Using `exclude` can remove fields when pydantic converts to the target data, but doing so alone will still include the `name` field in the definition when generating `openapi.json` in FastAPI. Adding the `model_config()` decorator can remove `name`.
 
 Signature: `model_config(default_required=True)`
 
@@ -312,9 +349,9 @@ class Data(BaseModel):
 
 Signature: `ensure_subset(base_kls)`
 
-If only a subset of fields is needed, but you want to strictly ensure the subset, you can use `ensure_subset` to check.
+If you only need a subset of fields but want to strictly ensure the subset, you can use `ensure_subset` to check.
 
-If the Base changes and the field does not exist, an `AttributeError` will be thrown.
+If the Base changes and the field does not exist, it will raise an `AttributeError`.
 
 ```python
 class Base(BaseModel):
@@ -328,7 +365,7 @@ class ChildA(BaseModel):
 
 ### mapper
 
-Provides a data conversion decorator
+Provides a data conversion decorator.
 
 ```python
 class Data(BaseModel):
@@ -351,7 +388,7 @@ NewLoader = copy_dataloader_kls('NewLoader', OriginLoader)
 
 ## Exceptions
 
-- `ResolverTargetAttrNotFound`: Target field not found
-- `LoaderFieldNotProvidedError`: Required parameters for Loader not provided in Resolve
-- `GlobalLoaderFieldOverlappedError`: Duplicate parameters in `global_loader_params` and `loader_params`
-- `MissingCollector`: Target collector not found, not defined in ancestor node methods
+- `ResolverTargetAttrNotFound`: Target field not found.
+- `LoaderFieldNotProvidedError`: Required parameters for the Loader are not provided in Resolve.
+- `GlobalLoaderFieldOverlappedError`: Duplicate parameters in `global_loader_params` and `loader_params`.
+- `MissingCollector`: Target collector not found, not defined in ancestor node methods.

@@ -2,6 +2,42 @@
 
 pydantic-resolve 是一个基于 pydantic 的轻量级封装库， 它为 pydantic 和 dataclass 对象添加了 resolve 和 post 方法。
 
+如果你曾经写过类似的代码， 并且觉得不满意， pydantic-resolve 可以派上用场。
+
+```python
+story_ids = [s.id for s in stories]
+tasks = await get_all_tasks_by_story_ids(story_ids)
+
+story_tasks = defaultdict(list)
+
+for task in tasks:
+    story_tasks[task.story_id].append(task)
+
+for story in stories:
+    tasks = story_tasks.get(story.id, [])
+    story.total_task_time = sum(task.time for task in tasks)
+    story.total_done_tasks_time = sum(task.time for task in tasks if task.done)
+```
+
+它可以将处理过程根据指责来拆分为描述数据和加载数据两部分， 使数据的组合计算更加清晰可维护
+
+```python
+@model_config()
+class Story(Base.Story)
+
+    tasks: List[Task] = Field(default_factory=list, exclude=True)
+    def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
+        return loader.load(self.id)
+
+    total_task_time: int = 0
+    def post_total_task_time(self):
+        return sum(task.time for task in self.tasks)
+
+    total_done_task_time: int = 0
+    def post_total_done_task_time(self):
+        return sum(task.time for task in self.tasks if task.done)
+```
+
 它可以在数据组装过程中， 降低获取和调整环节的代码复杂度， 使代码更加贴近 ER 模型， 更加可维护。
 
 借助 pydantic 它可以像 GraphQL 一样用图的关系来描述数据结构， 也能够在获取数据的同时根据业务做调整。

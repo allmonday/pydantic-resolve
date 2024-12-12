@@ -7,6 +7,44 @@
 
 pydantic-resolve is a lightweight wrapper library based on pydantic. It adds resolve and post methods to pydantic and dataclass objects.
 
+If you have ever written similar code and felt unsatisfied, pydantic-resolve can come in handy.
+
+```python
+story_ids = [s.id for s in stories]
+tasks = await get_all_tasks_by_story_ids(story_ids)
+
+story_tasks = defaultdict(list)
+
+for task in tasks:
+    story_tasks[task.story_id].append(task)
+
+for story in stories:
+    tasks = story_tasks.get(story.id, [])
+    story.total_task_time = sum(task.time for task in tasks)
+    story.total_done_tasks_time = sum(task.time for task in tasks if task.done)
+```
+
+It can split the processing into two parts: describing the data and loading the data, making the combination of data calculations clearer and more maintainable.
+
+```python
+@model_config()
+class Story(Base.Story)
+
+    tasks: List[Task] = Field(default_factory=list, exclude=True)
+    def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
+        return loader.load(self.id)
+
+    total_task_time: int = 0
+    def post_total_task_time(self):
+        return sum(task.time for task in self.tasks)
+
+    total_done_task_time: int = 0
+    def post_total_done_task_time(self):
+        return sum(task.time for task in self.tasks if task.done)
+  
+await Resolver().resolve(stories)
+```
+
 It can reduce the code complexity in the data assembly process, making the code closer to the ER model and more maintainable.
 
 With the help of pydantic, it can describe data structures in a graph-like relationship like GraphQL, and can also make adjustments based on business needs while fetching data.
