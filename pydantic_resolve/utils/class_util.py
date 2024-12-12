@@ -155,12 +155,12 @@ get_values = _get_values_v2 if PYDANTIC_V2 else _get_values_v1
 def get_pydantic_attrs(kls):
     items = class_util.get_items(kls)
 
-    for k, v in items:
+    for name, v in items:
         t = get_type(v)
 
         shelled_type = shelling_type(t)
         if is_acceptable_kls(shelled_type):
-            yield (k, shelled_type)  # type_ is the most inner type
+            yield (name, shelled_type)  # type_ is the most inner type
 
 
 def get_dataclass_attrs(kls):

@@ -328,11 +328,15 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
             for c in collectors:
                 if c not in collect_set:
                     raise MissingCollector(f'Collector alias name not found in ancestor, please check: {kls_name}')
+    
+    def _has_config(info: KlsMetaType):
+        result = len(info['resolve']) > 0 or len(info['post']) > 0 or len(info['collect_dict']) > 0 or len(info['expose_dict']) > 0 or info['post_default_handler_params'] is not None
+        return result
 
     def walker(kls):
         kls_name = class_util.get_kls_full_path(kls)
         hit = metadata.get(kls_name)
-        if hit: return
+        if hit: return _has_config(hit)  # for self reference case
 
         # - prepare fields, with resolve_, post_ reserved
         all_fields, object_fields = _get_all_fields_and_object_fields(kls)
@@ -374,8 +378,23 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
         }
         metadata[kls_name] = info
 
-        for _, shelled_type in object_fields:
+        has_config_in_descendant = False
+        exclude_object_fields = set() 
+
+        for field, shelled_type in (obj for obj in object_fields if obj[0] not in fields_with_resolver):
+            has_config = walker(shelled_type)
+            if not has_config:
+                exclude_object_fields.add(field)
+            has_config_in_descendant = has_config_in_descendant or has_config
+
+        info['object_fields'] = [f for f in info['object_fields'] if f not in exclude_object_fields]
+
+        for _, shelled_type in (obj for obj in object_fields if obj[0] in fields_with_resolver):
             walker(shelled_type)
+
+        self_has_config = _has_config(info)
+
+        return has_config_in_descendant or self_has_config
 
     walker(root_class)
     return metadata

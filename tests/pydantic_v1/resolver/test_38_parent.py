@@ -65,6 +65,7 @@ async def test_tree():
         ])
     ]) 
     data = await Resolver().resolve(Tree(**data))
+    print(data.json(indent=2))
     assert data.dict() ==  dict(name="a", path="a", children=[
         dict(name="b", path="a/b", children=[
             dict(name="c", path="a/b/c", children=[])
@@ -73,4 +74,3 @@ async def test_tree():
             dict(name="c", path="a/d/c", children=[])
         ])
     ]) 
-    print(data.json(indent=2))
