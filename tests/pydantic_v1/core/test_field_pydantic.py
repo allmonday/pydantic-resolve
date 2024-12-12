@@ -29,6 +29,7 @@ class Student(BaseModel):
         return dict(name='z')
 
 class Zone(BaseModel):
+    __pydantic_resolve_expose__ = {'name': 'zone_name'}
     name: str
     qs: List[Queue]
 
@@ -53,8 +54,8 @@ def test_get_all_fields():
         'test_field_pydantic.Zone': {
             'resolve': [],
             'post': [],
-            'object_fields': ['qs'],
-            'expose_dict': {},
+            'object_fields': [],
+            'expose_dict': {'name': 'zone_name'},
             'collect_dict': {}
             # ... others
         },
@@ -96,8 +97,8 @@ def test_convert_metadata():
         Zone: {
             'resolve': [],
             'post': [],
-            'object_fields': ['qs'],
-            'expose_dict': {},
+            'object_fields': [],
+            'expose_dict': {'name': 'zone_name'},
             'collect_dict': {},
             'kls': Zone,
             'kls_path': 'test_field_pydantic.Zone',

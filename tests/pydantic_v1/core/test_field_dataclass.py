@@ -11,9 +11,12 @@ class Queue:
 class Zone:
     name: str
     qs: List[Queue]
+    def resolve_qs(self):
+        return []
 
 @dataclass
 class Zeta:
+    __pydantic_resolve_expose__ = {'name': 'zeta_name'}
     name: str
 
 
@@ -50,9 +53,9 @@ def test_get_all_fields():
             'has_context': False,
         },
         'test_field_dataclass.Zone': {
-            'resolve': [],
+            'resolve': ['resolve_qs'],
             'post': [],
-            'object_fields': ['qs'],
+            'object_fields': [],
             'expose_dict': {},
             'collect_dict': {},
             'has_context': False,
@@ -69,7 +72,7 @@ def test_get_all_fields():
             'resolve': [],
             'post': [],
             'object_fields': [],
-            'expose_dict': {},
+            'expose_dict': {'name': 'zeta_name'},
             'collect_dict': {},
             'has_context': False,
         }

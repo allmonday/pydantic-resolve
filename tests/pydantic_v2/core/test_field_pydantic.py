@@ -45,7 +45,7 @@ def test_get_all_fields():
         'test_field_pydantic.Student': {
             'resolve': ['resolve_name', 'resolve_zeta'],
             'post': ['post_name'],
-            'object_fields': ['zones', 'zones2', 'zone'],
+            'object_fields': [],
             'expose_dict': {'name': 'student_name'},
             'collect_dict': {}
             # ... others
@@ -53,7 +53,7 @@ def test_get_all_fields():
         'test_field_pydantic.Zone': {
             'resolve': [],
             'post': [],
-            'object_fields': ['qs'],
+            'object_fields': [],
             'expose_dict': {},
             'collect_dict': {}
             # ... others
@@ -86,7 +86,7 @@ def test_convert_metadata():
         Student: {
             'resolve': ['resolve_name', 'resolve_zeta'],
             'post': ['post_name'],
-            'object_fields': ['zones', 'zones2', 'zone'],
+            'object_fields': [],
             'expose_dict': {'name': 'student_name'},
             'collect_dict': {},
             'kls': Student,
@@ -96,7 +96,7 @@ def test_convert_metadata():
         Zone: {
             'resolve': [],
             'post': [],
-            'object_fields': ['qs'],
+            'object_fields': [],
             'expose_dict': {},
             'collect_dict': {},
             'kls': Zone,

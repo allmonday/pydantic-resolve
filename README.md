@@ -109,7 +109,7 @@ tox -e coverage
 python -m http.server
 ```
 
-latest coverage: 98%
+latest coverage: 97%
 
 ## Sponsor
 
