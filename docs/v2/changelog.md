@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.11.3 (2024.12.12)
+
+- if an object field and its descendants does not has pydantic-resolve related configs, it will be skipped during the traversal.
+
 ## v1.11.2 (2024.11.22)
 
 - return value from post method will also be recursively traversed and resolved.
