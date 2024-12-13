@@ -1,25 +1,28 @@
 # Changelog
 
-## v1.11.3 (2024.12.12)
+## v1.11
+
+### v1.11.3 (2024.12.12)
 
 - if an object field and its descendants does not has pydantic-resolve related configs, it will be skipped during the traversal.
 
-## v1.11.2 (2024.11.22)
+### v1.11.2 (2024.11.22)
 
 - return value from post method will also be recursively traversed and resolved.
 - add dataloader params in post method
 
-## v1.11.1 (2024.11.21)
+### v1.11.1 (2024.11.21)
 
 - refactor fold structure
 - new documentation
 
-## v1.11.0 (2024.10.24)
+### v1.11.0 (2024.10.24)
 
-- support pydantic v2
+- support pydantic v2  (archive lib pydantic2-resolve)
 - remove hidden_fields in model_config
 
-## v1.10.8 (2024.8.27)
+## v1.10
+### v1.10.8 (2024.8.27)
 
 - collector suppor tuple for value
 
@@ -30,7 +33,7 @@ class Item(BaseModel):
 
 this means `(Item.field_a, Item.field_b)` will be sent to both collector_a and collector_b
 
-## v1.10.7 (2024.8.16)
+### v1.10.7 (2024.8.16)
 
 - collector support tuple
 
@@ -39,34 +42,34 @@ class Item(BaseModel):
     __pydantic_resolve_collect__ = {('field_a', 'field_b'): 'collector_name'}
 ```
 
-## v1.10.6 (2024.8.12)
+### v1.10.6 (2024.8.12)
 
 - collector now can collect from multiple sources
 
-## v1.10.5 (2024.5.20)
+### v1.10.5 (2024.5.20)
 
 - post method can be async function
 
-## v1.10.4 (2024.4.11)
+### v1.10.4 (2024.4.11)
 
 - new feature: reading parent node in resolve, post and post_default_handler
 
-## v1.10.3 (2024.4.8)
+### v1.10.3 (2024.4.8)
 
 - bugfix, handle TypeError from issubclass, https://github.com/allmonday/pydantic2-resolve/issues/7
 
-## v1.10.2 (2024.3.21)
+### v1.10.2 (2024.3.21)
 
 - internal optimization:
   - no more inspect.signature in runtime
 
-## v1.10.1 (2024.3.17)
+### v1.10.1 (2024.3.17)
 
 - fix collect intermediate level error
 - internal refactor
   - better metadata lookup
 
-## v1.10.0 (2024.3.16) yanked
+### ~~v1.10.0 (2024.3.16)~~
 
 - add new feature: `collector`
 - internal refactor
@@ -74,48 +77,52 @@ class Item(BaseModel):
   - prepare for debug feature.
   - create dataloader instance before resolving
 
-## v1.9.3 (2024.03.12)
+## v1.9
+### v1.9.3 (2024.03.12)
 
 - rename loader_filter -> loader_params
 - rename global_loader_filter -> global_loader_param
 
 using old params will have warning messages.
 
-## v1.9.2 (2024.02.03)
+### v1.9.2 (2024.02.03)
 
 - bugfix for model_config
   - setting `__exclude_fields__` should not put in schema_extra.
 
-## v1.9.1 (2024.02.02)
+### v1.9.1 (2024.02.02)
 
 - add new decorator `model_config`:
   - control hidden fields (for schema() and dict())
   - built-in required in schema
 
-## v1.9.0 (2024.01.22)
+### v1.9.0 (2024.01.22)
 
 - add `global_loader_filter` for convinence. (thanks Dambre)
 
-## v1.8.2 (2023.12.20)
+
+## v1.8
+### v1.8.2 (2023.12.20)
 
 - fix corner case of empty list input. `tests/core/test_input.py`
 
-## v1.8.1 (2023.12.16)
+### v1.8.1 (2023.12.16)
 
 - fix scan exceptions caused from pydantic `.type_` value of `List[Optional[T]]`
 
-## v1.8.0 (2023.12.15)
+### v1.8.0 (2023.12.15)
 
 - internal refactor: performance improvement
 - remove Resolver.annotation_class, it will be processed automatically
 - new helper function `copy_dataloader_kls` to generate a copy of DataLoader
 - `pydantic_resolve.utils` provide several internal `generate_loader` functions.
 
-## v1.7.2 (2023.11.16)
+## v1.7
+### v1.7.2 (2023.11.16)
 
 - fix overwriting BaseModel.Config.schema_extra in `@input`
 
-## v1.7.1 (2023.10.19)
+### v1.7.1 (2023.10.19)
 
 - fix raising error when `__pydantic_resolve_exposed__` field value is None
 
@@ -126,7 +133,7 @@ class Bar(BaseModel):
     num: Optional[int]  # may be None
 ```
 
-## v1.7.0 (2023.9.2)
+### v1.7.0 (2023.9.2)
 
 - add a port in ancestor class to expose value of specific field to its descendants.
 - resolve_field and post_field of descendant class can read those from `ancestor_context`
@@ -160,30 +167,32 @@ class Foo(BaseModel):
 
 ```
 
-## v1.6.5 (2023.8.12)
+## v1.6
+
+### v1.6.5 (2023.8.12)
 
 - `post_field` method and `post_default_handler` now can read context (setting in Resolver)
 
-## v1.6.4 (2023.8.7)
+### v1.6.4 (2023.8.7)
 
 - some inside refactor
 
-## v1.6.3 (2023.7.20)
+### v1.6.3 (2023.7.20)
 
 - fix dataclass exception under lazy annotation. refer to `tests/resolver/test_28_parse_to_obj_for_dataclass_with_annotation.py`
 - provide extra tip on auto map fails.
 
 > recursion dataclass type is still not supported, refer to `test/resolver/test_26_tree.py`, L81
 
-## v1.6.2 (2023.7.12)
+### v1.6.2 (2023.7.12)
 
 - fix `output` minor bug
 
-## v1.6.1 (2023.7.11)
+### v1.6.1 (2023.7.11)
 
 - fix `output` decorator, it will modify schema_json's `required` field and fill all fields
 
-## v1.6.0 (2023.7.11)
+### v1.6.0 (2023.7.11)
 
 - add `Resolver.context` param
 - remove `core.resolve`
@@ -191,15 +200,16 @@ class Foo(BaseModel):
 - add `output` decorator
 - add `post_default_handler` for spacial use.
 
-## v1.5.2 (2023.7.10)
+## v1.5
+### v1.5.2 (2023.7.10)
 
 - fix pydantic annotation related minor issue
 
-## v1.5.1 (2023.7.9)
+### v1.5.1 (2023.7.9)
 
 - fix the order of auto map, which will break the resolve chain
 
-## v1.5.0 (2023.7.9) yanked
+### ~~v1.5.0 (2023.7.9)~~
 
 - new feature. the return value from resolve_method will be automatically converted to the type of target field, which means mapper with params of type is not required any more.
 - if you `fromt __future__ import annotations` at top, make sure you define schemas in global scopes.
@@ -233,11 +243,12 @@ class Foo(BaseModel):
 
 - recommend: using `mapper` with lambda only
 
-## v1.4.1 (2023.7.6)
+## v1.4
+### v1.4.1 (2023.7.6)
 
 - minor optimization, iteration of object attributes.
 
-## v1.4.0 (2023.7.6)
+### v1.4.0 (2023.7.6)
 
 - support resolve through objects which intermediate items has not `resolve_` methods.
 
@@ -268,7 +279,8 @@ async def test_resolve_object():
     result = await Resolver().resolve(s)
 ```
 
-## v1.3.2 (2023.7.4)
+## v1.3
+### v1.3.2 (2023.7.4)
 
 - add subset check decorator `ensure_subset`.
 
@@ -293,7 +305,7 @@ async def test_resolve_object():
         a: int  # raise attribute error
 ```
 
-## v1.3.1 (2023.7.3)
+### v1.3.1 (2023.7.3)
 
 - support `auto-mapping` from pydantic to pydantic and fix some testcases.
 
@@ -302,7 +314,7 @@ more detail: `tests/resolver/test_16_mapper.py`
 - test_mapper_6
 - test_mapper_7
 
-## v1.3.0 (2023.6.27)
+### v1.3.0 (2023.6.27)
 
 - add `Resolver.loader_instances` param, user can create loader before Resolver and this loader will be used inside. for example: you can prime value and to avoid extra query.
 
@@ -316,15 +328,16 @@ result = await Resolver(loader_instances={FriendLoader: loader}).resolve(root)
 
 more detail: `tests/resolver/test_20_loader_instance.py`
 
-## v1.2.2 (2023.6.21)
+## v1.2
+### v1.2.2 (2023.6.21)
 
 - minor adjustment, `build_list` and `build_object` will return iterator instead of list.
 
-## v1.2.1 (2023.6.19)
+### v1.2.1 (2023.6.19)
 
 - fix, modify `post_fieldname` execution position, reduce the duplication.
 
-## v1.2.0 (2023.6.18)
+### v1.2.0 (2023.6.18)
 
 - add `post_fieldname` method, it will be called after the object is fully resolve as a hook, developer can run some aggregation computation. `tests/resolver/test_18_post_methods.py`
 
@@ -355,7 +368,8 @@ class User(BaseModel):
         self.has_cash = any([f.has_cash for f in self.friends])
 ```
 
-## v1.1.1 (2023.6.17)
+## v1.1
+### v1.1.1 (2023.6.17)
 
 - extend @mapper decorator with target class option, this will call auto_mapping function inside.
 
@@ -366,7 +380,7 @@ def resolve_comments(self, loader=LoaderDepend(CommentLoader)):
     return loader.load(self.id)
 ```
 
-## v1.1.0 (2023.6.16)
+### v1.1.0 (2023.6.16)
 
 - add @mapper decorator, to enable custom data transform
 
@@ -377,42 +391,47 @@ def resolve_comments(self, loader=LoaderDepend(CommentLoader)):
     return loader.load(self.id)
 ```
 
-## v1.0.0 (2023.6.11)
+## v1.0
+### v1.0.0 (2023.6.11)
 
 - support `batch_load_fn` as params for `LoaderDepend`
 - add test `tests/resolver/test_15_support_batch_load_fn.py`
 - `build_object`, `build_list` can be imported from `pydantic_resolve`
 
-## v0.5.1 (2023.6.11)
+## v0.5
+### v0.5.1 (2023.6.11)
 
 - add helper utils for Dataloader.batch_load_fn `built_list` and `build_object`, see `examples/fastapi_demo/loader.py`
 - FIX: fix potential error caused by same loader name from different module. see `tests/resolver/test_14_check_loader_name.py`
 
-## v0.5.0 (2023.6.1)
+### v0.5.0 (2023.6.1)
 
 - `Resolver.ensure_type`: True will ensure `resolve_*` methods have return annotation.
 - add FastAPI integrated example `examples/fastapi_demo`
 
-## v0.4.0 (2023.4.6)
+
+## v0.4
+### v0.4.0 (2023.4.6)
 
 - add new install option `pip install "pydantic-resolve[dataloader]" to include `aiodataloader` by default
 - add new `doc/loader-cn.md`, `doc/loader-en.md` to explain the convinence of using `LoaderDepen`
 - add new params in Resolver: `loader_filters` to support global filter setting for inside loaders.
 - add `examples/6_sqlalchemy_loaderdepend_global_filter.md` for global filter
 
-## v0.3.2 (2023.4.5)
+## v0.3
+### v0.3.2 (2023.4.5)
 
 - refact tests, group by `core` and `resolver`
 - replace `unittest` with `pytest.mark.asyncio`
 - little `readme.md` change, new top sample code
 
-## v0.3.1 (2023.4.3)
+### v0.3.1 (2023.4.3)
 
 - change code examples in readme.md
 - add unittest for pydantic validationError
 - code refactor (rename)
 
-## v0.3.0
+### v0.3.0
 
 - add `DataloaderDependCantBeResolved`, it will raise if use `resolve` to handle schema with `Dataloader`
 - add `chinese.md` and `english.md` in `doc` folder
