@@ -18,31 +18,42 @@ It provides resolve and post methods for pydantic objects.
 - resolve is usually used to fetch data
 - post can be used to do additional processing after fetching data
 
-```python hl_lines="13 17"
-from pydantic import BaseModel
+```python
 from pydantic_resolve import Resolver
-class Car(BaseModel):
-    id: int
+# data
+books = [
+    {"title": "1984", "year": 1949},
+    {"title": "To Kill a Mockingbird", "year": 1960},
+    {"title": "The Great Gatsby", "year": 1925}]
+persons = [
+    {"name": "George Orwell", "age": 46},
+    {"name": "Harper Lee", "age": 89},
+    {"name": "F. Scott Fitzgerald", "age": 44}]
+book_author_mapping = {
+    "1984": "George Orwell",
+    "To Kill a Mockingbird": "Harper Lee",
+    "The Great Gatsby": "F. Scott Fitzgerald"}
+
+async def get_author(title: str) -> Person:
+    author = book_author_mapping[book_name]
+    return Person(**[person for person in persons if person['name'] == author][0])
+
+class Person(BaseModel):
     name: str
-    produced_by: str
+    age: int
+    
 
-class Child(BaseModel):
-    id: int
-    name: str
+class Book(BaseModel):
+    title: str
+    year: int
+    author: Optional[Person] = None
+    
+    async def resolve_author(self):
+        return await get_author(self.title)
 
-    cars: List[Car] = []
-    async def resolve_cars(self):
-        return await get_cars_by_child(self.id)
+books = [Book(**book) for book in books]
+books_with_author = await Resolver().resolve(books)
 
-    description: str = ''
-    def post_description(self):
-        desc = ', '.join([c.name for c in self.cars])
-        return f'{self.name} owns {len(self.cars)} cars, they are: {desc}'
-
-children = await Resolver.resolve([
-        Child(id=1, name="Titan"),
-        Child(id=1, name="Siri")]
-    )
 
 ```
 
@@ -50,13 +61,9 @@ When the object methods are defined and the objects are initialized, pydantic-re
 
 ```python
 [
-    Child(id=1, name="Titan", cars=[
-        Car(id=1, name="Focus", produced_by="Ford")],
-        description="Titan owns 1 cars, they are: Focus"
-        ),
-    Child(id=1, name="Siri", cars=[
-        Car(id=3, name="Seal", produced_by="BYD")],
-        description="Siri owns 1 cars, they are Seal")
+    Book(title='1984', year=1949, author=Person(name='George Orwell', age=46)),
+    Book(title='To Kill a Mockingbird', year=1960, author=Person(name='Harper Lee', age=89)),
+    Book(title='The Great Gatsby', year=1925, author=Person(name='F. Scott Fitzgerald', age=44))
 ]
 ```
 
@@ -65,18 +72,11 @@ Compared to procedural code, it requires traversal and additional maintenance of
 ```python
 import asyncio
 
-async def handle_child(child):
-    cars = await get_cars()
-    child.cars = cars
+async def handle_author(book: Book):
+    author = await get_author(book.title)
+    book.author = author
 
-    cars_desc = '.'.join([c.name for c in cars])
-    child.description = f'{child.name} owns {len(child.cars)} cars, they are: {car_desc}'
-
-tasks = []
-for child in children:
-    tasks.append(handle(child))
-
-await asyncio.gather(*tasks)
+await asyncio.gather(*[handle_author(book) for book in books])
 ```
 
 

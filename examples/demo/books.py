@@ -15,19 +15,19 @@ class Book(BaseModel):
     year: int
     author: Optional[Person] = None
     
-    async def resolve_author(self):
+    def resolve_author(self):
         return get_author(self.title)
 
 
 @app.get("/books", response_model=list[Book])
 async def books():
-    books = fetch_books()
+    books = get_books()
     resolver = Resolver()
     results = await resolver.resolve(books)
     return results
     
 
-def fetch_books() -> list[Book]:
+def get_books() -> list[Book]:
     return [Book(**book) for book in books]
 
 def get_author(book_name: str) -> Person:
