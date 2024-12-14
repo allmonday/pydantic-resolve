@@ -9,3 +9,4 @@ coverage.json
 docs/_build
 .vscode
 cov
+.DS_Store
