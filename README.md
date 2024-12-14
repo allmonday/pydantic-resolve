@@ -60,6 +60,7 @@ It provides resolve and post methods for pydantic objects.
 
 ```python
 from pydantic_resolve import Resolver
+
 # data
 books = [
     {"title": "1984", "year": 1949},
