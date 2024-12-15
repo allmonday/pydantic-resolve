@@ -24,13 +24,25 @@ for story in stories:
     story.total_done_tasks_time = sum(task.time for task in tasks if task.done)
 ```
 
-It can split the processing into two parts: describing the data and loading the data, making the combination of data calculations clearer and more maintainable.
+this snippet mixed traversal, temp variables, data fetching and business logic together.
+
+pydantic-resolve can help **split them apart**, let you focus on the core business logic.
+
 
 ```python
-@model_config()
-class Story(Base.Story)
+from pydantic_resolve import Resolver, LoaderDepend, build_list
+from aiodataloader import DataLoader
 
-    tasks: List[Task] = Field(default_factory=list, exclude=True)
+
+# data fetching
+class TaskLoader(DataLoader):
+    async def batch_load_fn(self, story_ids):
+        tasks = await get_all_tasks_by_story_ids(story_ids)
+        return build_list(tasks, story_ids, lambda t: t.story_id)
+
+# core business logics
+class Story(Base.Story):
+    tasks: List[Task] = []
     def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
         return loader.load(self.id)
 
@@ -42,18 +54,29 @@ class Story(Base.Story)
     def post_total_done_task_time(self):
         return sum(task.time for task in self.tasks if task.done)
   
+# traversal and execute methods (runner)
 await Resolver().resolve(stories)
 ```
 
-and pydantic-resolve can easily extends to more complicated scenarios:
+pydantic-resolve can easily be applied to more complicated scenarios, such as:
 
-a list of sprint and each sprint owns a list of story which owns a list of task.
+A list of sprint, each sprint owns a list of story, each story owns a list of task, and do some modifications or calculations.
 
 ```python
-@model_config()
-class Story(Base.Story)
+# data fetching
+class TaskLoader(DataLoader):
+    async def batch_load_fn(self, story_ids):
+        tasks = await get_all_tasks_by_story_ids(story_ids)
+        return build_list(tasks, story_ids, lambda t: t.story_id)
 
-    tasks: List[Task] = Field(default_factory=list, exclude=True)
+class StoryLoader(DataLoader):
+    async def batch_load_fn(self, sprint_ids):
+        stories = await get_all_stories_by_sprint_ids(sprint_ids)
+        return build_list(stories, sprint_ids, lambda t: t.sprint_id)
+
+# core business logic
+class Story(Base.Story):
+    tasks: List[Task] = []
     def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
         return loader.load(self.id)
 
@@ -66,8 +89,7 @@ class Story(Base.Story)
         return sum(task.time for task in self.tasks if task.done)
 
 
-@model_config()
-class Sprint(Base.Sprint)
+class Sprint(Base.Sprint):
     stories: List[Story] = []
     def resolve_stories(self, loader=LoaderDepend(StoryLoader)):
         return loader.load(self.id)
@@ -80,7 +102,8 @@ class Sprint(Base.Sprint)
     def post_total_done_time(self):
         return sum(story.total_done_task_time for story in self.stories)
     
-  
+
+# traversal and execute methods (runner)
 await Resolver().resolve(sprints)
 ```
 
@@ -140,7 +163,7 @@ book_author_mapping = {
 
 async def get_author(title: str) -> Person:
     await asyncio.sleep(0.1)
-    author_name = book_author_mapping[book_name]
+    author_name = book_author_mapping[title]
     if not author_name:
         return None
     author = [person for person in persons if person['name'] == author_name][0]
