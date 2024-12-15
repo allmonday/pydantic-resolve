@@ -19,13 +19,24 @@ for story in stories:
     story.total_done_tasks_time = sum(task.time for task in tasks if task.done)
 ```
 
-它可以将处理过程根据指责来拆分为描述数据和加载数据两部分， 使数据的组合计算更加清晰可维护
+上述代码的问题是将数据获取, 遍历和业务计算混淆在了一起.
+
+pydantic-resolve 可以将他们拆分开来, 让开发专注在业务逻辑之上.
 
 ```python
-@model_config()
-class Story(Base.Story)
+from pydantic_resolve import Resolver, LoaderDepend, build_list
+from aiodataloader import DataLoader
 
-    tasks: List[Task] = Field(default_factory=list, exclude=True)
+
+# data fetching
+class TaskLoader(DataLoader):
+    async def batch_load_fn(self, story_ids):
+        tasks = await get_all_tasks_by_story_ids(story_ids)
+        return build_list(tasks, story_ids, lambda t: t.story_id)
+
+# core business logics
+class Story(Base.Story):
+    tasks: List[Task] = []
     def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
         return loader.load(self.id)
 
@@ -36,7 +47,58 @@ class Story(Base.Story)
     total_done_task_time: int = 0
     def post_total_done_task_time(self):
         return sum(task.time for task in self.tasks if task.done)
+  
+# traversal and execute methods (runner)
+await Resolver().resolve(stories)
 ```
+
+同时他还能轻易地的扩展到更加复杂的场景, 比如额外增加一层 sprint 类, 如果用先前的代码, for 循环的缩进就已经会影响到代码的可读性了.
+
+```python
+# data fetching
+class TaskLoader(DataLoader):
+    async def batch_load_fn(self, story_ids):
+        tasks = await get_all_tasks_by_story_ids(story_ids)
+        return build_list(tasks, story_ids, lambda t: t.story_id)
+
+class StoryLoader(DataLoader):
+    async def batch_load_fn(self, sprint_ids):
+        stories = await get_all_stories_by_sprint_ids(sprint_ids)
+        return build_list(stories, sprint_ids, lambda t: t.sprint_id)
+
+# core business logic
+class Story(Base.Story):
+    tasks: List[Task] = []
+    def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
+        return loader.load(self.id)
+
+    total_task_time: int = 0
+    def post_total_task_time(self):
+        return sum(task.time for task in self.tasks)
+
+    total_done_task_time: int = 0
+    def post_total_done_task_time(self):
+        return sum(task.time for task in self.tasks if task.done)
+
+
+class Sprint(Base.Sprint):
+    stories: List[Story] = []
+    def resolve_stories(self, loader=LoaderDepend(StoryLoader)):
+        return loader.load(self.id)
+    
+    total_time: int = 0
+    def post_total_time(self):
+        return sum(story.total_task_time for story in self.stories)
+
+    total_done_time: int = 0
+    def post_total_done_time(self):
+        return sum(story.total_done_task_time for story in self.stories)
+    
+
+# traversal and execute methods (runner)
+await Resolver().resolve(sprints)
+```
+
 
 它可以在数据组装过程中， 降低获取和调整环节的代码复杂度， 使代码更加贴近 ER 模型， 更加可维护。
 
