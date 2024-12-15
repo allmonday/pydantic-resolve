@@ -45,6 +45,45 @@ class Story(Base.Story)
 await Resolver().resolve(stories)
 ```
 
+and pydantic-resolve can easily extends to more complicated scenarios:
+
+a list of sprint and each sprint owns a list of story which owns a list of task.
+
+```python
+@model_config()
+class Story(Base.Story)
+
+    tasks: List[Task] = Field(default_factory=list, exclude=True)
+    def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
+        return loader.load(self.id)
+
+    total_task_time: int = 0
+    def post_total_task_time(self):
+        return sum(task.time for task in self.tasks)
+
+    total_done_task_time: int = 0
+    def post_total_done_task_time(self):
+        return sum(task.time for task in self.tasks if task.done)
+
+
+@model_config()
+class Sprint(Base.Sprint)
+    stories: List[Story] = []
+    def resolve_stories(self, loader=LoaderDepend(StoryLoader)):
+        return loader.load(self.id)
+    
+    total_time: int = 0
+    def post_total_time(self):
+        return sum(story.total_task_time for story in self.stories)
+
+    total_done_time: int = 0
+    def post_total_done_time(self):
+        return sum(story.total_done_task_time for story in self.stories)
+    
+  
+await Resolver().resolve(sprints)
+```
+
 It can reduce the code complexity in the data assembly process, making the code closer to the ER model and more maintainable.
 
 With the help of pydantic, it can describe data structures in a graph-like relationship like GraphQL, and can also make adjustments based on business needs while fetching data.
@@ -58,7 +97,29 @@ It provides resolve and post methods for pydantic objects.
 - resolve is usually used to fetch data
 - post can be used to do additional processing after fetching data
 
+
+When the object methods are defined and the objects are initialized, pydantic-resolve will internally traverse the data, execute these methods to process the data, and finally obtain all the data.
+
+With DataLoader, pydantic-resolve can avoid the N+1 query problem that easily occurs when fetching data in multiple layers, optimizing performance.
+
+Using DataLoader also allows the defined class fragments to be reused in any location.
+
+In addition, it also provides expose and collector mechanisms to facilitate cross-layer data processing.
+
+## Installation
+
+```
+pip install pydantic-resolve
+```
+
+Starting from pydantic-resolve v1.11.0, it will be compatible with both pydantic v1 and v2.
+
+## Hello world sample
+
+originally we have list of books, then we want to attach the author info.
+
 ```python
+import asyncio
 from pydantic_resolve import Resolver
 
 # data
@@ -66,18 +127,24 @@ books = [
     {"title": "1984", "year": 1949},
     {"title": "To Kill a Mockingbird", "year": 1960},
     {"title": "The Great Gatsby", "year": 1925}]
+
 persons = [
     {"name": "George Orwell", "age": 46},
     {"name": "Harper Lee", "age": 89},
     {"name": "F. Scott Fitzgerald", "age": 44}]
+
 book_author_mapping = {
     "1984": "George Orwell",
     "To Kill a Mockingbird": "Harper Lee",
     "The Great Gatsby": "F. Scott Fitzgerald"}
 
 async def get_author(title: str) -> Person:
-    author = book_author_mapping[book_name]
-    return Person(**[person for person in persons if person['name'] == author][0])
+    await asyncio.sleep(0.1)
+    author_name = book_author_mapping[book_name]
+    if not author_name:
+        return None
+    author = [person for person in persons if person['name'] == author_name][0]
+    return Person(**author)
 
 class Person(BaseModel):
     name: str
@@ -95,11 +162,8 @@ class Book(BaseModel):
 books = [Book(**book) for book in books]
 books_with_author = await Resolver().resolve(books)
 
-
 ```
-
-When the object methods are defined and the objects are initialized, pydantic-resolve will internally traverse the data, execute these methods to process the data, and finally obtain all the data.
-
+output
 ```python
 [
     Book(title='1984', year=1949, author=Person(name='George Orwell', age=46)),
@@ -108,7 +172,7 @@ When the object methods are defined and the objects are initialized, pydantic-re
 ]
 ```
 
-Compared to procedural code, it requires traversal and additional maintenance of concurrency logic.
+internally, it runs concurrently to execute the async functions, which looks like:
 
 ```python
 import asyncio
@@ -119,20 +183,6 @@ async def handle_author(book: Book):
 
 await asyncio.gather(*[handle_author(book) for book in books])
 ```
-
-With DataLoader, pydantic-resolve can avoid the N+1 query problem that easily occurs when fetching data in multiple layers, optimizing performance.
-
-Using DataLoader also allows the defined class fragments to be reused in any location.
-
-In addition, it also provides expose and collector mechanisms to facilitate cross-layer data processing.
-
-## Installation
-
-```
-pip install pydantic-resolve
-```
-
-Starting from pydantic-resolve v1.11.0, it will be compatible with both pydantic v1 and v2.
 
 ## Documents
 
