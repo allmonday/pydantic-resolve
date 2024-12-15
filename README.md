@@ -7,6 +7,7 @@
 
 pydantic-resolve is a lightweight wrapper library based on pydantic. It adds resolve and post methods to pydantic and dataclass objects.
 
+## Problems to solve
 If you have ever written similar code and felt unsatisfied, pydantic-resolve can come in handy.
 
 ```python
@@ -24,7 +25,7 @@ for story in stories:
     story.total_done_tasks_time = sum(task.time for task in tasks if task.done)
 ```
 
-this snippet mixed traversal, temp variables, data fetching and business logic together.
+this snippet mixed data fetching, traversal, variables and **business logic** together.
 
 pydantic-resolve can help **split them apart**, let you focus on the core business logic.
 
@@ -42,10 +43,12 @@ class TaskLoader(DataLoader):
 
 # core business logics
 class Story(Base.Story):
+    # fetch tasks
     tasks: List[Task] = []
     def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
         return loader.load(self.id)
 
+    # calc after fetched
     total_task_time: int = 0
     def post_total_task_time(self):
         return sum(task.time for task in self.tasks)
@@ -106,6 +109,8 @@ class Sprint(Base.Sprint):
 # traversal and execute methods (runner)
 await Resolver().resolve(sprints)
 ```
+
+## Features
 
 It can reduce the code complexity in the data assembly process, making the code closer to the ER model and more maintainable.
 
