@@ -5,7 +5,9 @@
 
 <img style="width:420px;" src="./docs/images/resolver.png"></img>
 
-pydantic-resolve is a lightweight wrapper library based on pydantic. It adds resolve and post methods to pydantic and dataclass objects.
+pydantic-resolve is a lightweight wrapper library based on pydantic, It adds resolve and post methods to pydantic and dataclass objects.
+
+It aims to provide an more elegant way for data composining, helps developers focusing on the core business logic.
 
 ## Problems to solve
 
