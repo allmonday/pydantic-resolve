@@ -28,7 +28,7 @@ for story in stories:
     story.total_done_tasks_time = sum(task.time for task in tasks if task.done)
 ```
 
-this snippet mixed data fetching, traversal, temp variables and **business logic** together, just for one level of relationships.
+This snippet mixed data fetching, traversal, temp variables and **business logic** together, just for one level of relationships.
 
 pydantic-resolve can help **split them apart**, let you focus on the core business logic.
 
@@ -66,15 +66,13 @@ pydantic-resolve can be easily applied to more complicated scenarios, such as:
 
 A list of sprint, each sprint owns a list of story, each story owns a list of task, and do some modifications or calculations.
 
-no more temp variables
+- no more temp variables
+- no more traversals 
+- no more indents
 
-no more traversals 
+Just focus on the target you want to handle, and you can **easily plug in and out the related fields without changing other code**.
 
-and no more indents
-
-just focus on the target you want to handle, and you can **easily plug in and out the related fields without changing other code**.
-
-totally composable.
+TOTALLY COMPOSABLE.
 
 ```python
 # data fetching
@@ -120,7 +118,7 @@ class Sprint(Base.Sprint):
 await Resolver().resolve(sprints)
 ```
 
-compares to ...
+Compares to ...
 
 ```python
 sprint_ids = [s.id for s in sprints]
@@ -155,16 +153,16 @@ for sprint in sprints:
 
 It can reduce the code complexity in the data assembly process, making the code closer to the ER model and more maintainable.
 
+> Using an ER oriented modeling approach, it can provide you with a 3 to 5 times increase in development efficiency and reduce code volume by more than 50%.
+
 With the help of pydantic, it can describe data structures in a graph-like relationship like GraphQL, and can also make adjustments based on business needs while fetching data.
 
-It can easily cooperate with FastAPI to build frontend friendly data structures on the backend and provide them to the frontend in the form of a TypeScript SDK.
+It can easily run with FastAPI to build frontend friendly data structures on the backend and provide them to the frontend in the form of a TypeScript SDK.
 
-> Using an ERD-oriented modeling approach, it can provide you with a 3 to 5 times increase in development efficiency and reduce code volume by more than 50%.
+Basically it just provides resolve and post methods for pydantic and dataclass objects.
 
-It provides resolve and post methods for pydantic objects.
-
-- resolve is usually used to fetch data
-- post can be used to do additional processing after fetching data
+- resolve is used to fetch data
+- post is used to do additional processing after fetching data
 
 And this is a recursive process, the resolve process finishs after all descendants are done.
 
@@ -172,6 +170,7 @@ And this is a recursive process, the resolve process finishs after all descendan
 
 take Sprint, Story and Task for example:
 
+<img src="docs/images/real-sample.png" style="width: 600px"/>
 ![](docs/images/real-sample.png)
 
 When the object methods are defined and the objects are initialized, pydantic-resolve will internally traverse the data, execute these methods to process the data, and finally obtain all the data.
