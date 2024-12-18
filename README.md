@@ -7,11 +7,11 @@
 
 pydantic-resolve is a lightweight wrapper library based on pydantic, It adds resolve and post methods to pydantic and dataclass objects.
 
-It aims to provide an more elegant way for data composining, helps developers focusing on the core business logic.
+It aims to provide a more elegant way for data composining, helps developers focusing on the core business logic.
 
 ## Problems to solve
 
-If you have ever written similar code and felt unsatisfied, pydantic-resolve can come in handy.
+If you have ever seen similar code and felt unsatisfied, pydantic-resolve can come in handy.
 
 ```python
 story_ids = [s.id for s in stories]
@@ -28,14 +28,13 @@ for story in stories:
     story.total_done_tasks_time = sum(task.time for task in tasks if task.done)
 ```
 
-this snippet mixed data fetching, traversal, variables and **business logic** together.
+this snippet mixed data fetching, traversal, temp variables and **business logic** together, just for one level of relationships.
 
 pydantic-resolve can help **split them apart**, let you focus on the core business logic.
 
 ```python
 from pydantic_resolve import Resolver, LoaderDepend, build_list
 from aiodataloader import DataLoader
-
 
 # data fetching
 class TaskLoader(DataLoader):
@@ -63,9 +62,19 @@ class Story(Base.Story):
 await Resolver().resolve(stories)
 ```
 
-pydantic-resolve can easily be applied to more complicated scenarios, such as:
+pydantic-resolve can be easily applied to more complicated scenarios, such as:
 
 A list of sprint, each sprint owns a list of story, each story owns a list of task, and do some modifications or calculations.
+
+no more temp variables
+
+no more traversals 
+
+and no more indents
+
+just focus on the target you want to handle, and you can **easily plug in and out the related fields without changing other code**.
+
+totally composable.
 
 ```python
 # data fetching
@@ -93,7 +102,6 @@ class Story(Base.Story):
     def post_total_done_task_time(self):
         return sum(task.time for task in self.tasks if task.done)
 
-
 class Sprint(Base.Sprint):
     stories: List[Story] = []
     def resolve_stories(self, loader=LoaderDepend(StoryLoader)):
@@ -110,6 +118,37 @@ class Sprint(Base.Sprint):
 
 # traversal and execute methods (runner)
 await Resolver().resolve(sprints)
+```
+
+compares to ...
+
+```python
+sprint_ids = [s.id for s in sprints]
+stories = await get_all_stories_by_sprint_id(sprint_ids)
+
+story_ids = [s.id for s in stories]
+tasks = await get_all_tasks_by_story_ids(story_ids)
+
+sprint_stories = defaultdict(list)
+story_tasks = defaultdict(list)
+
+for story in stories:
+    sprint_stories[story.sprint_id].append(story)
+
+for task in tasks:
+    story_tasks[task.story_id].append(task)
+
+for sprint in sprints:
+    stories = sprint_stories.get(sprint.id, [])
+    sprint.stories = stories
+
+    for story in stories:
+        tasks = story_tasks.get(story.id, [])
+        story.total_task_time = sum(task.time for task in tasks)
+        story.total_done_task_time = sum(task.time for task in tasks if task.done)
+
+    sprint.total_time = sum(story.total_task_time for story in stories) 
+    sprint.total_done_time = sum(story.total_done_task_time for story in stories)
 ```
 
 ## Features
@@ -241,12 +280,6 @@ python -m http.server
 
 latest coverage: 97%
 
-## Sponsor
-
-If this code helps and you wish to support me
-
-Paypal: https://www.paypal.me/tangkikodo
-
-## Discussion
+## Hear your voice
 
 [Discord](https://discord.com/channels/1197929379951558797/1197929379951558800)
