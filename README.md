@@ -8,6 +8,7 @@
 pydantic-resolve is a lightweight wrapper library based on pydantic. It adds resolve and post methods to pydantic and dataclass objects.
 
 ## Problems to solve
+
 If you have ever written similar code and felt unsatisfied, pydantic-resolve can come in handy.
 
 ```python
@@ -28,7 +29,6 @@ for story in stories:
 this snippet mixed data fetching, traversal, variables and **business logic** together.
 
 pydantic-resolve can help **split them apart**, let you focus on the core business logic.
-
 
 ```python
 from pydantic_resolve import Resolver, LoaderDepend, build_list
@@ -56,7 +56,7 @@ class Story(Base.Story):
     total_done_task_time: int = 0
     def post_total_done_task_time(self):
         return sum(task.time for task in self.tasks if task.done)
-  
+
 # traversal and execute methods (runner)
 await Resolver().resolve(stories)
 ```
@@ -96,7 +96,7 @@ class Sprint(Base.Sprint):
     stories: List[Story] = []
     def resolve_stories(self, loader=LoaderDepend(StoryLoader)):
         return loader.load(self.id)
-    
+
     total_time: int = 0
     def post_total_time(self):
         return sum(story.total_task_time for story in self.stories)
@@ -104,7 +104,7 @@ class Sprint(Base.Sprint):
     total_done_time: int = 0
     def post_total_done_time(self):
         return sum(story.total_done_task_time for story in self.stories)
-    
+
 
 # traversal and execute methods (runner)
 await Resolver().resolve(sprints)
@@ -125,6 +125,13 @@ It provides resolve and post methods for pydantic objects.
 - resolve is usually used to fetch data
 - post can be used to do additional processing after fetching data
 
+And this is a recursive process, the resolve process finishs after all descendants are done.
+
+![](docs/images/life-cycle.png)
+
+take Sprint, Story and Task for example:
+
+![](docs/images/real-sample.png)
 
 When the object methods are defined and the objects are initialized, pydantic-resolve will internally traverse the data, execute these methods to process the data, and finally obtain all the data.
 
@@ -177,13 +184,13 @@ async def get_author(title: str) -> Person:
 class Person(BaseModel):
     name: str
     age: int
-    
+
 
 class Book(BaseModel):
     title: str
     year: int
     author: Optional[Person] = None
-    
+
     async def resolve_author(self):
         return await get_author(self.title)
 
@@ -191,7 +198,9 @@ books = [Book(**book) for book in books]
 books_with_author = await Resolver().resolve(books)
 
 ```
+
 output
+
 ```python
 [
     Book(title='1984', year=1949, author=Person(name='George Orwell', age=46)),
