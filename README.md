@@ -7,6 +7,8 @@
 
 pydantic-resolve is a lightweight wrapper library based on pydantic. It adds resolve and post methods to pydantic and dataclass objects.
 
+## Problems to solve
+
 If you have ever written similar code and felt unsatisfied, pydantic-resolve can come in handy.
 
 ```python
@@ -24,10 +26,9 @@ for story in stories:
     story.total_done_tasks_time = sum(task.time for task in tasks if task.done)
 ```
 
-this snippet mixed traversal, temp variables, data fetching and business logic together.
+this snippet mixed data fetching, traversal, variables and **business logic** together.
 
 pydantic-resolve can help **split them apart**, let you focus on the core business logic.
-
 
 ```python
 from pydantic_resolve import Resolver, LoaderDepend, build_list
@@ -42,10 +43,12 @@ class TaskLoader(DataLoader):
 
 # core business logics
 class Story(Base.Story):
+    # fetch tasks
     tasks: List[Task] = []
     def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
         return loader.load(self.id)
 
+    # calc after fetched
     total_task_time: int = 0
     def post_total_task_time(self):
         return sum(task.time for task in self.tasks)
@@ -53,7 +56,7 @@ class Story(Base.Story):
     total_done_task_time: int = 0
     def post_total_done_task_time(self):
         return sum(task.time for task in self.tasks if task.done)
-  
+
 # traversal and execute methods (runner)
 await Resolver().resolve(stories)
 ```
@@ -93,7 +96,7 @@ class Sprint(Base.Sprint):
     stories: List[Story] = []
     def resolve_stories(self, loader=LoaderDepend(StoryLoader)):
         return loader.load(self.id)
-    
+
     total_time: int = 0
     def post_total_time(self):
         return sum(story.total_task_time for story in self.stories)
@@ -101,11 +104,13 @@ class Sprint(Base.Sprint):
     total_done_time: int = 0
     def post_total_done_time(self):
         return sum(story.total_done_task_time for story in self.stories)
-    
+
 
 # traversal and execute methods (runner)
 await Resolver().resolve(sprints)
 ```
+
+## Features
 
 It can reduce the code complexity in the data assembly process, making the code closer to the ER model and more maintainable.
 
@@ -120,6 +125,13 @@ It provides resolve and post methods for pydantic objects.
 - resolve is usually used to fetch data
 - post can be used to do additional processing after fetching data
 
+And this is a recursive process, the resolve process finishs after all descendants are done.
+
+![](docs/images/life-cycle.png)
+
+take Sprint, Story and Task for example:
+
+![](docs/images/real-sample.png)
 
 When the object methods are defined and the objects are initialized, pydantic-resolve will internally traverse the data, execute these methods to process the data, and finally obtain all the data.
 
@@ -172,13 +184,13 @@ async def get_author(title: str) -> Person:
 class Person(BaseModel):
     name: str
     age: int
-    
+
 
 class Book(BaseModel):
     title: str
     year: int
     author: Optional[Person] = None
-    
+
     async def resolve_author(self):
         return await get_author(self.title)
 
@@ -186,7 +198,9 @@ books = [Book(**book) for book in books]
 books_with_author = await Resolver().resolve(books)
 
 ```
+
 output
+
 ```python
 [
     Book(title='1984', year=1949, author=Person(name='George Orwell', age=46)),
