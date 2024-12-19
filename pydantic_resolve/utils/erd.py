@@ -31,7 +31,7 @@ html_template = """
 
     <style type="text/css">
       #mynetwork {
-        width: 1200px;
+        width: 100%;
         height: 800px;
         border: 1px solid lightgray;
       }
@@ -68,44 +68,60 @@ html_template = """
 </html>
 """
 
-class Tree(BaseModel):
-    id: int
-    name: str
-    children: list['Tree']
-
-class Product(BaseModel):
+class Project(BaseModel):
     id: int
     name: str
 
-class Order(BaseModel):
+class Team(BaseModel):
     id: int
-    product_id: int
     name: str
 
-class Buyer(BaseModel):
+
+class Event(BaseModel):
     id: int
-    order_id: int
     name: str
 
-class Snap(BaseModel):
+class Milestone(BaseModel):
     id: int
-    order_id: int
     name: str
 
-class History(BaseModel):
+class ProjectChangeLog(BaseModel):
     id: int
-    product_id: int
+    content: str
+
+class MeetingNote(BaseModel):
+    id: int
+    title: str
+    content: str
+
+class MeetingNoteAttendee(BaseModel):
+    id: int
+    name: str
+
+class MeetingNoteFollowup(BaseModel):
+    id: int
+    name: str
+
+class Service(BaseModel):
+    id: int
+    name: str
+
+class ServiceAdopt(BaseModel):
+    id: int
     name: str
 
 def get_data():
     counter = 1
     definitions = [
-        dict(source=Tree, target=Tree, field='id'),
-        dict(source=Product, target=Tree, field='product_id'),
-        dict(source=Product, target=Order, field='product_id'),
-        dict(source=Product, target=History, field='product_id'),
-        dict(source=Order, target=Buyer, field='order_id'),
-        dict(source=Order, target=Snap, field='order_id'),
+        dict(source=Project, target=Event, field='owns'),
+        dict(source=Project, target=Milestone, field='owns'),
+        dict(source=Project, target=ProjectChangeLog, field='generate'),
+        dict(source=Project, target=MeetingNote, field='owns'),
+        dict(source=MeetingNote, target=MeetingNoteAttendee, field='has'),
+        dict(source=MeetingNote, target=MeetingNoteFollowup, field='has'),
+        dict(source=Team, target=Service, field='manage'),
+        dict(source=Project, target=ServiceAdopt, field='has'),
+        dict(source=Service, target=ServiceAdopt, field='belong'),
     ]
 
     node_map = {}
