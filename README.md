@@ -7,7 +7,7 @@
 
 pydantic-resolve is a lightweight wrapper library based on pydantic, It adds resolve and post methods to pydantic and dataclass objects.
 
-It aims to provide a more elegant way for data composining, helps developers focusing on the core business logic.
+It aims to provide a more elegant way for data composing, helps developers focusing on the core business logic.
 
 ## Problems to solve
 
