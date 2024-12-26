@@ -9,6 +9,15 @@ pydantic-resolve is a lightweight wrapper library based on pydantic, It adds res
 
 It aims to provide a more elegant way for data composing, helps developers focusing on the core business logic.
 
+
+## Installation
+
+```
+pip install pydantic-resolve
+```
+
+Starting from pydantic-resolve v1.11.0, it is compatible with both pydantic v1 and v2.
+
 ## Problems to solve
 
 If you have ever seen similar code and felt unsatisfied, pydantic-resolve can come in handy.
@@ -181,13 +190,6 @@ Using DataLoader also allows the defined class fragments to be reused in any loc
 
 In addition, it also provides expose and collector mechanisms to facilitate cross-layer data processing.
 
-## Installation
-
-```
-pip install pydantic-resolve
-```
-
-Starting from pydantic-resolve v1.11.0, it will be compatible with both pydantic v1 and v2.
 
 ## Hello world sample
 
