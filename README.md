@@ -20,7 +20,7 @@ Starting from pydantic-resolve v1.11.0, it is compatible with both pydantic v1 a
 
 ## Problems to solve
 
-If you have ever seen similar code and felt unsatisfied, pydantic-resolve can come in handy.
+We sometimes need to write some code to fetch, compose and modify data together, here is an example of one level of relationships of Story and Task
 
 ```python
 story_ids = [s.id for s in stories]
@@ -37,9 +37,13 @@ for story in stories:
     story.total_done_tasks_time = sum(task.time for task in tasks if task.done)
 ```
 
-This snippet mixed data fetching, traversal, temp variables and **business logic** together, just for one level of relationships.
+This snippet includes data fetching, composing, traversal, temp variables and **business logic**
 
-pydantic-resolve can help **split them apart**, let you focus on the core business logic.
+the code could be simified if we can get rid of those fetching, composing and traversal, just focus on **business logic**
+
+pydantic-resolve can help **split them apart**, dedicate the fetching to Dataloader, handle the traversal internally, let you focus on the core **business logic**.
+
+the snippet below shows how pydantic-resolve works, the business logic is concentrated in each bussiness object, we just need to describe how to load data with Dataloader and how to calculate after data are ready.
 
 ```python
 from pydantic_resolve import Resolver, LoaderDepend, build_list
@@ -127,7 +131,7 @@ class Sprint(Base.Sprint):
 await Resolver().resolve(sprints)
 ```
 
-Compares to ...
+Compares to traditional way:
 
 ```python
 sprint_ids = [s.id for s in sprints]
