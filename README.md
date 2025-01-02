@@ -20,7 +20,7 @@ Starting from pydantic-resolve v1.11.0, it is compatible with both pydantic v1 a
 
 ## Problems to solve
 
-Starting from a list of story, first we need to fetch tasks of each story and then do some business calculation based on tasks.  
+Starting from a list of story, first we fetch tasks for each story and then do some business calculation.
 
 ```python
 story_ids = [s.id for s in stories]
@@ -37,7 +37,7 @@ for story in stories:
     story.total_done_tasks_time = sum(task.time for task in tasks if task.done)
 ```
 
-In this code we need to handle the tasks query, copmosing (tasks group by story) and then the final business calculation. 
+In this code we need to handle the tasks querying, copmosing (tasks group by story) and then the final business calculation. 
 
 Here are some problems:
 
@@ -77,9 +77,13 @@ for sprint in sprints:
     sprint.total_done_time = sum(story.total_done_task_time for story in stories)
 ```
 
+Even worse.
+
 We spend quite a lot of code for querying and composing the data, and the business calculation is mixed with for loops.
 
-> It use breadth first approach to minize the number of queries.
+> breadth first approach is used to minize the number of queries.
+
+## Solution
 
 The code could be simified if we can get rid of these querying and composing, let pydantic-resolve handle it, even the for loops.
 
