@@ -89,7 +89,7 @@ The code could be simified if we can get rid of these querying and composing, le
 
 pydantic-resolve can help **split them apart**, dedicate the querying and composing to Dataloader, handle the traversal internally
 
-Then you can focus on the **business calculation**.
+Then we can focus on the **business calculation**.
 
 ```python
 from pydantic_resolve import Resolver, LoaderDepend, build_list
@@ -172,14 +172,14 @@ No more indent, no more temp helper variables, no more for loops (and indents)
 > why not using ORM relationship for querying and composing?
 > 
 > Dataloader is a general interface for different implemetations
-> If the ORM has provided the related data, you just need to simply remove the resolve_method and dataloder.
+> If the ORM has provided the related data, we just need to simply remove the resolve_method and dataloder.
 
 
 ## Features
 
 It can reduce the code complexity in the data assembly process, making the code closer to the ER model and more maintainable.
 
-> Using an ER oriented modeling approach, it can provide you with a 3 to 5 times increase in development efficiency and reduce code volume by more than 50%.
+> Using an ER oriented modeling approach, it can provide us with a 3 to 5 times increase in development efficiency and reduce code volume by more than 50%.
 
 With the help of pydantic, it can describe data structures in a graph-like relationship like GraphQL, and can also make adjustments based on business needs while fetching data.
 
