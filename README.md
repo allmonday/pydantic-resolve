@@ -20,7 +20,7 @@ Starting from pydantic-resolve v1.11.0, it is compatible with both pydantic v1 a
 
 ## Problems to solve
 
-We sometimes need to write some code to fetch, compose and modify data together, here is an example of one level of relationships of Story and Task
+Starting from a list of story, first we need to fetch tasks of each story and then do some business calculation based on tasks.  
 
 ```python
 story_ids = [s.id for s in stories]
@@ -37,19 +37,61 @@ for story in stories:
     story.total_done_tasks_time = sum(task.time for task in tasks if task.done)
 ```
 
-This snippet includes data fetching, composing, traversal, temp variables and **business logic**
+In this code we need to handle the tasks query, copmosing (tasks group by story) and then the final business calculation. 
 
-the code could be simified if we can get rid of those fetching, composing and traversal, just focus on **business logic**
+Here are some problems:
 
-pydantic-resolve can help **split them apart**, dedicate the fetching to Dataloader, handle the traversal internally, let you focus on the core **business logic**.
+- Temp variables are defined, however they are useless from the view of the business calculation. 
+- The business logic is located insde a for indent. 
+- The composing code is boring.
 
-the snippet below shows how pydantic-resolve works, the business logic is concentrated in each bussiness object, we just need to describe how to load data with Dataloader and how to calculate after data are ready.
+
+What will happen if we add one more level, for example, add sprint.
+
+```python
+sprint_ids = [s.id for s in sprints]
+stories = await get_all_stories_by_sprint_id(sprint_ids)
+
+story_ids = [s.id for s in stories]
+tasks = await get_all_tasks_by_story_ids(story_ids)
+
+sprint_stories = defaultdict(list)
+story_tasks = defaultdict(list)
+
+for story in stories:
+    sprint_stories[story.sprint_id].append(story)
+
+for task in tasks:
+    story_tasks[task.story_id].append(task)
+
+for sprint in sprints:
+    stories = sprint_stories.get(sprint.id, [])
+    sprint.stories = stories
+
+    for story in stories:
+        tasks = story_tasks.get(story.id, [])
+        story.total_task_time = sum(task.time for task in tasks)
+        story.total_done_task_time = sum(task.time for task in tasks if task.done)
+
+    sprint.total_time = sum(story.total_task_time for story in stories) 
+    sprint.total_done_time = sum(story.total_done_task_time for story in stories)
+```
+
+We spend quite a lot of code for querying and composing the data, and the business calculation is mixed with for loops.
+
+> It use breadth first approach to minize the number of queries.
+
+The code could be simified if we can get rid of these querying and composing, let pydantic-resolve handle it, even the for loops.
+
+pydantic-resolve can help **split them apart**, dedicate the querying and composing to Dataloader, handle the traversal internally
+
+Then you can focus on the **business calculation**.
 
 ```python
 from pydantic_resolve import Resolver, LoaderDepend, build_list
 from aiodataloader import DataLoader
 
-# data fetching
+# data fetching, dataloader will group the tasks by story.
 class TaskLoader(DataLoader):
     async def batch_load_fn(self, story_ids):
         tasks = await get_all_tasks_by_story_ids(story_ids)
@@ -57,12 +99,12 @@ class TaskLoader(DataLoader):
 
 # core business logics
 class Story(Base.Story):
-    # fetch tasks
+    # fetch tasks with dataloader in resolve_method
     tasks: List[Task] = []
     def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
         return loader.load(self.id)
 
-    # calc after fetched
+    # calc after fetched, with post_method
     total_task_time: int = 0
     def post_total_task_time(self):
         return sum(task.time for task in self.tasks)
@@ -75,17 +117,7 @@ class Story(Base.Story):
 await Resolver().resolve(stories)
 ```
 
-pydantic-resolve can be easily applied to more complicated scenarios, such as:
-
-A list of sprint, each sprint owns a list of story, each story owns a list of task, and do some modifications or calculations.
-
-- no more temp variables
-- no more traversals 
-- no more indents
-
-Just focus on the target you want to handle, and you can **easily plug in and out the related fields without changing other code**.
-
-TOTALLY COMPOSABLE.
+for the second scenario:
 
 ```python
 # data fetching
@@ -131,36 +163,13 @@ class Sprint(Base.Sprint):
 await Resolver().resolve(sprints)
 ```
 
-Compares to traditional way:
+No more indent, no more temp helper variables, no more for loops (and indents)
 
-```python
-sprint_ids = [s.id for s in sprints]
-stories = await get_all_stories_by_sprint_id(sprint_ids)
+> why not using ORM relationship for querying and composing?
+> 
+> Dataloader is a general interface for different implemetations
+> If the ORM has provided the related data, you just need to simply remove the resolve_method and dataloder.
 
-story_ids = [s.id for s in stories]
-tasks = await get_all_tasks_by_story_ids(story_ids)
-
-sprint_stories = defaultdict(list)
-story_tasks = defaultdict(list)
-
-for story in stories:
-    sprint_stories[story.sprint_id].append(story)
-
-for task in tasks:
-    story_tasks[task.story_id].append(task)
-
-for sprint in sprints:
-    stories = sprint_stories.get(sprint.id, [])
-    sprint.stories = stories
-
-    for story in stories:
-        tasks = story_tasks.get(story.id, [])
-        story.total_task_time = sum(task.time for task in tasks)
-        story.total_done_task_time = sum(task.time for task in tasks if task.done)
-
-    sprint.total_time = sum(story.total_task_time for story in stories) 
-    sprint.total_done_time = sum(story.total_done_task_time for story in stories)
-```
 
 ## Features
 
