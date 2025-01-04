@@ -7,7 +7,7 @@
 
 pydantic-resolve is a lightweight wrapper library based on pydantic, It adds resolve and post methods to pydantic and dataclass objects.
 
-It aims to provide a more elegant way for data composing, helps developers focusing on the core business logic.
+It aims to provide an elegant way for data composing, helps developers focusing on the business part.
 
 
 ## Installation
@@ -16,11 +16,11 @@ It aims to provide a more elegant way for data composing, helps developers focus
 pip install pydantic-resolve
 ```
 
-Starting from pydantic-resolve v1.11.0, it is compatible with both pydantic v1 and v2.
+Starting from pydantic-resolve v1.11.0, it suports both pydantic v1 and v2.
 
 ## Problems to solve
 
-Starting from a list of story, first we fetch tasks for each story and then do some business calculation.
+Take story and task for example, we fetch tasks and group for each story and then do some business calculation.
 
 ```python
 story_ids = [s.id for s in stories]
@@ -37,16 +37,15 @@ for story in stories:
     story.total_done_tasks_time = sum(task.time for task in tasks if task.done)
 ```
 
-In this code we need to handle the tasks querying, copmosing (tasks group by story) and then the final business calculation. 
+In this code we handled the tasks querying, copmosing (tasks group by story) and then the final business calculation. 
 
-Here are some problems:
+But there are some problems:
 
-- Temp variables are defined, however they are useless from the view of the business calculation. 
-- The business logic is located insde a for indent. 
-- The composing code is boring.
+- Temp variables are defined however they are useless from the view of the business calculation. 
+- The business logic is located insde `for` indent. 
+- The composing part is boring.
 
-
-What will happen if we add one more level, for example, add sprint.
+If we add one more layer, for example, add sprint, it gets worse
 
 ```python
 sprint_ids = [s.id for s in sprints]
@@ -77,9 +76,7 @@ for sprint in sprints:
     sprint.total_done_time = sum(story.total_done_task_time for story in stories)
 ```
 
-Even worse.
-
-We spend quite a lot of code for querying and composing the data, and the business calculation is mixed with for loops.
+It spends quite a lot of code just for querying and composing the data, and the business calculation is mixed within for loops.
 
 > breadth first approach is used to minize the number of queries.
 
@@ -89,7 +86,7 @@ The code could be simified if we can get rid of these querying and composing, le
 
 pydantic-resolve can help **split them apart**, dedicate the querying and composing to Dataloader, handle the traversal internally
 
-Then we can focus on the **business calculation**.
+So that we can focus on the **business calculation**.
 
 ```python
 from pydantic_resolve import Resolver, LoaderDepend, build_list
@@ -167,7 +164,9 @@ class Sprint(Base.Sprint):
 await Resolver().resolve(sprints)
 ```
 
-No more indent, no more temp helper variables, no more for loops (and indents)
+No more indent, no more temp helper variables, no more for loops (and indents).
+
+All the relationships and traversal is defined by pydantic/ dataclass class.
 
 > why not using ORM relationship for querying and composing?
 > 
@@ -177,9 +176,9 @@ No more indent, no more temp helper variables, no more for loops (and indents)
 
 ## Features
 
-It can reduce the code complexity in the data assembly process, making the code closer to the ER model and more maintainable.
+It can reduce the code complexity during the data composition, making the code close to the ER model and then more maintainable.
 
-> Using an ER oriented modeling approach, it can provide us with a 3 to 5 times increase in development efficiency and reduce code volume by more than 50%.
+> Using an ER oriented modeling approach, it can provide us with a 3 to 5 times increase in development efficiency and reduce code by more than 50%.
 
 With the help of pydantic, it can describe data structures in a graph-like relationship like GraphQL, and can also make adjustments based on business needs while fetching data.
 
@@ -197,7 +196,6 @@ And this is a recursive process, the resolve process finishs after all descendan
 take Sprint, Story and Task for example:
 
 <img src="docs/images/real-sample.png" style="width: 600px"/>
-![](docs/images/real-sample.png)
 
 When the object methods are defined and the objects are initialized, pydantic-resolve will internally traverse the data, execute these methods to process the data, and finally obtain all the data.
 
@@ -282,6 +280,7 @@ await asyncio.gather(*[handle_author(book) for book in books])
 
 ## Documents
 
+- **Doc**: https://allmonday.github.io/pydantic-resolve/v2/introduction/
 - **Demo**: https://github.com/allmonday/pydantic-resolve-demo
 - **Composition oriented pattern**: https://github.com/allmonday/composition-oriented-development-pattern
 
