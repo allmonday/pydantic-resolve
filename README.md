@@ -7,7 +7,7 @@
 
 pydantic-resolve is a lightweight wrapper library based on pydantic, It adds resolve and post methods to pydantic and dataclass objects.
 
-It aims to provide an elegant way for data composing, helps developers focusing on the business part.
+It aims to provide an elegant way for data composition, helps developers focusing on the business part.
 
 
 ## Installation
@@ -37,13 +37,13 @@ for story in stories:
     story.total_done_tasks_time = sum(task.time for task in tasks if task.done)
 ```
 
-In this code we handled the tasks querying, copmosing (tasks group by story) and then the final business calculation. 
+In this code we handled the tasks querying, composing (tasks group by story) and then the final business calculation. 
 
 But there are some problems:
 
 - Temp variables are defined however they are useless from the view of the business calculation. 
 - The business logic is located insde `for` indent. 
-- The composing part is boring.
+- The composition part is boring.
 
 If we add one more layer, for example, add sprint, it gets worse
 
