@@ -135,6 +135,8 @@ class Story(Base.Story):
         return sum(task.time for task in self.tasks if task.done)
 
 # traversal and execute methods (runner)
+# query root data
+stories: List[Story] = await query_stories()
 await Resolver().resolve(stories)
 ```
 
@@ -181,6 +183,8 @@ class Sprint(Base.Sprint):
 
 
 # traversal and execute methods (runner)
+# query root data
+sprints: List[Sprint] = await query_sprints()
 await Resolver().resolve(sprints)
 ```
 
