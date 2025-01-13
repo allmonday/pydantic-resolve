@@ -24,11 +24,15 @@ A typical flow of data composition contains steps of:
 
 1. query root data (single item or array of items)
 2. query related data a, b, c ...
-3. modify the data, from leaf data to root data
+3. modify data, from leaf data to root data
 
 Take story and task for example, we fetch tasks and group for each story and then do some business calculation.
 
 ```python
+# 1. query root data
+stories = await query_stories()
+
+# 2. query related data
 story_ids = [s.id for s in stories]
 tasks = await get_all_tasks_by_story_ids(story_ids)
 
@@ -39,6 +43,8 @@ for task in tasks:
 
 for story in stories:
     tasks = story_tasks.get(story.id, [])
+
+    # 3. modify data
     story.total_task_time = sum(task.time for task in tasks)
     story.total_done_tasks_time = sum(task.time for task in tasks if task.done)
 ```
@@ -54,9 +60,14 @@ But there are some problems:
 If we add one more layer, for example, add sprint, it gets worse
 
 ```python
+# 1. query root data
+sprints = await query_sprints()
+
+# 2-1. query related data, stories
 sprint_ids = [s.id for s in sprints]
 stories = await get_all_stories_by_sprint_id(sprint_ids)
 
+# 2-2. query related data, tasks
 story_ids = [s.id for s in stories]
 tasks = await get_all_tasks_by_story_ids(story_ids)
 
@@ -75,9 +86,12 @@ for sprint in sprints:
 
     for story in stories:
         tasks = story_tasks.get(story.id, [])
+
+        # 3-1. modify data
         story.total_task_time = sum(task.time for task in tasks)
         story.total_done_task_time = sum(task.time for task in tasks if task.done)
 
+    # 3-2. modify data
     sprint.total_time = sum(story.total_task_time for story in stories) 
     sprint.total_done_time = sum(story.total_done_task_time for story in stories)
 ```
