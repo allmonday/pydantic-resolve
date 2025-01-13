@@ -20,6 +20,12 @@ Starting from pydantic-resolve v1.11.0, it suports both pydantic v1 and v2.
 
 ## Problems to solve
 
+A typical flow of data composition contains steps of: 
+
+1. query root data (single item or array of items)
+2. query related data a, b, c ...
+3. modify the data, from leaf data to root data
+
 Take story and task for example, we fetch tasks and group for each story and then do some business calculation.
 
 ```python
