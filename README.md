@@ -5,9 +5,36 @@
 
 <img style="width:420px;" src="./docs/images/resolver.png"></img>
 
-pydantic-resolve is a lightweight wrapper library based on pydantic, It adds resolve and post methods to pydantic and dataclass objects.
+Based on the ER model, use pydantic-resolve to flexibly assemble data, most user-friendly Python BFF tool ever.
 
-It aims to provide an elegant way for data composition, helps developers focusing on the business part.
+You simply need to declare the new fields you require, add a dataloader, and then you can effortlessly extend your data.
+
+```python
+from pydantic import BaseModel
+from pydantic_resolve import Resolver, build_list
+from aiodataloader import DataLoader
+
+class TaskLoader(DataLoader):
+    async def batch_load_fn(self, story_ids):
+        tasks = await get_tasks_by_ids(story_ids)
+        return build_list(tasks, story_ids, lambda t: t.story_id)
+
+class Task(BaseModel):
+    id: int
+    story_id: int
+    name: str
+
+class Story(BaseModel):
+    id: int
+    name: str
+
+    tasks: list[Task] = []
+    def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
+        return loader.load(self.id)
+
+stories = await get_stories()
+stories = await Resolver().resolve(stories)     
+```
 
 
 ## Installation
