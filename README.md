@@ -32,7 +32,8 @@ class Story(BaseModel):
     def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
         return loader.load(self.id)
 
-stories = await get_stories()
+stories = await get_raw_stories()
+stories = [Story(**s) for s in stories)]
 stories = await Resolver().resolve(stories)     
 ```
 
