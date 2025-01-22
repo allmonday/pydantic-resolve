@@ -5,9 +5,9 @@
 
 <img style="width:420px;" src="./docs/images/resolver.png"></img>
 
-Based on the ER model, use pydantic-resolve to flexibly assemble data, most user-friendly Python BFF tool ever.
+Based on the ER model, use pydantic-resolve to flexibly assemble data, the most user-friendly Python BFF tool ever.
 
-You simply need to declare the new fields you require, add a dataloader, and then you can effortlessly extend your data.
+You simply declare the new fields required, add a dataloader, and then it will effortlessly extend your data.
 
 ```python
 from pydantic import BaseModel
