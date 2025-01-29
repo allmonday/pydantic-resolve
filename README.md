@@ -37,6 +37,25 @@ stories = [Story(**s) for s in stories)]
 stories = await Resolver().resolve(stories)     
 ```
 
+As a tool for data composition, it would not be fancy if it only supports mounting related data, pydantic-resolve provides an extra life cycle hooks for post method.
+
+You'll be able to adjust the fields immediately after all the resolve processes finish, and it has many useful params, it even supports async. 
+
+```python
+class Story(BaseModel):
+    id: int
+    name: str
+
+    tasks: list[Task] = []
+    def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
+        return loader.load(self.id)
+
+    ratio: float = 0
+    def post_ratio(self):
+        return len([t for t in tasks if task.done is True]) / len(self.tasks) 
+```
+
+
 
 ## Installation
 
