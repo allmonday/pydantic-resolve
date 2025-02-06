@@ -5,9 +5,11 @@
 
 <img style="width:420px;" src="./docs/images/resolver.png"></img>
 
-Based on the ER model, use pydantic-resolve to flexibly assemble data, the most user-friendly Python BFF tool ever.
+pydantic-resolve is a tool helps to flexibly assemble data together, it might be the most developer friendly Python BFF tool ever.
 
-You simply declare the new fields required, add a dataloader, and then it will effortlessly extend your data.
+You just simply declare the new fields required, add a dataloader (batch query) based on their relationships, and then it will effortlessly extend your data.
+
+> For FastAPI user, if you are used to treating pydantic models as business entities, using pydantic-resolve can helps greatly.
 
 ```python
 from pydantic import BaseModel
