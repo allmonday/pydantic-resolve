@@ -9,11 +9,9 @@ pydantic-resolve is a tool helps to flexibly assemble data together, it might be
 
 By prioritizing the definition of Pydantic or dataclass before defining the specific persistent layer model, you can achieve excellent code flexibility & Good maintainability.
 
-Then you will gain excellent flexibility in data composition.
-
 Dataloader provides a universal method to associate data without worrying about N+1 queries.
 
-pydantic-resolve itself offers a series of tools to meet various needs in data composition.
+pydantic-resolve itself also offers a series of tools to deal with various needs happens in data composition.
 
 
 ```python
