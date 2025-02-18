@@ -15,8 +15,6 @@ Dataloader provides a universal method to associate data without worrying about 
 
 pydantic-resolve itself offers a series of tools to meet various needs in data composition.
 
-![](https://blog.cleancoder.com/uncle-bob/images/2012-08-13-the-clean-architecture/CleanArchitecture.jpg)
-
 
 ```python
 from pydantic import BaseModel
