@@ -5,11 +5,18 @@
 
 <img style="width:420px;" src="./docs/images/resolver.png"></img>
 
-pydantic-resolve is a tool helps to flexibly assemble data together, it might be the most developer friendly Python BFF tool ever.
+pydantic-resolve is a tool helps to flexibly assemble data together, it might be the most intuitive one.
 
-You just simply declare the new fields required, add a dataloader (batch query) based on their relationships, and then it will effortlessly extend your data.
+By prioritizing the definition of Pydantic or dataclass before defining the specific persistent layer model, you can achieve excellent code flexibility & Good maintainability.
 
-> For FastAPI user, if you are used to treating pydantic models as business entities, using pydantic-resolve can helps greatly.
+Then you will gain excellent flexibility in data composition.
+
+Dataloader provides a universal method to associate data without worrying about N+1 queries.
+
+pydantic-resolve itself offers a series of tools to meet various needs in data composition.
+
+![](https://blog.cleancoder.com/uncle-bob/images/2012-08-13-the-clean-architecture/CleanArchitecture.jpg)
+
 
 ```python
 from pydantic import BaseModel
