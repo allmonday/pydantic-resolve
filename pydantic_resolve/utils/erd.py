@@ -12,7 +12,7 @@ from pydantic_resolve.utils.class_util import get_keys
 PORT = 8001
 
 # 定义 HTML 内容
-html_template = """
+HTML_TEMPLATE = """
 
 <!DOCTYPE html>
 <html lang="en">
@@ -68,61 +68,8 @@ html_template = """
 </html>
 """
 
-class Project(BaseModel):
-    id: int
-    name: str
-
-class Team(BaseModel):
-    id: int
-    name: str
-
-
-class Event(BaseModel):
-    id: int
-    name: str
-
-class Milestone(BaseModel):
-    id: int
-    name: str
-
-class ProjectChangeLog(BaseModel):
-    id: int
-    content: str
-
-class MeetingNote(BaseModel):
-    id: int
-    title: str
-    content: str
-
-class MeetingNoteAttendee(BaseModel):
-    id: int
-    name: str
-
-class MeetingNoteFollowup(BaseModel):
-    id: int
-    name: str
-
-class Service(BaseModel):
-    id: int
-    name: str
-
-class ServiceAdopt(BaseModel):
-    id: int
-    name: str
-
-def get_data():
+def process_definitions(definitions):
     counter = 1
-    definitions = [
-        dict(source=Project, target=Event, field='owns'),
-        dict(source=Project, target=Milestone, field='owns'),
-        dict(source=Project, target=ProjectChangeLog, field='generate'),
-        dict(source=Project, target=MeetingNote, field='owns'),
-        dict(source=MeetingNote, target=MeetingNoteAttendee, field='has'),
-        dict(source=MeetingNote, target=MeetingNoteFollowup, field='has'),
-        dict(source=Team, target=Service, field='manage'),
-        dict(source=Project, target=ServiceAdopt, field='has'),
-        dict(source=Service, target=ServiceAdopt, field='belong'),
-    ]
 
     node_map = {}
     nodes = []
@@ -172,58 +119,106 @@ def get_data():
     return data
 
 
-data = get_data()
+def serve(definitions):
+    data = process_definitions(definitions)
+    class MyRequestHandler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            try:
+                if self.path == '/':
+                    # 设置响应状态码和头部
+                    self.send_response(200)
+                    self.send_header("Content-type", "text/html")
+                    self.end_headers()
+                    self.wfile.write(HTML_TEMPLATE.encode('utf-8'))
 
-# 创建一个请求处理器类
-class MyRequestHandler(http.server.BaseHTTPRequestHandler):
-    def do_GET(self):
-        try:
-            if self.path == '/':
-                # 设置响应状态码和头部
-                self.send_response(200)
-                self.send_header("Content-type", "text/html")
-                self.end_headers()
-                self.wfile.write(html_template.encode('utf-8'))
+                elif self.path == '/api/data':
+                    self.send_response(200)
+                    self.send_header("Content-type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps(data).encode('utf-8'))
 
-            elif self.path == '/api/data':
-                self.send_response(200)
-                self.send_header("Content-type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps(data).encode('utf-8'))
+                else:
+                    self.send_error(404, "File Not Found")
+            except BrokenPipeError:
+                self.send_error(500, 'borken pipeline')
+        # 设置处理器
+    Handler = MyRequestHandler
+    class ReusableTCPServer(socketserver.ThreadingTCPServer):
+        allow_reuse_address = True
 
-            else:
-                self.send_error(404, "File Not Found")
-        except BrokenPipeError:
-            self.send_error(500, 'borken pipeline')
+    # 创建服务器
+    httpd = ReusableTCPServer(("", PORT), Handler)
 
-# 设置处理器
-Handler = MyRequestHandler
+    shutdown_event = threading.Event()
 
-class ReusableTCPServer(socketserver.ThreadingTCPServer):
-    allow_reuse_address = True
+    def control_thread_t():
+        input("Press Enter to shutdown the server...\n")
+        shutdown_event.set()
+        httpd.shutdown()
+        httpd.server_close()
+        print('port released')
+    print(f"Serving at port {PORT}")
 
-# 创建服务器
-httpd = ReusableTCPServer(("", PORT), Handler)
+    server_thread = threading.Thread(target=httpd.serve_forever)
+    server_thread.start()
+
+    control_thread = threading.Thread(target=control_thread_t)
+    control_thread.start()
+    server_thread.join()
+
+if __name__ == '__main__':
+    class Project(BaseModel):
+        id: int
+        name: str
+
+    class Team(BaseModel):
+        id: int
+        name: str
 
 
-shutdown_event = threading.Event()
+    class Event(BaseModel):
+        id: int
+        name: str
 
-def control_thread_t():
-    input("Press Enter to shutdown the server...\n")
-    shutdown_event.set()
-    print('set')
-    httpd.shutdown()
-    httpd.server_close()
-    print('released')
+    class Milestone(BaseModel):
+        id: int
+        name: str
 
-print(f"Serving at port {PORT}")
+    class ProjectChangeLog(BaseModel):
+        id: int
+        content: str
 
-server_thread = threading.Thread(target=httpd.serve_forever)
-server_thread.start()
+    class MeetingNote(BaseModel):
+        id: int
+        title: str
+        content: str
 
-control_thread = threading.Thread(target=control_thread_t)
-control_thread.start()
+    class MeetingNoteAttendee(BaseModel):
+        id: int
+        name: str
 
-server_thread.join()
+    class MeetingNoteFollowup(BaseModel):
+        id: int
+        name: str
 
-print('end')
+    class Service(BaseModel):
+        id: int
+        name: str
+
+    class ServiceAdopt(BaseModel):
+        id: int
+        name: str
+
+    definitions = [
+        dict(source=Project, target=Event, field='owns'),
+        dict(source=Project, target=Milestone, field='owns'),
+        dict(source=Project, target=ProjectChangeLog, field='generate'),
+        dict(source=Project, target=MeetingNote, field='owns'),
+        dict(source=MeetingNote, target=MeetingNoteAttendee, field='has'),
+        dict(source=MeetingNote, target=MeetingNoteFollowup, field='has'),
+        dict(source=Team, target=Service, field='manage'),
+        dict(source=Project, target=ServiceAdopt, field='has'),
+        dict(source=Service, target=ServiceAdopt, field='belong'),
+    ]
+
+    serve(definitions)
