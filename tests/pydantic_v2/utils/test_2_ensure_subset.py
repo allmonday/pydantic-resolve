@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 from pydantic import BaseModel
 from pydantic_resolve.utils import class_util
 import pytest
@@ -23,6 +24,11 @@ def test_ensure_subset():
         c: int = 0
         def resolve_c(self):
             return 21
+
+    @class_util.ensure_subset(Base)
+    class ChildB(BaseModel):
+        a: str
+        d: Optional[int]
 
     with pytest.raises(AttributeError):
         @class_util.ensure_subset(Base)
