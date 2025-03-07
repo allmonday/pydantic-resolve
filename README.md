@@ -24,16 +24,17 @@ class TaskLoader(DataLoader):
         tasks = await get_tasks_by_ids(story_ids)
         return build_list(tasks, story_ids, lambda t: t.story_id)
 
-class Task(BaseModel):
+class BaseTask(BaseModel):
     id: int
     story_id: int
     name: str
 
-class Story(BaseModel):
+class BaseStory(BaseModel):
     id: int
     name: str
 
-    tasks: list[Task] = []
+class Story(BaseStory):
+    tasks: list[BaseTask] = []
     def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
         return loader.load(self.id)
 
