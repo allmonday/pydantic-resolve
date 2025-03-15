@@ -5,18 +5,25 @@
 
 <img style="width:420px;" src="./docs/images/resolver.png"></img>
 
-pydantic-resolve is a tool helps to flexibly assemble data together, it might be the most intuitive one， by default it plays best with FastAPI
+pydantic-resolve is a tool helps to flexibly assemble data together, it might be the most intuitive one，by default it plays best with FastAPI.
+ 
+In FastAPI, pydantic plays the role of defining the DTO layer's interface and performing runtime type checking, its definition needs to passively follow the real data source (DB, ORM or API).
 
-In FastAPI, Pydantic plays the role of defining the DTO layer's interface and performing runtime type checking. Its definition needs to passively follow the real data source (DB, ORM or API)
+You have written the database query or API, and then defined a pydantic for this data structure, which makes the definition of pydantic very trivial, difficult to maintain and reuse, and even somewhat redundant.
 
-However, in pydantic-resolve, Pydantic can be used to actively define **ER models**. The database or external interfaces merely serve as data providers for the ER models. Simply through the declaration of Pydantic, data assembly can be achieved.
+>  SQLModel attempts to solve the problem at the database level, but I am still concerned about the approach of binding ORM and pydantic together.
+
+Well, in pydantic-resolve, pydantic should be used to **actively define ER models**. The database or external interfaces merely serve as data providers for the ER models. Simply through the declaration of pydantic, data assembly can be achieved.
 
 The process of using pydantic-resolve to combine data is essentially the process of assembling data through the definition of ER models.
 
 Dataloader provides a universal method to associate data without worrying about N+1 queries.
 
-pydantic-resolve itself also offers a series of tools to deal with various needs happens in data composition.
+Once the query methods for entities and the query methods for entity associations (DataLoaders) are defined, all that remains is to make declarative definitions at the pydantic level. (The query details are encapsulated within methods and DataLoaders.）
 
+Another issue that pydantic-resolve solved is the transformation process of the ER model data into view data, you can use `expose` to expose the data of ancestor nodes to descendant nodes, or use the `collect` tool to gather the final data of descendant nodes into ancestor nodes, thus easily achieving the restructuring of the data schema.
+
+Here's a simple ER model of Story and Task and it's code implementation.
 
 ```python
 from pydantic import BaseModel
