@@ -5,9 +5,13 @@
 
 <img style="width:420px;" src="./docs/images/resolver.png"></img>
 
-pydantic-resolve is a tool helps to flexibly assemble data together, it might be the most intuitive one.
+pydantic-resolve is a tool helps to flexibly assemble data together, it might be the most intuitive one， by default it plays best with FastAPI
 
-By prioritizing the definition of Pydantic or dataclass before defining the specific persistent layer model, you can achieve excellent code flexibility & Good maintainability.
+In FastAPI, Pydantic plays the role of defining the DTO layer's interface and performing runtime type checking. Its definition needs to passively follow the real data source (DB, ORM or API)
+
+However, in pydantic-resolve, Pydantic can be used to actively define **ER models**. The database or external interfaces merely serve as data providers for the ER models. Simply through the declaration of Pydantic, data assembly can be achieved.
+
+The process of using pydantic-resolve to combine data is essentially the process of assembling data through the definition of ER models.
 
 Dataloader provides a universal method to associate data without worrying about N+1 queries.
 
@@ -18,6 +22,22 @@ pydantic-resolve itself also offers a series of tools to deal with various needs
 from pydantic import BaseModel
 from pydantic_resolve import Resolver, build_list
 from aiodataloader import DataLoader
+
+# ER model of story and task
+# ┌───────────┐          
+# │           │          
+# │   story   │          
+# │           │          
+# └─────┬─────┘          
+#       │                
+#       │   owns multiple (TaskLoader)
+#       │                
+#       │                
+# ┌─────▼─────┐          
+# │           │          
+# │   task    │          
+# │           │          
+# └───────────┘
 
 class TaskLoader(DataLoader):
     async def batch_load_fn(self, story_ids):
