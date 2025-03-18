@@ -5,7 +5,7 @@
 
 <img style="width:420px;" src="./docs/images/resolver.png"></img>
 
-pydantic-resolve is a tool helps to flexibly assemble data together, it might be the most intuitive one，by default it plays best with FastAPI.
+pydantic-resolve is a tool helps to flexibly assemble data together, it might be the most intuitive one, it plays pretty well with FastAPI.
  
 In FastAPI, pydantic plays the role of defining the DTO layer's interface and performing runtime type checking, its definition needs to passively follow the real data source (DB, ORM or API).
 
