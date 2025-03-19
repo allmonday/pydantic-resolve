@@ -2,6 +2,12 @@
 
 ## v1.11
 
+### v1.11.6 (2025.3.19)
+
+bug:
+
+- fix debug generate multiple logging due to add handler multiple times in constructor.
+
 ### v1.11.5 (2025.3.19)
 
 bug:
