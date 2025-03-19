@@ -254,7 +254,6 @@ class Resolver:
         if not getattr(method, const.HAS_MAPPER_FUNCTION, False):  # defined in util.mapper
             val = conversion_util.try_parse_data_to_target_field_type(node, trim_field, val)
 
-        val = await self._traverse(val, node)
         setattr(node, trim_field, val)
 
     async def _traverse(self, node: T, parent: object) -> T:

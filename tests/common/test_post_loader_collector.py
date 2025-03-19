@@ -13,10 +13,7 @@ BOOKS = {
 
 class Book(BaseModel):
     __pydantic_resolve_collect__ = {'name': 'name_collector'}
-
     name: str
-    def resolve_name(self):
-        return 'hello_' + self.name
 
 class BookLoader(DataLoader):
     async def batch_load_fn(self, keys) -> List[List[Book]]:
@@ -42,14 +39,17 @@ class Student(BaseModel):
 @pytest.mark.asyncio
 async def test_post_loader_collect_exception():
     """
-    return type defined in post_method can be recursively traversed
-    but the other post_method wont be able to collect from descendant
+    ~~return type defined in post_method can be recursively traversed~~
+    ~~but the other post_method wont be able to collect from descendant~~
+
+    return type defined in post_method will not be recursively traversed any more
+    so collector in post_method will not work
     """
     students = [Student(id=1, name="jack"), Student(id=2, name="mike"), Student(id=3, name="wiki")]
     result = await Resolver().resolve(students)
 
     assert result == [
-        Student(id=1, name='jack', books=[Book(name='hello_book1'), Book(name='hello_book2')], book_names=['hello_book1', 'hello_book2'], book_names_a=[]),
-        Student(id=2, name='mike', books=[Book(name='hello_book3'), Book(name='hello_book4')], book_names=['hello_book3', 'hello_book4'], book_names_a=[]),
-        Student(id=3, name='wiki', books=[Book(name='hello_book1'), Book(name='hello_book2')], book_names=['hello_book1', 'hello_book2'], book_names_a=[]),
+        Student(id=1, name='jack', books=[Book(name='book1'), Book(name='book2')], book_names=[], book_names_a=[]),
+        Student(id=2, name='mike', books=[Book(name='book3'), Book(name='book4')], book_names=[], book_names_a=[]),
+        Student(id=3, name='wiki', books=[Book(name='book1'), Book(name='book2')], book_names=[], book_names_a=[]),
     ]

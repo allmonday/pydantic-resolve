@@ -2,6 +2,13 @@
 
 ## v1.11
 
+### v1.11.5 (2025.3.19)
+
+bug:
+
+- post method should not further resolve the target, it will cause the lost of ancestor using with collector
+- and this behavior also conflicts with the purpose of data adjustment and re-organization only
+
 ### v1.11.4 (2025.3.19)
 
 feature:
