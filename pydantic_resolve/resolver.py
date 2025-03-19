@@ -10,12 +10,15 @@ from types import MappingProxyType
 
 from pydantic_resolve import analysis
 from pydantic_resolve.exceptions import MissingAnnotationError
+from pydantic_resolve.logger import get_logger
 import pydantic_resolve.utils.conversion as conversion_util
 import pydantic_resolve.utils.class_util as class_util
 import pydantic_resolve.constant as const
 
 
 T = TypeVar("T")
+
+logger = get_logger(__name__)
 
 class Resolver:
     def __init__(
@@ -61,17 +64,6 @@ class Resolver:
         self.context = MappingProxyType(context) if context else None
         self.metadata = {}
         self.object_level_collect_alias_map_store: Dict[int, Dict] = {}
-
-        # logger
-        self._set_logger()
-    
-    def _set_logger(self):
-        self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(logging.DEBUG)
-        handler = logging.StreamHandler()
-        formatter = logging.Formatter("[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s")
-        handler.setFormatter(formatter)
-        self.logger.addHandler(handler)
 
     def _validate_loader_instance(self, loader_instances: Dict[Any, Any]):
         for cls, loader in loader_instances.items():
@@ -327,7 +319,7 @@ class Resolver:
         self._add_values_into_collectors(node, kls)
 
         if self.debug:
-            self.logger.debug(f'{kls.__name__:20} -> {time.time() - t} ')
+            logger.debug(f'{kls.__name__:20} -> {time.time() - t} ')
         return node
 
     async def resolve(self, node: T) -> T:
