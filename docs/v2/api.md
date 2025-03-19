@@ -86,7 +86,8 @@ class Resolver:
             loader_params: Optional[Dict[Any, Dict[str, Any]]] = None,
             global_loader_param: Optional[Dict[str, Any]] = None,
             loader_instances: Optional[Dict[Any, Any]] = None,
-            context: Optional[Dict[str, Any]] = None):
+            context: Optional[Dict[str, Any]] = None,
+            debug: bool = False):
 ```
 
 ### loader_params
@@ -109,7 +110,7 @@ Note that if there are multiple sources of parameters:
 
 ```python
 resolver = Resolver(
-    loader_params={ LoaderA: { "param_x": 2 } }, 
+    loader_params={ LoaderA: { "param_x": 2 } },
     global_loader_param={ { "param_x": 1, "param_y": 2 } })
 ```
 
@@ -126,11 +127,16 @@ resolver = Resolver(loader_instances={ LoaderA: loader })
 ```
 
 ### context
+
 Provides global parameters that can be accessed in all resolve and post methods.
 
 ```python
 resolver = Resolver(context={'name': 'tangkikodo'})
 ```
+
+### debug
+
+debug = True will display the time consuming of each nodes.
 
 ## Method Parameter Description
 

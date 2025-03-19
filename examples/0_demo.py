@@ -52,7 +52,7 @@ async def single():
 
 async def batch():
     my_blog_site = MyBlogSite()
-    my_blog_site = await Resolver().resolve(my_blog_site)
+    my_blog_site = await Resolver(debug=True).resolve(my_blog_site)
     print(my_blog_site.json(indent=2))
 
 
