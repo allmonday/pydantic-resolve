@@ -2,6 +2,12 @@
 
 ## v1.11
 
+### v1.11.4 (2025.3.19)
+
+feature:
+
+- add debug field to display time consuming of each node.
+
 ### v1.11.3 (2024.12.12)
 
 - if an object field and its descendants does not has pydantic-resolve related configs, it will be skipped during the traversal.
@@ -18,10 +24,11 @@
 
 ### v1.11.0 (2024.10.24)
 
-- support pydantic v2  (archive lib pydantic2-resolve)
+- support pydantic v2 (archive lib pydantic2-resolve)
 - remove hidden_fields in model_config
 
 ## v1.10
+
 ### v1.10.8 (2024.8.27)
 
 - collector suppor tuple for value
@@ -78,6 +85,7 @@ class Item(BaseModel):
   - create dataloader instance before resolving
 
 ## v1.9
+
 ### v1.9.3 (2024.03.12)
 
 - rename loader_filter -> loader_params
@@ -100,8 +108,8 @@ using old params will have warning messages.
 
 - add `global_loader_filter` for convinence. (thanks Dambre)
 
-
 ## v1.8
+
 ### v1.8.2 (2023.12.20)
 
 - fix corner case of empty list input. `tests/core/test_input.py`
@@ -118,6 +126,7 @@ using old params will have warning messages.
 - `pydantic_resolve.utils` provide several internal `generate_loader` functions.
 
 ## v1.7
+
 ### v1.7.2 (2023.11.16)
 
 - fix overwriting BaseModel.Config.schema_extra in `@input`
@@ -201,6 +210,7 @@ class Foo(BaseModel):
 - add `post_default_handler` for spacial use.
 
 ## v1.5
+
 ### v1.5.2 (2023.7.10)
 
 - fix pydantic annotation related minor issue
@@ -244,6 +254,7 @@ class Foo(BaseModel):
 - recommend: using `mapper` with lambda only
 
 ## v1.4
+
 ### v1.4.1 (2023.7.6)
 
 - minor optimization, iteration of object attributes.
@@ -280,6 +291,7 @@ async def test_resolve_object():
 ```
 
 ## v1.3
+
 ### v1.3.2 (2023.7.4)
 
 - add subset check decorator `ensure_subset`.
@@ -329,6 +341,7 @@ result = await Resolver(loader_instances={FriendLoader: loader}).resolve(root)
 more detail: `tests/resolver/test_20_loader_instance.py`
 
 ## v1.2
+
 ### v1.2.2 (2023.6.21)
 
 - minor adjustment, `build_list` and `build_object` will return iterator instead of list.
@@ -369,6 +382,7 @@ class User(BaseModel):
 ```
 
 ## v1.1
+
 ### v1.1.1 (2023.6.17)
 
 - extend @mapper decorator with target class option, this will call auto_mapping function inside.
@@ -392,6 +406,7 @@ def resolve_comments(self, loader=LoaderDepend(CommentLoader)):
 ```
 
 ## v1.0
+
 ### v1.0.0 (2023.6.11)
 
 - support `batch_load_fn` as params for `LoaderDepend`
@@ -399,6 +414,7 @@ def resolve_comments(self, loader=LoaderDepend(CommentLoader)):
 - `build_object`, `build_list` can be imported from `pydantic_resolve`
 
 ## v0.5
+
 ### v0.5.1 (2023.6.11)
 
 - add helper utils for Dataloader.batch_load_fn `built_list` and `build_object`, see `examples/fastapi_demo/loader.py`
@@ -409,8 +425,8 @@ def resolve_comments(self, loader=LoaderDepend(CommentLoader)):
 - `Resolver.ensure_type`: True will ensure `resolve_*` methods have return annotation.
 - add FastAPI integrated example `examples/fastapi_demo`
 
-
 ## v0.4
+
 ### v0.4.0 (2023.4.6)
 
 - add new install option `pip install "pydantic-resolve[dataloader]" to include `aiodataloader` by default
@@ -419,6 +435,7 @@ def resolve_comments(self, loader=LoaderDepend(CommentLoader)):
 - add `examples/6_sqlalchemy_loaderdepend_global_filter.md` for global filter
 
 ## v0.3
+
 ### v0.3.2 (2023.4.5)
 
 - refact tests, group by `core` and `resolver`

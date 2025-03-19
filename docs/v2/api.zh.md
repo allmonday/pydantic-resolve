@@ -86,7 +86,8 @@ class Resolver:
             loader_params: Optional[Dict[Any, Dict[str, Any]]] = None,
             global_loader_param: Optional[Dict[str, Any]] = None,
             loader_instances: Optional[Dict[Any, Any]] = None,
-            context: Optional[Dict[str, Any]] = None):
+            context: Optional[Dict[str, Any]] = None
+            debug: bool = False):
 ```
 
 ### loader_params
@@ -109,7 +110,7 @@ resolver = Resolver(global_loader_param={ { "param_x": 1, "param_y": 2 } })
 
 ```python
 resolver = Resolver(
-    loader_params={ LoaderA: { "param_x": 2 } }, 
+    loader_params={ LoaderA: { "param_x": 2 } },
     global_loader_param={ { "param_x": 1, "param_y": 2 } })
 ```
 
@@ -126,11 +127,16 @@ resolver = Resolver(loader_instances={ LoaderA: loader })
 ```
 
 ### context
+
 提供全局参数, 在所有的 resolve, post 方法中都可以获取到
 
 ```python
 resolver = Resolver(context={'name': 'tangkikodo'})
 ```
+
+### debug
+
+debug = True 将会开启 logger 输出每个节点的计算总耗时
 
 ## 方法参数说明
 

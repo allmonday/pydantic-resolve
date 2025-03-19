@@ -1,6 +1,8 @@
+import time
 import asyncio
-import contextvars
+import logging
 import warnings
+import contextvars
 from inspect import iscoroutine
 from typing import TypeVar, Dict, Type, Callable, Any, Optional
 from aiodataloader import DataLoader
@@ -24,7 +26,10 @@ class Resolver:
             global_loader_param: Optional[Dict[str, Any]] = None,
             loader_instances: Optional[Dict[Any, Any]] = None,
             ensure_type=False,
+            debug=False,
             context: Optional[Dict[str, Any]] = None):
+        
+        self.debug = debug
         self.loader_instance_cache = {}
 
         self.ancestor_vars = {}
@@ -56,6 +61,17 @@ class Resolver:
         self.context = MappingProxyType(context) if context else None
         self.metadata = {}
         self.object_level_collect_alias_map_store: Dict[int, Dict] = {}
+
+        # logger
+        self._set_logger()
+    
+    def _set_logger(self):
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.DEBUG)
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter("[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s")
+        handler.setFormatter(formatter)
+        self.logger.addHandler(handler)
 
     def _validate_loader_instance(self, loader_instances: Dict[Any, Any]):
         for cls, loader in loader_instances.items():
@@ -261,9 +277,12 @@ class Resolver:
         """
         if isinstance(node, (list, tuple)):
             await asyncio.gather(*[self._traverse(t, parent) for t in node])
+            return node
 
         if not analysis.is_acceptable_instance(node):
             return node
+
+        t = time.time()
 
         kls = node.__class__
         kls_path = class_util.get_kls_full_path(kls)
@@ -307,6 +326,9 @@ class Resolver:
             self._execute_post_default_handler(node, kls, kls_path, default_post_method)
 
         self._add_values_into_collectors(node, kls)
+
+        if self.debug:
+            self.logger.debug(f'{kls.__name__:20} -> {time.time() - t} ')
         return node
 
     async def resolve(self, node: T) -> T:
