@@ -1,6 +1,5 @@
 import time
 import asyncio
-import logging
 import warnings
 import contextvars
 from inspect import iscoroutine
@@ -10,15 +9,17 @@ from types import MappingProxyType
 
 from pydantic_resolve import analysis
 from pydantic_resolve.exceptions import MissingAnnotationError
-from pydantic_resolve.logger import get_logger
+from pydantic_resolve.utils.logger import get_logger
 import pydantic_resolve.utils.conversion as conversion_util
 import pydantic_resolve.utils.class_util as class_util
 import pydantic_resolve.constant as const
+import pydantic_resolve.utils.timer as timer_util
 
 
 T = TypeVar("T")
 
 logger = get_logger(__name__)
+
 
 class Resolver:
     def __init__(
@@ -33,6 +34,7 @@ class Resolver:
             context: Optional[Dict[str, Any]] = None):
         
         self.debug = debug
+        self.performance = timer_util.Performance() 
         self.loader_instance_cache = {}
 
         self.ancestor_vars = {}
@@ -262,18 +264,20 @@ class Resolver:
         - collect
             - values into ancestor collectors
         - return node
-
-        TODO:
-        If the descendant of object has no more pydantic-resolve related operation, it should be skipped.
         """
         if isinstance(node, (list, tuple)):
             await asyncio.gather(*[self._traverse(t, parent) for t in node])
             return node
 
+        ancestors = self.ancestor_list.get()
+        new_ancestors = ancestors + [node.__class__.__name__]
+        self.ancestor_list.set(new_ancestors)
+
+        timer = self.performance.get_timer(new_ancestors)
+        tid = timer.start()
+
         if not analysis.is_acceptable_instance(node):
             return node
-
-        t = time.time()
 
         kls = node.__class__
         kls_path = class_util.get_kls_full_path(kls)
@@ -317,9 +321,7 @@ class Resolver:
             self._execute_post_default_handler(node, kls, kls_path, default_post_method)
 
         self._add_values_into_collectors(node, kls)
-
-        if self.debug:
-            logger.debug(f'{kls.__name__:20} -> {time.time() - t} ')
+        timer.end(tid)
         return node
 
     async def resolve(self, node: T) -> T:
@@ -338,6 +340,9 @@ class Resolver:
         has_context = analysis.has_context(self.metadata)
         if has_context and self.context is None:
             raise AttributeError('context is missing')
+
+        self.ancestor_list = contextvars.ContextVar('ancestor_list', default=[])
             
         await self._traverse(node, None)
+
         return node
