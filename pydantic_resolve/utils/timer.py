@@ -15,10 +15,14 @@ class Performance():
         return self.full_path_timer[key]
     
     def __repr__(self) -> str:
-        output = []
-        for k, v in self.full_path_timer.items():
-            output.append(f'{k}: {v}')
-        return '\n'.join(output)
+        def format_key(key, longest):
+            return key + ' ' * (longest - len(key))
+
+        longest = max([len(key) for key in self.full_path_timer.keys()])
+        items = self.full_path_timer.items()
+        items = sorted(items, key=lambda x: x[0])
+        items = [f'{format_key(item[0], longest)}: {item[1]}' for item in items]
+        return '\n'.join(items)
     
 
 class Timer():
@@ -36,7 +40,7 @@ class Timer():
     
     def end(self, id: str):
         start = self.timeset[id]
-        t = time.time() - start
+        t = self.to_ms(time.time() - start)
 
         self.records.append(t)
         self._max = max(self._max, t)
@@ -44,7 +48,10 @@ class Timer():
     
     @property
     def average(self):
-        return sum(self.records) / len(self.records)
+        try: 
+            return sum(self.records) / len(self.records)
+        except ZeroDivisionError:
+            return 0
     
     @property
     def max(self):
@@ -54,8 +61,8 @@ class Timer():
     def min(self):
         return self._min
     
-    def __hash__(self):
-        return self.name
+    def to_ms(self, t):
+        return t * 1000
     
     def __repr__(self) -> str:
-        return f'avg: {self.average:.4f}s, min: {self.min:.4f}s, max: {self.max:.4f}s'
+        return f'avg: {self.average:.1f}ms, max: {self.max:.1f}ms, min: {self.min:.1f}ms'

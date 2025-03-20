@@ -1,4 +1,3 @@
-import time
 import asyncio
 import warnings
 import contextvars
@@ -249,7 +248,7 @@ class Resolver:
             val = conversion_util.try_parse_data_to_target_field_type(node, trim_field, val)
 
         setattr(node, trim_field, val)
-
+    
     async def _traverse(self, node: T, parent: object) -> T:
         """
         life cycle:
@@ -269,15 +268,14 @@ class Resolver:
             await asyncio.gather(*[self._traverse(t, parent) for t in node])
             return node
 
+        if not analysis.is_acceptable_instance(node):
+            return node
+
         ancestors = self.ancestor_list.get()
         new_ancestors = ancestors + [node.__class__.__name__]
         self.ancestor_list.set(new_ancestors)
-
         timer = self.performance.get_timer(new_ancestors)
         tid = timer.start()
-
-        if not analysis.is_acceptable_instance(node):
-            return node
 
         kls = node.__class__
         kls_path = class_util.get_kls_full_path(kls)
@@ -344,5 +342,7 @@ class Resolver:
         self.ancestor_list = contextvars.ContextVar('ancestor_list', default=[])
             
         await self._traverse(node, None)
+
+        print(self.performance)
 
         return node
