@@ -138,6 +138,20 @@ resolver = Resolver(context={'name': 'tangkikodo'})
 
 debug = True will display the time consuming of each nodes.
 
+> export PYDANTIC_RESOLVE_DEBUG=true can enable it globally
+
+```shell
+# sample
+Tree          : avg: 1.1ms, max: 1.1ms, min: 1.1ms
+Tree.Tree     : avg: 0.4ms, max: 0.5ms, min: 0.4ms
+Tree.Tree.Tree: avg: 0.2ms, max: 0.2ms, min: 0.2ms
+
+# sample
+MyBlogSite             : avg: 1.5ms, max: 1.5ms, min: 1.5ms
+MyBlogSite.Blog        : avg: 1.0ms, max: 1.0ms, min: 1.0ms
+MyBlogSite.Blog.Comment: avg: 0.3ms, max: 0.3ms, min: 0.3ms
+```
+
 ## Method Parameter Description
 
 ### context

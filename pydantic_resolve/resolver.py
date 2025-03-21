@@ -1,6 +1,5 @@
-import time
+import os
 import asyncio
-import logging
 import warnings
 import contextvars
 from inspect import iscoroutine
@@ -10,15 +9,17 @@ from types import MappingProxyType
 
 from pydantic_resolve import analysis
 from pydantic_resolve.exceptions import MissingAnnotationError
-from pydantic_resolve.logger import get_logger
+from pydantic_resolve.utils.logger import get_logger
 import pydantic_resolve.utils.conversion as conversion_util
 import pydantic_resolve.utils.class_util as class_util
 import pydantic_resolve.constant as const
+import pydantic_resolve.utils.profile as profile_util
 
 
 T = TypeVar("T")
 
 logger = get_logger(__name__)
+
 
 class Resolver:
     def __init__(
@@ -32,7 +33,8 @@ class Resolver:
             debug=False,
             context: Optional[Dict[str, Any]] = None):
         
-        self.debug = debug
+        self.debug = debug or os.getenv("PYDANTIC_RESOLVE_DEBUG", "false").lower() == "true"
+        self.performance = profile_util.Profile() 
         self.loader_instance_cache = {}
 
         self.ancestor_vars = {}
@@ -247,7 +249,7 @@ class Resolver:
             val = conversion_util.try_parse_data_to_target_field_type(node, trim_field, val)
 
         setattr(node, trim_field, val)
-
+    
     async def _traverse(self, node: T, parent: object) -> T:
         """
         life cycle:
@@ -262,9 +264,6 @@ class Resolver:
         - collect
             - values into ancestor collectors
         - return node
-
-        TODO:
-        If the descendant of object has no more pydantic-resolve related operation, it should be skipped.
         """
         if isinstance(node, (list, tuple)):
             await asyncio.gather(*[self._traverse(t, parent) for t in node])
@@ -273,8 +272,6 @@ class Resolver:
         if not analysis.is_acceptable_instance(node):
             return node
 
-        t = time.time()
-
         kls = node.__class__
         kls_path = class_util.get_kls_full_path(kls)
 
@@ -282,13 +279,21 @@ class Resolver:
         self._prepare_expose_fields(node)
         self._prepare_parent(parent)
 
-        tasks = []
+
+        if self.debug:
+            ancestors = self.ancestor_list.get()
+            new_ancestors = ancestors + [node.__class__.__name__]
+            self.ancestor_list.set(new_ancestors)
+            tid = self.performance.get_timer(new_ancestors).start()
+
+
+        resolve_tasks = []
         post_tasks = []
 
         # resolve process
         resolve_fields, object_fields = analysis.get_resolve_fields_and_object_fields_from_object(node, kls, self.metadata)
         for field, resolve_trim_field, method in resolve_fields:
-            tasks.append(self._execute_resolve_method_field(
+            resolve_tasks.append(self._execute_resolve_method_field(
                 node=node, 
                 kls=kls, 
                 field=field, 
@@ -296,9 +301,9 @@ class Resolver:
                 method=method))
 
         for field, attr_object in object_fields:
-            tasks.append(self._traverse(attr_object, node))
+            resolve_tasks.append(self._traverse(attr_object, node))
 
-        await asyncio.gather(*tasks)
+        await asyncio.gather(*resolve_tasks)
 
         # post process
         for post_field, post_trim_field, method in analysis.get_post_methods(node, kls, self.metadata):
@@ -319,7 +324,8 @@ class Resolver:
         self._add_values_into_collectors(node, kls)
 
         if self.debug:
-            logger.debug(f'{kls.__name__:20} -> {time.time() - t} ')
+            self.performance.get_timer(new_ancestors).end(tid) # type: ignore
+
         return node
 
     async def resolve(self, node: T) -> T:
@@ -338,6 +344,12 @@ class Resolver:
         has_context = analysis.has_context(self.metadata)
         if has_context and self.context is None:
             raise AttributeError('context is missing')
+
+        self.ancestor_list = contextvars.ContextVar('ancestor_list', default=[])
             
         await self._traverse(node, None)
+
+        if self.debug:
+            self.performance.report()
+
         return node
