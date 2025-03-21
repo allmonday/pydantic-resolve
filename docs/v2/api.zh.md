@@ -138,6 +138,20 @@ resolver = Resolver(context={'name': 'tangkikodo'})
 
 debug = True 将会开启 logger 输出每个节点的计算总耗时
 
+> export PYDANTIC_RESOLVE_DEBUG=true 可以全局开启
+
+```shell
+# sample
+Tree          : avg: 1.1ms, max: 1.1ms, min: 1.1ms
+Tree.Tree     : avg: 0.4ms, max: 0.5ms, min: 0.4ms
+Tree.Tree.Tree: avg: 0.2ms, max: 0.2ms, min: 0.2ms
+
+# sample
+MyBlogSite             : avg: 1.5ms, max: 1.5ms, min: 1.5ms
+MyBlogSite.Blog        : avg: 1.0ms, max: 1.0ms, min: 1.0ms
+MyBlogSite.Blog.Comment: avg: 0.3ms, max: 0.3ms, min: 0.3ms
+```
+
 ## 方法参数说明
 
 ### context

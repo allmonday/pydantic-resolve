@@ -1,10 +1,12 @@
 import time
 import math
 from typing import List
-from typing_extensions import TypedDict
 from uuid import uuid1
+from pydantic_resolve.utils.logger import get_logger
 
-class Performance():
+profile_logger = get_logger(__name__)
+
+class Profile():
     def __init__(self):
         self.full_path_timer = {}
     
@@ -23,6 +25,9 @@ class Performance():
         items = sorted(items, key=lambda x: x[0])
         items = [f'{format_key(item[0], longest)}: {item[1]}' for item in items]
         return '\n'.join(items)
+    
+    def report(self):
+        profile_logger.debug('\n' + self.__repr__())
     
 
 class Timer():

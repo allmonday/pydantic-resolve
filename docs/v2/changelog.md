@@ -2,6 +2,12 @@
 
 ## v1.11
 
+### v1.11.7 (2025.3.21)
+
+feat:
+
+- optimize the output of debug (profile)
+
 ### v1.11.6 (2025.3.19)
 
 bug:
