@@ -26,9 +26,9 @@ def test_ensure_subset():
             return 21
 
     @class_util.ensure_subset(Base)
-    class ChildB(BaseModel):
+    class ChildB1(BaseModel):
         a: str
-        d: Optional[int]
+        d: Optional[int] = 0
 
     with pytest.raises(AttributeError):
         @class_util.ensure_subset(Base)

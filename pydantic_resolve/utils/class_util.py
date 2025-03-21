@@ -93,6 +93,22 @@ def ensure_subset_v2(base):
     """
     used with pydantic class to make sure a class's field is 
     subset of target class
+
+    for pydantic v2, subclass with Optional[T] but without default value will raise exception
+
+    @class_util.ensure_subset(Base)
+    class ChildB1(BaseModel):
+        a: str
+        d: Optional[int]
+    
+    this will raise
+
+    @class_util.ensure_subset(Base)
+    class ChildB1(BaseModel):
+        a: str
+        d: Optional[int] = 0 
+    
+    this is ok
     """
     def wrap(kls):
         assert safe_issubclass(base, BaseModel), 'base should be pydantic class'

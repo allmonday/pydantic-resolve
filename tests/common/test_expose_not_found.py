@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from pydantic_resolve import Resolver
 import pytest
 from typing import Optional
+from pydantic_resolve.compat import PYDANTIC_V2
 
 
 # fix bug: 
@@ -36,7 +37,11 @@ class Container(BaseModel):
 async def test_expose_not_found():
     game = Container(game=Game(name='game1'))
     game = await Resolver().resolve(game)
-    assert game.dict() == {
+    if PYDANTIC_V2:
+        output = game.model_dump() 
+    else:
+        output = game.dict()
+    assert output == {
         'game': {
             'name': 'game1',
             'item': [{'name': 'item1','game_name': 'game1'}]
