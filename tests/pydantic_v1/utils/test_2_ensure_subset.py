@@ -26,7 +26,7 @@ def test_ensure_subset():
             return 21
 
     @class_util.ensure_subset(Base)
-    class ChildB(BaseModel):
+    class ChildB1(BaseModel):
         a: str
         d: Optional[int]
 
@@ -46,7 +46,7 @@ def test_ensure_subset():
     with pytest.raises(AssertionError):
         @class_util.ensure_subset(Base)
         @dataclass
-        class ChildD():
+        class ChildD1():
             a: str
             b: int
             c: int
@@ -54,7 +54,7 @@ def test_ensure_subset():
     with pytest.raises(AssertionError):
         @class_util.ensure_subset(BaseX)
         @dataclass
-        class ChildD():
+        class ChildD2():
             a: str
             b: int
             c: int
