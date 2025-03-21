@@ -72,7 +72,13 @@ stories = await Resolver().resolve(stories)
 
 As a tool for data composition, it would not be fancy if it only supports mounting related data, pydantic-resolve provides an extra life cycle hooks for post method.
 
+This post process could help transform business object (generated at resolve process) to the view object 
+
+<img width="743" alt="image" src="https://github.com/user-attachments/assets/cdcf82a7-bfd6-4b71-8221-a8f06500ebb0" />
+
 You'll be able to adjust the fields immediately after all the resolve processes finish, and it has many useful params, it even supports async. 
+
+for example, calculate extra fields:
 
 ```python
 class Story(BaseModel):
@@ -88,7 +94,51 @@ class Story(BaseModel):
         return len([t for t in tasks if task.done is True]) / len(self.tasks) 
 ```
 
+another more complicated example: 
 
+during resolve process:
+- read list of story
+- expose story name to task
+
+during post process:
+- collect all task into Data.tasks
+- hide Data.stories during serilization
+
+now Data only contains tasks with each one's story name.
+
+```python
+class BaseTask(BaseModel):
+    id: int
+    story_id: int
+    name: str
+
+class BaseStory(BaseModel):
+    id: int
+    name: str
+
+class Task(BaseTask):
+    story_name: str = ''
+    def resolve_story_name(self, ancestor_context):
+        return ancestor_context['story_name'] # read story_name of direct ancestor
+
+class Story(BaseStory):
+    __pydantic_resolve_expose__ = {'name': 'story_name'}  # expose name (as story_name) to descendent nodes
+    __pydantic_resolve_collect__ = {'tasks': 'task_collector'}  # tasks will be collected by task_collector
+
+    tasks: list[BaseTask] = []
+    def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
+        return loader.load(self.id)
+
+class Data(BaseModel):
+    stories: list[Story] = Field(default_factory=list, exclude=True)
+    async def resolve_stories(self):
+        return await get_raw_stories()
+
+    tasks: list[Task] = []
+    def post_tasks(self, collector=Collector('task_collector', flat=True)):  # flat=True to avoid list of list
+        return collector.values()
+```
+    
 
 ## Installation
 
