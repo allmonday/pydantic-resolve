@@ -87,7 +87,9 @@ class Resolver:
             global_loader_param: Optional[Dict[str, Any]] = None,
             loader_instances: Optional[Dict[Any, Any]] = None,
             context: Optional[Dict[str, Any]] = None,
-            debug: bool = False):
+            debug: bool = False,
+            enable_from_attribute_in_type_adapter = False
+            ):
 ```
 
 ### loader_params
@@ -138,7 +140,9 @@ resolver = Resolver(context={'name': 'tangkikodo'})
 
 debug = True will display the time consuming of each nodes.
 
-> export PYDANTIC_RESOLVE_DEBUG=true can enable it globally
+to enable it globally
+
+> export PYDANTIC_RESOLVE_DEBUG=true
 
 ```shell
 # sample
@@ -151,6 +155,29 @@ MyBlogSite             : avg: 1.5ms, max: 1.5ms, min: 1.5ms
 MyBlogSite.Blog        : avg: 1.0ms, max: 1.0ms, min: 1.0ms
 MyBlogSite.Blog.Comment: avg: 0.3ms, max: 0.3ms, min: 0.3ms
 ```
+
+### enable_from_attribute_in_type_adapter (pydantic v2)
+
+only use with pydantic v2, mainly for scenario of upgrading from pydantic v1
+
+to enable it globally
+
+> export PYDANTIC_RESOLVE_ENABLE_FROM_ATTRIBUTE=true
+
+in v1, it supports parsing from another pydantic object which contains all fields the target class required, but in v2, this will raise exception, type adapter by default only support from dict or pydantic object exactly the same with target class
+
+```python
+class A(BaseModel):
+  name: str
+  id: int
+
+class B(BaseModel):
+  name: str
+```
+
+in pydantc v1, parse_obj_as can parse B from A, but in v2, it will raise exception, however, with typeAdapter.validate_python(data, from_attribute=True), it works
+
+the cost is performance (abount 10% overhead), so it is disabled by default
 
 ## Method Parameter Description
 

@@ -2,6 +2,12 @@
 
 ## v1.11
 
+### v1.11.8 (2025.3.31)
+
+bug:
+
+- [pydantic v2] fix `adapter.validate_python` raise exception when parse from another pydantic object (which is not exactly the same with target class)
+
 ### v1.11.7 (2025.3.21)
 
 feat:

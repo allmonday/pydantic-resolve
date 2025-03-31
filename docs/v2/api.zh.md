@@ -152,6 +152,25 @@ MyBlogSite.Blog        : avg: 1.0ms, max: 1.0ms, min: 1.0ms
 MyBlogSite.Blog.Comment: avg: 0.3ms, max: 0.3ms, min: 0.3ms
 ```
 
+### enable_from_attribute_in_type_adapter (pydantic v2)
+
+只在 pydantic v2 中使用， 主要解决（兜底）从 v1 升级过来可能产生的问题.
+
+> export PYDANTIC_RESOLVE_ENABLE_FROM_ATTRIBUTE=true 可以全局开启
+
+在 v1 中， 从一个 pydantic 对象， 这个对象不是目标字段类型（但是能满足目标类型的所需字段），是可以被 `parse_obj_as` 方法转换成目标字段的， 但是在 v2 中 type adapter 会报错
+
+```python
+class A(BaseModel):
+  name: str
+  id: int
+
+class B(BaseModel):
+  name: str
+```
+
+v2 中可以通过 `typeAdapter.validate_python(data, from_attribute=True)` 进行兜底，但该方法会对数据转换产生 10%+的性能影响， 因此默认为 False， 按需启用
+
 ## 方法参数说明
 
 ### context
