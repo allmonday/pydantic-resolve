@@ -195,7 +195,6 @@ class Foo(BaseModel):
         name: str
 
     async def batch_load_fn(keys):
-        print('oader')
         books = [[bb for bb in BOOKS.get(k, [])] for k in keys]
         return books
 

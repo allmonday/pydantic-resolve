@@ -16,7 +16,6 @@ async def test_loader_depends():
         name: str
 
     async def batch_load_fn(keys):
-        print('oader')
         books = [[Book(**bb) for bb in BOOKS.get(k, [])] for k in keys]
         return books
 
