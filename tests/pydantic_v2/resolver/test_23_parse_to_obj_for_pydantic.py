@@ -16,7 +16,6 @@ async def test_1():
         name: str
 
     async def batch_load_fn(keys):
-        print('oader')
         books = [BOOKS.get(k, []) for k in keys]
         return books
 
@@ -51,7 +50,6 @@ async def test_2():
         num: int
 
     async def batch_load_fn(keys):
-        print('oader')
         books = [[bb for bb in BOOKS.get(k, [])] for k in keys]
         return books
 

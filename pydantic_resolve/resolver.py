@@ -9,7 +9,6 @@ from types import MappingProxyType
 
 from pydantic_resolve import analysis
 from pydantic_resolve.exceptions import MissingAnnotationError
-from pydantic_resolve.utils.logger import get_logger
 import pydantic_resolve.utils.conversion as conversion_util
 import pydantic_resolve.utils.class_util as class_util
 import pydantic_resolve.constant as const
@@ -17,9 +16,6 @@ import pydantic_resolve.utils.profile as profile_util
 
 
 T = TypeVar("T")
-
-logger = get_logger(__name__)
-
 
 class Resolver:
     def __init__(
@@ -30,10 +26,13 @@ class Resolver:
             global_loader_param: Optional[Dict[str, Any]] = None,
             loader_instances: Optional[Dict[Any, Any]] = None,
             ensure_type=False,
+            context: Optional[Dict[str, Any]] = None,
             debug=False,
-            context: Optional[Dict[str, Any]] = None):
+            enable_from_attribute_in_type_adapter=False,
+            ):
         
         self.debug = debug or os.getenv("PYDANTIC_RESOLVE_DEBUG", "false").lower() == "true"
+
         self.performance = profile_util.Profile() 
         self.loader_instance_cache = {}
 
@@ -61,6 +60,25 @@ class Resolver:
             self.loader_instances = loader_instances
         else:
             self.loader_instances = {}
+
+        # only use with pydantic v2
+        # for scenario of upgrading from pydantic v1
+        # in v1, it supports parsing from another pydantic object which contains all fields the target
+        # class required, but in v2, this will raise exception, type adapter by default only support parsing from 
+        # dict or pydantic object which is exactly the same with target class
+        #
+        # class A(BaseModel):
+        #   name: str
+        #   id: int
+        # 
+        # class B(BaseModel):
+        #   name: str
+        # 
+        # in pydantc v1, parse_obj_as can parse B from A, but in v2, it will raise exception
+        # however, with typeAdapter.validate_python(data, from_attribute=True), it can work
+        # the cost is performance (abount 10% overhead), so it is disabled by default
+        self.enable_from_attribute_in_type_adapter = enable_from_attribute_in_type_adapter \
+            or os.getenv("PYDANTIC_RESOLVE_ENABLE_FROM_ATTRIBUTE", "false").lower() == "true"
 
         self.ensure_type = ensure_type
         self.context = MappingProxyType(context) if context else None
@@ -226,7 +244,11 @@ class Resolver:
             val = await val
 
         if not getattr(method, const.HAS_MAPPER_FUNCTION, False):  # defined in util.mapper
-            val = conversion_util.try_parse_data_to_target_field_type(node, trim_field, val)
+            val = conversion_util.try_parse_data_to_target_field_type(
+                node,
+                trim_field,
+                val,
+                self.enable_from_attribute_in_type_adapter)
 
         val = await self._traverse(val, node)
         setattr(node, trim_field, val)
@@ -246,7 +268,11 @@ class Resolver:
             val = await val
             
         if not getattr(method, const.HAS_MAPPER_FUNCTION, False):  # defined in util.mapper
-            val = conversion_util.try_parse_data_to_target_field_type(node, trim_field, val)
+            val = conversion_util.try_parse_data_to_target_field_type(
+                node,
+                trim_field,
+                val,
+                self.enable_from_attribute_in_type_adapter)
 
         setattr(node, trim_field, val)
     

@@ -1,18 +1,22 @@
 # Changelog
 
 ## v.2.1.1 (2024.4.20)
+
 - new feature: reading parent node in resolve, post and post_default_handler
 
 ## v.2.1.0 (2024.04.08)
+
 - bugfix: https://github.com/allmonday/pydantic2-resolve/issues/7
 - migrating collctor and internal optimization from pydantic-resolve
 
 ## v.2.0.0 (2024.02.29)
+
 - rename pydantic2_resolve -> pydantic_resolve to align with pydantic-resolve (v1)
 - add more diagrams in readme.
 
 ## v.1.1.3 (2024.02.08)
-- add `model_config` into  `__all__`
+
+- add `model_config` into `__all__`
 
 ## v.1.1.2 (2024.02.08) yanked
 
@@ -138,7 +142,6 @@ class Foo(BaseModel):
         name: str
 
     async def batch_load_fn(keys):
-        print('oader')
         books = [[bb for bb in BOOKS.get(k, [])] for k in keys]
         return books
 
@@ -311,7 +314,6 @@ def resolve_comments(self, loader=LoaderDepend(CommentLoader)):
 - support `batch_load_fn` as params for `LoaderDepend`
 - add test `tests/resolver/test_15_support_batch_load_fn.py`
 - `build_object`, `build_list` can be imported from `pydantic_resolve`
-
 
 ## v0.5.1 (2023.6.11)
 

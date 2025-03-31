@@ -28,7 +28,8 @@ if PYDANTIC_V2:
 def try_parse_data_to_target_field_type_v1(
         target: object,
         field_name: str,
-        data):
+        data,
+        enable_from_attribute=False):
     """
     parse to pydantic or dataclass object
     1. get type of target field
@@ -63,13 +64,18 @@ def try_parse_data_to_target_field_type_v1(
 def try_parse_data_to_target_field_type_v2(
         target: object,
         field_name: str,
-        data):
+        data,
+        enable_from_attribute=False):
     """
     parse to pydantic or dataclass object
     1. get type of target field
     2. parse
     """
     field_type = None
+
+    # from_attribute by default is None
+    # if set False it will fail when dealing with namedtuple
+    _enable_from_attribute = True if enable_from_attribute else None 
 
     # 1. get type of target field
     if isinstance(target, BaseModel):
@@ -88,7 +94,7 @@ def try_parse_data_to_target_field_type_v2(
         try:
             # https://docs.pydantic.dev/latest/concepts/performance/#typeadapter-instantiated-once
             adapter = TypeAdapterManager.get(field_type)
-            result = adapter.validate_python(data)
+            result = adapter.validate_python(data, from_attributes=_enable_from_attribute)
             return result
         except ValidationError as e:
             print(f'Warning: type mismatch, pls check the return type for "{field_name}", expected: {field_type}')
