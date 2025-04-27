@@ -10,6 +10,8 @@ pydantic-resolve is a tool helps to flexibly assemble data together, it might be
 
 you can simply extend your data by adding `resolve_field` function, no matter the position, no matter list or single.
 
+> It also supports dataclass
+
 ```python
 from pydantic import BaseModel
 from pydantic_resolve import Resolver, build_list
