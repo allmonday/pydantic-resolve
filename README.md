@@ -5,30 +5,16 @@
 
 <img style="width:420px;" src="./docs/images/resolver.png"></img>
 
-pydantic-resolve is a tool helps to flexibly assemble data together, it might be the most intuitive one, it plays pretty well with FastAPI.
- 
-In FastAPI, pydantic plays the role of defining the DTO layer's interface and performing runtime type checking, its definition needs to passively follow the real data source (DB, ORM or API).
 
-You have written the database query or API, and then defined a pydantic for this data structure, which makes the definition of pydantic very trivial, difficult to maintain and reuse, and even somewhat redundant.
+pydantic-resolve is a tool helps to flexibly assemble data together, it might be the most intuitive one, it plays pretty well with FastAPI / Litestar / Django-ninja
 
->  SQLModel attempts to solve the problem at the database level, but I am still concerned about the approach of binding ORM and pydantic together.
-
-Well, in pydantic-resolve, pydantic should be used to **actively define ER models**. The database or external interfaces merely serve as data providers for the ER models. Simply through the declaration of pydantic, data assembly can be achieved.
-
-The process of using pydantic-resolve to combine data is essentially the process of assembling data through the definition of ER models.
-
-Dataloader provides a universal method to associate data without worrying about N+1 queries.
-
-Once the query methods for entities and the query methods for entity associations (DataLoaders) are defined, all that remains is to make declarative definitions at the pydantic level. (The query details are encapsulated within methods and DataLoaders.）
-
-Another issue that pydantic-resolve solved is the transformation process of the ER model data into view data, you can use `expose` to expose the data of ancestor nodes to descendant nodes, or use the `collect` tool to gather the final data of descendant nodes into ancestor nodes, thus easily achieving the restructuring of the data schema.
-
-Here's a simple ER model of Story and Task and it's code implementation.
+you can simply extend your data by adding `resolve_field` function, no matter the position, no matter list or single.
 
 ```python
 from pydantic import BaseModel
 from pydantic_resolve import Resolver, build_list
 from aiodataloader import DataLoader
+
 
 # ER model of story and task
 # ┌───────────┐          
@@ -60,7 +46,7 @@ class BaseStory(BaseModel):
     id: int
     name: str
 
-class Story(BaseStory):
+class Story(BaseStory):  # inherit and compose
     tasks: list[BaseTask] = []
     def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
         return loader.load(self.id)
@@ -69,6 +55,29 @@ stories = await get_raw_stories()
 stories = [Story(**s) for s in stories)]
 stories = await Resolver().resolve(stories)     
 ```
+
+
+
+## Installation
+
+```
+pip install pydantic-resolve
+```
+
+Starting from pydantic-resolve v1.11.0, it suports both pydantic v1 and v2.
+
+## Features
+
+### Dataloader
+Dataloader provides a universal method to associate data without worrying about N+1 queries.
+
+Once the query methods for entities and the query methods for entity associations (DataLoaders) are defined, all that remains is to make declarative definitions at the pydantic level. (The query details are encapsulated within methods and DataLoaders.）
+
+### Post process
+
+Another issue that pydantic-resolve solved is the transformation process of the ER model data into view data, you can use `expose` to expose the data of ancestor nodes to descendant nodes, or use the `collect` tool to gather the final data of descendant nodes into ancestor nodes, thus easily achieving the restructuring of the data schema.
+
+Here's a simple ER model of Story and Task and it's code implementation.
 
 As a tool for data composition, it would not be fancy if it only supports mounting related data, pydantic-resolve provides an extra life cycle hooks for post method.
 
@@ -139,16 +148,8 @@ class Data(BaseModel):
         return collector.values()
 ```
     
-
-## Installation
-
-```
-pip install pydantic-resolve
-```
-
-Starting from pydantic-resolve v1.11.0, it suports both pydantic v1 and v2.
-
-## Problems to solve
+## Why create it?
+### Problems to solve
 
 A typical flow of data composition contains steps of: 
 
@@ -230,7 +231,7 @@ It spends quite a lot of code just for querying and composing the data, and the 
 
 > breadth first approach is used to minize the number of queries.
 
-## Solution
+### Solution
 
 The code could be simified if we can get rid of these querying and composing, let pydantic-resolve handle it, even the for loops.
 
@@ -328,7 +329,7 @@ All the relationships and traversal is defined by pydantic/ dataclass class.
 > If the ORM has provided the related data, we just need to simply remove the resolve_method and dataloder.
 
 
-## Features
+## How it works?
 
 It can reduce the code complexity during the data composition, making the code close to the ER model and then more maintainable.
 
