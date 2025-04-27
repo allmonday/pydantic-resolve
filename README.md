@@ -103,7 +103,9 @@ class Story(BaseModel):
         return len([t for t in tasks if task.done is True]) / len(self.tasks) 
 ```
 
-another more complicated example: 
+### Communication between ancestor and descendents
+
+This sample shows the capability of: 1 exposing specific data to descendents, 2 collecting data from descendents.
 
 during resolve process:
 - read list of story
@@ -149,6 +151,7 @@ class Data(BaseModel):
 ```
     
 ## Why create it?
+
 ### Problems to solve
 
 A typical flow of data composition contains steps of: 
