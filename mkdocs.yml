@@ -26,19 +26,19 @@ edit_uri: ""
 
 nav:
   - Quick Start:
-      - Introduction: ./v2/introduction.md
-      - Why create it: ./v2/why.md
-      - Use cases: ./v2/use_case.md
-      - Schema first: ./v2/schema_first.md
+      - Introduction: ./introduction.md
+      - Why create it: ./why.md
+      - Use cases: ./use_case.md
+      - Schema first: ./schema_first.md
   - Features:
-      - Dataloader: ./v2/dataloader.md
-      - Inherit and reuse: ./v2/inherit_reuse.md
-      - ERD Driven Pattern: ./v2/erd_driven.md
-      - Expose and collect: ./v2/expose_and_collect.md
-      - Connect to UI: ./v2/connect_to_ui.md
+      - Dataloader: ./dataloader.md
+      - Inherit and reuse: ./inherit_reuse.md
+      - ERD Driven Pattern: ./erd_driven.md
+      - Expose and collect: ./expose_and_collect.md
+      - Connect to UI: ./connect_to_ui.md
   - API:
-      - Reference: ./v2/api.md
-      - Change log: ./v2/changelog.md
+      - Reference: ./api.md
+      - Change log: ./changelog.md
 
 markdown_extensions:
   - pymdownx.highlight:
