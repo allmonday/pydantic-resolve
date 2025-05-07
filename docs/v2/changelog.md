@@ -2,6 +2,24 @@
 
 ## v1.11
 
+### v1.11.9 (2025.5.7)
+
+bug:
+
+details in testcase: `test/common/test_long_distance_resolve.py`
+
+before ver: 1.11.8
+d, or e will be removed from the object_fields
+it is due to the \_has_config function do not verify the len of
+object_fields.
+
+but in fact, if a kls is cached, it should not take party in judging
+`should_treverse`, so from 1.11.9 it will return None
+
+for self reference data structure, object fields will always be kept
+
+details in test case `test/common/test_long_distance_resolve_recursive.py`
+
 ### v1.11.8 (2025.3.31)
 
 bug:
