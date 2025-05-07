@@ -388,6 +388,9 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
         should_traverse_in_deep = False
         exclude_object_fields = set() 
 
+        # for object_fields, we introduce an optimization (should_traverse)
+        # to reduce unnecessary traversal
+        # if walker meets cached kls, it will return None and continue
         for field, shelled_type in (obj for obj in object_fields if obj[0] not in fields_with_resolver):
             should_traverse = walker(shelled_type)
             
@@ -395,9 +398,10 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
                 continue
 
             if should_traverse is False:
-                exclude_object_fields.add(field)
-            
-            should_traverse_in_deep = should_traverse_in_deep or should_traverse
+                # fields dont need to traverse
+                exclude_object_fields.add(field) 
+            else:            
+                should_traverse_in_deep = True
 
         info['object_fields'] = [f for f in info['object_fields'] if f not in exclude_object_fields]
 
@@ -405,9 +409,7 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
             walker(shelled_type)
 
         self_should_traverse = _should_traverse(info)
-
-        result = should_traverse_in_deep or self_should_traverse
-        return result
+        return should_traverse_in_deep or self_should_traverse
 
     walker(root_class)
     return metadata
