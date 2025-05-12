@@ -36,6 +36,7 @@ class B(BaseB):
 
 class A(BaseModel):
     id: int
+    c: E  # travers once, then populate the cache info
     b: B
 
 
@@ -46,7 +47,7 @@ def test_long_distance_resolve():
         f'{prefix}.A': {
             'resolve': [],
             'post': [],
-            'object_fields': ['b'],
+            'object_fields': [ 'c', 'b'],
             'expose_dict': {},
             'collect_dict': {},
         },
@@ -89,7 +90,7 @@ def test_long_distance_resolve():
             'collect_dict': {},
         }
     }
-    # from pprint import pprint
-    # pprint(result)
+    from pprint import pprint
+    pprint(result)
     for k, v in result.items():
         assert expect[k].items() <= v.items()
