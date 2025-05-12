@@ -63,6 +63,7 @@ class KlsMetaType(TypedDict):
     collect_dict: dict
     kls: Type
     has_context: bool
+    should_traverse: Optional[bool]
 
 MetaType = Dict[str, KlsMetaType]
 
@@ -341,9 +342,9 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
         kls_name = class_util.get_kls_full_path(kls)
         hit = metadata.get(kls_name)
         if hit:
-            # means do not provide traversal info, do not operate
-            # leave parent to handle
-            return None  
+            # if None, means recursive call
+            # otherwise, it should have value
+            return hit['should_traverse']  
 
         # - prepare fields, with resolve_, post_ reserved
         all_fields, object_fields = _get_all_fields_and_object_fields(kls)
@@ -382,6 +383,7 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
             'collect_dict': collect_dict,
             'kls': kls,
             'has_context': has_context,
+            'should_traverse': None  # unknown yeat
         }
         metadata[kls_name] = info
 
@@ -409,7 +411,9 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
             walker(shelled_type)
 
         self_should_traverse = _should_traverse(info)
-        return should_traverse_in_deep or self_should_traverse
+        ret = should_traverse_in_deep or self_should_traverse
+        info['should_traverse'] = ret
+        return ret
 
     walker(root_class)
     return metadata

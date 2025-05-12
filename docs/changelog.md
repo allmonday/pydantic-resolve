@@ -2,6 +2,14 @@
 
 ## v1.11
 
+### v1.11.9 (2025.5.12)
+
+bug:
+
+optimize the hit logic during analysising the class
+
+fix a corner case of wrongly marking a class as 'no resolve'
+
 ### v1.11.9 (2025.5.7)
 
 bug:
