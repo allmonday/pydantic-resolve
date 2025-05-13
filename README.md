@@ -6,9 +6,13 @@
 <img style="width:420px;" src="./docs/images/resolver.png"></img>
 
 
-pydantic-resolve is a tool helps to flexibly assemble data together, it might be the most intuitive one, it plays pretty well with FastAPI / Litestar / Django-ninja
+pydantic-resolve is a tool helps to flexibly assemble data together, might be the most intuitive one
 
-you can simply extend your data by adding `resolve_field` function, no matter the position, no matter list or single.
+It can progressively extends the target data, adding new fields without any loops or temp variables, just a simple dataloader can handle anything.
+
+You can simply extend your data by adding `resolve_field` function, no matter the position, no matter list or single.
+
+It plays pretty well with FastAPI / Litestar / Django-ninja
 
 > It also supports dataclass
 
