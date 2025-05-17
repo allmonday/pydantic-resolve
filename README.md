@@ -16,52 +16,31 @@ It plays pretty well with FastAPI / Litestar / Django-ninja
 
 > It also supports dataclass
 
-```python
-from pydantic import BaseModel
-from pydantic_resolve import Resolver, build_list
-from aiodataloader import DataLoader
+## TL;DR;
+
+3 Steps to build to your view object. Let's go.
+
+### ER model (virtual)
+
+This is how we define the entities and their relationships.
+
+<img width="1726" alt="image" src="https://github.com/user-attachments/assets/07220fdc-9a28-4d64-87eb-eb68cf2151b3" />
 
 
-# ER model of story and task
-# ┌───────────┐          
-# │           │          
-# │   story   │          
-# │           │          
-# └─────┬─────┘          
-#       │                
-#       │   owns multiple (TaskLoader)
-#       │                
-#       │                
-# ┌─────▼─────┐          
-# │           │          
-# │   task    │          
-# │           │          
-# └───────────┘
+### Business model (real)
 
-class TaskLoader(DataLoader):
-    async def batch_load_fn(self, story_ids):
-        tasks = await get_tasks_by_ids(story_ids)
-        return build_list(tasks, story_ids, lambda t: t.story_id)
+This is what we really need in a specific business scenario.
 
-class BaseTask(BaseModel):
-    id: int
-    story_id: int
-    name: str
+<img width="1738" alt="image" src="https://github.com/user-attachments/assets/47ee88a8-388a-49bb-8d0c-772e8daf5ce7" />
 
-class BaseStory(BaseModel):
-    id: int
-    name: str
 
-class Story(BaseStory):  # inherit and compose
-    tasks: list[BaseTask] = []
-    def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
-        return loader.load(self.id)
+### View model
 
-stories = await get_raw_stories()
-stories = [Story(**s) for s in stories)]
-stories = await Resolver().resolve(stories)     
-```
+This is the modifications required by view layer.
 
+<img width="1705" alt="image" src="https://github.com/user-attachments/assets/9dc40483-1e07-42c1-b6f5-5bc7d6861630" />
+
+<img width="1730" alt="image" src="https://github.com/user-attachments/assets/9d2b2b2d-38ee-4ec6-b9e4-5cd5c19acdee" />
 
 
 ## Installation
