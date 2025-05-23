@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from pydantic_resolve import Resolver
 import pytest
-from typing import Optional
+from typing import Optional, List
 from pydantic_resolve.compat import PYDANTIC_V2
 
 
@@ -22,14 +22,14 @@ class Game(BaseModel):
     }
     name: str
 
-    item: list[Item] = []
+    item: List[Item] = []
     def resolve_item(self):
         return [Item(name='item1')]
 
 class Container(BaseModel):
     game: Optional[Game] = None
 
-    game_item: list[Item] = []
+    game_item: List[Item] = []
     def post_game_item(self):
         return self.game.item
 
