@@ -42,7 +42,7 @@ class A(BaseModel):
 
 def test_long_distance_resolve():
     result = scan_and_store_metadata(A)
-    prefix = 'tests.common.test_long_distance_resolve'
+    prefix = 'tests.common.test_analysis_object_fields_4'
     expect = {
         f'{prefix}.A': {
             'resolve': [],

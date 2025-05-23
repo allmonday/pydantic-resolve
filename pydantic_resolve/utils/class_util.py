@@ -1,6 +1,6 @@
 import functools
 from dataclasses import is_dataclass
-from typing import Type, get_type_hints
+from typing import Type, get_type_hints, List
 import pydantic_resolve.constant as const
 from pydantic_resolve.compat import PYDANTIC_V2
 import pydantic_resolve.utils.class_util as class_util
@@ -146,11 +146,11 @@ def _get_items_v2(kls):
 get_items = _get_items_v2 if PYDANTIC_V2 else _get_items_v1
 
 
-def _get_keys_v1(kls):
+def _get_keys_v1(kls) -> str:
     return kls.__fields__.keys()
 
 
-def _get_keys_v2(kls):
+def _get_keys_v2(kls) -> str:
     return kls.model_fields.keys()
 
 

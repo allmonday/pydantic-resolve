@@ -1,5 +1,52 @@
 # Changelog
 
+## v1.12
+
+### v1.12.0 (2025.5.24)
+
+optimization:
+
+improve the algorithm of analysising object_fields, it helps skip nodes that don't need processing.
+using a back populate approach, now it can handle loop scenaio.
+
+refer:
+
+- `tests/common/test_analysis_object_fields.py` 1,2,3,4
+
+```
+┌────────┐
+│   Kls  │
+└────────┘
+    │       ┌─────────────────┐
+    │       │ ┌──────────┐    │
+    │       ▼ ▼          │    │
+    │     ┌─────┐        x(o) o
+    ├─o───│ Tree│────────┘    │
+    │     └─────┘─────────────┘
+    │
+    │
+    │         ┌───────┐
+    │         │       │
+    │         ▼       x
+    │     ┌──────┐    │
+    ├─x───│ Tree2│ ───┘
+    │     └──────┘
+    │
+    │         ┌─────────o─────────┐
+    │         │                   │
+    │         ▼                   │
+    │     ┌───────┐           ┌───────┐
+    ├──o──│ Tree31│─────x────►│Tree32 │
+    │     └───────┘           └───────┘
+    │
+    │         ┌───────┐
+    │         │       │
+    │         ▼       o
+    │     ┌──────┐    │
+    └─x───│ Tree4│ ───┘
+          └──────┘
+```
+
 ## v1.11
 
 ### v1.11.10 (2025.5.12)
