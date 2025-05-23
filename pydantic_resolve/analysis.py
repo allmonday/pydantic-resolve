@@ -58,6 +58,7 @@ class KlsMetaType(TypedDict):
     resolve_params: Dict[str, ResolveMethodType]
     post_params: Dict[str, PostMethodType]
     post_default_handler_params: Optional[PostDefaultHandlerType]
+    raw_object_fields: List[str]
     object_fields: List[str]
     expose_dict: dict
     collect_dict: dict
@@ -330,7 +331,7 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
                 if c not in collect_set:
                     raise MissingCollector(f'Collector alias name not found in ancestor, please check: {kls_name}')
     
-    def _should_traverse(info: KlsMetaType):
+    def _has_config(info: KlsMetaType):
         result = len(info['resolve']) > 0 or \
                 len(info['post']) > 0 or \
                 len(info['collect_dict']) > 0 or \
@@ -338,33 +339,21 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
                 info['post_default_handler_params'] is not None
         return result
 
-    def walker(kls, parents: List):
+    def _handle_populate_ancestors(parents):
+        for field, kls_name in parents:
+            if field in metadata[kls_name]['raw_object_fields'] and \
+                field not in metadata[kls_name]['object_fields']:
+                metadata[kls_name]['object_fields'].append(field)
+            metadata[kls_name]['should_traverse'] = True
+
+    def walker(kls, parents: List[Tuple[str, str]]):
         kls_name = class_util.get_kls_full_path(kls)
-        print('1.', kls_name)
         hit = metadata.get(kls_name)
         if hit:
-            print('---- hit ')
-            loop_members = class_util.find_loop_members(parents, kls_name)
-
-            # if in a loop, find all members
-            if loop_members:
-                if len(loop_members) == 1:  # only itself
-                    return _should_traverse(hit) # decided by itself
-
-                other_loop_members = loop_members[1:]  # itself will run _should_traverse at outside
-                print('hit, other_loop_members', other_loop_members)
-                for member_name in other_loop_members:
-                    print('check loop ember')
-                    print(member_name)
-                    print(metadata[member_name])
-                    if _should_traverse(metadata[member_name]):
-                        return True
-                else:
-                    return False
-
-            else:
-                # not in a loop, should promised to have a value
-                return hit['should_traverse']  
+            if parents[-1][1] == kls_name:  # strictly self reference
+                if _has_config(hit):
+                    _handle_populate_ancestors(parents)
+            return
 
         # - prepare fields, with resolve_, post_ reserved
         all_fields, object_fields = _get_all_fields_and_object_fields(kls)
@@ -398,43 +387,35 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
             'post': post_fields,
             'post_params': post_params,
             'post_default_handler_params': post_default_handler_params,
-            'object_fields': object_fields_without_resolver,
+            'raw_object_fields': object_fields_without_resolver,
+            'object_fields': [],
             'expose_dict': expose_dict,
             'collect_dict': collect_dict,
             'kls': kls,
             'has_context': has_context,
-            'should_traverse': None  # unknown yeat
+            'should_traverse': False  # unknown yeat
         }
         metadata[kls_name] = info
 
-        should_traverse_in_deep = False
-        exclude_object_fields = set() 
+        # object fields
+        for field, shelled_type in (obj for obj in object_fields if obj[0] in object_fields_without_resolver):
+            walker(shelled_type, parents + [(field, kls_name)])
 
-        # for object_fields, we introduce an optimization (should_traverse)
-        # to reduce unnecessary traversal
-        # if walker meets cached kls, it will return None and continue
-        for field, shelled_type in (obj for obj in object_fields if obj[0] not in fields_with_resolver):
-            should_traverse = walker(shelled_type, parents + [kls_name])
-            print('2.', kls_name, field, should_traverse)
-            
-            if should_traverse is False:
-                # fields dont need to traverse
-                exclude_object_fields.add(field) 
-            else:            
-                should_traverse_in_deep = True
+        # resolve fields
+        for field, shelled_type in (obj for obj in object_fields if obj[0] in fields_with_resolver):
+            walker(shelled_type, parents + [(field, kls_name)])
 
-        info['object_fields'] = [f for f in info['object_fields'] if f not in exclude_object_fields]
+        final_should_traverse = info['should_traverse'] or _has_config(info)
 
-        for _, shelled_type in (obj for obj in object_fields if obj[0] in fields_with_resolver):
-            walker(shelled_type, parents + [kls_name])
+        if final_should_traverse:
+            _handle_populate_ancestors(parents)
 
-        self_should_traverse = _should_traverse(info)
-        ret = should_traverse_in_deep or self_should_traverse
-        info['should_traverse'] = ret
-        return ret
+        info['should_traverse'] = final_should_traverse
 
     walker(root_class, [])
     return metadata
+
+
 
 
 def convert_metadata_key_as_kls(metadata: MetaType) -> MappedMetaType:

@@ -146,11 +146,11 @@ def _get_items_v2(kls):
 get_items = _get_items_v2 if PYDANTIC_V2 else _get_items_v1
 
 
-def _get_keys_v1(kls):
+def _get_keys_v1(kls) -> str:
     return kls.__fields__.keys()
 
 
-def _get_keys_v2(kls):
+def _get_keys_v2(kls) -> str:
     return kls.model_fields.keys()
 
 

@@ -118,7 +118,7 @@ def test_analysis_object_fields():
             'should_traverse': True,
         },
     }
-    # from pprint import pprint
-    # pprint(result)
+    from pprint import pprint
+    pprint(result)
     for k, v in result.items():
         assert expect[k].items() <= v.items()
