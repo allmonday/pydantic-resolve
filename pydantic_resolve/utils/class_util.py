@@ -1,6 +1,6 @@
 import functools
 from dataclasses import is_dataclass
-from typing import Type, get_type_hints
+from typing import Type, get_type_hints, List
 import pydantic_resolve.constant as const
 from pydantic_resolve.compat import PYDANTIC_V2
 import pydantic_resolve.utils.class_util as class_util
@@ -200,3 +200,12 @@ def _is_required_v2(field):
     return field.is_required()
 
 is_required_field = _is_required_v2 if PYDANTIC_V2 else _is_required_v1
+
+
+def find_loop_members(parent: List[str], name: str):
+    # Return all elements after the first occurrence of `name` in `parent`
+    try:
+        idx = parent.index(name)
+        return parent[idx :]
+    except ValueError:
+        return []

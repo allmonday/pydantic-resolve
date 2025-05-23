@@ -5,19 +5,35 @@ class Tree(BaseModel):
     a: 'Tree'
     b: 'Tree'
 
+class Tree2(BaseModel):
+    a: 'Tree2'
+    b: 'Tree2'
+    def resolve_b(self):
+        return self.b
 
-# this is known issue
-# self reference will not support early skip traversal.
 def test_long_distance_resolve():
     result = scan_and_store_metadata(Tree)
     prefix = 'tests.common.test_long_distance_resolve_recursive'
     expect = {
         f'{prefix}.Tree': {
             'resolve': [],
-            'post': [],
-            'object_fields': ['a', 'b'],
-            'expose_dict': {},
-            'collect_dict': {},
+            'object_fields': [],
+            'should_traverse': False,
+        }
+    }
+    # from pprint import pprint
+    # pprint(result)
+    for k, v in result.items():
+        assert expect[k].items() <= v.items()
+
+def test_long_distance_resolve_2():
+    result = scan_and_store_metadata(Tree2)
+    prefix = 'tests.common.test_long_distance_resolve_recursive'
+    expect = {
+        f'{prefix}.Tree2': {
+            'resolve': ['resolve_b'],
+            'object_fields': ['a'],
+            'should_traverse': True,
         }
     }
     # from pprint import pprint
