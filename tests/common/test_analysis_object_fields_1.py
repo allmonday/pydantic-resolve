@@ -85,7 +85,7 @@ class Kls(BaseModel):
 # self reference will not support early skip traversal.
 def test_analysis_object_fields():
     result = scan_and_store_metadata(Kls)
-    prefix = 'tests.common.test_analysis_object_fields'
+    prefix = 'tests.common.test_analysis_object_fields_1'
     expect = {
         f'{prefix}.Kls': {
             'resolve': [],
@@ -118,7 +118,7 @@ def test_analysis_object_fields():
             'should_traverse': True,
         },
     }
-    from pprint import pprint
-    pprint(result)
+    # from pprint import pprint
+    # pprint(result)
     for k, v in result.items():
         assert expect[k].items() <= v.items()

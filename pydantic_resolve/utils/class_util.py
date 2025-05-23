@@ -200,12 +200,3 @@ def _is_required_v2(field):
     return field.is_required()
 
 is_required_field = _is_required_v2 if PYDANTIC_V2 else _is_required_v1
-
-
-def find_loop_members(parent: List[str], name: str):
-    # Return all elements after the first occurrence of `name` in `parent`
-    try:
-        idx = parent.index(name)
-        return parent[idx :]
-    except ValueError:
-        return []

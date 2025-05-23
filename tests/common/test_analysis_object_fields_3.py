@@ -13,7 +13,7 @@ class Tree2(BaseModel):
 
 def test_long_distance_resolve():
     result = scan_and_store_metadata(Tree)
-    prefix = 'tests.common.test_long_distance_resolve_recursive'
+    prefix = 'tests.common.test_analysis_object_fields_3'
     expect = {
         f'{prefix}.Tree': {
             'resolve': [],
@@ -28,7 +28,7 @@ def test_long_distance_resolve():
 
 def test_long_distance_resolve_2():
     result = scan_and_store_metadata(Tree2)
-    prefix = 'tests.common.test_long_distance_resolve_recursive'
+    prefix = 'tests.common.test_analysis_object_fields_3'
     expect = {
         f'{prefix}.Tree2': {
             'resolve': ['resolve_b'],

@@ -58,13 +58,13 @@ class KlsMetaType(TypedDict):
     resolve_params: Dict[str, ResolveMethodType]
     post_params: Dict[str, PostMethodType]
     post_default_handler_params: Optional[PostDefaultHandlerType]
-    raw_object_fields: List[str]
+    raw_object_fields: List[str] # store the original field names
     object_fields: List[str]
     expose_dict: dict
     collect_dict: dict
     kls: Type
     has_context: bool
-    should_traverse: Optional[bool]
+    should_traverse: bool
 
 MetaType = Dict[str, KlsMetaType]
 
@@ -339,20 +339,21 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
                 info['post_default_handler_params'] is not None
         return result
 
-    def _handle_populate_ancestors(parents):
+    def _populate_ancestors(parents):
         for field, kls_name in parents:
+            # normally, array size is small
             if field in metadata[kls_name]['raw_object_fields'] and \
                 field not in metadata[kls_name]['object_fields']:
                 metadata[kls_name]['object_fields'].append(field)
             metadata[kls_name]['should_traverse'] = True
 
-    def walker(kls, parents: List[Tuple[str, str]]):
+    def walker(kls, ancestors: List[Tuple[str, str]]):
         kls_name = class_util.get_kls_full_path(kls)
         hit = metadata.get(kls_name)
         if hit:
-            if parents[-1][1] == kls_name:  # strictly self reference
-                if _has_config(hit):
-                    _handle_populate_ancestors(parents)
+            # if populated by previous node, or self has_config
+            if hit['should_traverse'] or _has_config(hit):
+                _populate_ancestors(ancestors)
             return
 
         # - prepare fields, with resolve_, post_ reserved
@@ -393,29 +394,27 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
             'collect_dict': collect_dict,
             'kls': kls,
             'has_context': has_context,
-            'should_traverse': False  # unknown yeat
+            'should_traverse': False  
         }
         metadata[kls_name] = info
 
         # object fields
         for field, shelled_type in (obj for obj in object_fields if obj[0] in object_fields_without_resolver):
-            walker(shelled_type, parents + [(field, kls_name)])
+            walker(shelled_type, ancestors + [(field, kls_name)])
 
         # resolve fields
         for field, shelled_type in (obj for obj in object_fields if obj[0] in fields_with_resolver):
-            walker(shelled_type, parents + [(field, kls_name)])
+            walker(shelled_type, ancestors + [(field, kls_name)])
 
-        final_should_traverse = info['should_traverse'] or _has_config(info)
+        should_traverse = info['should_traverse'] or _has_config(info)
 
-        if final_should_traverse:
-            _handle_populate_ancestors(parents)
+        if should_traverse:
+            _populate_ancestors(ancestors)
 
-        info['should_traverse'] = final_should_traverse
+        info['should_traverse'] = should_traverse
 
     walker(root_class, [])
     return metadata
-
-
 
 
 def convert_metadata_key_as_kls(metadata: MetaType) -> MappedMetaType:

@@ -41,4 +41,4 @@ jobs:
       - run: pip install pydantic==1.*
 
       - name: Test with pytest
-        run: poetry run pytest tests/pydantic_v1
+        run: poetry run pytest tests/pydantic_v1 tests/common
