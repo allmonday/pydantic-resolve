@@ -38,6 +38,9 @@ This is what we really need in a specific business scenario.  (stable)
 
 This is the modifications required by view layer. (flexible)
 
+using post_field method, you can read values from ancestor node, transfer nodes to ancestor, or any in-place modifications.
+
+more information, please refer to [How it works?](#how-it-works)
 <img width="1705" alt="image" src="https://github.com/user-attachments/assets/9dc40483-1e07-42c1-b6f5-5bc7d6861630" />
 
 <img width="1730" alt="image" src="https://github.com/user-attachments/assets/9d2b2b2d-38ee-4ec6-b9e4-5cd5c19acdee" />
