@@ -22,29 +22,55 @@ It plays pretty well with FastAPI / Litestar / Django-ninja
 
 ### ER model (virtual)
 
-This is how we define the entities and their relationships.  (very stable)
+This is how we define the entities and their relationships.  (very stable, act as blueprint)
 
-<img width="1726" alt="image" src="https://github.com/user-attachments/assets/07220fdc-9a28-4d64-87eb-eb68cf2151b3" />
+<img width="639" alt="image" src="https://github.com/user-attachments/assets/2656f72e-1af5-467a-96f9-cab95760b720" />
+
+<img width="1128" alt="image" src="https://github.com/user-attachments/assets/9612ca2b-1f20-486a-a07f-2421e0c88ac5" />
+
+
 
 
 ### Business model (real)
 
-This is what we really need in a specific business scenario.  (stable)
+This is what we really need in a specific business scenario, pick and link.  (stable, and can be reused)
 
-<img width="1738" alt="image" src="https://github.com/user-attachments/assets/47ee88a8-388a-49bb-8d0c-772e8daf5ce7" />
+<img width="709" alt="image" src="https://github.com/user-attachments/assets/ffc74e60-0670-475c-85ab-cb0d03460813" />
+
+<img width="764" alt="image" src="https://github.com/user-attachments/assets/255b28c8-9a50-40c2-94d0-d662fdbaf84a" />
 
 
 ### View model
 
-This is the modifications required by view layer. (flexible)
+Here we can do extra modifications for view layer. (flexible, case by case)
 
 using post_field method, you can read values from ancestor node, transfer nodes to ancestor, or any in-place modifications.
 
 more information, please refer to [How it works?](#how-it-works)
-<img width="1705" alt="image" src="https://github.com/user-attachments/assets/9dc40483-1e07-42c1-b6f5-5bc7d6861630" />
 
-<img width="1730" alt="image" src="https://github.com/user-attachments/assets/9d2b2b2d-38ee-4ec6-b9e4-5cd5c19acdee" />
+#### case 1: collect related users for each story
 
+<img width="701" alt="image" src="https://github.com/user-attachments/assets/2e3b1345-9e5e-489b-a81d-dc220b9d6334" />
+
+<img width="1083" alt="image" src="https://github.com/user-attachments/assets/12dce9ac-03f1-4218-9d95-6d1e2e84a809" />
+
+
+#### case 2: sum up estimate time for each story
+
+<img width="687" alt="image" src="https://github.com/user-attachments/assets/fd5897d6-1c6a-49ec-aab0-495070054b83" />
+
+<img width="946" alt="image" src="https://github.com/user-attachments/assets/b7048d66-c232-4bf7-b61e-d6fd77db8191" />
+
+### Run it
+
+```python
+from pydantic_resolve import Resolver
+
+stories: List[Story] = await query_stories()
+await Resolver().resolve(stories)
+```
+
+done!
 
 ## Installation
 
