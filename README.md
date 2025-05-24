@@ -28,7 +28,7 @@ This is how we define the entities and their relationships.  (very stable, act a
 
 <img width="1128" alt="image" src="https://github.com/user-attachments/assets/9612ca2b-1f20-486a-a07f-2421e0c88ac5" />
 
-
+Inside DataLoader, you could adopt whatever tech-stacks you like, from DB query to RPC.
 
 
 ### Business model (real)
@@ -39,6 +39,7 @@ This is what we really need in a specific business scenario, pick and link.  (st
 
 <img width="764" alt="image" src="https://github.com/user-attachments/assets/255b28c8-9a50-40c2-94d0-d662fdbaf84a" />
 
+> Once the business model is validated as useful, more efficient (but complex) queries can be used to replace DataLoader.
 
 ### View model
 
