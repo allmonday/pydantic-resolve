@@ -24,6 +24,7 @@ class DataLoaderType(TypedDict):
     param: str
     kls: Type
     path: str
+    request_type: Type
 
 class CollectorType(TypedDict):
     field: str 
@@ -66,6 +67,14 @@ class KlsMetaType(TypedDict):
     has_context: bool
     should_traverse: bool
 
+class LoaderQueryMetaRequestType(TypedDict):
+    name: Type
+    fields: List[str]
+
+class LoaderQueryMeta(TypedDict):
+    required_types: List
+    all_fields: List[str]
+
 MetaType = Dict[str, KlsMetaType]
 
 class MappedMetaMemberType(KlsMetaType):
@@ -75,7 +84,7 @@ class MappedMetaMemberType(KlsMetaType):
 MappedMetaType = Dict[Type, MappedMetaMemberType]
 
 
-def _scan_resolve_method(method, field: str) -> ResolveMethodType:
+def _scan_resolve_method(method, field: str, request_type: Optional[Type]) -> ResolveMethodType:
     result: ResolveMethodType = {
         'trim_field': field.replace(const.RESOLVE_PREFIX, ''),
         'context': False,
@@ -99,7 +108,9 @@ def _scan_resolve_method(method, field: str) -> ResolveMethodType:
             info: DataLoaderType = { 
                 'param': name,
                 'kls': param.default.dependency,  # for later initialization
-                'path': class_util.get_kls_full_path(param.default.dependency) }
+                'path': class_util.get_kls_full_path(param.default.dependency),
+                'request_type': request_type
+            }
             result['dataloaders'].append(info)
 
     for name, param in signature.parameters.items():
@@ -109,7 +120,7 @@ def _scan_resolve_method(method, field: str) -> ResolveMethodType:
     return result
 
 
-def _scan_post_method(method, field) -> PostMethodType:
+def _scan_post_method(method, field: str, request_type: Optional[Type]) -> PostMethodType:
     result: PostMethodType = {
         'trim_field': field.replace(const.POST_PREFIX, ''),
         'context': False,
@@ -135,7 +146,9 @@ def _scan_post_method(method, field) -> PostMethodType:
             loader_info: DataLoaderType = { 
                 'param': name,
                 'kls': param.default.dependency,  # for later initialization
-                'path': class_util.get_kls_full_path(param.default.dependency) }
+                'path': class_util.get_kls_full_path(param.default.dependency),
+                'request_type': request_type
+            }
             result['dataloaders'].append(loader_info)
 
         if isinstance(param.default, ICollector):
@@ -186,7 +199,7 @@ def validate_and_create_loader_instance(
         loader_params,
         global_loader_param,
         loader_instances,
-        metadata):
+        metadata: MappedMetaType):
     """
     return loader_instance_cache
 
@@ -252,6 +265,9 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
     collect_set = set()  # for validation
     metadata: MetaType = {}
 
+    def _get_request_type_for_loader(object_field_pairs, field_name: str):
+        return object_field_pairs.get(field_name)
+
     def _get_all_fields_and_object_fields(kls):
         if class_util.safe_issubclass(kls, BaseModel):
             all_fields = set(class_util.get_keys(kls))
@@ -261,14 +277,13 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
             object_fields = list(class_util.get_dataclass_attrs(kls))
         else:
             raise AttributeError('invalid type: should be pydantic object or dataclass object')  #noqa
-        return all_fields, object_fields
+        return all_fields, object_fields, { x:y for x, y in object_fields}
     
     def _has_post_default_handler(kls):
         fields = dir(kls)
         fields = [f for f in fields if f == const.POST_DEFAULT_HANDLER and isfunction(getattr(kls, f))]
         return len(fields) > 0
 
-    
     def _get_resolve_and_post_fields(kls):
         fields = dir(kls)
 
@@ -357,7 +372,7 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
             return
 
         # - prepare fields, with resolve_, post_ reserved
-        all_fields, object_fields = _get_all_fields_and_object_fields(kls)
+        all_fields, object_fields, object_field_pairs = _get_all_fields_and_object_fields(kls)
         resolve_fields, post_fields, fields_with_resolver = _get_resolve_and_post_fields(kls)
         _validate_resolve_and_post_fields(resolve_fields, post_fields, all_fields)
         object_fields_without_resolver = [a[0] for a in object_fields if a[0] not in fields_with_resolver] 
@@ -367,8 +382,20 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
         collect_dict = getattr(kls, const.COLLECTOR_CONFIGURATION, {})
         _validate_expose(expose_dict, kls_name)
 
-        resolve_params = {field: _scan_resolve_method(getattr(kls, field), field) for field in resolve_fields}
-        post_params = {field: _scan_post_method(getattr(kls, field), field) for field in post_fields}
+        resolve_params = {
+            field: _scan_resolve_method(
+                    getattr(kls, field),
+                    field,
+                    _get_request_type_for_loader(object_field_pairs, field)) 
+                for field in resolve_fields
+        }
+        post_params = {
+            field: _scan_post_method(
+                    getattr(kls, field),
+                    field,
+                    _get_request_type_for_loader(object_field_pairs, field)) 
+                for field in post_fields
+        }
         post_default_handler_params = _scan_post_default_handler(getattr(kls, const.POST_DEFAULT_HANDLER)) if _has_post_default_handler(kls) else None
 
         # check context
