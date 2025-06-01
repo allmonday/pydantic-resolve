@@ -43,4 +43,4 @@ async def test_loader_query_meta():
         {'name': Student, 'fields': ['id', 'name']},
         {'name': Student2, 'fields': ['name']}
     ]
-    assert set(loader_instance._query_meta['all_fields']) == {'id', 'name'}
+    assert set(loader_instance._query_meta['fields']) == {'id', 'name'}

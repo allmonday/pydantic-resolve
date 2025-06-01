@@ -73,7 +73,7 @@ class LoaderQueryMetaRequestType(TypedDict):
 
 class LoaderQueryMeta(TypedDict):
     required_types: List
-    all_fields: List[str]
+    fields: List[str]
 
 MetaType = Dict[str, KlsMetaType]
 
@@ -257,7 +257,7 @@ def validate_and_create_loader_instance(
     def _generate_meta(types: List[Type]):
         _fields = set()
         meta: LoaderQueryMeta = {
-            'all_fields': [],
+            'fields': [],
             'request_types': []
         }
 
@@ -265,7 +265,7 @@ def validate_and_create_loader_instance(
             fields = _get_all_fields(t)
             meta['request_types'].append(dict(name=t, fields=fields))
             _fields.update(fields)
-        meta['all_fields'] = list(_fields)
+        meta['fields'] = list(_fields)
         return meta
     
     cache = {}
