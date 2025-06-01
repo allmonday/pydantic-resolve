@@ -24,7 +24,7 @@ class DataLoaderType(TypedDict):
     param: str
     kls: Type
     path: str
-    request_type: Type
+    request_type: Optional[Type]
 
 class CollectorType(TypedDict):
     field: str 
@@ -244,16 +244,63 @@ def validate_and_create_loader_instance(
             loader = DataLoader(batch_load_fn=loader_kls)  # type:ignore
             return loader
     
-    cache = {}
+    def _get_all_fields(kls):
+        if class_util.safe_issubclass(kls, BaseModel):
+            return list(class_util.get_keys(kls))
+
+        elif is_dataclass(kls):
+            return [f.name for f in dc_fields(kls)]
+
+        else:
+            raise AttributeError('invalid type: should be pydantic object or dataclass object')  #noqa
+
+    def _generate_meta(types: List[Type]):
+        _fields = set()
+        meta: LoaderQueryMeta = {
+            'all_fields': [],
+            'request_types': []
+        }
+
+        for t in types:
+            fields = _get_all_fields(t)
+            meta['request_types'].append(dict(name=t, fields=fields))
+            _fields.update(fields)
+        meta['all_fields'] = list(_fields)
+        return meta
     
+    cache = {}
+    request_info = {}
+    
+    # create instance
     for loader in _get_all_loaders_from_meta(metadata):
         loader_kls, path = loader['kls'], loader['path']
 
         if path in cache: continue
-        if loader_instances.get(loader_kls):
+
+        if loader_instances.get(loader_kls):  # if instance already exists
             cache[path] = loader_instances.get(loader_kls)
             continue
+
         cache[path] = _create_instance(loader)    
+
+    # prepare query meta
+    for loader in _get_all_loaders_from_meta(metadata):
+        kls, path = loader['request_type'], loader['path']
+
+        if kls is None:
+            continue
+
+        if path in request_info and kls not in request_info[path]:
+            request_info[path].append(kls)
+        else: 
+            request_info[path] = [kls]
+
+    # combine together
+    for path, instance in cache.items():
+        if request_info.get(path) is None:
+            continue
+
+        instance._query_meta = _generate_meta(request_info[path])
 
     return cache
 
@@ -386,14 +433,18 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
             field: _scan_resolve_method(
                     getattr(kls, field),
                     field,
-                    _get_request_type_for_loader(object_field_pairs, field)) 
+                    _get_request_type_for_loader(
+                        object_field_pairs, 
+                        field.replace(const.RESOLVE_PREFIX, ''))) 
                 for field in resolve_fields
         }
         post_params = {
             field: _scan_post_method(
                     getattr(kls, field),
                     field,
-                    _get_request_type_for_loader(object_field_pairs, field)) 
+                    _get_request_type_for_loader(
+                        object_field_pairs, 
+                        field.replace(const.POST_PREFIX, ''))) 
                 for field in post_fields
         }
         post_default_handler_params = _scan_post_default_handler(getattr(kls, const.POST_DEFAULT_HANDLER)) if _has_post_default_handler(kls) else None

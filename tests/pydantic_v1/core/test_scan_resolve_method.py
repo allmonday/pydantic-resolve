@@ -10,7 +10,7 @@ def test_scan_resolve_method_1():
         def resolve_a(self):
             return 2 * self.a
         
-    result = _scan_resolve_method(A.resolve_a, 'resolve_a')
+    result = _scan_resolve_method(A.resolve_a, 'resolve_a', None)
 
     assert result == {
         'trim_field': 'a',
@@ -27,7 +27,7 @@ def test_scan_resolve_method_2():
         def resolve_a(self, context, ancestor_context, parent):
             return 2 * self.a
         
-    result = _scan_resolve_method(A.resolve_a, 'resolve_a')
+    result = _scan_resolve_method(A.resolve_a, 'resolve_a', None)
 
     assert result == {
         'trim_field': 'a',
@@ -48,7 +48,7 @@ def test_scan_resolve_method_3():
         def resolve_a(self, context, ancestor_context, parent, loader=LoaderDepend(Loader)):
             return 2 * self.a
         
-    result = _scan_resolve_method(A.resolve_a, 'resolve_a')
+    result = _scan_resolve_method(A.resolve_a, 'resolve_a', None)
 
     assert result == {
         'trim_field': 'a',
@@ -59,7 +59,8 @@ def test_scan_resolve_method_3():
             {
                 'param': 'loader',
                 'kls': Loader,
-                'path': 'test_scan_resolve_method.test_scan_resolve_method_3.<locals>.Loader' 
+                'path': 'test_scan_resolve_method.test_scan_resolve_method_3.<locals>.Loader',
+                'request_type': None
             }
         ]
     }
@@ -72,4 +73,4 @@ def test_scan_resolve_method_4():
             return c.values()
         
     with pytest.raises(AttributeError):
-        _scan_resolve_method(A.resolve_a, 'resolve_a')
+        _scan_resolve_method(A.resolve_a, 'resolve_a', None)

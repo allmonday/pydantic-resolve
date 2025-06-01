@@ -6,7 +6,7 @@ from pydantic_resolve import LoaderDepend, Resolver
 class SampleLoader(DataLoader):
     async def batch_load_fn(self, keys):
         """A simple loader that returns the keys as values."""
-        return [[Student(id=1, name='me')] for k in keys]
+        return [[dict(id=1, name='me')] for k in keys]
 
 class Student(BaseModel):
     id: int
@@ -42,10 +42,4 @@ async def test_loader_query_meta():
         {'name': Student, 'fields': ['id', 'name']},
         {'name': Student2, 'fields': ['name']}
     ]
-    assert loader_instance._query_meta['all_fields'] == ['id', 'name']
-
-    
-# @pytest.mark.asyncio
-# async def test_loader_query_meta_in_analysis_scan():
-#     ...
-#     loader = SampleLoader()
+    assert set(loader_instance._query_meta['all_fields']) == {'id', 'name'}
