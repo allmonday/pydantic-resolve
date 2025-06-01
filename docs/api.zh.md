@@ -362,9 +362,7 @@ data = await Resolver(loader_filters={LoaderA:{'power': 2}}).resolve(data)
 
 请慎用， 参数维护可能会不清晰。
 
-## 辅助方法
-
-### self._query_meta
+#### self.\_query_meta
 
 它提供了 `fields` 和 `request_types` 两个字段信息， 用来获取调用 dataloader 之后用来返回的类型信息。
 
@@ -397,6 +395,8 @@ class ClassRoom(BaseModel):
     def resolve_students(self, loader=LoaderDepend(SampleLoader)):
         return loader.load(self.id)
 ```
+
+## 辅助方法
 
 ### build_list, build_object
 

@@ -370,9 +370,7 @@ If multiple instances of the same type of `DataLoader` use the same parameters, 
 
 Use with caution, as parameter maintenance may become unclear.
 
-## Auxiliary Methods
-
-### self._query_meta
+#### self.\_query_meta
 
 It provides two fields, `fields` and `request_types`, which are used to obtain the type information returned after calling the dataloader.
 
@@ -407,6 +405,8 @@ class ClassRoom(BaseModel):
     def resolve_students(self, loader=LoaderDepend(SampleLoader)):
         return loader.load(self.id)
 ```
+
+## Auxiliary Methods
 
 ### build_list, build_object
 
