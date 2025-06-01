@@ -96,7 +96,8 @@ def test_resolve_params():
                         {
                             'param': 'loader',
                             'kls': loader_fn,
-                            'path': 'test_field_dataclass_anno.loader_fn'
+                            'path': 'test_field_dataclass_anno.loader_fn',
+                            'request_type': None
                         }
                     ],
                 }, 

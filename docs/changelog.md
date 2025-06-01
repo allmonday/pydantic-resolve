@@ -2,6 +2,36 @@
 
 ## v1.12
 
+### v1.12.1 (2025.6.1)
+
+feature:
+
+inside dataloader object, we can read the request return types / request fiels from `_query_meta` field.
+
+```python
+class SampleLoader(DataLoader):
+    async def batch_load_fn(self, keys):
+        print(self._query_meta['fields']) # => ['id', 'name']
+        print(self._query_meta['request_types']) # => [ {'name': Student, 'fields': ['id', 'name'] } ]
+
+        data = await query_students(self._query_meta['fields'], keys)
+        # select id, name from xxxxx
+
+        return build_list(data, keys, lambda d: d.id)
+
+class Student(BaseModel):
+    id: int
+    name: str
+
+class ClassRoom(BaseModel):
+    id: int
+    name: str
+
+    students: List[Student] = []
+    def resolve_students(self, loader=LoaderDepend(SampleLoader)):
+        return loader.load(self.id)
+```
+
 ### v1.12.0 (2025.5.24)
 
 optimization:

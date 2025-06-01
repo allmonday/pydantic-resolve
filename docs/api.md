@@ -372,6 +372,42 @@ Use with caution, as parameter maintenance may become unclear.
 
 ## Auxiliary Methods
 
+### self._query_meta
+
+It provides two fields, `fields` and `request_types`, which are used to obtain the type information returned after calling the dataloader.
+
+This can optimize the field range limitation in the dataloader, such as specifying fields in SQL queries.
+
+Since a dataloader may have multiple callers, the type of `request_types` is an array.
+
+`fields` is the deduplicated result of all `request_types.fields`.
+
+```python
+class SampleLoader(DataLoader):
+    async def batch_load_fn(self, keys):
+
+        print(self._query_meta['fields']) # => ['id', 'name']
+        print(self._query_meta['request_types']) # => [ {'name': Student, 'fields': ['id', 'name'] } ]
+
+        data = await query_students(self._query_meta['fields'], keys)
+        # select id, name from xxxxx
+
+        return build_list(data, keys, lambda d: d.id)
+
+
+class Student(BaseModel):
+    id: int
+    name: str
+
+class ClassRoom(BaseModel):
+    id: int
+    name: str
+
+    students: List[Student] = []
+    def resolve_students(self, loader=LoaderDepend(SampleLoader)):
+        return loader.load(self.id)
+```
+
 ### build_list, build_object
 
 Used in `DataLoader` to aggregate the obtained data according to the keys.
