@@ -68,7 +68,8 @@ def test_get_all_fields():
                         {
                             'param': 'loader',
                             'kls': loader_fn,
-                            'path': 'test_field_dataclass_anno.loader_fn'
+                            'path': 'test_field_dataclass_anno.loader_fn',
+                            'request_type': None
                         }
                     ],
                 }, 

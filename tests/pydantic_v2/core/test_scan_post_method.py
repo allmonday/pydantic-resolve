@@ -8,7 +8,7 @@ def test_scan_post_method_1():
         def post_a(self):
             return 2 * self.a
         
-    result = _scan_post_method(A.post_a, 'post_a')
+    result = _scan_post_method(A.post_a, 'post_a', None)
 
     assert result == {
         'trim_field': 'a',
@@ -26,7 +26,7 @@ def test_scan_post_method_2():
         def post_a(self, context, ancestor_context, parent):
             return 2 * self.a
         
-    result = _scan_post_method(A.post_a, 'post_a')
+    result = _scan_post_method(A.post_a, 'post_a', None)
 
     assert result == {
         'trim_field': 'a',
@@ -49,7 +49,7 @@ def test_scan_post_method_3():
                    ):
             return 2 * self.a
         
-    result = _scan_post_method(A.post_a, 'post_a')
+    result = _scan_post_method(A.post_a, 'post_a', None)
 
     assert len(result['collectors']) == 2
     assert result['collectors'][0]['field'] == 'post_a' 

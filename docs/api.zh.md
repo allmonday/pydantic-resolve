@@ -364,6 +364,40 @@ data = await Resolver(loader_filters={LoaderA:{'power': 2}}).resolve(data)
 
 ## 辅助方法
 
+### self._query_meta
+
+它提供了 `fields` 和 `request_types` 两个字段信息， 用来获取调用 dataloader 之后用来返回的类型信息。
+
+可以优化 dataloader 中字段范围的限定， 比如 sql 查询中的字段等
+
+因为一个 dataloader 可能有多个调用者， 所以 request_types 类型是个数组
+
+`fields` 是 `request_types.fields` 的去重结果
+
+```python
+class SampleLoader(DataLoader):
+    async def batch_load_fn(self, keys):
+        print(self._query_meta['fields']) # => ['id', 'name']
+        print(self._query_meta['request_types']) # => [ {'name': Student, 'fields': ['id', 'name'] } ]
+
+        data = await query_students(self._query_meta['fields'], keys)
+        # select id, name from xxxxx
+
+        return build_list(data, keys, lambda d: d.id)
+
+class Student(BaseModel):
+    id: int
+    name: str
+
+class ClassRoom(BaseModel):
+    id: int
+    name: str
+
+    students: List[Student] = []
+    def resolve_students(self, loader=LoaderDepend(SampleLoader)):
+        return loader.load(self.id)
+```
+
 ### build_list, build_object
 
 在 DataLoader 中用来将获取到的数据根据 keys 做聚合。
