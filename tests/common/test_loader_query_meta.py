@@ -1,4 +1,5 @@
 import pytest
+from typing import List
 from pydantic import BaseModel
 from aiodataloader import DataLoader
 from pydantic_resolve import LoaderDepend, Resolver
@@ -19,11 +20,11 @@ class ClassRoom(BaseModel):
     id: int
     name: str
 
-    students: list[Student] = []
+    students: List[Student] = []
     def resolve_students(self, loader=LoaderDepend(SampleLoader)):
         return loader.load(self.id)
 
-    students2: list[Student2] = []
+    students2: List[Student2] = []
     def resolve_students2(self, loader=LoaderDepend(SampleLoader)):
         return loader.load(self.id)
 
