@@ -16,7 +16,7 @@ It plays pretty well with FastAPI / Litestar / Django-ninja
 
 > It also supports dataclass
 
-## TL;DR;
+## TL;DR
 
 3 Steps to build to your view object. Let's go.
 
