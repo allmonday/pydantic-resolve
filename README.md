@@ -100,7 +100,7 @@ you can also pick fields and decorate it with `ensure_subset` to check the consi
 
 ```python
 @ensure_subset(BaseStory)
-class Story(BaseStory):
+class Story(BaseModel):
     id: int
     assignee_id: int
     report_to: int
