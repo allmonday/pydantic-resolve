@@ -54,14 +54,14 @@ from aiodataloader import DataLoader
 from pydantic_resolve import build_list, build_object
 
 class StoryTaskLoader(DataLoader):
-    async def batch_load_fn(self, keys: list[int]) -> list[list[BaseTask]]:
+    async def batch_load_fn(self, keys: list[int]):
         tasks = await get_tasks_by_story_ids(keys)
-        return build_list(tasks, keys, lambda x: x.story_id) # type: ignore
+        return build_list(tasks, keys, lambda x: x.story_id)
 
 class UserLoader(DataLoader):
-    async def batch_load_fn(self, keys: list[int]) -> list[list[BaseUser]]:
+    async def batch_load_fn(self, keys: list[int]):
         users = await get_tuser_by_ids(keys)
-        return build_object(users, keys, lambda x: x.id) # type: ignore
+        return build_object(users, keys, lambda x: x.id)
 ```
 
 Inside DataLoader, you could adopt whatever tech-stacks you like, from DB query to RPC.
@@ -147,7 +147,8 @@ class Story(BaseStory):
     reporter: Optional[BaseUser] = None
     def resolve_reporter(self, loader=LoaderDepend(UserLoader)):
         return loader.load(self.report_to)
-    
+
+    # ---------- post method ------------
     related_users: list[BaseUser] = []
     def post_related_users(self, collector=Collector(alias='related_users')):
         return collector.values()
@@ -172,6 +173,7 @@ class Story(BaseStory):
     def resolve_reporter(self, loader=LoaderDepend(UserLoader)):
         return loader.load(self.report_to)
     
+    # ---------- post method ------------
     total_estimate: int = 0
     def post_total_estimate(self):
         return sum(task.estimate for task in self.tasks)
@@ -187,8 +189,9 @@ class Task(BaseTask):
     def resolve_user(self, loader=LoaderDepend(UserLoader)):
         return loader.load(self.assignee_id)
     
+    # ---------- post method ------------
     def post_name(self, ancestor_context):  # read story.name from direct ancestor
-        return f'{ancestor_context['story_name']} - {self.name}' #type: ignore
+        return f'{ancestor_context['story_name']} - {self.name}'
 
 class Story(BaseStory):
     __pydantic_resolve_expose__ = {'name': 'story_name'}
