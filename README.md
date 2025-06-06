@@ -20,28 +20,100 @@ It plays pretty well with FastAPI / Litestar / Django-ninja
 
 3 Steps to build to your view object. Let's go.
 
-### ER model (virtual)
+### 1. Design ER model
 
 This is how we define the entities and their relationships.  (very stable, act as blueprint)
 
 <img width="639" alt="image" src="https://github.com/user-attachments/assets/2656f72e-1af5-467a-96f9-cab95760b720" />
 
-<img width="1128" alt="image" src="https://github.com/user-attachments/assets/9612ca2b-1f20-486a-a07f-2421e0c88ac5" />
+```python
+from pydantic import BaseModel
+
+class BaseStory(BaseModel):
+    id: int
+    name: str
+    assignee_id: Optional[int]
+    report_to: Optional[int]
+
+class BaseTask(BaseModel):
+    id: int
+    story_id: int
+    name: str
+    estimate: int
+    done: bool
+    assignee_id: Optional[int]   
+
+class BaseUser(BaseModel):
+    id: int
+    name: str
+    title: str
+```
+
+```python
+from aiodataloader import DataLoader
+from pydantic_resolve import build_list, build_object
+
+class StoryTaskLoader(DataLoader):
+    async def batch_load_fn(self, keys: list[int]) -> list[list[BaseTask]]:
+        tasks = await get_tasks_by_story_ids(keys)
+        return build_list(tasks, keys, lambda x: x.story_id) # type: ignore
+
+class UserLoader(DataLoader):
+    async def batch_load_fn(self, keys: list[int]) -> list[list[BaseUser]]:
+        users = await get_tuser_by_ids(keys)
+        return build_object(users, keys, lambda x: x.id) # type: ignore
+```
 
 Inside DataLoader, you could adopt whatever tech-stacks you like, from DB query to RPC.
 
 
-### Business model (real)
+### 1. Build business model for specific use case
 
 This is what we really need in a specific business scenario, pick and link.  (stable, and can be reused)
 
 <img width="709" alt="image" src="https://github.com/user-attachments/assets/ffc74e60-0670-475c-85ab-cb0d03460813" />
 
-<img width="764" alt="image" src="https://github.com/user-attachments/assets/255b28c8-9a50-40c2-94d0-d662fdbaf84a" />
+```python
+from pydantic_resolve import LoaderDepend
+
+class Task(BaseTask):
+    user: Optional[BaseUser] = None
+    def resolve_user(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.assignee_id) if self.assignee_id else None
+
+class Story(BaseStory):
+    tasks: list[Task] = []
+    def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
+        return loader.load(self.id)
+    
+    assignee: Optional[BaseUser] = None
+    def resolve_assignee(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.assignee_id) if self.assignee_id else None
+    
+    reporter: Optional[BaseUser] = None
+    def resolve_reporter(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.report_to) if self.report_to else None
+```
+
+
+you can also pick fields and decorate it with `ensure_subset` to check the consistence
+
+```python
+@ensure_subset(BaseStory)
+class Story(BaseStory):
+    id: int
+    assignee_id: int
+    report_to: int
+
+    tasks: list[BaseTask] = []
+    def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
+        return loader.load(self.id)
+
+```
 
 > Once the business model is validated as useful, more efficient (but complex) queries can be used to replace DataLoader.
 
-### View model
+### 3. Tweak the view model
 
 Here we can do extra modifications for view layer. (flexible, case by case)
 
@@ -53,16 +125,88 @@ more information, please refer to [How it works?](#how-it-works)
 
 <img width="701" alt="image" src="https://github.com/user-attachments/assets/2e3b1345-9e5e-489b-a81d-dc220b9d6334" />
 
-<img width="1083" alt="image" src="https://github.com/user-attachments/assets/12dce9ac-03f1-4218-9d95-6d1e2e84a809" />
+```python
+from pydantic_resolve import LoaderDepend, Collector
+
+class Task(BaseTask):
+    __pydantic_resolve_collect__ = {'user': 'related_users'}  # send user to collector: 'related_users'
+
+    user: Optional[BaseUser] = None
+    def resolve_user(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.assignee_id)
+
+class Story(BaseStory):
+    tasks: list[Task] = []
+    def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
+        return loader.load(self.id)
+    
+    assignee: Optional[BaseUser] = None
+    def resolve_assignee(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.assignee_id)
+    
+    reporter: Optional[BaseUser] = None
+    def resolve_reporter(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.report_to)
+    
+    related_users: list[BaseUser] = []
+    def post_related_users(self, collector=Collector(alias='related_users')):
+        return collector.values()
+```
 
 
 #### case 2: sum up estimate time for each story
 
 <img width="687" alt="image" src="https://github.com/user-attachments/assets/fd5897d6-1c6a-49ec-aab0-495070054b83" />
 
-<img width="946" alt="image" src="https://github.com/user-attachments/assets/b7048d66-c232-4bf7-b61e-d6fd77db8191" />
+```python
+class Story(BaseStory):
+    tasks: list[Task] = []
+    def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
+        return loader.load(self.id)
+    
+    assignee: Optional[BaseUser] = None
+    def resolve_assignee(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.assignee_id)
+    
+    reporter: Optional[BaseUser] = None
+    def resolve_reporter(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.report_to)
+    
+    total_estimate: int = 0
+    def post_total_estimate(self):
+        return sum(task.estimate for task in self.tasks)
+```
 
-### Run it
+### case 3: expose ancestor field to descents
+
+```python
+from pydantic_resolve import LoaderDepend
+
+class Task(BaseTask):
+    user: Optional[BaseUser] = None
+    def resolve_user(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.assignee_id)
+    
+    def post_name(self, ancestor_context):  # read story.name from direct ancestor
+        return f'{ancestor_context['story_name']} - {self.name}' #type: ignore
+
+class Story(BaseStory):
+    __pydantic_resolve_expose__ = {'name': 'story_name'}
+
+    tasks: list[Task] = []
+    def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
+        return loader.load(self.id)
+    
+    assignee: Optional[BaseUser] = None
+    def resolve_assignee(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.assignee_id)
+    
+    reporter: Optional[BaseUser] = None
+    def resolve_reporter(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.report_to)
+```
+
+### 4. Resolve and get the result
 
 ```python
 from pydantic_resolve import Resolver
