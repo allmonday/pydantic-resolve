@@ -3,14 +3,13 @@
 ![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
-<img style="width:420px;" src="./docs/images/resolver.png"></img>
+pydantic-resolve is a tool helps to flexibly assemble view objects, and might be the most intuitive one.
 
+> The best scenaio of pydantic-resolve might be api integration, developer can easily build view object for frontend and let them focus on UI
 
-pydantic-resolve is a tool helps to flexibly assemble data together, might be the most intuitive one
+It can progressively extends the data, adding new fields without any loops or temp variables, just a simple dataloader can handle anything.
 
-It can progressively extends the target data, adding new fields without any loops or temp variables, just a simple dataloader can handle anything.
-
-You can simply extend your data by adding `resolve_field` function, no matter the position, no matter list or single.
+You can simply extend your data by adding `resolve_field` function, or re-org, in-place modify the target field by adding `post_field` function, no matter the nested position, no matter list or single.
 
 It plays pretty well with FastAPI / Litestar / Django-ninja
 
