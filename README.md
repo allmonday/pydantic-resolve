@@ -3,25 +3,46 @@
 ![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
-pydantic-resolve is a tool helps to flexibly assemble view objects, and might be the most intuitive one.
+pydantic-resolve is a sophisticated framework for composing complex data structures with an intuitive, resolver-based architecture that eliminates the N+1 query problem.
 
-> The best scenaio of pydantic-resolve might be api integration, developer can easily build view object for frontend and let them focus on UI
+```python
+class Task(BaseTask):
+    user: Optional[BaseUser] = None
+    def resolve_user(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.assignee_id) if self.assignee_id else None
+```
 
-It can progressively extends the data, adding new fields without any loops or temp variables, just a simple dataloader can handle anything.
+If you have experience with GraphQL, this article provides comprehensive insights: [Resolver Pattern: A Better Alternative to GraphQL in BFF.](https://github.com/allmonday/resolver-vs-graphql/blob/master/README-en.md)
 
-You can simply extend your data by adding `resolve_field` function, or re-org, in-place modify the target field by adding `post_field` function, no matter the nested position, no matter list or single.
+The framework enables progressive data enrichment through incremental field resolution, allowing seamless API evolution from flat to hierarchical data structures.
 
-It plays pretty well with FastAPI / Litestar / Django-ninja
+Extend your data models by implementing `resolve_field` methods for data fetching and `post_field` methods for transformations, enabling node creation, in-place modifications, or cross-node data aggregation.
 
-> It also supports dataclass
+Seamlessly integrates with modern Python web frameworks including FastAPI, Litestar, and Django-ninja.
 
-## TL;DR
+> dataclass support is also available
 
-3 Steps to build to your view object. Let's go.
+## Installation
 
-### 1. Design ER model
+```
+pip install pydantic-resolve
+```
 
-This is how we define the entities and their relationships.  (very stable, act as blueprint)
+Starting from pydantic-resolve v1.11.0, both pydantic v1 and v2 are supported.
+
+## Documentation
+
+- **Documentation**: https://allmonday.github.io/pydantic-resolve/v2/introduction/
+- **Demo Repository**: https://github.com/allmonday/pydantic-resolve-demo
+- **Composition-Oriented Pattern**: https://github.com/allmonday/composition-oriented-development-pattern
+
+## Architecture Overview
+
+Building complex data structures requires only 3 systematic steps:
+
+### 1. Define Domain Models
+
+Establish entity relationships as foundational data models (stable, serves as architectural blueprint)
 
 <img width="639" alt="image" src="https://github.com/user-attachments/assets/2656f72e-1af5-467a-96f9-cab95760b720" />
 
@@ -40,7 +61,7 @@ class BaseTask(BaseModel):
     name: str
     estimate: int
     done: bool
-    assignee_id: Optional[int]   
+    assignee_id: Optional[int]
 
 class BaseUser(BaseModel):
     id: int
@@ -63,12 +84,11 @@ class UserLoader(DataLoader):
         return build_object(users, keys, lambda x: x.id)
 ```
 
-Inside DataLoader, you could adopt whatever tech-stacks you like, from DB query to RPC.
+DataLoader implementations support flexible data sources, from database queries to microservice RPC calls.
 
+### 2. Compose Business Models
 
-### 1. Build business model for specific use case
-
-This is what we really need in a specific business scenario, pick and link.  (stable, and can be reused)
+Create domain-specific data structures through selective composition and relationship mapping (stable, reusable across use cases)
 
 <img width="709" alt="image" src="https://github.com/user-attachments/assets/ffc74e60-0670-475c-85ab-cb0d03460813" />
 
@@ -84,18 +104,17 @@ class Story(BaseStory):
     tasks: list[Task] = []
     def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
         return loader.load(self.id)
-    
+
     assignee: Optional[BaseUser] = None
     def resolve_assignee(self, loader=LoaderDepend(UserLoader)):
         return loader.load(self.assignee_id) if self.assignee_id else None
-    
+
     reporter: Optional[BaseUser] = None
     def resolve_reporter(self, loader=LoaderDepend(UserLoader)):
         return loader.load(self.report_to) if self.report_to else None
 ```
 
-
-you can also pick fields and decorate it with `ensure_subset` to check the consistence
+Utilize `ensure_subset` decorator for field validation and consistency enforcement:
 
 ```python
 @ensure_subset(BaseStory)
@@ -110,17 +129,15 @@ class Story(BaseModel):
 
 ```
 
-> Once the business model is validated as useful, more efficient (but complex) queries can be used to replace DataLoader.
+> Once business models are validated, consider optimizing with specialized queries to replace DataLoader for enhanced performance.
 
-### 3. Tweak the view model
+### 3. Implement View-Layer Transformations
 
-Here we can do extra modifications for view layer. (flexible, case by case)
+Apply presentation-specific modifications and data aggregations (flexible, context-dependent)
 
-using post_field method, you can read values from ancestor node, transfer nodes to ancestor, or any in-place modifications.
+Leverage post_field methods for ancestor data access, node transfers, and in-place transformations.
 
-more information, please refer to [How it works?](#how-it-works)
-
-#### case 1: collect related users for each story
+#### Pattern 1: Aggregate Related Entities
 
 <img width="701" alt="image" src="https://github.com/user-attachments/assets/2e3b1345-9e5e-489b-a81d-dc220b9d6334" />
 
@@ -128,7 +145,7 @@ more information, please refer to [How it works?](#how-it-works)
 from pydantic_resolve import LoaderDepend, Collector
 
 class Task(BaseTask):
-    __pydantic_resolve_collect__ = {'user': 'related_users'}  # send user to collector: 'related_users'
+    __pydantic_resolve_collect__ = {'user': 'related_users'}  # Propagate user to collector: 'related_users'
 
     user: Optional[BaseUser] = None
     def resolve_user(self, loader=LoaderDepend(UserLoader)):
@@ -138,23 +155,22 @@ class Story(BaseStory):
     tasks: list[Task] = []
     def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
         return loader.load(self.id)
-    
+
     assignee: Optional[BaseUser] = None
     def resolve_assignee(self, loader=LoaderDepend(UserLoader)):
         return loader.load(self.assignee_id)
-    
+
     reporter: Optional[BaseUser] = None
     def resolve_reporter(self, loader=LoaderDepend(UserLoader)):
         return loader.load(self.report_to)
 
-    # ---------- post method ------------
+    # ---------- Post-processing ------------
     related_users: list[BaseUser] = []
     def post_related_users(self, collector=Collector(alias='related_users')):
         return collector.values()
 ```
 
-
-#### case 2: sum up estimate time for each story
+#### Pattern 2: Compute Derived Metrics
 
 <img width="687" alt="image" src="https://github.com/user-attachments/assets/fd5897d6-1c6a-49ec-aab0-495070054b83" />
 
@@ -163,22 +179,22 @@ class Story(BaseStory):
     tasks: list[Task] = []
     def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
         return loader.load(self.id)
-    
+
     assignee: Optional[BaseUser] = None
     def resolve_assignee(self, loader=LoaderDepend(UserLoader)):
         return loader.load(self.assignee_id)
-    
+
     reporter: Optional[BaseUser] = None
     def resolve_reporter(self, loader=LoaderDepend(UserLoader)):
         return loader.load(self.report_to)
-    
-    # ---------- post method ------------
+
+    # ---------- Post-processing ------------
     total_estimate: int = 0
     def post_total_estimate(self):
         return sum(task.estimate for task in self.tasks)
 ```
 
-### case 3: expose ancestor field to descents
+### Pattern 3: Propagate Ancestor Context
 
 ```python
 from pydantic_resolve import LoaderDepend
@@ -187,9 +203,9 @@ class Task(BaseTask):
     user: Optional[BaseUser] = None
     def resolve_user(self, loader=LoaderDepend(UserLoader)):
         return loader.load(self.assignee_id)
-    
-    # ---------- post method ------------
-    def post_name(self, ancestor_context):  # read story.name from direct ancestor
+
+    # ---------- Post-processing ------------
+    def post_name(self, ancestor_context):  # Access story.name from parent context
         return f'{ancestor_context['story_name']} - {self.name}'
 
 class Story(BaseStory):
@@ -198,17 +214,17 @@ class Story(BaseStory):
     tasks: list[Task] = []
     def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
         return loader.load(self.id)
-    
+
     assignee: Optional[BaseUser] = None
     def resolve_assignee(self, loader=LoaderDepend(UserLoader)):
         return loader.load(self.assignee_id)
-    
+
     reporter: Optional[BaseUser] = None
     def resolve_reporter(self, loader=LoaderDepend(UserLoader)):
         return loader.load(self.report_to)
 ```
 
-### 4. Resolve and get the result
+### 4. Execute Resolution Pipeline
 
 ```python
 from pydantic_resolve import Resolver
@@ -217,393 +233,40 @@ stories: List[Story] = await query_stories()
 await Resolver().resolve(stories)
 ```
 
-done!
+Resolution complete!
 
-## Installation
+## Technical Architecture
 
-```
-pip install pydantic-resolve
-```
+The framework significantly reduces complexity in data composition by maintaining alignment with entity-relationship models, resulting in enhanced maintainability.
 
-Starting from pydantic-resolve v1.11.0, it suports both pydantic v1 and v2.
+> Utilizing an ER-oriented modeling approach delivers 3-5x development efficiency gains and 50%+ code reduction.
 
-## Features
+Leveraging pydantic's capabilities, it enables GraphQL-like hierarchical data structures while providing flexible business logic integration during data resolution.
 
-### Dataloader
-Dataloader provides a universal method to associate data without worrying about N+1 queries.
+Seamlessly integrates with FastAPI to construct frontend-optimized data structures and generate TypeScript SDKs for type-safe client integration.
 
-Once the query methods for entities and the query methods for entity associations (DataLoaders) are defined, all that remains is to make declarative definitions at the pydantic level. (The query details are encapsulated within methods and DataLoaders.）
+The core architecture provides `resolve` and `post` method hooks for pydantic and dataclass objects:
 
-### Post process
+- `resolve`: Handles data fetching operations
+- `post`: Executes post-processing transformations
 
-Another issue that pydantic-resolve solved is the transformation process of the ER model data into view data, you can use `expose` to expose the data of ancestor nodes to descendant nodes, or use the `collect` tool to gather the final data of descendant nodes into ancestor nodes, thus easily achieving the restructuring of the data schema.
-
-Here's a simple ER model of Story and Task and it's code implementation.
-
-As a tool for data composition, it would not be fancy if it only supports mounting related data, pydantic-resolve provides an extra life cycle hooks for post method.
-
-This post process could help transform business object (generated at resolve process) to the view object 
-
-<img width="743" alt="image" src="https://github.com/user-attachments/assets/cdcf82a7-bfd6-4b71-8221-a8f06500ebb0" />
-
-You'll be able to adjust the fields immediately after all the resolve processes finish, and it has many useful params, it even supports async. 
-
-for example, calculate extra fields:
-
-```python
-class Story(BaseModel):
-    id: int
-    name: str
-
-    tasks: list[Task] = []
-    def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
-        return loader.load(self.id)
-
-    ratio: float = 0
-    def post_ratio(self):
-        return len([t for t in tasks if task.done is True]) / len(self.tasks) 
-```
-
-### Communication between ancestor and descendents
-
-This sample shows the capability of: 1 exposing specific data to descendents, 2 collecting data from descendents.
-
-during resolve process:
-- read list of story
-- expose story name to task
-
-during post process:
-- collect all task into Data.tasks
-- hide Data.stories during serilization
-
-now Data only contains tasks with each one's story name.
-
-```python
-class BaseTask(BaseModel):
-    id: int
-    story_id: int
-    name: str
-
-class BaseStory(BaseModel):
-    id: int
-    name: str
-
-class Task(BaseTask):
-    story_name: str = ''
-    def resolve_story_name(self, ancestor_context):
-        return ancestor_context['story_name'] # read story_name of direct ancestor
-
-class Story(BaseStory):
-    __pydantic_resolve_expose__ = {'name': 'story_name'}  # expose name (as story_name) to descendent nodes
-    __pydantic_resolve_collect__ = {'tasks': 'task_collector'}  # tasks will be collected by task_collector
-
-    tasks: list[BaseTask] = []
-    def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
-        return loader.load(self.id)
-
-class Data(BaseModel):
-    stories: list[Story] = Field(default_factory=list, exclude=True)
-    async def resolve_stories(self):
-        return await get_raw_stories()
-
-    tasks: list[Task] = []
-    def post_tasks(self, collector=Collector('task_collector', flat=True)):  # flat=True to avoid list of list
-        return collector.values()
-```
-    
-## Why create it?
-
-### Problems to solve
-
-A typical flow of data composition contains steps of: 
-
-1. query root data (single item or array of items)
-2. query related data a, b, c ...
-3. modify data, from leaf data to root data
-
-Take story and task for example, we fetch tasks and group for each story and then do some business calculation.
-
-```python
-# 1. query root data
-stories = await query_stories()
-
-# 2. query related data
-story_ids = [s.id for s in stories]
-tasks = await get_all_tasks_by_story_ids(story_ids)
-
-story_tasks = defaultdict(list)
-
-for task in tasks:
-    story_tasks[task.story_id].append(task)
-
-for story in stories:
-    tasks = story_tasks.get(story.id, [])
-
-    # 3. modify data
-    story.total_task_time = sum(task.time for task in tasks)
-    story.total_done_tasks_time = sum(task.time for task in tasks if task.done)
-```
-
-In this code we handled the tasks querying, composing (tasks group by story) and then the final business calculation. 
-
-But there are some problems:
-
-- Temp variables are defined however they are useless from the view of the business calculation. 
-- The business logic is located insde `for` indent. 
-- The composition part is boring.
-
-If we add one more layer, for example, add sprint, it gets worse
-
-```python
-# 1. query root data
-sprints = await query_sprints()
-
-# 2-1. query related data, stories
-sprint_ids = [s.id for s in sprints]
-stories = await get_all_stories_by_sprint_id(sprint_ids)
-
-# 2-2. query related data, tasks
-story_ids = [s.id for s in stories]
-tasks = await get_all_tasks_by_story_ids(story_ids)
-
-sprint_stories = defaultdict(list)
-story_tasks = defaultdict(list)
-
-for story in stories:
-    sprint_stories[story.sprint_id].append(story)
-
-for task in tasks:
-    story_tasks[task.story_id].append(task)
-
-for sprint in sprints:
-    stories = sprint_stories.get(sprint.id, [])
-    sprint.stories = stories
-
-    for story in stories:
-        tasks = story_tasks.get(story.id, [])
-
-        # 3-1. modify data
-        story.total_task_time = sum(task.time for task in tasks)
-        story.total_done_task_time = sum(task.time for task in tasks if task.done)
-
-    # 3-2. modify data
-    sprint.total_time = sum(story.total_task_time for story in stories) 
-    sprint.total_done_time = sum(story.total_done_task_time for story in stories)
-```
-
-It spends quite a lot of code just for querying and composing the data, and the business calculation is mixed within for loops.
-
-> breadth first approach is used to minize the number of queries.
-
-### Solution
-
-The code could be simified if we can get rid of these querying and composing, let pydantic-resolve handle it, even the for loops.
-
-pydantic-resolve can help **split them apart**, dedicate the querying and composing to Dataloader, handle the traversal internally
-
-So that we can focus on the **business calculation**.
-
-```python
-from pydantic_resolve import Resolver, LoaderDepend, build_list
-from aiodataloader import DataLoader
-
-# data fetching, dataloader will group the tasks by story.
-class TaskLoader(DataLoader):
-    async def batch_load_fn(self, story_ids):
-        tasks = await get_all_tasks_by_story_ids(story_ids)
-        return build_list(tasks, story_ids, lambda t: t.story_id)
-
-# core business logics
-class Story(Base.Story):
-    # fetch tasks with dataloader in resolve_method
-    tasks: List[Task] = []
-    def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
-        return loader.load(self.id)
-
-    # calc after fetched, with post_method
-    total_task_time: int = 0
-    def post_total_task_time(self):
-        return sum(task.time for task in self.tasks)
-
-    total_done_task_time: int = 0
-    def post_total_done_task_time(self):
-        return sum(task.time for task in self.tasks if task.done)
-
-# traversal and execute methods (runner)
-# query root data
-stories: List[Story] = await query_stories()
-await Resolver().resolve(stories)
-```
-
-for the second scenario:
-
-```python
-# data fetching
-class TaskLoader(DataLoader):
-    async def batch_load_fn(self, story_ids):
-        tasks = await get_all_tasks_by_story_ids(story_ids)
-        return build_list(tasks, story_ids, lambda t: t.story_id)
-
-class StoryLoader(DataLoader):
-    async def batch_load_fn(self, sprint_ids):
-        stories = await get_all_stories_by_sprint_ids(sprint_ids)
-        return build_list(stories, sprint_ids, lambda t: t.sprint_id)
-
-# core business logic
-class Story(Base.Story):
-    tasks: List[Task] = []
-    def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
-        return loader.load(self.id)
-
-    total_task_time: int = 0
-    def post_total_task_time(self):
-        return sum(task.time for task in self.tasks)
-
-    total_done_task_time: int = 0
-    def post_total_done_task_time(self):
-        return sum(task.time for task in self.tasks if task.done)
-
-class Sprint(Base.Sprint):
-    stories: List[Story] = []
-    def resolve_stories(self, loader=LoaderDepend(StoryLoader)):
-        return loader.load(self.id)
-
-    total_time: int = 0
-    def post_total_time(self):
-        return sum(story.total_task_time for story in self.stories)
-
-    total_done_time: int = 0
-    def post_total_done_time(self):
-        return sum(story.total_done_task_time for story in self.stories)
-
-
-# traversal and execute methods (runner)
-# query root data
-sprints: List[Sprint] = await query_sprints()
-await Resolver().resolve(sprints)
-```
-
-No more indent, no more temp helper variables, no more for loops (and indents).
-
-All the relationships and traversal is defined by pydantic/ dataclass class.
-
-> why not using ORM relationship for querying and composing?
-> 
-> Dataloader is a general interface for different implemetations
-> If the ORM has provided the related data, we just need to simply remove the resolve_method and dataloder.
-
-
-## How it works?
-
-It can reduce the code complexity during the data composition, making the code close to the ER model and then more maintainable.
-
-> Using an ER oriented modeling approach, it can provide us with a 3 to 5 times increase in development efficiency and reduce code by more than 50%.
-
-With the help of pydantic, it can describe data structures in a graph-like relationship like GraphQL, and can also make adjustments based on business needs while fetching data.
-
-It can easily run with FastAPI to build frontend friendly data structures on the backend and provide them to the frontend in the form of a TypeScript SDK.
-
-Basically it just provides resolve and post methods for pydantic and dataclass objects.
-
-- resolve is used to fetch data
-- post is used to do additional processing after fetching data
-
-And this is a recursive process, the resolve process finishs after all descendants are done.
+This implements a recursive resolution pipeline that completes when all descendant nodes are processed.
 
 ![](docs/images/life-cycle.png)
 
-take Sprint, Story and Task for example:
+Consider the Sprint, Story, and Task relationship hierarchy:
 
 <img src="docs/images/real-sample.png" style="width: 600px"/>
 
-When the object methods are defined and the objects are initialized, pydantic-resolve will internally traverse the data, execute these methods to process the data, and finally obtain all the data.
+Upon object instantiation with defined methods, pydantic-resolve traverses the data graph, executes resolution methods, and produces the complete data structure.
 
-With DataLoader, pydantic-resolve can avoid the N+1 query problem that easily occurs when fetching data in multiple layers, optimizing performance.
+DataLoader integration eliminates N+1 query problems inherent in multi-level data fetching, optimizing performance characteristics.
 
-Using DataLoader also allows the defined class fragments to be reused in any location.
+DataLoader architecture enables modular class composition and reusability across different contexts.
 
-In addition, it also provides expose and collector mechanisms to facilitate cross-layer data processing.
+Additionally, the framework provides expose and collector mechanisms for sophisticated cross-layer data processing patterns.
 
-
-## Hello world sample
-
-originally we have list of books, then we want to attach the author info.
-
-```python
-import asyncio
-from pydantic_resolve import Resolver
-
-# data
-books = [
-    {"title": "1984", "year": 1949},
-    {"title": "To Kill a Mockingbird", "year": 1960},
-    {"title": "The Great Gatsby", "year": 1925}]
-
-persons = [
-    {"name": "George Orwell", "age": 46},
-    {"name": "Harper Lee", "age": 89},
-    {"name": "F. Scott Fitzgerald", "age": 44}]
-
-book_author_mapping = {
-    "1984": "George Orwell",
-    "To Kill a Mockingbird": "Harper Lee",
-    "The Great Gatsby": "F. Scott Fitzgerald"}
-
-async def get_author(title: str) -> Person:
-    await asyncio.sleep(0.1)
-    author_name = book_author_mapping[title]
-    if not author_name:
-        return None
-    author = [person for person in persons if person['name'] == author_name][0]
-    return Person(**author)
-
-class Person(BaseModel):
-    name: str
-    age: int
-
-
-class Book(BaseModel):
-    title: str
-    year: int
-    author: Optional[Person] = None
-
-    async def resolve_author(self):
-        return await get_author(self.title)
-
-books = [Book(**book) for book in books]
-books_with_author = await Resolver().resolve(books)
-
-```
-
-output
-
-```python
-[
-    Book(title='1984', year=1949, author=Person(name='George Orwell', age=46)),
-    Book(title='To Kill a Mockingbird', year=1960, author=Person(name='Harper Lee', age=89)),
-    Book(title='The Great Gatsby', year=1925, author=Person(name='F. Scott Fitzgerald', age=44))
-]
-```
-
-internally, it runs concurrently to execute the async functions, which looks like:
-
-```python
-import asyncio
-
-async def handle_author(book: Book):
-    author = await get_author(book.title)
-    book.author = author
-
-await asyncio.gather(*[handle_author(book) for book in books])
-```
-
-## Documents
-
-- **Doc**: https://allmonday.github.io/pydantic-resolve/v2/introduction/
-- **Demo**: https://github.com/allmonday/pydantic-resolve-demo
-- **Composition oriented pattern**: https://github.com/allmonday/composition-oriented-development-pattern
-
-## Test and coverage
+## Testing and Coverage
 
 ```shell
 tox
@@ -614,8 +277,73 @@ tox -e coverage
 python -m http.server
 ```
 
-latest coverage: 97%
+Current test coverage: 97%
 
-## Hear your voice
+## Benchmark
+
+`ab -c 50 -n 1000` based on FastAPI.
+
+strawberry-graphql
+
+```
+Server Software:        uvicorn
+Server Hostname:        localhost
+Server Port:            8000
+
+Document Path:          /graphql
+Document Length:        5303 bytes
+
+Concurrency Level:      50
+Time taken for tests:   3.630 seconds
+Complete requests:      1000
+Failed requests:        0
+Total transferred:      5430000 bytes
+Total body sent:        395000
+HTML transferred:       5303000 bytes
+Requests per second:    275.49 [#/sec] (mean)
+Time per request:       181.498 [ms] (mean)
+Time per request:       3.630 [ms] (mean, across all concurrent requests)
+Transfer rate:          1460.82 [Kbytes/sec] received
+                        106.27 kb/s sent
+                        1567.09 kb/s total
+
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:        0    0   0.2      0       1
+Processing:    31  178  14.3    178     272
+Waiting:       30  176  14.3    176     270
+Total:         31  178  14.4    179     273
+```
+
+pydantic-resolve
+
+```
+Server Software: uvicorn
+Server Hostname: localhost
+Server Port: 8000
+
+Document Path: /sprints
+Document Length: 4621 bytes
+
+Concurrency Level: 50
+Time taken for tests: 2.194 seconds
+Complete requests: 1000
+Failed requests: 0
+Total transferred: 4748000 bytes
+HTML transferred: 4621000 bytes
+Requests per second: 455.79 [#/sec] (mean)
+Time per request: 109.700 [ms] (mean)
+Time per request: 2.194 [ms] (mean, across all concurrent requests)
+Transfer rate: 2113.36 [Kbytes/sec] received
+
+Connection Times (ms)
+min mean[+/-sd] median max
+Connect: 0 0 0.3 0 1
+Processing: 30 107 10.9 106 138
+Waiting: 28 105 10.7 104 138
+Total: 30 107 11.0 106 140
+```
+
+## Community
 
 [Discord](https://discord.com/channels/1197929379951558797/1197929379951558800)
