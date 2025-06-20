@@ -1,10 +1,10 @@
 # Use Cases
 
-Some scenarios where pydantic-resolve can be used.
+Practical scenarios demonstrating pydantic-resolve's capabilities in data composition and resolution.
 
-## Simple Data Concatenation
+## Simple Data Aggregation
 
-Concatenate data from multiple data sources (requests at the same level will be automatically concurrent).
+Aggregate data from multiple data sources with automatic concurrency for same-level requests.
 
 ```python
 from pydantic import BaseModel
@@ -23,9 +23,9 @@ retData = ReturnData()
 retData = await Resolver().resolve(retData)
 ```
 
-## Multi-layer Data Loading
+## Hierarchical Data Composition
 
-Use dataloader to concatenate multi-layer data. First, provide the root data, and then let pydantic-resolve concatenate the data of other levels.
+Leverage DataLoader to compose multi-layer relational data. Initialize root entities and let pydantic-resolve handle nested relationship resolution.
 
 ```python
 from pydantic import BaseModel
@@ -60,9 +60,9 @@ companies = [
 companies = await Resolver().resolve(companies)
 ```
 
-## Processing Retrieved Data
+## Data Transformation and Enhancement
 
-You can process data at any position of the object without worrying about the traversal logic.
+Apply business logic and data transformations at any node in the object graph without manual tree traversal.
 
 ```python
 from pydantic import BaseModel
@@ -88,11 +88,11 @@ owners = [
 owners = await Resolver.resolve([Owner.parse_obj(o) for o in owners])
 ```
 
-## Tree Data Processing
+## Recursive Data Structure Resolution
 
-Handle self-referential data types more elegantly.
+Handle self-referential models and recursive data structures with built-in parent context access.
 
-For example, use the parent parameter to concatenate the full path of the tag.
+Compute derived fields using parent node information:
 
 ```python
 from pydantic import BaseModel
@@ -121,4 +121,51 @@ tag_data = dict(name='root', children=[
 
 tag = Tag.parse_obj(tag_data)
 tag = await Resolver().resolve(tag)
+```
+
+Tree construction from flat data structures using primed loaders:
+
+```python
+from __future__ import annotations
+from collections import defaultdict
+import asyncio
+from typing import List
+from pydantic import BaseModel
+from pydantic_resolve import Resolver, LoaderDepend
+from pydantic_resolve.utils.dataloader import ListEmptyLoader
+
+roots = [{ 'id': 1, 'content': 'root' }, {'id': 6, 'content': '6'}]
+records = [
+    {'id': 2, 'parent': 1, 'content': '2'},
+    {'id': 3, 'parent': 1, 'content': '3'},
+    {'id': 4, 'parent': 2, 'content': '4'},
+    {'id': 5, 'parent': 3, 'content': '5'},
+    {'id': 7, 'parent': 6, 'content': '7'},
+]
+
+class Tree(BaseModel):
+    id: int
+    content: str
+
+    children: List[Tree] = []
+    def resolve_children(self, loader=LoaderDepend(ListEmptyLoader)):
+        return loader.load(self.id)
+
+async def main():
+    import json
+    loader = ListEmptyLoader()
+
+    # prime parent-child mappings for tree construction
+    _records = defaultdict(list)
+    for r in records:
+        _records[r['parent']].append(r)
+    for k, v in _records.items():
+        loader.prime(k, v)
+
+    trees = [Tree(**r) for r in roots]
+    trees = await Resolver(
+        loader_instances={ ListEmptyLoader: loader }
+    ).resolve(trees)
+    trees = [t.dict() for t in trees]
+    print(json.dumps(trees, indent=2))
 ```
