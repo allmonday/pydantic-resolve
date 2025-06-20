@@ -27,9 +27,9 @@ edit_uri: ""
 nav:
   - Quick Start:
       - Introduction: ./introduction.md
-      - Why create it: ./why.md
       - Use cases: ./use_case.md
       - Schema first: ./schema_first.md
+      - Why create it: ./why.md
   - Features:
       - Dataloader: ./dataloader.md
       - Inherit and reuse: ./inherit_reuse.md

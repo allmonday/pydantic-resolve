@@ -1,55 +1,21 @@
-# 简介
-
-pydantic-resolve 是一个帮助灵活组装数据的工具，可能是最直观的工具之一，并且与 FastAPI / Litestar / Django-ninja 配合得非常好。
-
-您可以通过添加 `resolve_field` 函数轻松扩展您的数据，无论位置如何，无论是列表还是单个数据。
-
-> 它还支持 dataclass
+pydantic-resolve 是一个复杂数据结构组合框架，采用直观的解析器架构，彻底解决 N+1 查询问题。
 
 ```python
-from pydantic import BaseModel
-from pydantic_resolve import Resolver, build_list
-from aiodataloader import DataLoader
-
-
-# 故事和任务的 ER 模型
-# ┌───────────┐
-# │           │
-# │   story   │
-# │           │
-# └─────┬─────┘
-#       │
-#       │   拥有多个 (TaskLoader)
-#       │
-#       │
-# ┌─────▼─────┐
-# │           │
-# │   task    │
-# │           │
-# └───────────┘
-
-class TaskLoader(DataLoader):
-    async def batch_load_fn(self, story_ids):
-        tasks = await get_tasks_by_ids(story_ids)
-        return build_list(tasks, story_ids, lambda t: t.story_id)
-
-class BaseTask(BaseModel):
-    id: int
-    story_id: int
-    name: str
-
-class BaseStory(BaseModel):
-    id: int
-    name: str
-
-class Story(BaseStory):  # 继承和组合
-    tasks: list[BaseTask] = []
-    def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
-        return loader.load(self.id)
-
-stories = await get_raw_stories()
-stories = [Story(**s) for s in stories)]
+class Task(BaseTask):
+    user: Optional[BaseUser] = None
+    def resolve_user(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.assignee_id) if self.assignee_id else None
 ```
+
+如果你有 GraphQL 经验，这篇文章提供了全面的讨论和比较：[解析器模式：BFF 中 GraphQL 的更好替代方案。](https://github.com/allmonday/resolver-vs-graphql/blob/master/README-en.md)
+
+该框架通过增量字段解析实现渐进式数据丰富，支持 API 从扁平到层次化数据结构的无缝演进。
+
+通过实现 `resolve_field` 方法进行数据获取和 `post_field` 方法进行转换来扩展数据模型，支持节点创建、就地修改或跨节点数据聚合。
+
+与现代 Python Web 框架完美集成，包括 FastAPI、Litestar 和 Django-ninja。
+
+> 也支持 dataclass
 
 ## 安装
 
@@ -57,384 +23,241 @@ stories = [Story(**s) for s in stories)]
 pip install pydantic-resolve
 ```
 
-从 pydantic-resolve v1.11.0 开始，它支持 pydantic v1 和 v2。
+从 pydantic-resolve v1.11.0 开始，同时支持 pydantic v1 和 v2。
 
-## 特性
+## 文档
 
-### Dataloader
+- **文档**: [https://allmonday.github.io/pydantic-resolve/v2/introduction/](https://allmonday.github.io/pydantic-resolve/v2/introduction/)
+- **示例仓库**: [https://github.com/allmonday/pydantic-resolve-demo](https://github.com/allmonday/pydantic-resolve-demo)
+- **面向组合的开发模式**: [https://github.com/allmonday/composition-oriented-development-pattern](https://github.com/allmonday/composition-oriented-development-pattern)
 
-Dataloader 提供了一种通用的方法来关联数据，而无需担心 N+1 查询。
+## 架构概览
 
-一旦定义了实体的查询方法和实体关联的查询方法（DataLoaders），剩下的就是在 pydantic 层面进行声明性定义。（查询细节封装在方法和 DataLoaders 中。）
+构建复杂数据结构只需 3 个系统化步骤：
 
-### 后处理
+### 1. 定义领域模型
 
-pydantic-resolve 解决的另一个问题是将 ER 模型数据转换为视图数据的过程，您可以使用 `expose` 将祖先节点的数据暴露给后代节点，或使用 `collect` 工具将后代节点的最终数据收集到祖先节点中，从而轻松实现数据模式的重构。
+建立实体关系作为基础数据模型（稳定，作为架构蓝图）
 
-这是一个简单的故事和任务的 ER 模型及其代码实现。
-
-作为数据组合的工具，如果它仅支持挂载相关数据，那就不太花哨了，pydantic-resolve 提供了一个额外的生命周期钩子用于后处理方法。
-
-这个后处理过程可以帮助将业务对象（在解析过程中生成）转换为视图对象。
-
-<img width="743" alt="image" src="https://github.com/user-attachments/assets/cdcf82a7-bfd6-4b71-8221-a8f06500ebb0" />
-
-在所有解析过程完成后，您将能够立即调整字段，并且它有许多有用的参数，甚至支持异步。
-
-例如，计算额外字段：
+<img width="639" alt="image" src="https://github.com/user-attachments/assets/2656f72e-1af5-467a-96f9-cab95760b720" />
 
 ```python
-class Story(BaseModel):
-    id: int
-    name: str
-
-    tasks: list[Task] = []
-    def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
-        return loader.load(self.id)
-
-    ratio: float = 0
-    def post_ratio(self):
-        return len([t for t in tasks if task.done is True]) / len(self.tasks)
-```
-
-### 祖先和后代之间的通信
-
-此示例显示了以下功能：1 将特定数据暴露给后代，2 从后代收集数据。
-
-在解析过程中：
-
-- 读取故事列表
-- 将故事名称暴露给任务
-
-在后处理过程中：
-
-- 将所有任务收集到 Data.tasks 中
-- 在序列化期间隐藏 Data.stories
-
-现在 Data 仅包含每个任务的故事名称。
-
-```python
-class BaseTask(BaseModel):
-    id: int
-    story_id: int
-    name: str
+from pydantic import BaseModel
 
 class BaseStory(BaseModel):
     id: int
     name: str
+    assignee_id: Optional[int]
+    report_to: Optional[int]
+
+class BaseTask(BaseModel):
+    id: int
+    story_id: int
+    name: str
+    estimate: int
+    done: bool
+    assignee_id: Optional[int]
+
+class BaseUser(BaseModel):
+    id: int
+    name: str
+    title: str
+```
+
+```python
+from aiodataloader import DataLoader
+from pydantic_resolve import build_list, build_object
+
+class StoryTaskLoader(DataLoader):
+    async def batch_load_fn(self, keys: list[int]):
+        tasks = await get_tasks_by_story_ids(keys)
+        return build_list(tasks, keys, lambda x: x.story_id)
+
+class UserLoader(DataLoader):
+    async def batch_load_fn(self, keys: list[int]):
+        users = await get_tuser_by_ids(keys)
+        return build_object(users, keys, lambda x: x.id)
+```
+
+DataLoader 实现支持灵活的数据源，从数据库查询到微服务 RPC 调用。
+
+### 2. 组合业务模型
+
+通过选择性组合和关系映射创建特定领域的数据结构（稳定，可在不同用例中复用）
+
+<img width="709" alt="image" src="https://github.com/user-attachments/assets/ffc74e60-0670-475c-85ab-cb0d03460813" />
+
+```python
+from pydantic_resolve import LoaderDepend
 
 class Task(BaseTask):
-    story_name: str = ''
-    def resolve_story_name(self, ancestor_context):
-        return ancestor_context['story_name'] # 读取直接祖先的 story_name
+    user: Optional[BaseUser] = None
+    def resolve_user(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.assignee_id) if self.assignee_id else None
 
 class Story(BaseStory):
-    __pydantic_resolve_expose__ = {'name': 'story_name'}  # 将名称（作为 story_name）暴露给后代节点
-    __pydantic_resolve_collect__ = {'tasks': 'task_collector'}  # 任务将由 task_collector 收集
-
-    tasks: list[BaseTask] = []
-    def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
+    tasks: list[Task] = []
+    def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
         return loader.load(self.id)
 
-class Data(BaseModel):
-    stories: list[Story] = Field(default_factory=list, exclude=True)
-    async def resolve_stories(self):
-        return await get_raw_stories()
+    assignee: Optional[BaseUser] = None
+    def resolve_assignee(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.assignee_id) if self.assignee_id else None
 
+    reporter: Optional[BaseUser] = None
+    def resolve_reporter(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.report_to) if self.report_to else None
+```
+
+使用 `ensure_subset` 装饰器进行字段验证和一致性强制：
+
+```python
+@ensure_subset(BaseStory)
+class Story(BaseModel):
+    id: int
+    assignee_id: int
+    report_to: int
+
+    tasks: list[BaseTask] = []
+    def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
+        return loader.load(self.id)
+
+```
+
+> 业务模型验证完成后，考虑使用专门的查询来替换 DataLoader 以提升性能。
+
+### 3. 实现视图层转换
+
+应用特定于展示的修改和数据聚合（灵活，依赖于上下文）
+
+利用 post_field 方法进行祖先数据访问、节点传输和就地转换。
+
+#### 模式 1：跨层收集对象
+
+<img width="701" alt="image" src="https://github.com/user-attachments/assets/2e3b1345-9e5e-489b-a81d-dc220b9d6334" />
+
+```python
+from pydantic_resolve import LoaderDepend, Collector
+
+class Task(BaseTask):
+    __pydantic_resolve_collect__ = {'user': 'related_users'}  # 将 user 传播到收集器：'related_users'
+
+    user: Optional[BaseUser] = None
+    def resolve_user(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.assignee_id)
+
+class Story(BaseStory):
     tasks: list[Task] = []
-    def post_tasks(self, collector=Collector('task_collector', flat=True)):  # flat=True 以避免列表嵌套
+    def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
+        return loader.load(self.id)
+
+    assignee: Optional[BaseUser] = None
+    def resolve_assignee(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.assignee_id)
+
+    reporter: Optional[BaseUser] = None
+    def resolve_reporter(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.report_to)
+
+    # ---------- 后处理 ------------
+    related_users: list[BaseUser] = []
+    def post_related_users(self, collector=Collector(alias='related_users')):
         return collector.values()
 ```
 
-## 为什么创建它？
+#### 模式 2：计算新的字段
 
-### 要解决的问题
-
-数据组合的典型流程包含以下步骤：
-
-1. 查询根数据（单个项目或项目数组）
-2. 查询相关数据 a、b、c ...
-3. 修改数据，从叶子数据到根数据
-
-以故事和任务为例，我们获取任务并为每个故事分组，然后进行一些业务计算。
+<img width="687" alt="image" src="https://github.com/user-attachments/assets/fd5897d6-1c6a-49ec-aab0-495070054b83" />
 
 ```python
-# 1. 查询根数据
-stories = await query_stories()
-
-# 2. 查询相关数据
-story_ids = [s.id for s in stories]
-tasks = await get_all_tasks_by_story_ids(story_ids)
-
-story_tasks = defaultdict(list)
-
-for task in tasks:
-    story_tasks[task.story_id].append(task)
-
-for story in stories:
-    tasks = story_tasks.get(story.id, [])
-
-    # 3. 修改数据
-    story.total_task_time = sum(task.time for task in tasks)
-    story.total_done_tasks_time = sum(task.time for task in tasks if task.done)
-```
-
-在这段代码中，我们处理了任务查询、组合（按故事分组任务）和最终的业务计算。
-
-但存在一些问题：
-
-- 定义了临时变量，但从业务计算的角度来看，它们是无用的。
-- 业务逻辑位于 `for` 缩进内。
-- 组合部分很无聊。
-
-如果我们再添加一层，例如添加冲刺，情况会变得更糟。
-
-```python
-# 1. 查询根数据
-sprints = await query_sprints()
-
-# 2-1. 查询相关数据，故事
-sprint_ids = [s.id for s in sprints]
-stories = await get_all_stories_by_sprint_id(sprint_ids)
-
-# 2-2. 查询相关数据，任务
-story_ids = [s.id for s in stories]
-tasks = await get_all_tasks_by_story_ids(story_ids)
-
-sprint_stories = defaultdict(list)
-story_tasks = defaultdict(list)
-
-for story in stories:
-    sprint_stories[story.sprint_id].append(story)
-
-for task in tasks:
-    story_tasks[task.story_id].append(task)
-
-for sprint in sprints:
-    stories = sprint_stories.get(sprint.id, [])
-    sprint.stories = stories
-
-    for story in stories:
-        tasks = story_tasks.get(story.id, [])
-
-        # 3-1. 修改数据
-        story.total_task_time = sum(task.time for task in tasks)
-        story.total_done_task_time = sum(task.time for task in tasks if task.done)
-
-    # 3-2. 修改数据
-    sprint.total_time = sum(story.total_task_time for story in stories)
-    sprint.total_done_time = sum(story.total_done_task_time for story in stories)
-```
-
-仅用于查询和组合数据就花费了大量代码，并且业务计算混杂在 for 循环中。
-
-> 使用广度优先方法以最小化查询次数。
-
-### 解决方案
-
-如果我们可以摆脱这些查询和组合，代码可以简化，让 pydantic-resolve 处理它，甚至是 for 循环。
-
-pydantic-resolve 可以帮助**将它们分开**，将查询和组合委托给 Dataloader，内部处理遍历。
-
-这样我们就可以专注于**业务计算**。
-
-```python
-from pydantic_resolve import Resolver, LoaderDepend, build_list
-from aiodataloader import DataLoader
-
-# 数据获取，dataloader 将按故事分组任务。
-class TaskLoader(DataLoader):
-    async def batch_load_fn(self, story_ids):
-        tasks = await get_all_tasks_by_story_ids(story_ids)
-        return build_list(tasks, story_ids, lambda t: t.story_id)
-
-# 核心业务逻辑
-class Story(Base.Story):
-    # 在 resolve_method 中使用 dataloader 获取任务
-    tasks: List[Task] = []
-    def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
+class Story(BaseStory):
+    tasks: list[Task] = []
+    def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
         return loader.load(self.id)
 
-    # 获取后计算，在 post_method 中
-    total_task_time: int = 0
-    def post_total_task_time(self):
-        return sum(task.time for task in self.tasks)
+    assignee: Optional[BaseUser] = None
+    def resolve_assignee(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.assignee_id)
 
-    total_done_task_time: int = 0
-    def post_total_done_task_time(self):
-        return sum(task.time for task in self.tasks if task.done)
+    reporter: Optional[BaseUser] = None
+    def resolve_reporter(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.report_to)
 
-# 遍历并执行方法（runner）
-# 查询根数据
+    # ---------- 后处理 ------------
+    total_estimate: int = 0
+    def post_total_estimate(self):
+        return sum(task.estimate for task in self.tasks)
+```
+
+### 模式 3：传播祖先上下文
+
+```python
+from pydantic_resolve import LoaderDepend
+
+class Task(BaseTask):
+    user: Optional[BaseUser] = None
+    def resolve_user(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.assignee_id)
+
+    # ---------- 后处理 ------------
+    def post_name(self, ancestor_context):  # 从父上下文访问 story.name
+        return f'{ancestor_context['story_name']} - {self.name}'
+
+class Story(BaseStory):
+    __pydantic_resolve_expose__ = {'name': 'story_name'}
+
+    tasks: list[Task] = []
+    def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
+        return loader.load(self.id)
+
+    assignee: Optional[BaseUser] = None
+    def resolve_assignee(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.assignee_id)
+
+    reporter: Optional[BaseUser] = None
+    def resolve_reporter(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.report_to)
+```
+
+### 4. 执行 Resolver
+
+```python
+from pydantic_resolve import Resolver
+
 stories: List[Story] = await query_stories()
 await Resolver().resolve(stories)
 ```
 
-对于第二种情况：
+处理完成！
 
-```python
-# 数据获取
-class TaskLoader(DataLoader):
-    async def batch_load_fn(self, story_ids):
-        tasks = await get_all_tasks_by_story_ids(story_ids)
-        return build_list(tasks, story_ids, lambda t: t.story_id)
+## 技术架构
 
-class StoryLoader(DataLoader):
-    async def batch_load_fn(self, sprint_ids):
-        stories = await get_all_stories_by_sprint_ids(sprint_ids)
-        return build_list(stories, sprint_ids, lambda t: t.sprint_id)
+该框架通过保持与实体关系模型的一致性，显著降低了数据组合的复杂性，增强了可维护性。
 
-# 核心业务逻辑
-class Story(Base.Story):
-    tasks: List[Task] = []
-    def resolve_tasks(self, loader=LoaderDepend(TaskLoader)):
-        return loader.load(self.id)
+> 使用面向 ER 的建模方法可以提供 3-5 倍的开发效率提升和 50% 以上的代码减少。
 
-    total_task_time: int = 0
-    def post_total_task_time(self):
-        return sum(task.time for task in self.tasks)
+利用 pydantic 的能力，它支持类似 GraphQL 的层次化数据结构，同时在数据解析过程中提供灵活的业务逻辑集成。
 
-    total_done_task_time: int = 0
-    def post_total_done_task_time(self):
-        return sum(task.time for task in self.tasks if task.done)
+与 FastAPI 无缝集成，构建前端优化的数据结构并生成 TypeScript SDK 以实现类型安全的客户端集成。
 
-class Sprint(Base.Sprint):
-    stories: List[Story] = []
-    def resolve_stories(self, loader=LoaderDepend(StoryLoader)):
-        return loader.load(self.id)
+核心架构为 pydantic 和 dataclass 对象提供 `resolve` 和 `post` 方法钩子：
 
-    total_time: int = 0
-    def post_total_time(self):
-        return sum(story.total_task_time for story in self.stories)
+- `resolve`：处理数据获取操作
+- `post`：执行后处理转换
 
-    total_done_time: int = 0
-    def post_total_done_time(self):
-        return sum(story.total_done_task_time for story in self.stories)
+这实现了一个递归解析管道，在所有后代节点处理完成时完成。
 
+![](images/life-cycle.png)
 
-# 遍历并执行方法（runner）
-# 查询根数据
-sprints: List[Sprint] = await query_sprints()
-await Resolver().resolve(sprints)
-```
+考虑 Sprint、Story 和 Task 关系层次结构：
 
-不再有缩进，不再有临时辅助变量，不再有 for 循环（和缩进）。
+![](images/real-sample.png)
 
-所有关系和遍历都由 pydantic/dataclass 类定义。
+在使用定义方法的对象实例化后，pydantic-resolve 遍历数据图，执行解析方法，并产生完整的数据结构。
 
-> 为什么不使用 ORM 关系进行查询和组合？
->
-> Dataloader 是不同实现的通用接口
-> 如果 ORM 提供了相关数据，我们只需要简单地删除 resolve_method 和 dataloader。
+DataLoader 集成消除了多级数据获取中容易出现的 N+1 查询问题，优化了性能。
 
-## 它是如何工作的？
-
-它可以在数据组合过程中减少代码复杂性，使代码接近 ER 模型，从而更易于维护。
-
-> 使用面向 ER 的建模方法，它可以使我们的开发效率提高 3 到 5 倍，并减少 50% 以上的代码。
-
-在 pydantic 的帮助下，它可以像 GraphQL 一样描述图状关系的数据结构，并且在获取数据时可以根据业务需求进行调整。
-
-它可以轻松地与 FastAPI 一起运行，在后端构建前端友好的数据结构，并以 TypeScript SDK 的形式提供给前端。
-
-基本上它只是为 pydantic 和 dataclass 对象提供了解析和后处理方法。
-
-- 解析用于获取数据
-- 后处理用于在获取数据后进行额外处理
-
-这是一个递归过程，解析过程在所有后代完成后结束。
-
-![](./images/life-cycle.png)
-
-以 Sprint、Story 和 Task 为例：
-
-![](./images/real-sample.png)
-
-当对象方法定义并初始化对象时，pydantic-resolve 将在内部遍历数据，执行这些方法以处理数据，最终获取所有数据。
-
-借助 DataLoader，pydantic-resolve 可以避免在多层获取数据时容易出现的 N+1 查询问题，优化性能。
-
-使用 DataLoader 还允许定义的类片段在任何位置重用。
-
-此外，它还提供了暴露和收集机制，以方便跨层数据处理。
-
-## Hello world 示例
-
-最初我们有一本书的列表，然后我们想要附加作者信息。
-
-```python
-import asyncio
-from pydantic_resolve import Resolver
-
-# 数据
-books = [
-    {"title": "1984", "year": 1949},
-    {"title": "To Kill a Mockingbird", "year": 1960},
-    {"title": "The Great Gatsby", "year": 1925}]
-
-persons = [
-    {"name": "George Orwell", "age": 46},
-    {"name": "Harper Lee", "age": 89},
-    {"name": "F. Scott Fitzgerald", "age": 44}]
-
-book_author_mapping = {
-    "1984": "George Orwell",
-    "To Kill a Mockingbird": "Harper Lee",
-    "The Great Gatsby": "F. Scott Fitzgerald"}
-
-async def get_author(title: str) -> Person:
-    await asyncio.sleep(0.1)
-    author_name = book_author_mapping[title]
-    if not author_name:
-        return None
-    author = [person for person in persons if person['name'] == author_name][0]
-    return Person(**author)
-
-class Person(BaseModel):
-    name: str
-    age: int
-
-
-class Book(BaseModel):
-    title: str
-    year: int
-    author: Optional[Person] = None
-
-    async def resolve_author(self):
-        return await get_author(self.title)
-
-books = [Book(**book) for book in books]
-books_with_author = await Resolver().resolve(books)
-
-```
-
-输出
-
-```python
-[
-    Book(title='1984', year=1949, author=Person(name='George Orwell', age=46)),
-    Book(title='To Kill a Mockingbird', year=1960, author=Person(name='Harper Lee', age=89)),
-    Book(title='The Great Gatsby', year=1925, author=Person(name='F. Scott Fitzgerald', age=44))
-]
-```
-
-在内部，它并发执行异步函数，看起来像这样：
-
-```python
-import asyncio
-
-async def handle_author(book: Book):
-    author = await get_author(book.title)
-    book.author = author
-
-await asyncio.gather(*[handle_author(book) for book in books])
-```
-
-## 文档
-
-- **文档**: https://allmonday.github.io/pydantic-resolve/v2/introduction/
-- **演示**: https://github.com/allmonday/pydantic-resolve-demo
-- **面向组合的模式**: https://github.com/allmonday/composition-oriented-development-pattern
+此外，该框架提供暴露和收集器机制，用于复杂的跨层数据处理模式。
 
 ## 测试和覆盖率
 
@@ -447,8 +270,73 @@ tox -e coverage
 python -m http.server
 ```
 
-最新覆盖率：97%
+当前测试覆盖率：97%
 
-## 听取您的意见
+## 基准测试
+
+基于 FastAPI 的 `ab -c 50 -n 1000` 测试。
+
+strawberry-graphql
+
+```
+Server Software:        uvicorn
+Server Hostname:        localhost
+Server Port:            8000
+
+Document Path:          /graphql
+Document Length:        5303 bytes
+
+Concurrency Level:      50
+Time taken for tests:   3.630 seconds
+Complete requests:      1000
+Failed requests:        0
+Total transferred:      5430000 bytes
+Total body sent:        395000
+HTML transferred:       5303000 bytes
+Requests per second:    275.49 [#/sec] (mean)
+Time per request:       181.498 [ms] (mean)
+Time per request:       3.630 [ms] (mean, across all concurrent requests)
+Transfer rate:          1460.82 [Kbytes/sec] received
+                        106.27 kb/s sent
+                        1567.09 kb/s total
+
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:        0    0   0.2      0       1
+Processing:    31  178  14.3    178     272
+Waiting:       30  176  14.3    176     270
+Total:         31  178  14.4    179     273
+```
+
+pydantic-resolve
+
+```
+Server Software: uvicorn
+Server Hostname: localhost
+Server Port: 8000
+
+Document Path: /sprints
+Document Length: 4621 bytes
+
+Concurrency Level: 50
+Time taken for tests: 2.194 seconds
+Complete requests: 1000
+Failed requests: 0
+Total transferred: 4748000 bytes
+HTML transferred: 4621000 bytes
+Requests per second: 455.79 [#/sec] (mean)
+Time per request: 109.700 [ms] (mean)
+Time per request: 2.194 [ms] (mean, across all concurrent requests)
+Transfer rate: 2113.36 [Kbytes/sec] received
+
+Connection Times (ms)
+min mean[+/-sd] median max
+Connect: 0 0 0.3 0 1
+Processing: 30 107 10.9 106 138
+Waiting: 28 105 10.7 104 138
+Total: 30 107 11.0 106 140
+```
+
+## 社区
 
 [Discord](https://discord.com/channels/1197929379951558797/1197929379951558800)
