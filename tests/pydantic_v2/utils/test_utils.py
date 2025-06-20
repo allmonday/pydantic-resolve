@@ -10,6 +10,9 @@ import pydantic_resolve.utils.conversion
 import pydantic_resolve.utils.dataloader
 
 def test_get_class_field_annotations():
+    class B:
+        hello: str = 'hello'
+
     class C:
         hello: str
 
@@ -22,9 +25,10 @@ def test_get_class_field_annotations():
     class E(C):
         world: str
     
-    assert list(pydantic_resolve.utils.class_util.get_class_field_annotations(C)) == ['hello']
-    assert list(pydantic_resolve.utils.class_util.get_class_field_annotations(D)) == []
-    assert list(pydantic_resolve.utils.class_util.get_class_field_annotations(E)) == ['world']
+    assert list(pydantic_resolve.utils.class_util.get_class_field_without_default_value(B)) == [('hello', True)]
+    assert list(pydantic_resolve.utils.class_util.get_class_field_without_default_value(C)) == [('hello', False)]
+    assert list(pydantic_resolve.utils.class_util.get_class_field_without_default_value(D)) == []
+    assert list(pydantic_resolve.utils.class_util.get_class_field_without_default_value(E)) == [('world', False)]
 
 
 class User(BaseModel):

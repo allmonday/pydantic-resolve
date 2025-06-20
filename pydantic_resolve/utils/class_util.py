@@ -1,6 +1,6 @@
 import functools
 from dataclasses import is_dataclass
-from typing import Type, get_type_hints, List
+from typing import Type, get_type_hints, List, Tuple
 import pydantic_resolve.constant as const
 from pydantic_resolve.compat import PYDANTIC_V2
 import pydantic_resolve.utils.class_util as class_util
@@ -10,9 +10,19 @@ from pydantic_resolve.utils.types import shelling_type, get_type
 from pydantic import BaseModel
 
 
-def get_class_field_annotations(cls: Type):
+def get_class_field_without_default_value(cls: Type) -> List[Tuple[str, bool]]:  # field name, has default value
+    """
+    return class field which do not have a default value.
+
+    class MyClass:
+        a: int
+        b: int = 1
+
+    print(hasattr(MyClass, 'a'))  # False
+    print(hasattr(MyClass, 'b'))  # True
+    """
     anno = cls.__dict__.get('__annotations__') or {}
-    return anno.keys()
+    return [(k, hasattr(cls, k)) for k in anno.keys()]
 
 
 def safe_issubclass(kls, classinfo):

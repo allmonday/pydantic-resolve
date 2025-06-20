@@ -233,8 +233,11 @@ def validate_and_create_loader_instance(
                 global_loader_param,
                 loader_params.get(loader_kls, {}))
 
-            for field in class_util.get_class_field_annotations(loader_kls):
+            for field, has_default in class_util.get_class_field_without_default_value(loader_kls):
                 try:
+                    if has_default and field not in param_config:
+                        continue
+
                     value = param_config[field]
                     setattr(loader, field, value)
                 except KeyError:
