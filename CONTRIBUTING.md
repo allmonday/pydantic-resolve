@@ -1,16 +1,9 @@
 # Contributing
 
-## Unittest
+## Unittests and Coverage
 
 ```shell
-poetry run python -m unittest  # or
-poetry run pytest  # or
-poetry run tox
-```
-
-## Coverage
-
-```shell
-poetry run coverage run -m pytest
-poetry run coverage report -m
+tox -e py310pyd2
+tox
+tox -e coverage
 ```
