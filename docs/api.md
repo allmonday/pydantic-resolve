@@ -428,6 +428,15 @@ class Data(BaseModel):
     name: str = Field('', exclude=True)
 ```
 
+
+> in fastapi, dataclass can also enjob  - wip
+```python
+@dataclass
+class Car:
+    name: str
+    used_years: int = field(default=0, metadata={'exclude': True})
+```
+
 ### ensure_subset
 
 Signature: `ensure_subset(base_kls)`

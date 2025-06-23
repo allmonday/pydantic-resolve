@@ -37,7 +37,6 @@ def model_config_v1(default_required: bool = True):
     """
     def wrapper(kls):
         if safe_issubclass(kls, BaseModel):
-
             # override schema_extra method
             def _schema_extra(schema: Dict[str, Any], model) -> None:
                 # define schema.properties
@@ -57,7 +56,30 @@ def model_config_v1(default_required: bool = True):
                 if default_required:
                     fnames = _get_required_fields(model)
                     schema['required'] = fnames
+
             kls.__config__.schema_extra = staticmethod(_schema_extra)
+
+        elif hasattr(kls, '__pydantic_model__'):  # pydantic.dataclasses
+            # override schema_extra method
+            def _schema_extra(schema: Dict[str, Any], model) -> None:
+                excludes = set()
+
+                if kls.__pydantic_model__.__exclude_fields__:
+                    for k in kls.__pydantic_model__.__exclude_fields__.keys():
+                        excludes.add(k)
+
+                props = {}
+                for k, v in schema.get('properties', {}).items():
+                    if k not in excludes:
+                        props[k] = v
+                schema['properties'] = props
+
+                if default_required:
+                    fnames = _get_required_fields(model)
+                    schema['required'] = fnames
+
+            kls.__pydantic_model__.__config__.schema_extra = staticmethod(_schema_extra)
+
         else:
             raise AttributeError(f'target class {kls.__name__} is not BaseModel')
         return kls

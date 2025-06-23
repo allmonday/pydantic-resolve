@@ -1,4 +1,6 @@
 from pydantic import BaseModel, Field
+from pydantic.dataclasses import dataclass
+from dataclasses import field
 from pydantic_resolve import Resolver, LoaderDepend as LD, model_config, ensure_subset
 import pytest
 import json
@@ -132,3 +134,16 @@ async def test_nested_loader():
     assert schema['required'] == ['items']
     assert set(schema['properties'].keys()) == {'items'}
     assert set(schema['definitions']['Item']['properties'].keys()) == {'name'}
+
+
+@pytest.mark.asyncio
+async def test_schema_config_for_dataclass():
+    @model_config()
+    @dataclass
+    class K:
+        name: str
+        number: int = field(default=0, metadata={'exclude': True})
+
+    schema = K.__pydantic_model__.schema()
+    assert set(schema['required']) == {'name'}
+
