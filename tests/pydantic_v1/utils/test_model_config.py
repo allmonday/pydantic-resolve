@@ -139,11 +139,12 @@ async def test_nested_loader():
 @pytest.mark.asyncio
 async def test_schema_config_for_dataclass():
     @model_config()
-    @dataclass
+    @dataclass  # pydantic.dataclass
     class K:
         name: str
         number: int = field(default=0, metadata={'exclude': True})
 
     schema = K.__pydantic_model__.schema()
+    assert set(schema['properties'].keys()) == {'name'}
     assert set(schema['required']) == {'name'}
 
