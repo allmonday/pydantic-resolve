@@ -77,6 +77,13 @@ def model_config_v2(default_required: bool=True):
     (same like `output` decorator, you can replace output with model_config)
 
     it keeps the form of model_config(params) in order to extend new features in future
+
+    update:
+
+    in fastapi + pydantic v2, this function will be handled internal automatically with mode: serilization
+    you can remove the model_config_v2
+
+    reference: fastapi/_compat.py::get_definitions
     """
     def wrapper(kls):
         if safe_issubclass(kls, BaseModel):

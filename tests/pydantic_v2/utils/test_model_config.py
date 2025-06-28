@@ -1,6 +1,9 @@
 from pydantic_resolve.utils.openapi import model_config
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, TypeAdapter
 from pydantic_resolve import Resolver
+from pydantic.dataclasses import dataclass
+from dataclasses import field
+from pydantic.json_schema import GenerateJsonSchema as GenerateJsonSchema
 import pytest
 
 @pytest.mark.asyncio
@@ -45,3 +48,53 @@ async def test_schema_config_required():
     schema = Y.model_json_schema()
     assert set(schema['required']) == {'name'}
 
+
+@pytest.mark.asyncio
+async def test_raw_schema_in_serialization():
+    """
+    in pydantic v2 and fastapi, it will generate json schema in mode: serialization
+    so that you can remove model_config decorator.
+    """
+    class Y(BaseModel):
+        name: str
+        id: int = 0
+        password: str = Field(default='', exclude=True)
+
+    schema = Y.model_json_schema(mode='serialization')
+    assert list((schema['properties']).keys()) == ['name', 'id']
+    assert set(schema['required']) == {'name'}
+
+
+@pytest.mark.asyncio
+async def test_schema_config_for_dataclass():
+    # @model_config()
+    @dataclass  # pydantic.dataclass
+    class K:
+        name: str
+        number: int = field(default=0, metadata={'exclude': True, 'title': 'Hello'})
+    
+    schema = TypeAdapter(K).json_schema(mode='serialization')
+    assert set(schema['properties'].keys()) == {'name'}
+    assert set(schema['required']) == {'name'}
+
+
+@pytest.mark.asyncio
+async def test_validate_dataclass_with_generate_definition():
+    # @model_config()
+    @dataclass  # pydantic.dataclass
+    class Item:
+        name: str
+        number: int = field(default=0, metadata={'exclude': True, 'title': 'Hello'})
+    REF_TEMPLATE = "#/components/schemas/{model}"
+    g = GenerateJsonSchema(ref_template=REF_TEMPLATE)
+    
+    f, d = g.generate_definitions([
+        (Item, 'serialization', TypeAdapter(Item).core_schema)
+    ])
+
+    assert d == {'Item': {'properties': {'name': {'title': 'Name', 'type': 'string'}},
+          'required': ['name'],
+          'title': 'Item',
+          'type': 'object'}}
+
+    assert f ==  {(Item, 'serialization'): {'$ref': '#/components/schemas/Item'}}
