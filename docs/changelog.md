@@ -8,7 +8,9 @@
 
 enhancement:
 
-update model_config decorator to also support dataclass.
+- update model_config decorator to also support dataclass.
+- return annotation now supports `Union[T, None]` for `sys.version_info > (3.7)`
+- ensure_subset support dataclass
 
 
 ### v1.12.2 (2025.6.20)
