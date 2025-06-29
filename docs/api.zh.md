@@ -408,6 +408,8 @@ build_list 返回对象数组， build_object 返回对象。
 
 ### model_config
 
+这个装饰器用来改善 FastAPI 等 web frameworb 根据 response_model 生成 json schema 时存在的问题。
+
 使用 exclude 可以在 pydantic 转换成目标数据时移除字段， 但是光这么做在 FastAPI 中生成 openapi.json 时 `name` 字段依然会存在于定义中， 添加 model_config() 装饰器可以移除 `name`。
 
 签名 `model_config(default_required=True)`
@@ -415,8 +417,19 @@ build_list 返回对象数组， build_object 返回对象。
 ```python
 @model_config()
 class Data(BaseModel):
-    name: str = Field('', exclude=True)
+    name: str = Field(default='', exclude=True)
 ```
+
+```python
+from pydantic.dataclasses import dataclass
+
+@dataclass
+class Car:
+    name: str
+    used_years: int = field(default=0, metadata={'exclude': True})
+```
+
+注意，如果 FastAPI 中使用的是 pydantic v2， 它内部已经做了类似的处理，因此可以不使用 model_config 装饰器.
 
 ### ensure_subset
 

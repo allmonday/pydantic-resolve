@@ -4,6 +4,13 @@
 
 ## v1.12
 
+### v1.12.3 (2025.6.29)
+
+enhancement:
+
+update model_config decorator to also support dataclass.
+
+
 ### v1.12.2 (2025.6.20)
 
 fix:

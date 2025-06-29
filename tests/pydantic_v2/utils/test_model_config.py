@@ -1,7 +1,8 @@
 from pydantic_resolve.utils.openapi import model_config
 from pydantic import BaseModel, Field, TypeAdapter
 from pydantic_resolve import Resolver
-from pydantic.dataclasses import dataclass
+from pydantic.dataclasses import dataclass as pydantic_dataclass
+from dataclasses import dataclass
 from dataclasses import field
 from pydantic.json_schema import GenerateJsonSchema as GenerateJsonSchema
 import pytest
@@ -66,9 +67,22 @@ async def test_raw_schema_in_serialization():
 
 
 @pytest.mark.asyncio
-async def test_schema_config_for_dataclass():
-    # @model_config()
-    @dataclass  # pydantic.dataclass
+async def test_model_config_do_nothing_for_origin_dataclass():
+    @model_config()
+    @dataclass
+    class K:
+        name: str
+        number: int = field(default=0, metadata={'exclude': True, 'title': 'Hello'})
+    
+    schema = TypeAdapter(K).json_schema(mode='serialization')
+    assert set(schema['properties'].keys()) == {'name'}
+    assert set(schema['required']) == {'name'}
+
+
+@pytest.mark.asyncio
+async def test_model_config_do_nothing_for_pydantic_dataclass():
+    @model_config()
+    @pydantic_dataclass
     class K:
         name: str
         number: int = field(default=0, metadata={'exclude': True, 'title': 'Hello'})
@@ -80,8 +94,7 @@ async def test_schema_config_for_dataclass():
 
 @pytest.mark.asyncio
 async def test_validate_dataclass_with_generate_definition():
-    # @model_config()
-    @dataclass  # pydantic.dataclass
+    @pydantic_dataclass  # pydantic.dataclass
     class Item:
         name: str
         number: int = field(default=0, metadata={'exclude': True, 'title': 'Hello'})

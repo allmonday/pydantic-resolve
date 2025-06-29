@@ -1,8 +1,9 @@
-from pydantic import BaseModel
 from typing import Any, Dict
+from inspect import isfunction
+from dataclasses import is_dataclass
+from pydantic import BaseModel
 import pydantic_resolve.constant as const
 from pydantic_resolve.compat import PYDANTIC_V2
-from inspect import isfunction
 from pydantic_resolve.utils.class_util import safe_issubclass, is_required_field, get_items
 
 
@@ -86,7 +87,10 @@ def model_config_v2(default_required: bool=True):
     reference: fastapi/_compat.py::get_definitions
     """
     def wrapper(kls):
-        if safe_issubclass(kls, BaseModel):
+        if is_dataclass(kls):
+            return kls
+        elif safe_issubclass(kls, BaseModel):
+            # TODO: check the behavior of generating json schema in other frameworks using pydantic
             def build():
                 def _schema_extra(schema: Dict[str, Any], model) -> None:
                     # 1. collect exclude fields and then hide in both schema and dump (default action)
@@ -110,9 +114,9 @@ def model_config_v2(default_required: bool=True):
                 return _schema_extra
 
             kls.model_config['json_schema_extra'] = staticmethod(build())
+            return kls
         else:
-            raise AttributeError(f'target class {kls.__name__} is not BaseModel')
-        return kls
+            raise AttributeError(f'target class {kls.__name__} is not BaseModel or dataclass')
     return wrapper
 
 
