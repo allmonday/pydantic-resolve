@@ -418,15 +418,29 @@ Signature: `build_list(data, keys, lambda d: d.key)`
 
 ### model_config
 
-Using `exclude` can remove fields when pydantic converts to the target data, but doing so alone will still include the `name` field in the definition when generating `openapi.json` in FastAPI. Adding the `model_config()` decorator can remove `name`.
+This decorator can help generating correct json schema for response_model.
+
+Using `exclude` can remove fields when pydantic converts to the target data, but doing so alone will still include the `name` field in the definition when generating `openapi.json` in FastAPI. Adding the `model_config()` decorator can remove the `name` property.
 
 Signature: `model_config(default_required=True)`
 
 ```python
 @model_config()
 class Data(BaseModel):
-    name: str = Field('', exclude=True)
+    name: str = Field(default='', exclude=True)
 ```
+
+```python
+from pydantic.dataclasses import dataclass
+@dataclass
+class Car:
+    name: str
+    used_years: int = field(default=0, metadata={'exclude': True})
+```
+
+
+If you are using FastAPI with pydantic-v2, this model_config is no more required.
+
 
 ### ensure_subset
 
