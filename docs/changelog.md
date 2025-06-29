@@ -6,7 +6,7 @@
 
 ### v1.12.3 (2025.6.29)
 
-enhancement:
+enhancement the support to dataclass
 
 - update model_config decorator to also support dataclass.
 - return annotation now supports `Union[T, None]` for `sys.version_info > (3.7)`
