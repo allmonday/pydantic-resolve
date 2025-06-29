@@ -27,6 +27,7 @@ Extend your data models by implementing `resolve_field` methods for data fetchin
 Seamlessly integrates with modern Python web frameworks including FastAPI, Litestar, and Django-ninja.
 
 > dataclass support is also available
+> with `from pydantic.dataclasses import dataclass`
 
 ## Installation
 
