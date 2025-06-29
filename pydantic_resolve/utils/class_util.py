@@ -143,8 +143,6 @@ def ensure_subset_v2(base):
         is_base_dataclass = is_dataclass(base)
         is_kls_dataclass = is_dataclass(kls)
 
-        print(is_base_dataclass, is_kls_dataclass)
-
         if is_base_pydantic and is_kls_pydantic:
             @functools.wraps(kls)
             def inner():
@@ -254,5 +252,4 @@ def dataclass_has_default(field):
         return True
 
     typ = field.type
-    print(_is_optional(typ), typ)
     return _is_optional(typ)
