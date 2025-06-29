@@ -1,12 +1,11 @@
 import functools
-from dataclasses import is_dataclass
+from dataclasses import is_dataclass, fields, MISSING
 from typing import Type, get_type_hints, List, Tuple
 import pydantic_resolve.constant as const
 from pydantic_resolve.compat import PYDANTIC_V2
 import pydantic_resolve.utils.class_util as class_util
 from pydantic_resolve.analysis import is_acceptable_kls
-from pydantic_resolve.utils.types import shelling_type, get_type
-
+from pydantic_resolve.utils.types import shelling_type, get_type, _is_optional
 from pydantic import BaseModel
 
 
@@ -78,30 +77,48 @@ def update_forward_refs(kls):
 
 def ensure_subset_v1(base):
     """
-    used with pydantic class to make sure a class's field is 
+    used with pydantic class or dataclass to make sure a class's field is 
     subset of target class
     """
     def wrap(kls):
-        assert safe_issubclass(base, BaseModel), 'base should be pydantic class'
-        assert safe_issubclass(kls, BaseModel), 'class should be pydantic class'
+        is_base_pydantic = safe_issubclass(base, BaseModel)
+        is_kls_pydantic = safe_issubclass(kls, BaseModel)
+        is_base_dataclass = is_dataclass(base)
+        is_kls_dataclass = is_dataclass(kls)
 
-        @functools.wraps(kls)
-        def inner():
-            for k, field in kls.__fields__.items():
-                if field.required:
-                    base_field = base.__fields__.get(k)
-                    if not base_field:
-                        raise AttributeError(f'{k} not existed in {base.__name__}.')
-                    if base_field and base_field.type_ != field.type_:
-                        raise AttributeError(f'type of {k} not consistent with {base.__name__}'  )
-            return kls
-        return inner()
+        if is_base_pydantic and is_kls_pydantic:
+            @functools.wraps(kls)
+            def inner():
+                for k, field in kls.__fields__.items():
+                    if field.required:
+                        base_field = base.__fields__.get(k)
+                        if not base_field:
+                            raise AttributeError(f'{k} not existed in {base.__name__}.')
+                        if base_field and base_field.type_ != field.type_:
+                            raise AttributeError(f'type of {k} not consistent with {base.__name__}')
+                return kls
+            return inner()
+        elif is_base_dataclass and is_kls_dataclass:
+            @functools.wraps(kls)
+            def inner():
+                base_fields = {f.name: f.type for f in fields(base)}
+                for f in fields(kls):
+                    has_default = dataclass_has_default(f)
+                    if not has_default:
+                        if f.name not in base_fields:
+                            raise AttributeError(f'{f.name} not existed in {base.__name__}.')
+                        if base_fields[f.name] != f.type:
+                            raise AttributeError(f'type of {f.name} not consistent with {base.__name__}')
+                return kls
+            return inner()
+        else:
+            raise TypeError('base and kls should both be Pydantic BaseModel or both be dataclass')
     return wrap
 
 
 def ensure_subset_v2(base):
     """
-    used with pydantic class to make sure a class's field is 
+    used with pydantic class or dataclass to make sure a class's field is 
     subset of target class
 
     for pydantic v2, subclass with Optional[T] but without default value will raise exception
@@ -121,20 +138,39 @@ def ensure_subset_v2(base):
     this is ok
     """
     def wrap(kls):
-        assert safe_issubclass(base, BaseModel), 'base should be pydantic class'
-        assert safe_issubclass(kls, BaseModel), 'class should be pydantic class'
+        is_base_pydantic = safe_issubclass(base, BaseModel)
+        is_kls_pydantic = safe_issubclass(kls, BaseModel)
+        is_base_dataclass = is_dataclass(base)
+        is_kls_dataclass = is_dataclass(kls)
 
-        @functools.wraps(kls)
-        def inner():
-            for k, field in kls.model_fields.items():
-                if field.is_required():
-                    base_field = base.model_fields.get(k)
-                    if not base_field:
-                        raise AttributeError(f'{k} not existed in {base.__name__}.')
-                    if base_field and base_field.annotation != field.annotation:
-                        raise AttributeError(f'type of {k} not consistent with {base.__name__}'  )
-            return  kls
-        return inner()
+        if is_base_pydantic and is_kls_pydantic:
+            @functools.wraps(kls)
+            def inner():
+                for k, field in kls.model_fields.items():
+                    if field.is_required():
+                        base_field = base.model_fields.get(k)
+                        if not base_field:
+                            raise AttributeError(f'{k} not existed in {base.__name__}.')
+                        if base_field and base_field.annotation != field.annotation:
+                            raise AttributeError(f'type of {k} not consistent with {base.__name__}')
+                return kls
+            return inner()
+
+        elif is_base_dataclass and is_kls_dataclass:
+            @functools.wraps(kls)
+            def inner():
+                base_fields = {f.name: f.type for f in fields(base)}
+                for f in fields(kls):
+                    has_default = dataclass_has_default(f)
+                    if not has_default:
+                        if f.name not in base_fields:
+                            raise AttributeError(f'{f.name} not existed in {base.__name__}.')
+                        if base_fields[f.name] != f.type:
+                            raise AttributeError(f'type of {f.name} not consistent with {base.__name__}')
+                return kls
+            return inner()
+        else:
+            raise TypeError('base and kls should both be Pydantic BaseModel or both be dataclass')
     return wrap
 
 
@@ -210,3 +246,10 @@ def _is_required_v2(field):
     return field.is_required()
 
 is_required_field = _is_required_v2 if PYDANTIC_V2 else _is_required_v1
+
+def dataclass_has_default(field):
+    if field.default is not MISSING or field.default_factory is not MISSING:
+        return True
+
+    typ = field.type
+    return _is_optional(typ)

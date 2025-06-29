@@ -10,6 +10,12 @@ class Task(BaseTask):
     user: Optional[BaseUser] = None
     def resolve_user(self, loader=LoaderDepend(UserLoader)):
         return loader.load(self.assignee_id) if self.assignee_id else None
+
+class Story(BaseStory):
+    tasks: list[Task] = []
+    def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
+        return loader.load(self.id)
+
 ```
 
 If you have experience with GraphQL, this article provides comprehensive insights: [Resolver Pattern: A Better Alternative to GraphQL in BFF.](https://github.com/allmonday/resolver-vs-graphql/blob/master/README-en.md)
@@ -21,6 +27,7 @@ Extend your data models by implementing `resolve_field` methods for data fetchin
 Seamlessly integrates with modern Python web frameworks including FastAPI, Litestar, and Django-ninja.
 
 > dataclass support is also available
+> with `from pydantic.dataclasses import dataclass`
 
 ## Installation
 
@@ -265,6 +272,7 @@ DataLoader integration eliminates N+1 query problems inherent in multi-level dat
 DataLoader architecture enables modular class composition and reusability across different contexts.
 
 Additionally, the framework provides expose and collector mechanisms for sophisticated cross-layer data processing patterns.
+
 
 ## Testing and Coverage
 

@@ -1,8 +1,9 @@
-from pydantic import BaseModel
 from typing import Any, Dict
+from inspect import isfunction
+from dataclasses import is_dataclass
+from pydantic import BaseModel
 import pydantic_resolve.constant as const
 from pydantic_resolve.compat import PYDANTIC_V2
-from inspect import isfunction
 from pydantic_resolve.utils.class_util import safe_issubclass, is_required_field, get_items
 
 
@@ -35,31 +36,36 @@ def model_config_v1(default_required: bool = True):
         if resolve field has default value, it will not be listed in schema['required']
         set default_required=True to add it into required list.
     """
-    def wrapper(kls):
+    def _get_pydantic_model(kls):
         if safe_issubclass(kls, BaseModel):
-
-            # override schema_extra method
-            def _schema_extra(schema: Dict[str, Any], model) -> None:
-                # define schema.properties
-                excludes = set()
-
-                if kls.__exclude_fields__:
-                    for k in kls.__exclude_fields__.keys():
-                        excludes.add(k)
-
-                props = {}
-                for k, v in schema.get('properties', {}).items():
-                    if k not in excludes:
-                        props[k] = v
-                schema['properties'] = props
-
-                # define schema.required
-                if default_required:
-                    fnames = _get_required_fields(model)
-                    schema['required'] = fnames
-            kls.__config__.schema_extra = staticmethod(_schema_extra)
+            return kls
+        elif hasattr(kls, '__pydantic_model__'):
+            return kls.__pydantic_model__
         else:
-            raise AttributeError(f'target class {kls.__name__} is not BaseModel')
+            raise AttributeError(f'target class {kls.__name__} is not subclass of BaseModel, or decorated by pydantic.dataclass')
+
+    def wrapper(kls):
+        pydantic_model = _get_pydantic_model(kls)
+        def _schema_extra(schema: Dict[str, Any], model) -> None:
+            # define schema.properties
+            excludes = set()
+
+            if pydantic_model.__exclude_fields__:
+                for k in pydantic_model.__exclude_fields__.keys():
+                    excludes.add(k)
+
+            props = {}
+            for k, v in schema.get('properties', {}).items():
+                if k not in excludes:
+                    props[k] = v
+            schema['properties'] = props
+
+            # define schema.required
+            if default_required:
+                fnames = _get_required_fields(model)
+                schema['required'] = fnames
+
+        pydantic_model.__config__.schema_extra = staticmethod(_schema_extra)
         return kls
     return wrapper
 
@@ -72,9 +78,19 @@ def model_config_v2(default_required: bool=True):
     (same like `output` decorator, you can replace output with model_config)
 
     it keeps the form of model_config(params) in order to extend new features in future
+
+    update:
+
+    in fastapi + pydantic v2, this function will be handled internal automatically with mode: serilization
+    you can remove the model_config_v2
+
+    reference: fastapi/_compat.py::get_definitions
     """
     def wrapper(kls):
-        if safe_issubclass(kls, BaseModel):
+        if is_dataclass(kls):
+            return kls
+        elif safe_issubclass(kls, BaseModel):
+            # TODO: check the behavior of generating json schema in other frameworks using pydantic
             def build():
                 def _schema_extra(schema: Dict[str, Any], model) -> None:
                     # 1. collect exclude fields and then hide in both schema and dump (default action)
@@ -98,9 +114,9 @@ def model_config_v2(default_required: bool=True):
                 return _schema_extra
 
             kls.model_config['json_schema_extra'] = staticmethod(build())
+            return kls
         else:
-            raise AttributeError(f'target class {kls.__name__} is not BaseModel')
-        return kls
+            raise AttributeError(f'target class {kls.__name__} is not BaseModel or dataclass')
     return wrapper
 
 

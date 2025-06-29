@@ -1,13 +1,23 @@
 from typing import Type, Union
-from pydantic_resolve.compat import PYDANTIC_V2
+from pydantic_resolve.compat import PYDANTIC_V2, OVER_PYTHON_3_7
 
+if OVER_PYTHON_3_7:
+    from typing import get_origin, get_args
 
-def _is_optional(annotation):
+def _is_optional_3_7(annotation):
     annotation_origin = getattr(annotation, "__origin__", None)
     return annotation_origin == Union \
         and len(annotation.__args__) == 2 \
         and annotation.__args__[1] == type(None)  # noqa
 
+def _is_optional_3_x(annotation):
+    origin = get_origin(annotation)
+    args = get_args(annotation)
+    if origin is Union and type(None) in args:
+        return True
+    return False
+
+_is_optional = _is_optional_3_x if OVER_PYTHON_3_7 else _is_optional_3_7
 
 def _is_list(annotation):
     return getattr(annotation, "__origin__", None) == list

@@ -43,7 +43,7 @@ def test_ensure_subset():
             b: int
             c: int
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(TypeError):
         @class_util.ensure_subset(Base)
         @dataclass
         class ChildD1():
@@ -51,10 +51,66 @@ def test_ensure_subset():
             b: int
             c: int
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(TypeError):
         @class_util.ensure_subset(BaseX)
-        @dataclass
-        class ChildD2():
+        class ChildD2(BaseModel):
             a: str
             b: int
             c: int
+
+
+def test_ensure_subset_dataclass():
+    from pydantic_resolve.utils import class_util
+
+    @dataclass
+    class Base:
+        a: str
+        b: int
+
+    @dataclass
+    class ChildA:
+        a: str
+
+    @dataclass
+    class ChildB:
+        a: str
+        c: int = 0
+        def resolve_c(self):
+            return 21
+
+    @dataclass
+    class ChildB1:
+        a: str
+        d: Optional[int]
+
+
+    # Should not raise
+    class_util.ensure_subset(Base)(ChildA)
+    class_util.ensure_subset(Base)(ChildB)
+    class_util.ensure_subset(Base)(ChildB1)
+
+    with pytest.raises(AttributeError):
+        @dataclass
+        class ChildC:
+            a: str
+            b: str  # expect int 
+        class_util.ensure_subset(Base)(ChildC)
+
+
+    with pytest.raises(TypeError):
+        class ChildC(BaseModel):  # should not mixed with dataclass
+            a: str
+            b: int
+
+        class_util.ensure_subset(Base)(ChildC)
+
+
+    with pytest.raises(AttributeError):
+        @dataclass
+        class ChildD:
+            a: str
+            b: int
+            c: int  # <- error
+            d: Optional[int]
+            e: int = 1
+        class_util.ensure_subset(Base)(ChildD)
