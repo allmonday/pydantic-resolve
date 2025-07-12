@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pydantic-resolve"
-version = "1.12.3"
+version = "1.12.4"
 description = "It just provide a pair of pre & post methods around pydantic fields, the rest is up to your imagination"
 authors = ["tangkikodo <allmonday@126.com>"]
 readme = "README.md"
@@ -23,7 +23,6 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
     "Framework :: FastAPI",
-    "Framework :: Django-ninja",
     "Framework :: Pydantic",
 ]
 
