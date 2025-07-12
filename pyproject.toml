@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pydantic-resolve"
-version = "1.12.3"
+version = "1.12.4"
 description = "It just provide a pair of pre & post methods around pydantic fields, the rest is up to your imagination"
 authors = ["tangkikodo <allmonday@126.com>"]
 readme = "README.md"
@@ -8,6 +8,23 @@ repository = "https://github.com/allmonday/pydantic_resolve"
 keywords = ["pydantic", "fastapi"]
 license = "MIT"
 packages = [{include = "pydantic_resolve"}]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Framework :: FastAPI",
+    "Framework :: Pydantic",
+]
 
 [tool.poetry.dependencies]
 python = "^3.7"

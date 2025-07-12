@@ -1,8 +1,10 @@
 # Changelog
 
-
-
 ## v1.12
+
+### v1.12.3 (2025.7.12)
+
+update python versions in pyproject.toml
 
 ### v1.12.3 (2025.6.29)
 
@@ -12,13 +14,11 @@ enhancement the support to dataclass
 - return annotation now supports `Union[T, None]` for `sys.version_info > (3.7)`
 - ensure_subset support dataclass
 
-
 ### v1.12.2 (2025.6.20)
 
 fix:
 
 if DataLoader fields already has default value, Resolver.loader_params can skip them and will not raise `LoaderFieldNotProvidedError` any more.
-
 
 ```python
 class LoaderA(DataLoader):
