@@ -3,12 +3,13 @@
 ![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
-pydantic-resolve is a sophisticated framework for composing complex data structures with an intuitive, resolver-based architecture that eliminates the N+1 query problem.
+pydantic-resolve is a sophisticated framework for composing complex data structures with an intuitive, declarative, resolver-based architecture that eliminates the N+1 query problem.
 
 it supports:
+
 - pydantic v1
 - pydantic v2
-- dataclass  `from pydantic.dataclasses import dataclass`
+- dataclass `from pydantic.dataclasses import dataclass`
 
 ```python
 class Task(BaseTask):
@@ -20,7 +21,50 @@ class Story(BaseStory):
     tasks: list[Task] = []
     def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
         return loader.load(self.id)
+```
 
+using this snippets above, it can esily transform plain stories,
+
+```json
+[
+  { "id": 1, "name": "story - 1" },
+  { "id": 2, "name": "story - 2" }
+]
+```
+
+into complicated stories with rich details:
+
+```json
+[
+  {
+    "id": 1,
+    "name": "story - 1",
+    "tasks": [
+      {
+        "id": 1,
+        "name": "design",
+        "user": {
+          "id": 1,
+          "name": "tangkikodo"
+        }
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "name": "story - 2",
+    "tasks": [
+      {
+        "id": 2,
+        "name": "add ut",
+        "user": {
+          "id": 2,
+          "name": "john"
+        }
+      }
+    ]
+  }
+]
 ```
 
 If you have experience with GraphQL, this article provides comprehensive insights: [Resolver Pattern: A Better Alternative to GraphQL in BFF.](https://github.com/allmonday/resolver-vs-graphql/blob/master/README-en.md)
@@ -30,7 +74,6 @@ The framework enables progressive data enrichment through incremental field reso
 Extend your data models by implementing `resolve_field` methods for data fetching and `post_field` methods for transformations, enabling node creation, in-place modifications, or cross-node data aggregation.
 
 Seamlessly integrates with modern Python web frameworks including FastAPI, Litestar, and Django-ninja.
-
 
 ## Installation
 
@@ -275,7 +318,6 @@ DataLoader integration eliminates N+1 query problems inherent in multi-level dat
 DataLoader architecture enables modular class composition and reusability across different contexts.
 
 Additionally, the framework provides expose and collector mechanisms for sophisticated cross-layer data processing patterns.
-
 
 ## Testing and Coverage
 
