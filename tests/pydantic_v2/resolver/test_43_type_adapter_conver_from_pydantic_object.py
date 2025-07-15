@@ -2,6 +2,7 @@ from typing import List, Optional
 import pytest
 from pydantic import BaseModel, ValidationError
 from pydantic_resolve import Resolver
+from pydantic_core._pydantic_core import ValidationError as ValidationError2
 
 @pytest.mark.asyncio
 async def test_1():
@@ -55,4 +56,23 @@ async def test_3():
     c = await Resolver().resolve(c)
 
     assert c.item and c.item.name == 'name-1'
+
+
+@pytest.mark.asyncio
+async def test_4():
+    class Base(BaseModel):
+        name: str
+    
+    class Child(Base):
+        id: Optional[int] = None
+    
+    class Container(BaseModel):
+        items: List[Child] = []
+        def resolve_items(self):
+            return [Base(name='name-1'), Base(name='name-2')]
+        
+    c = Container()
+    c = await Resolver(enable_from_attribute_in_type_adapter=True).resolve(c)
+    assert c.items[0].name == 'name-1'
+
 
