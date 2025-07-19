@@ -186,6 +186,15 @@ def mapper(func_or_class: Union[Callable, Type]):
     func_or_class:
         is func: run func
         is class: call auto_mapping to have a try
+
+    @dataclass
+    class K:
+        id: int
+
+        field: str = ''
+        @mapper(lambda x: x.name)
+        def resolve_field(self, loader=Loader(field_batch_load_fn)):
+            return loader.load(self.id)
     """
     def inner(inner_fn):
 

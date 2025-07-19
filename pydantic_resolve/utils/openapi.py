@@ -4,16 +4,16 @@ from dataclasses import is_dataclass
 from pydantic import BaseModel
 import pydantic_resolve.constant as const
 from pydantic_resolve.compat import PYDANTIC_V2
-from pydantic_resolve.utils.class_util import safe_issubclass, is_required_field, get_items
+from pydantic_resolve.utils.class_util import safe_issubclass, is_pydantic_field_required_field, get_pydantic_field_items
 
 
 def _get_required_fields(kls: BaseModel):
     required_fields = []
 
-    items = get_items(kls)
+    items = get_pydantic_field_items(kls)
 
     for fname, field in items:
-        if is_required_field(field):
+        if is_pydantic_field_required_field(field):
             required_fields.append(fname)
 
 

@@ -14,12 +14,12 @@ it supports:
 ```python
 class Task(BaseTask):
     user: Optional[BaseUser] = None
-    def resolve_user(self, loader=LoaderDepend(UserLoader)):
+    def resolve_user(self, loader=Loader(UserLoader)):
         return loader.load(self.assignee_id) if self.assignee_id else None
 
 class Story(BaseStory):
     tasks: list[Task] = []
-    def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
+    def resolve_tasks(self, loader=Loader(StoryTaskLoader)):
         return loader.load(self.id)
 ```
 
@@ -146,24 +146,24 @@ Create domain-specific data structures through selective composition and relatio
 <img width="709" alt="image" src="https://github.com/user-attachments/assets/ffc74e60-0670-475c-85ab-cb0d03460813" />
 
 ```python
-from pydantic_resolve import LoaderDepend
+from pydantic_resolve import Loader
 
 class Task(BaseTask):
     user: Optional[BaseUser] = None
-    def resolve_user(self, loader=LoaderDepend(UserLoader)):
+    def resolve_user(self, loader=Loader(UserLoader)):
         return loader.load(self.assignee_id) if self.assignee_id else None
 
 class Story(BaseStory):
     tasks: list[Task] = []
-    def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
+    def resolve_tasks(self, loader=Loader(StoryTaskLoader)):
         return loader.load(self.id)
 
     assignee: Optional[BaseUser] = None
-    def resolve_assignee(self, loader=LoaderDepend(UserLoader)):
+    def resolve_assignee(self, loader=Loader(UserLoader)):
         return loader.load(self.assignee_id) if self.assignee_id else None
 
     reporter: Optional[BaseUser] = None
-    def resolve_reporter(self, loader=LoaderDepend(UserLoader)):
+    def resolve_reporter(self, loader=Loader(UserLoader)):
         return loader.load(self.report_to) if self.report_to else None
 ```
 
@@ -177,7 +177,7 @@ class Story(BaseModel):
     report_to: int
 
     tasks: list[BaseTask] = []
-    def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
+    def resolve_tasks(self, loader=Loader(StoryTaskLoader)):
         return loader.load(self.id)
 
 ```
@@ -195,26 +195,26 @@ Leverage post_field methods for ancestor data access, node transfers, and in-pla
 <img width="701" alt="image" src="https://github.com/user-attachments/assets/2e3b1345-9e5e-489b-a81d-dc220b9d6334" />
 
 ```python
-from pydantic_resolve import LoaderDepend, Collector
+from pydantic_resolve import Loader, Collector
 
 class Task(BaseTask):
     __pydantic_resolve_collect__ = {'user': 'related_users'}  # Propagate user to collector: 'related_users'
 
     user: Optional[BaseUser] = None
-    def resolve_user(self, loader=LoaderDepend(UserLoader)):
+    def resolve_user(self, loader=Loader(UserLoader)):
         return loader.load(self.assignee_id)
 
 class Story(BaseStory):
     tasks: list[Task] = []
-    def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
+    def resolve_tasks(self, loader=Loader(StoryTaskLoader)):
         return loader.load(self.id)
 
     assignee: Optional[BaseUser] = None
-    def resolve_assignee(self, loader=LoaderDepend(UserLoader)):
+    def resolve_assignee(self, loader=Loader(UserLoader)):
         return loader.load(self.assignee_id)
 
     reporter: Optional[BaseUser] = None
-    def resolve_reporter(self, loader=LoaderDepend(UserLoader)):
+    def resolve_reporter(self, loader=Loader(UserLoader)):
         return loader.load(self.report_to)
 
     # ---------- Post-processing ------------
@@ -230,15 +230,15 @@ class Story(BaseStory):
 ```python
 class Story(BaseStory):
     tasks: list[Task] = []
-    def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
+    def resolve_tasks(self, loader=Loader(StoryTaskLoader)):
         return loader.load(self.id)
 
     assignee: Optional[BaseUser] = None
-    def resolve_assignee(self, loader=LoaderDepend(UserLoader)):
+    def resolve_assignee(self, loader=Loader(UserLoader)):
         return loader.load(self.assignee_id)
 
     reporter: Optional[BaseUser] = None
-    def resolve_reporter(self, loader=LoaderDepend(UserLoader)):
+    def resolve_reporter(self, loader=Loader(UserLoader)):
         return loader.load(self.report_to)
 
     # ---------- Post-processing ------------
@@ -250,11 +250,11 @@ class Story(BaseStory):
 ### Pattern 3: Propagate Ancestor Context
 
 ```python
-from pydantic_resolve import LoaderDepend
+from pydantic_resolve import Loader
 
 class Task(BaseTask):
     user: Optional[BaseUser] = None
-    def resolve_user(self, loader=LoaderDepend(UserLoader)):
+    def resolve_user(self, loader=Loader(UserLoader)):
         return loader.load(self.assignee_id)
 
     # ---------- Post-processing ------------
@@ -265,15 +265,15 @@ class Story(BaseStory):
     __pydantic_resolve_expose__ = {'name': 'story_name'}
 
     tasks: list[Task] = []
-    def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
+    def resolve_tasks(self, loader=Loader(StoryTaskLoader)):
         return loader.load(self.id)
 
     assignee: Optional[BaseUser] = None
-    def resolve_assignee(self, loader=LoaderDepend(UserLoader)):
+    def resolve_assignee(self, loader=Loader(UserLoader)):
         return loader.load(self.assignee_id)
 
     reporter: Optional[BaseUser] = None
-    def resolve_reporter(self, loader=LoaderDepend(UserLoader)):
+    def resolve_reporter(self, loader=Loader(UserLoader)):
         return loader.load(self.report_to)
 ```
 

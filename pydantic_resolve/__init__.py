@@ -9,7 +9,7 @@ from .exceptions import (
     GlobalLoaderFieldOverlappedError,
     MissingCollector)
 from .resolver import Resolver
-from .utils.depend import LoaderDepend
+from .utils.depend import LoaderDepend, Loader
 from .utils.openapi import (
     model_config)
 
@@ -17,7 +17,7 @@ from .utils.openapi import (
 __all__ = [
     'Resolver',
     'LoaderDepend',
-
+    'Loader',  # short 
     'Collector',
     'ICollector',
 
