@@ -69,6 +69,8 @@ into complicated stories with rich details:
 
 If you have experience with GraphQL, this article provides comprehensive insights: [Resolver Pattern: A Better Alternative to GraphQL in BFF.](https://github.com/allmonday/resolver-vs-graphql/blob/master/README-en.md)
 
+> Persisted queries in GraphQL can be easily transformed into pydantic-resolve pattern and gain performance improvement.
+
 The framework enables progressive data enrichment through incremental field resolution, allowing seamless API evolution from flat to hierarchical data structures.
 
 Extend your data models by implementing `resolve_field` methods for data fetching and `post_field` methods for transformations, enabling node creation, in-place modifications, or cross-node data aggregation.
@@ -336,7 +338,7 @@ Current test coverage: 97%
 
 `ab -c 50 -n 1000` based on FastAPI.
 
-strawberry-graphql
+strawberry-graphql  (including cost of parsing query statements)
 
 ```
 Server Software:        uvicorn
