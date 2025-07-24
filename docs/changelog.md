@@ -2,7 +2,17 @@
 
 ## v1.12
 
-### v1.12.3 (2025.7.12)
+### v1.12.5 (2025.7.24)
+
+feature:
+- add short name `Loader` for `LoaderDepend`
+- set Loader return type as DataLoader
+
+non-functional:
+- add more tests
+- rename internal variable names
+
+### v1.12.4 (2025.7.12)
 
 update python versions in pyproject.toml
 

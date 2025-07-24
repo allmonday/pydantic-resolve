@@ -329,6 +329,8 @@ DataLoader 可以将并发的多个异步查询合并为一个。
 
 在 pydantic-resolve 中需要使用 LoaderDepend 来管理 DataLoader。
 
+> 从 v1.12.5 开始， 你也可以使用 `Loader`， 两者是等价的。
+
 支持一个方法中申明多个 DataLoader。
 
 ```python

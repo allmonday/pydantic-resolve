@@ -1,4 +1,5 @@
 from typing import Any, Callable, Optional
+from aiodataloader import DataLoader
 
 class Depends:
     def __init__(
@@ -10,5 +11,8 @@ class Depends:
 
 def LoaderDepend(  # noqa: N802
     dependency: Optional[Callable[..., Any]] = None,
-) -> Any:
+) -> DataLoader:
     return Depends(dependency=dependency)
+
+
+Loader = LoaderDepend

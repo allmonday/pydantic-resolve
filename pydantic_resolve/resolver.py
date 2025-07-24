@@ -299,7 +299,7 @@ class Resolver:
             return node
 
         kls = node.__class__
-        kls_path = class_util.get_kls_full_path(kls)
+        kls_path = class_util.get_kls_full_name(kls)
 
         self._prepare_collectors(node, kls)
         self._prepare_expose_fields(node)
@@ -357,7 +357,7 @@ class Resolver:
     async def resolve(self, node: T) -> T:
         if isinstance(node, list) and node == []: return node
 
-        root_class = class_util.get_class(node)
+        root_class = class_util.get_class_of_object(node)
         metadata = analysis.scan_and_store_metadata(root_class)
         self.metadata = analysis.convert_metadata_key_as_kls(metadata)
 

@@ -25,10 +25,10 @@ def test_get_class_field_annotations():
     class E(C):
         world: str
     
-    assert list(pydantic_resolve.utils.class_util.get_class_field_without_default_value(B)) == [('hello', True)]
-    assert list(pydantic_resolve.utils.class_util.get_class_field_without_default_value(C)) == [('hello', False)]
-    assert list(pydantic_resolve.utils.class_util.get_class_field_without_default_value(D)) == []
-    assert list(pydantic_resolve.utils.class_util.get_class_field_without_default_value(E)) == [('world', False)]
+    assert list(pydantic_resolve.utils.class_util.get_fields_default_value_not_provided(B)) == [('hello', True)]
+    assert list(pydantic_resolve.utils.class_util.get_fields_default_value_not_provided(C)) == [('hello', False)]
+    assert list(pydantic_resolve.utils.class_util.get_fields_default_value_not_provided(D)) == []
+    assert list(pydantic_resolve.utils.class_util.get_fields_default_value_not_provided(E)) == [('world', False)]
 
 
 class User(BaseModel):
