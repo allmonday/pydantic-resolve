@@ -2,7 +2,7 @@
 
 ## v1.12
 
-### v1.12.5 (2025.7.12)
+### v1.12.5 (2025.7.24)
 
 feature:
 - add short name `Loader` for `LoaderDepend`
