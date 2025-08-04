@@ -3,7 +3,7 @@
 ![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
-pydantic-resolve is a sophisticated framework for composing complex data structures with an intuitive, declarative, resolver-based architecture that eliminates the N+1 query problem.
+pydantic-resolve is a framework for composing complex data structures with an intuitive, declarative, resolver-based architecture.
 
 it supports:
 
@@ -23,8 +23,9 @@ class Story(BaseStory):
         return loader.load(self.id)
 ```
 
-using this snippets above, it can esily transform plain stories,
+By using this snippets above, it can esily transform plain stories into complicated stories with rich details:
 
+BaseStory
 ```json
 [
   { "id": 1, "name": "story - 1" },
@@ -32,8 +33,7 @@ using this snippets above, it can esily transform plain stories,
 ]
 ```
 
-into complicated stories with rich details:
-
+Story
 ```json
 [
   {
@@ -71,8 +71,6 @@ If you have experience with GraphQL, this article provides comprehensive insight
 
 > Persisted queries in GraphQL can be easily transformed into pydantic-resolve pattern and gain performance improvement.
 
-The framework enables progressive data enrichment through incremental field resolution, allowing seamless API evolution from flat to hierarchical data structures.
-
 Extend your data models by implementing `resolve_field` methods for data fetching and `post_field` methods for transformations, enabling node creation, in-place modifications, or cross-node data aggregation.
 
 Seamlessly integrates with modern Python web frameworks including FastAPI, Litestar, and Django-ninja.
@@ -91,9 +89,9 @@ Starting from pydantic-resolve v1.11.0, both pydantic v1 and v2 are supported.
 - **Demo Repository**: https://github.com/allmonday/pydantic-resolve-demo
 - **Composition-Oriented Pattern**: https://github.com/allmonday/composition-oriented-development-pattern
 
-## Architecture Overview
+## Quick Start
 
-Building complex data structures requires only 3 systematic steps:
+Building complex data structures requires only 3 systematic steps， let's take Agile's Story for example.
 
 ### 1. Define Domain Models
 
@@ -139,11 +137,11 @@ class UserLoader(DataLoader):
         return build_object(users, keys, lambda x: x.id)
 ```
 
-DataLoader implementations support flexible data sources, from database queries to microservice RPC calls.
+DataLoader implementations support flexible data sources, from database queries to microservice RPC calls. (It could be replaced in future optimization)
 
 ### 2. Compose Business Models
 
-Create domain-specific data structures through selective composition and relationship mapping (stable, reusable across use cases)
+Based on a specific business logic, create domain-specific data structures through selective schemas and relationship dataloader (stable, reusable across use cases)
 
 <img width="709" alt="image" src="https://github.com/user-attachments/assets/ffc74e60-0670-475c-85ab-cb0d03460813" />
 
@@ -192,7 +190,7 @@ Apply presentation-specific modifications and data aggregations (flexible, conte
 
 Leverage post_field methods for ancestor data access, node transfers, and in-place transformations.
 
-#### Pattern 1: Aggregate Related Entities
+#### Case 1: Aggregate or collect items
 
 <img width="701" alt="image" src="https://github.com/user-attachments/assets/2e3b1345-9e5e-489b-a81d-dc220b9d6334" />
 
@@ -225,7 +223,7 @@ class Story(BaseStory):
         return collector.values()
 ```
 
-#### Pattern 2: Compute Derived Metrics
+#### Case 2: Compute extra fields
 
 <img width="687" alt="image" src="https://github.com/user-attachments/assets/fd5897d6-1c6a-49ec-aab0-495070054b83" />
 
@@ -249,7 +247,7 @@ class Story(BaseStory):
         return sum(task.estimate for task in self.tasks)
 ```
 
-### Pattern 3: Propagate Ancestor Context
+### Case 3: Propagate ancestor data through ancestor_context
 
 ```python
 from pydantic_resolve import LoaderDepend
@@ -279,7 +277,7 @@ class Story(BaseStory):
         return loader.load(self.report_to)
 ```
 
-### 4. Execute Resolution Pipeline
+### 4. Execute Resolution
 
 ```python
 from pydantic_resolve import Resolver
@@ -288,7 +286,7 @@ stories: List[Story] = await query_stories()
 await Resolver().resolve(stories)
 ```
 
-Resolution complete!
+Complete!
 
 ## Technical Architecture
 
