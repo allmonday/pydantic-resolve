@@ -3,15 +3,31 @@
 ![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
-pydantic-resolve is a framework for composing complex data structures with an intuitive, declarative, resolver-based architecture.
+Pydantic-resolve is a framework for composing complex data structures with an intuitive, declarative, resolver-based architecture.
 
-it supports:
+It provides three major functions to facilitate the acquisition and modification of multi-layered data.
+- pluggable resolve methods and post methods, they can define how to fetch and modify nodes.
+- transporting field data from ancestor nodes to their descendant nodes, through multiple layers.
+- collecting data from any descendants nodes to their ancestor nodes, through multiple layers.
 
+It supports:
 - pydantic v1
 - pydantic v2
 - dataclass `from pydantic.dataclasses import dataclass`
 
+If you have experience with GraphQL, this article provides comprehensive insights: [Resolver Pattern: A Better Alternative to GraphQL in BFF.](https://github.com/allmonday/resolver-vs-graphql/blob/master/README-en.md)
+
+It could be seamlessly integrated with modern Python web frameworks including FastAPI, Litestar, and Django-ninja.
+
+## Hello world
+
+This snippet shows the basic capability of fetching descendant nodes in a declarative way, the specific query details are encapsulated inside the dataloader.
+
 ```python
+from pydantic_resolve import Resolver
+from biz_models import BaseTask, BaseStory, BaseUser
+from biz_services import UserLoader, StoryTaskLoader
+
 class Task(BaseTask):
     user: Optional[BaseUser] = None
     def resolve_user(self, loader=LoaderDepend(UserLoader)):
@@ -21,9 +37,12 @@ class Story(BaseStory):
     tasks: list[Task] = []
     def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
         return loader.load(self.id)
+
+stories = [Story(**s) for s in await query_stories()]
+data = await Resolver().resolve(stories)
 ```
 
-By using this snippets above, it can esily transform plain stories into complicated stories with rich details:
+then it will transform flat stories into complicated stories with rich details:
 
 BaseStory
 ```json
@@ -66,14 +85,6 @@ Story
   }
 ]
 ```
-
-If you have experience with GraphQL, this article provides comprehensive insights: [Resolver Pattern: A Better Alternative to GraphQL in BFF.](https://github.com/allmonday/resolver-vs-graphql/blob/master/README-en.md)
-
-> Persisted queries in GraphQL can be easily transformed into pydantic-resolve pattern and gain performance improvement.
-
-Extend your data models by implementing `resolve_field` methods for data fetching and `post_field` methods for transformations, enabling node creation, in-place modifications, or cross-node data aggregation.
-
-Seamlessly integrates with modern Python web frameworks including FastAPI, Litestar, and Django-ninja.
 
 ## Installation
 
@@ -282,8 +293,8 @@ class Story(BaseStory):
 ```python
 from pydantic_resolve import Resolver
 
-stories: List[Story] = await query_stories()
-await Resolver().resolve(stories)
+stories = [Story(**s) for s in await query_stories()]
+data = await Resolver().resolve(stories)
 ```
 
 Complete!
