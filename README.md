@@ -3,7 +3,7 @@
 ![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
-Pydantic-resolve is a framework for composing complex data structures with an intuitive, declarative, resolver-based architecture.
+Pydantic-resolve is a framework for composing complex data structures with an intuitive, declarative, resolver-based way, and then let the data easy to understand and adjust. 
 
 It provides three major functions to facilitate the acquisition and modification of multi-layered data.
 - pluggable resolve methods and post methods, they can define how to fetch and modify nodes.
