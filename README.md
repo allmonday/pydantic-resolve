@@ -96,8 +96,8 @@ Starting from pydantic-resolve v1.11.0, both pydantic v1 and v2 are supported.
 
 ## Documentation
 
-- **Documentation**: https://allmonday.github.io/pydantic-resolve/v2/introduction/
-- **Demo Repository**: https://github.com/allmonday/pydantic-resolve-demo
+- **Documentation**: https://allmonday.github.io/pydantic-resolve/
+- **Demo**: https://github.com/allmonday/pydantic-resolve-demo
 - **Composition-Oriented Pattern**: https://github.com/allmonday/composition-oriented-development-pattern
 
 ## Quick Start
