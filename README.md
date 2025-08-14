@@ -34,8 +34,10 @@ class Task(BaseTask):
         return loader.load(self.assignee_id) if self.assignee_id else None
 
 class Story(BaseStory):
-    tasks: list[Task] = []
+    tasks: list[Task] = [] 
     def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
+        # this loader returns BaseTask,
+        # Task inhert from BaseTask so that it can be initialized from the it and then fetch the user.
         return loader.load(self.id)
 
 stories = [Story(**s) for s in await query_stories()]
