@@ -114,7 +114,7 @@ Building complex data structures requires only 3 systematic steps， let's take 
 
 Establish entity relationships as foundational data models (stable, serves as architectural blueprint)
 
-<img width="639" alt="image" src="https://github.com/user-attachments/assets/2656f72e-1af5-467a-96f9-cab95760b720" />
+<img width="630px" alt="image" src="https://github.com/user-attachments/assets/2656f72e-1af5-467a-96f9-cab95760b720" />
 
 ```python
 from pydantic import BaseModel
@@ -160,7 +160,7 @@ DataLoader implementations support flexible data sources, from database queries 
 
 Based on a specific business logic, create domain-specific data structures through selective schemas and relationship dataloader (stable, reusable across use cases)
 
-<img width="709" alt="image" src="https://github.com/user-attachments/assets/ffc74e60-0670-475c-85ab-cb0d03460813" />
+<img width="630px" alt="image" src="https://github.com/user-attachments/assets/ffc74e60-0670-475c-85ab-cb0d03460813" />
 
 ```python
 from pydantic_resolve import Loader
@@ -209,7 +209,7 @@ Leverage post_field methods for ancestor data access, node transfers, and in-pla
 
 #### Case 1: Aggregate or collect items
 
-<img width="701" alt="image" src="https://github.com/user-attachments/assets/2e3b1345-9e5e-489b-a81d-dc220b9d6334" />
+<img width="630px" alt="image" src="https://github.com/user-attachments/assets/2e3b1345-9e5e-489b-a81d-dc220b9d6334" />
 
 ```python
 from pydantic_resolve import Loader, Collector
@@ -242,7 +242,7 @@ class Story(BaseStory):
 
 #### Case 2: Compute extra fields
 
-<img width="687" alt="image" src="https://github.com/user-attachments/assets/fd5897d6-1c6a-49ec-aab0-495070054b83" />
+<img width="630px" alt="image" src="https://github.com/user-attachments/assets/fd5897d6-1c6a-49ec-aab0-495070054b83" />
 
 ```python
 class Story(BaseStory):
