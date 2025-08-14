@@ -108,7 +108,7 @@ def _scan_resolve_method(method, field: str, request_type: Optional[Type]) -> Re
             info: DataLoaderType = { 
                 'param': name,
                 'kls': param.default.dependency,  # for later initialization
-                'path': class_util.get_kls_full_path(param.default.dependency),
+                'path': class_util.get_kls_full_name(param.default.dependency),
                 'request_type': request_type
             }
             result['dataloaders'].append(info)
@@ -146,7 +146,7 @@ def _scan_post_method(method, field: str, request_type: Optional[Type]) -> PostM
             loader_info: DataLoaderType = { 
                 'param': name,
                 'kls': param.default.dependency,  # for later initialization
-                'path': class_util.get_kls_full_path(param.default.dependency),
+                'path': class_util.get_kls_full_name(param.default.dependency),
                 'request_type': request_type
             }
             result['dataloaders'].append(loader_info)
@@ -233,7 +233,7 @@ def validate_and_create_loader_instance(
                 global_loader_param,
                 loader_params.get(loader_kls, {}))
 
-            for field, has_default in class_util.get_class_field_without_default_value(loader_kls):
+            for field, has_default in class_util.get_fields_default_value_not_provided(loader_kls):
                 try:
                     if has_default and field not in param_config:
                         continue
@@ -249,7 +249,7 @@ def validate_and_create_loader_instance(
     
     def _get_all_fields(kls):
         if class_util.safe_issubclass(kls, BaseModel):
-            return list(class_util.get_keys(kls))
+            return list(class_util.get_pydantic_field_keys(kls))
 
         elif is_dataclass(kls):
             return [f.name for f in dc_fields(kls)]
@@ -320,11 +320,11 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
 
     def _get_all_fields_and_object_fields(kls):
         if class_util.safe_issubclass(kls, BaseModel):
-            all_fields = set(class_util.get_keys(kls))
-            object_fields = list(class_util.get_pydantic_attrs(kls))  # dive and recursively analysis
+            all_fields = set(class_util.get_pydantic_field_keys(kls))
+            object_fields = list(class_util.get_pydantic_fields(kls))  # dive and recursively analysis
         elif is_dataclass(kls):
             all_fields = set([f.name for f in dc_fields(kls)])
-            object_fields = list(class_util.get_dataclass_attrs(kls))
+            object_fields = list(class_util.get_dataclass_fields(kls))
         else:
             raise AttributeError('invalid type: should be pydantic object or dataclass object')  #noqa
         return all_fields, object_fields, { x:y for x, y in object_fields}
@@ -413,7 +413,7 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
             metadata[kls_name]['should_traverse'] = True
 
     def walker(kls, ancestors: List[Tuple[str, str]]):
-        kls_name = class_util.get_kls_full_path(kls)
+        kls_name = class_util.get_kls_full_name(kls)
         hit = metadata.get(kls_name)
         if hit:
             # if populated by previous node, or self has_config

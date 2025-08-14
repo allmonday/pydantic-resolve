@@ -3,14 +3,16 @@
 ![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
-Pydantic-resolve is a framework for composing complex data structures with an intuitive, declarative, resolver-based way, and then let the data easy to understand and adjust. 
+Pydantic-resolve is a framework for composing complex data structures with an intuitive, declarative, resolver-based way, and then let the data easy to understand and adjust.
 
 It provides three major functions to facilitate the acquisition and modification of multi-layered data.
+
 - pluggable resolve methods and post methods, they can define how to fetch and modify nodes.
 - transporting field data from ancestor nodes to their descendant nodes, through multiple layers.
 - collecting data from any descendants nodes to their ancestor nodes, through multiple layers.
 
 It supports:
+
 - pydantic v1
 - pydantic v2
 - dataclass `from pydantic.dataclasses import dataclass`
@@ -30,12 +32,12 @@ from biz_services import UserLoader, StoryTaskLoader
 
 class Task(BaseTask):
     user: Optional[BaseUser] = None
-    def resolve_user(self, loader=LoaderDepend(UserLoader)):
+    def resolve_user(self, loader=Loader(UserLoader)):
         return loader.load(self.assignee_id) if self.assignee_id else None
 
 class Story(BaseStory):
-    tasks: list[Task] = [] 
-    def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
+    tasks: list[Task] = []
+    def resolve_tasks(self, loader=Loader(StoryTaskLoader)):
         # this loader returns BaseTask,
         # Task inhert from BaseTask so that it can be initialized from it, then fetch the user.
         return loader.load(self.id)
@@ -47,6 +49,7 @@ data = await Resolver().resolve(stories)
 then it will transform flat stories into complicated stories with rich details:
 
 BaseStory
+
 ```json
 [
   { "id": 1, "name": "story - 1" },
@@ -55,6 +58,7 @@ BaseStory
 ```
 
 Story
+
 ```json
 [
   {
@@ -110,7 +114,7 @@ Building complex data structures requires only 3 systematic steps， let's take 
 
 Establish entity relationships as foundational data models (stable, serves as architectural blueprint)
 
-<img width="639" alt="image" src="https://github.com/user-attachments/assets/2656f72e-1af5-467a-96f9-cab95760b720" />
+<img width="630px" alt="image" src="https://github.com/user-attachments/assets/2656f72e-1af5-467a-96f9-cab95760b720" />
 
 ```python
 from pydantic import BaseModel
@@ -156,27 +160,27 @@ DataLoader implementations support flexible data sources, from database queries 
 
 Based on a specific business logic, create domain-specific data structures through selective schemas and relationship dataloader (stable, reusable across use cases)
 
-<img width="709" alt="image" src="https://github.com/user-attachments/assets/ffc74e60-0670-475c-85ab-cb0d03460813" />
+<img width="630px" alt="image" src="https://github.com/user-attachments/assets/ffc74e60-0670-475c-85ab-cb0d03460813" />
 
 ```python
-from pydantic_resolve import LoaderDepend
+from pydantic_resolve import Loader
 
 class Task(BaseTask):
     user: Optional[BaseUser] = None
-    def resolve_user(self, loader=LoaderDepend(UserLoader)):
+    def resolve_user(self, loader=Loader(UserLoader)):
         return loader.load(self.assignee_id) if self.assignee_id else None
 
 class Story(BaseStory):
     tasks: list[Task] = []
-    def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
+    def resolve_tasks(self, loader=Loader(StoryTaskLoader)):
         return loader.load(self.id)
 
     assignee: Optional[BaseUser] = None
-    def resolve_assignee(self, loader=LoaderDepend(UserLoader)):
+    def resolve_assignee(self, loader=Loader(UserLoader)):
         return loader.load(self.assignee_id) if self.assignee_id else None
 
     reporter: Optional[BaseUser] = None
-    def resolve_reporter(self, loader=LoaderDepend(UserLoader)):
+    def resolve_reporter(self, loader=Loader(UserLoader)):
         return loader.load(self.report_to) if self.report_to else None
 ```
 
@@ -190,7 +194,7 @@ class Story(BaseModel):
     report_to: int
 
     tasks: list[BaseTask] = []
-    def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
+    def resolve_tasks(self, loader=Loader(StoryTaskLoader)):
         return loader.load(self.id)
 
 ```
@@ -205,29 +209,29 @@ Leverage post_field methods for ancestor data access, node transfers, and in-pla
 
 #### Case 1: Aggregate or collect items
 
-<img width="701" alt="image" src="https://github.com/user-attachments/assets/2e3b1345-9e5e-489b-a81d-dc220b9d6334" />
+<img width="630px" alt="image" src="https://github.com/user-attachments/assets/2e3b1345-9e5e-489b-a81d-dc220b9d6334" />
 
 ```python
-from pydantic_resolve import LoaderDepend, Collector
+from pydantic_resolve import Loader, Collector
 
 class Task(BaseTask):
     __pydantic_resolve_collect__ = {'user': 'related_users'}  # Propagate user to collector: 'related_users'
 
     user: Optional[BaseUser] = None
-    def resolve_user(self, loader=LoaderDepend(UserLoader)):
+    def resolve_user(self, loader=Loader(UserLoader)):
         return loader.load(self.assignee_id)
 
 class Story(BaseStory):
     tasks: list[Task] = []
-    def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
+    def resolve_tasks(self, loader=Loader(StoryTaskLoader)):
         return loader.load(self.id)
 
     assignee: Optional[BaseUser] = None
-    def resolve_assignee(self, loader=LoaderDepend(UserLoader)):
+    def resolve_assignee(self, loader=Loader(UserLoader)):
         return loader.load(self.assignee_id)
 
     reporter: Optional[BaseUser] = None
-    def resolve_reporter(self, loader=LoaderDepend(UserLoader)):
+    def resolve_reporter(self, loader=Loader(UserLoader)):
         return loader.load(self.report_to)
 
     # ---------- Post-processing ------------
@@ -238,20 +242,20 @@ class Story(BaseStory):
 
 #### Case 2: Compute extra fields
 
-<img width="687" alt="image" src="https://github.com/user-attachments/assets/fd5897d6-1c6a-49ec-aab0-495070054b83" />
+<img width="630px" alt="image" src="https://github.com/user-attachments/assets/fd5897d6-1c6a-49ec-aab0-495070054b83" />
 
 ```python
 class Story(BaseStory):
     tasks: list[Task] = []
-    def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
+    def resolve_tasks(self, loader=Loader(StoryTaskLoader)):
         return loader.load(self.id)
 
     assignee: Optional[BaseUser] = None
-    def resolve_assignee(self, loader=LoaderDepend(UserLoader)):
+    def resolve_assignee(self, loader=Loader(UserLoader)):
         return loader.load(self.assignee_id)
 
     reporter: Optional[BaseUser] = None
-    def resolve_reporter(self, loader=LoaderDepend(UserLoader)):
+    def resolve_reporter(self, loader=Loader(UserLoader)):
         return loader.load(self.report_to)
 
     # ---------- Post-processing ------------
@@ -263,11 +267,11 @@ class Story(BaseStory):
 ### Case 3: Propagate ancestor data through ancestor_context
 
 ```python
-from pydantic_resolve import LoaderDepend
+from pydantic_resolve import Loader
 
 class Task(BaseTask):
     user: Optional[BaseUser] = None
-    def resolve_user(self, loader=LoaderDepend(UserLoader)):
+    def resolve_user(self, loader=Loader(UserLoader)):
         return loader.load(self.assignee_id)
 
     # ---------- Post-processing ------------
@@ -278,15 +282,15 @@ class Story(BaseStory):
     __pydantic_resolve_expose__ = {'name': 'story_name'}
 
     tasks: list[Task] = []
-    def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
+    def resolve_tasks(self, loader=Loader(StoryTaskLoader)):
         return loader.load(self.id)
 
     assignee: Optional[BaseUser] = None
-    def resolve_assignee(self, loader=LoaderDepend(UserLoader)):
+    def resolve_assignee(self, loader=Loader(UserLoader)):
         return loader.load(self.assignee_id)
 
     reporter: Optional[BaseUser] = None
-    def resolve_reporter(self, loader=LoaderDepend(UserLoader)):
+    def resolve_reporter(self, loader=Loader(UserLoader)):
         return loader.load(self.report_to)
 ```
 
@@ -344,71 +348,6 @@ python -m http.server
 ```
 
 Current test coverage: 97%
-
-## Benchmark
-
-`ab -c 50 -n 1000` based on FastAPI.
-
-strawberry-graphql  (including cost of parsing query statements)
-
-```
-Server Software:        uvicorn
-Server Hostname:        localhost
-Server Port:            8000
-
-Document Path:          /graphql
-Document Length:        5303 bytes
-
-Concurrency Level:      50
-Time taken for tests:   3.630 seconds
-Complete requests:      1000
-Failed requests:        0
-Total transferred:      5430000 bytes
-Total body sent:        395000
-HTML transferred:       5303000 bytes
-Requests per second:    275.49 [#/sec] (mean)
-Time per request:       181.498 [ms] (mean)
-Time per request:       3.630 [ms] (mean, across all concurrent requests)
-Transfer rate:          1460.82 [Kbytes/sec] received
-                        106.27 kb/s sent
-                        1567.09 kb/s total
-
-Connection Times (ms)
-              min  mean[+/-sd] median   max
-Connect:        0    0   0.2      0       1
-Processing:    31  178  14.3    178     272
-Waiting:       30  176  14.3    176     270
-Total:         31  178  14.4    179     273
-```
-
-pydantic-resolve
-
-```
-Server Software: uvicorn
-Server Hostname: localhost
-Server Port: 8000
-
-Document Path: /sprints
-Document Length: 4621 bytes
-
-Concurrency Level: 50
-Time taken for tests: 2.194 seconds
-Complete requests: 1000
-Failed requests: 0
-Total transferred: 4748000 bytes
-HTML transferred: 4621000 bytes
-Requests per second: 455.79 [#/sec] (mean)
-Time per request: 109.700 [ms] (mean)
-Time per request: 2.194 [ms] (mean, across all concurrent requests)
-Transfer rate: 2113.36 [Kbytes/sec] received
-
-Connection Times (ms)
-min mean[+/-sd] median max
-Connect: 0 0 0.3 0 1
-Processing: 30 107 10.9 106 138
-Waiting: 28 105 10.7 104 138
-Total: 30 107 11.0 106 140
-```
 
 ## Community
 

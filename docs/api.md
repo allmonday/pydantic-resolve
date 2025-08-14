@@ -337,6 +337,8 @@ In `post_default_handler`, you can additionally collect data from the return val
 
 In pydantic-resolve, you need to use `LoaderDepend` to manage `DataLoader`.
 
+> new in v1.12.5, a shorter name `Loader` is also available.
+
 It supports declaring multiple `DataLoader` instances in one method.
 
 ```python
