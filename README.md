@@ -3,15 +3,33 @@
 ![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
-pydantic-resolve is a sophisticated framework for composing complex data structures with an intuitive, declarative, resolver-based architecture that eliminates the N+1 query problem.
+Pydantic-resolve is a framework for composing complex data structures with an intuitive, declarative, resolver-based way, and then let the data easy to understand and adjust.
 
-it supports:
+It provides three major functions to facilitate the acquisition and modification of multi-layered data.
+
+- pluggable resolve methods and post methods, they can define how to fetch and modify nodes.
+- transporting field data from ancestor nodes to their descendant nodes, through multiple layers.
+- collecting data from any descendants nodes to their ancestor nodes, through multiple layers.
+
+It supports:
 
 - pydantic v1
 - pydantic v2
 - dataclass `from pydantic.dataclasses import dataclass`
 
+If you have experience with GraphQL, this article provides comprehensive insights: [Resolver Pattern: A Better Alternative to GraphQL in BFF.](https://github.com/allmonday/resolver-vs-graphql/blob/master/README-en.md)
+
+It could be seamlessly integrated with modern Python web frameworks including FastAPI, Litestar, and Django-ninja.
+
+## Hello world
+
+This snippet shows the basic capability of fetching descendant nodes in a declarative way, the specific query details are encapsulated inside the dataloader.
+
 ```python
+from pydantic_resolve import Resolver
+from biz_models import BaseTask, BaseStory, BaseUser
+from biz_services import UserLoader, StoryTaskLoader
+
 class Task(BaseTask):
     user: Optional[BaseUser] = None
     def resolve_user(self, loader=Loader(UserLoader)):
@@ -20,10 +38,17 @@ class Task(BaseTask):
 class Story(BaseStory):
     tasks: list[Task] = []
     def resolve_tasks(self, loader=Loader(StoryTaskLoader)):
+        # this loader returns BaseTask,
+        # Task inhert from BaseTask so that it can be initialized from it, then fetch the user.
         return loader.load(self.id)
+
+stories = [Story(**s) for s in await query_stories()]
+data = await Resolver().resolve(stories)
 ```
 
-using this snippets above, it can esily transform plain stories,
+then it will transform flat stories into complicated stories with rich details:
+
+BaseStory
 
 ```json
 [
@@ -32,7 +57,7 @@ using this snippets above, it can esily transform plain stories,
 ]
 ```
 
-into complicated stories with rich details:
+Story
 
 ```json
 [
@@ -67,14 +92,6 @@ into complicated stories with rich details:
 ]
 ```
 
-If you have experience with GraphQL, this article provides comprehensive insights: [Resolver Pattern: A Better Alternative to GraphQL in BFF.](https://github.com/allmonday/resolver-vs-graphql/blob/master/README-en.md)
-
-The framework enables progressive data enrichment through incremental field resolution, allowing seamless API evolution from flat to hierarchical data structures.
-
-Extend your data models by implementing `resolve_field` methods for data fetching and `post_field` methods for transformations, enabling node creation, in-place modifications, or cross-node data aggregation.
-
-Seamlessly integrates with modern Python web frameworks including FastAPI, Litestar, and Django-ninja.
-
 ## Installation
 
 ```
@@ -85,13 +102,13 @@ Starting from pydantic-resolve v1.11.0, both pydantic v1 and v2 are supported.
 
 ## Documentation
 
-- **Documentation**: https://allmonday.github.io/pydantic-resolve/v2/introduction/
-- **Demo Repository**: https://github.com/allmonday/pydantic-resolve-demo
+- **Documentation**: https://allmonday.github.io/pydantic-resolve/
+- **Demo**: https://github.com/allmonday/pydantic-resolve-demo
 - **Composition-Oriented Pattern**: https://github.com/allmonday/composition-oriented-development-pattern
 
-## Architecture Overview
+## Quick Start
 
-Building complex data structures requires only 3 systematic steps:
+Building complex data structures requires only 3 systematic steps， let's take Agile's Story for example.
 
 ### 1. Define Domain Models
 
@@ -137,11 +154,11 @@ class UserLoader(DataLoader):
         return build_object(users, keys, lambda x: x.id)
 ```
 
-DataLoader implementations support flexible data sources, from database queries to microservice RPC calls.
+DataLoader implementations support flexible data sources, from database queries to microservice RPC calls. (It could be replaced in future optimization)
 
 ### 2. Compose Business Models
 
-Create domain-specific data structures through selective composition and relationship mapping (stable, reusable across use cases)
+Based on a specific business logic, create domain-specific data structures through selective schemas and relationship dataloader (stable, reusable across use cases)
 
 <img width="709" alt="image" src="https://github.com/user-attachments/assets/ffc74e60-0670-475c-85ab-cb0d03460813" />
 
@@ -190,7 +207,7 @@ Apply presentation-specific modifications and data aggregations (flexible, conte
 
 Leverage post_field methods for ancestor data access, node transfers, and in-place transformations.
 
-#### Pattern 1: Aggregate Related Entities
+#### Case 1: Aggregate or collect items
 
 <img width="701" alt="image" src="https://github.com/user-attachments/assets/2e3b1345-9e5e-489b-a81d-dc220b9d6334" />
 
@@ -223,7 +240,7 @@ class Story(BaseStory):
         return collector.values()
 ```
 
-#### Pattern 2: Compute Derived Metrics
+#### Case 2: Compute extra fields
 
 <img width="687" alt="image" src="https://github.com/user-attachments/assets/fd5897d6-1c6a-49ec-aab0-495070054b83" />
 
@@ -247,7 +264,7 @@ class Story(BaseStory):
         return sum(task.estimate for task in self.tasks)
 ```
 
-### Pattern 3: Propagate Ancestor Context
+### Case 3: Propagate ancestor data through ancestor_context
 
 ```python
 from pydantic_resolve import Loader
@@ -277,16 +294,16 @@ class Story(BaseStory):
         return loader.load(self.report_to)
 ```
 
-### 4. Execute Resolution Pipeline
+### 4. Execute Resolution
 
 ```python
 from pydantic_resolve import Resolver
 
-stories: List[Story] = await query_stories()
-await Resolver().resolve(stories)
+stories = [Story(**s) for s in await query_stories()]
+data = await Resolver().resolve(stories)
 ```
 
-Resolution complete!
+Complete!
 
 ## Technical Architecture
 
@@ -331,71 +348,6 @@ python -m http.server
 ```
 
 Current test coverage: 97%
-
-## Benchmark
-
-`ab -c 50 -n 1000` based on FastAPI.
-
-strawberry-graphql
-
-```
-Server Software:        uvicorn
-Server Hostname:        localhost
-Server Port:            8000
-
-Document Path:          /graphql
-Document Length:        5303 bytes
-
-Concurrency Level:      50
-Time taken for tests:   3.630 seconds
-Complete requests:      1000
-Failed requests:        0
-Total transferred:      5430000 bytes
-Total body sent:        395000
-HTML transferred:       5303000 bytes
-Requests per second:    275.49 [#/sec] (mean)
-Time per request:       181.498 [ms] (mean)
-Time per request:       3.630 [ms] (mean, across all concurrent requests)
-Transfer rate:          1460.82 [Kbytes/sec] received
-                        106.27 kb/s sent
-                        1567.09 kb/s total
-
-Connection Times (ms)
-              min  mean[+/-sd] median   max
-Connect:        0    0   0.2      0       1
-Processing:    31  178  14.3    178     272
-Waiting:       30  176  14.3    176     270
-Total:         31  178  14.4    179     273
-```
-
-pydantic-resolve
-
-```
-Server Software: uvicorn
-Server Hostname: localhost
-Server Port: 8000
-
-Document Path: /sprints
-Document Length: 4621 bytes
-
-Concurrency Level: 50
-Time taken for tests: 2.194 seconds
-Complete requests: 1000
-Failed requests: 0
-Total transferred: 4748000 bytes
-HTML transferred: 4621000 bytes
-Requests per second: 455.79 [#/sec] (mean)
-Time per request: 109.700 [ms] (mean)
-Time per request: 2.194 [ms] (mean, across all concurrent requests)
-Transfer rate: 2113.36 [Kbytes/sec] received
-
-Connection Times (ms)
-min mean[+/-sd] median max
-Connect: 0 0 0.3 0 1
-Processing: 30 107 10.9 106 138
-Waiting: 28 105 10.7 104 138
-Total: 30 107 11.0 106 140
-```
 
 ## Community
 
