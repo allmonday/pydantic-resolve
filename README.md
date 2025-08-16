@@ -106,13 +106,15 @@ Starting from pydantic-resolve v1.11.0, both pydantic v1 and v2 are supported.
 - **Demo**: https://github.com/allmonday/pydantic-resolve-demo
 - **Composition-Oriented Pattern**: https://github.com/allmonday/composition-oriented-development-pattern
 
-## Quick Start
+## 3 Steps to construct complex data
 
-Building complex data structures requires only 3 systematic steps， let's take Agile's Story for example.
+Let's take Agile's Story for example.
 
 ### 1. Define Domain Models
 
-Establish entity relationships as foundational data models (stable, serves as architectural blueprint)
+Establish entity relationships as foundational data models
+
+(which is stable, serves as architectural blueprint)
 
 <img width="630px" alt="image" src="https://github.com/user-attachments/assets/2656f72e-1af5-467a-96f9-cab95760b720" />
 
@@ -158,7 +160,11 @@ DataLoader implementations support flexible data sources, from database queries 
 
 ### 2. Compose Business Models
 
-Based on a specific business logic, create domain-specific data structures through selective schemas and relationship dataloader (stable, reusable across use cases)
+Based on a our business logic, create domain-specific data structures through selective schemas and relationship dataloader 
+
+We need to extend `tasks`, `assignee` and `reporter` for `Story`, extend `user` for `Task`
+
+Extending new fields is dynamic, all based on business requirement, but the relationships / loader are restricted by the definition from step 1.
 
 <img width="630px" alt="image" src="https://github.com/user-attachments/assets/ffc74e60-0670-475c-85ab-cb0d03460813" />
 
@@ -199,17 +205,19 @@ class Story(BaseModel):
 
 ```
 
-> Once business models are validated, consider optimizing with specialized queries to replace DataLoader for enhanced performance.
+> Once this combination is stable, you can consider optimizing with specialized queries to replace DataLoader for enhanced performance, eg ORM's join relationship
 
 ### 3. Implement View-Layer Transformations
 
-Apply presentation-specific modifications and data aggregations (flexible, context-dependent)
+Dataset from data-persistent layer can not meet all the requirement, we always need some extra computed fields or adjust the data structure.
 
-Leverage post_field methods for ancestor data access, node transfers, and in-place transformations.
+post method could read fields from ancestor, collect fields from descendants or modify the data fetched by resolve method.
 
 #### Case 1: Aggregate or collect items
 
 <img width="630px" alt="image" src="https://github.com/user-attachments/assets/2e3b1345-9e5e-489b-a81d-dc220b9d6334" />
+
+`__pydantic_resolve_collect__` can collect fields from current node and then send them to ancestor node who declared `related_users`.
 
 ```python
 from pydantic_resolve import Loader, Collector
@@ -244,6 +252,8 @@ class Story(BaseStory):
 
 <img width="630px" alt="image" src="https://github.com/user-attachments/assets/fd5897d6-1c6a-49ec-aab0-495070054b83" />
 
+post methods are executed after all resolve_methods are resolved, so we can use it to calculate extra fields.
+
 ```python
 class Story(BaseStory):
     tasks: list[Task] = []
@@ -265,6 +275,12 @@ class Story(BaseStory):
 ```
 
 ### Case 3: Propagate ancestor data through ancestor_context
+
+`__pydantic_resolve_expose__` could expose specific fields from current node to it's descendant.
+
+alias_names should be global unique inside root node.
+
+descendant nodes could read the value with `ancestor_context[alias_name]`.
 
 ```python
 from pydantic_resolve import Loader
@@ -294,7 +310,7 @@ class Story(BaseStory):
         return loader.load(self.report_to)
 ```
 
-### 4. Execute Resolution
+### 4. Execute Resolver().resolve()
 
 ```python
 from pydantic_resolve import Resolver
@@ -303,38 +319,8 @@ stories = [Story(**s) for s in await query_stories()]
 data = await Resolver().resolve(stories)
 ```
 
-Complete!
+`query_stories()` returns `BaseStory` list, after we transformed it into `Story`, resolve and post fields are initialized as default value, after `Resolver().resolve()` finished, all these fields will be resolved and post-processed to what we expected.
 
-## Technical Architecture
-
-The framework significantly reduces complexity in data composition by maintaining alignment with entity-relationship models, resulting in enhanced maintainability.
-
-> Utilizing an ER-oriented modeling approach delivers 3-5x development efficiency gains and 50%+ code reduction.
-
-Leveraging pydantic's capabilities, it enables GraphQL-like hierarchical data structures while providing flexible business logic integration during data resolution.
-
-Seamlessly integrates with FastAPI to construct frontend-optimized data structures and generate TypeScript SDKs for type-safe client integration.
-
-The core architecture provides `resolve` and `post` method hooks for pydantic and dataclass objects:
-
-- `resolve`: Handles data fetching operations
-- `post`: Executes post-processing transformations
-
-This implements a recursive resolution pipeline that completes when all descendant nodes are processed.
-
-![](docs/images/life-cycle.png)
-
-Consider the Sprint, Story, and Task relationship hierarchy:
-
-<img src="docs/images/real-sample.png" style="width: 600px"/>
-
-Upon object instantiation with defined methods, pydantic-resolve traverses the data graph, executes resolution methods, and produces the complete data structure.
-
-DataLoader integration eliminates N+1 query problems inherent in multi-level data fetching, optimizing performance characteristics.
-
-DataLoader architecture enables modular class composition and reusability across different contexts.
-
-Additionally, the framework provides expose and collector mechanisms for sophisticated cross-layer data processing patterns.
 
 ## Testing and Coverage
 
