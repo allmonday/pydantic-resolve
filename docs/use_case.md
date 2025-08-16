@@ -2,9 +2,9 @@
 
 Practical scenarios demonstrating pydantic-resolve's capabilities in data composition and resolution.
 
-## Simple Data Aggregation
+## Simple Data Composition
 
-Aggregate data from multiple data sources with automatic concurrency for same-level requests.
+Compose data from multiple data sources with automatic concurrency for same-level requests.
 
 ```python
 from pydantic import BaseModel

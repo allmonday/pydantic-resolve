@@ -209,7 +209,7 @@ class Story(BaseModel):
 
 ### 3. Implement View-Layer Transformations
 
-Dataset from data-persistent layer can not meet all the requirement, we always need some extra computed fields or adjust the data structure.
+Dataset from data-persistent layer can not meet all requirements, we always need some extra computed fields or adjust the data structure.
 
 post method could read fields from ancestor, collect fields from descendants or modify the data fetched by resolve method.
 
