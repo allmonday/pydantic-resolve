@@ -2,15 +2,17 @@
 
 一些 pydantic-resolve 可以使用的场景。
 
-## 数据构建
+## 简单据构建
 
-从多个数据源拼接数据 （同层的请求会自动并发）。
+定义一个容器结构， 然后在里面查询所需的相关数据， 比较适合面向 UI 的数据构建。
+
+同层的数据会自动并发查询。
 
 ```python
 from pydantic import BaseModel
 from pydantic_resolve import Resolver
 
-class ReturnData(BaseModel):
+class BusinessPage(BaseModel):
     data: List[str] = []
     async def resolve_data(self):
         return await get_data()
@@ -19,45 +21,58 @@ class ReturnData(BaseModel):
     async def resolve_records(self):
         return await get_records()
 
-retData = ReturnData()
+retData = BusinessPage()
 retData = await Resolver().resolve(retData)
 ```
 
 ## 多层数据构建
 
-使用 dataloader 拼接多层数据， 首先提供根数据， 然后让 pydantic-resolve 拼接其他层级的数据。
+通过继承和扩展的方式， 可将普通 RESTful 的返回数据作为根数据， 然后根据定义自动获取所需的数据和后处理逻辑。
+
+根数据的做法可以分离业务查询逻辑和数据组合逻辑
+
+比如 Company 数组可能由各种查询方式获得， 比如 id, ids, 或根据字段来过滤， 但却能共享同一种组合逻辑。
+
+另外， 使用 dataloader 可以自动规避 N+1 查询的问题。
 
 ```python
 from pydantic import BaseModel
 from pydantic_resolve import Resolver, DoaderDepend
 
-class Company(BaseModel):
+class BaseCompany(BaseModel):
     id: int
     name: str
 
-    offices: List[Office] = []
-    def resolve_offices(self, loader=LoaderDepend(OfficeLoader)):
-        return loader.load(self.id)
-
-class Office(BaseModel):
+class Baseffice(BaseModel):
     id: int
     company_id: int
     name: str
 
-    members: List[Member] = []
-    def resolve_members(self, loader=LoaderDepend(MemberLoader)):
-        return loader.load(self.id)
-
-class Member(BaseModel):
+class BaseMember(BaseModel):
     id: int
     office_id: int
     name: str
 
-companies = [
-    Company(id=1, name='Aston'),
-    Compay(id=2, name="Nicc"),
-    Company(id=3, name="Carxx")]
-companies = await Resolver().resolve(companies)
+# ------- composition ----------
+class Company(BaseCompany):
+    offices: List[Office] = []
+    def resolve_offices(self, loader=LoaderDepend(OfficeLoader)):
+        return loader.load(self.id)
+
+class Office(BaseOffice):
+    members: List[Member] = []
+    def resolve_members(self, loader=LoaderDepend(MemberLoader)):
+        return loader.load(self.id)
+
+
+raw_companies = [
+    BaseCompany(id=1, name='Aston'),
+    BaseCompany(id=2, name="Nicc"),
+    BaseCompany(id=3, name="Carxx")]
+
+companies = [Company.model_validate(c, from_attributes=True) for c in raw_companies]
+
+data = await Resolver().resolve(companies)
 ```
 
 ## 对获取的数据做处理
