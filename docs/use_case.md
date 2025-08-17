@@ -1,16 +1,18 @@
 # Use Cases
 
-Practical scenarios demonstrating pydantic-resolve's capabilities in data composition and resolution.
+This document introduces common scenarios for pydantic-resolve and summarizes some development tips.
 
-## Simple Data Aggregation
+## Build Data Containers
 
-Aggregate data from multiple data sources with automatic concurrency for same-level requests.
+Define a container structure and query the related data inside it. This is suitable for UI-oriented data composition.
+
+Data at the same level will be fetched concurrently.
 
 ```python
 from pydantic import BaseModel
 from pydantic_resolve import Resolver
 
-class ReturnData(BaseModel):
+class BusinessPage(BaseModel):
     data: List[str] = []
     async def resolve_data(self):
         return await get_data()
@@ -19,50 +21,71 @@ class ReturnData(BaseModel):
     async def resolve_records(self):
         return await get_records()
 
-retData = ReturnData()
+retData = BusinessPage()
 retData = await Resolver().resolve(retData)
 ```
 
-## Hierarchical Data Composition
+## Build Multi-layer Data
 
-Leverage DataLoader to compose multi-layer relational data. Initialize root entities and let pydantic-resolve handle nested relationship resolution.
+Through inheritance and extension, you can take the return data from a regular RESTful API as the root data, then automatically fetch the required data and apply post-processing according to your definitions.
+
+Separating root data and composition allows you to separate business query logic from data composition logic.
+
+For example, the Company array can be obtained in many ways (by id, ids, filter_by, etc.), yet they can share the same composition.
+
+In addition, using a dataloader can automatically avoid the N+1 query problem.
 
 ```python
 from pydantic import BaseModel
-from pydantic_resolve import Resolver, LoaderDepend
+from pydantic_resolve import Resolver, DoaderDepend
 
-class Company(BaseModel):
+class BaseCompany(BaseModel):
     id: int
     name: str
 
-    offices: List[Office] = []
-    def resolve_offices(self, loader=LoaderDepend(OfficeLoader)):
-        return loader.load(self.id)
-
-class Office(BaseModel):
+class Baseffice(BaseModel):
     id: int
     company_id: int
     name: str
 
-    members: List[Member] = []
-    def resolve_members(self, loader=LoaderDepend(MemberLoader)):
-        return loader.load(self.id)
-
-class Member(BaseModel):
+class BaseMember(BaseModel):
     id: int
     office_id: int
     name: str
 
-companies = [
-    Company(id=1, name='Aston'),
-    Compay(id=2, name="Nicc"),
-    Company(id=3, name="Carxx")]
-companies = await Resolver().resolve(companies)
+# ------- composition ----------
+class Company(BaseCompany):
+    offices: List[Office] = []
+    def resolve_offices(self, loader=LoaderDepend(OfficeLoader)):
+        return loader.load(self.id)
+
+class Office(BaseOffice):
+    members: List[Member] = []
+    def resolve_members(self, loader=LoaderDepend(MemberLoader)):
+        return loader.load(self.id)
+
+
+raw_companies = [
+    BaseCompany(id=1, name='Aston'),
+    BaseCompany(id=2, name="Nicc"),
+    BaseCompany(id=3, name="Carxx")]
+
+companies = [Company.model_validate(c, from_attributes=True) for c in raw_companies]
+
+data = await Resolver().resolve(companies)
 ```
 
-## Data Transformation and Enhancement
+## Cross-level Data Passing: Provide Data to Descendants
 
-Apply business logic and data transformations at any node in the object graph without manual tree traversal.
+`__pydantic_resolve_expose__` exposes the current node's data to all of its descendants. In the following example, the Owner's `name` field can be read by its child node Item.
+
+In `{'name': 'owner_name'}`, the key is the field to expose, and the value is a globally unique alias.
+
+If another intermediate node also uses `owner_name`, the Resolver will check this at initialization and raise an error.
+
+Item can access `name` via `ancestor_context` using the globally unique alias `owner_name`.
+
+Both `resolve` and `post` methods can read the `ancestor_context` variable.
 
 ```python
 from pydantic import BaseModel
@@ -77,7 +100,7 @@ class Item(BaseModel):
     name: str
 
     description: str = ''
-    def resolve_description(self, ancestor_context):
+    def post_description(self, ancestor_context):
         return f'this is item: {self.name}, it belongs to {ancestor_context['owner_name']}'
 
 owners = [
@@ -85,14 +108,51 @@ owners = [
     dict(name="bob", items=[dict(name='shoe'), dict(name="pen")]),
 ]
 
-owners = await Resolver.resolve([Owner.parse_obj(o) for o in owners])
+owners = await Resolver.resolve([Owner(**o) for o in owners])
 ```
 
-## Recursive Data Structure Resolution
+## Cross-level Data Passing: Send Data to Ancestors
 
-Handle self-referential models and recursive data structures with built-in parent context access.
+To meet cross-level data collection needs, you can flexibly collect the required data by specifying a collector and specifying the objects to be collected.
 
-Compute derived fields using parent node information:
+Define the data collector in a `post` method, because `resolve` is still in the data fetching stage and information may be incomplete, while `post` is triggered after all descendants have been processed, ensuring completeness.
+
+```python
+related_users: list[BaseUser] = []
+def post_related_users(self, collector=Collector(alias='related_users')):
+    return collector.values()
+```
+
+In descendant nodes, provide data by defining `__pydantic_resolve_collect__`. The keys specify which fields to send, and the values are the target collectors.
+
+The key supports tuples to send multiple fields together; the value also supports tuples to send a batch of fields to multiple collectors.
+
+```python
+from pydantic_resolve import Loader, Collector
+
+class Task(BaseTask):
+    __pydantic_resolve_collect__ = {'user': 'related_users'}  # Propagate user to collector: 'related_users'
+
+    user: Optional[BaseUser] = None
+    def resolve_user(self, loader=Loader(UserLoader)):
+        return loader.load(self.assignee_id)
+
+class Story(BaseStory):
+    tasks: list[Task] = []
+    def resolve_tasks(self, loader=Loader(StoryTaskLoader)):
+        return loader.load(self.id)
+
+    # ---------- Post-processing ------------
+    related_users: list[BaseUser] = []
+    def post_related_users(self, collector=Collector(alias='related_users')):
+        return collector.values()
+```
+
+## Tree-Structured Data Processing
+
+pydantic-resolve provides a `parent` parameter, which allows you to get the parent node.
+
+This parameter makes many functions easy to implement, such as concatenating the full path of a tag.
 
 ```python
 from pydantic import BaseModel
@@ -123,49 +183,20 @@ tag = Tag.parse_obj(tag_data)
 tag = await Resolver().resolve(tag)
 ```
 
-Tree construction from flat data structures using primed loaders:
+## Hide Unneeded Temporary Variables in Serialized Data
 
-```python
-from __future__ import annotations
-from collections import defaultdict
-import asyncio
-from typing import List
-from pydantic import BaseModel
-from pydantic_resolve import Resolver, LoaderDepend
-from pydantic_resolve.utils.dataloader import ListEmptyLoader
+By flexibly combining Pydantic's `Field(exclude=True)` or dataclass's `field(metadata={'exclude': True})`, you can hide intermediate variables that the recipient does not need. These will be filtered out from the serialized result.
 
-roots = [{ 'id': 1, 'content': 'root' }, {'id': 6, 'content': '6'}]
-records = [
-    {'id': 2, 'parent': 1, 'content': '2'},
-    {'id': 3, 'parent': 1, 'content': '3'},
-    {'id': 4, 'parent': 2, 'content': '4'},
-    {'id': 5, 'parent': 3, 'content': '5'},
-    {'id': 7, 'parent': 6, 'content': '7'},
-]
+## Summary
 
-class Tree(BaseModel):
-    id: int
-    content: str
+From another perspective, pydantic-resolve uses structured definitions to constrain the intermediate computation process. By dividing the work into two phases, `resolve` (data fetching) and `post` (post-processing), and with cross-level capabilities of `expose` and `collect`, it provides convenient means for data restructuring between nodes.
 
-    children: List[Tree] = []
-    def resolve_children(self, loader=LoaderDepend(ListEmptyLoader)):
-        return loader.load(self.id)
+The `exclude` capability also prevents intermediate variables from being returned and wasting payload space.
 
-async def main():
-    import json
-    loader = ListEmptyLoader()
+With dataloaders encapsulating implementation details (SQL, NoSQL, or RESTful APIs), data composition can follow ER-model structures. This keeps ER relationships clear throughout the business data processing lifecycle, which is crucial for maintainability.
 
-    # prime parent-child mappings for tree construction
-    _records = defaultdict(list)
-    for r in records:
-        _records[r['parent']].append(r)
-    for k, v in _records.items():
-        loader.prime(k, v)
+For relationships like A -> B -> C where you only need A -> C, you can leverage the data persistence layer's implementation (e.g., ORM joins) to build a dataloader directly for A -> C to optimize query performance, avoiding the overhead of traversing A -> B -> C.
 
-    trees = [Tree(**r) for r in roots]
-    trees = await Resolver(
-        loader_instances={ ListEmptyLoader: loader }
-    ).resolve(trees)
-    trees = [t.dict() for t in trees]
-    print(json.dumps(trees, indent=2))
-```
+Also, a dataloader that returns only BaseClass data enables maximum reuse. For example, a dataloader returning `BaseStory` can serve any subclass that inherits `BaseStory`, or a subset class provided by `@ensure_subset`.
+
+In short, pydantic-resolve provides ample flexibility. Guided by the clarity of the ER model, it helps you obtain the fundamental data needed for computation, then modify and move nodes as required by the business to construct the final result. Over two years of experience shows this pattern saves a lot of code and maintenance cost compared with traditional approaches.

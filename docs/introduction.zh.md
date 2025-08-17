@@ -1,21 +1,78 @@
-pydantic-resolve 是一个复杂数据结构组合框架，采用直观的解析器架构，彻底解决 N+1 查询问题。
+pydantic-resolve 是一个通用的数据组合工具，包含了多层级的数据获，节点上的后处理，以及跨节点的数据传送。
+
+以申明的方式组织管理数据，极大地提高代码的可读和可维护性。
+
+示例代码中， 继承 BaseStory 和 BaseTask 来复用和扩展所需字段，为 BaseStory 添加了 tasks，task 内添加了 user 字段。
 
 ```python
+from pydantic_resolve import Resolver
+from biz_models import BaseTask, BaseStory, BaseUser
+from biz_services import UserLoader, StoryTaskLoader
+
 class Task(BaseTask):
     user: Optional[BaseUser] = None
-    def resolve_user(self, loader=LoaderDepend(UserLoader)):
+    def resolve_user(self, loader=Loader(UserLoader)):
         return loader.load(self.assignee_id) if self.assignee_id else None
+
+class Story(BaseStory):
+    tasks: list[Task] = []
+    def resolve_tasks(self, loader=Loader(StoryTaskLoader)):
+        # this loader returns BaseTask,
+        # Task inhert from BaseTask so that it can be initialized from it, then fetch the user.
+        return loader.load(self.id)
+
+stories = [Story(**s) for s in await query_stories()]
+data = await Resolver().resolve(stories)
 ```
 
-如果你有 GraphQL 经验，这篇文章提供了全面的讨论和比较：[解析器模式：BFF 中 GraphQL 的更好替代方案。](https://github.com/allmonday/resolver-vs-graphql/blob/master/README-en.md)
+通过提供初始的 BaseStory 数据:
 
-该框架通过增量字段解析实现渐进式数据丰富，支持 API 从扁平到层次化数据结构的无缝演进。
+```json
+[
+  { "id": 1, "name": "story - 1" },
+  { "id": 2, "name": "story - 2" }
+]
+```
 
-通过实现 `resolve_field` 方法进行数据获取和 `post_field` 方法进行转换来扩展数据模型，支持节点创建、就地修改或跨节点数据聚合。
+pydantic-resolve 可以将其扩展为我们所申明的复杂结构数据：
 
-与现代 Python Web 框架完美集成，包括 FastAPI、Litestar 和 Django-ninja。
+```json
+[
+  {
+    "id": 1,
+    "name": "story - 1",
+    "tasks": [
+      {
+        "id": 1,
+        "name": "design",
+        "user": {
+          "id": 1,
+          "name": "tangkikodo"
+        }
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "name": "story - 2",
+    "tasks": [
+      {
+        "id": 2,
+        "name": "add ut",
+        "user": {
+          "id": 2,
+          "name": "john"
+        }
+      }
+    ]
+  }
+]
+```
 
-> 也支持 dataclass
+如果你有 GraphQL 经验，这篇文章提供了全面的讨论和比较：[Resolver 模式：BFF 中比 GraphQL 更好的替代方案。](https://github.com/allmonday/resolver-vs-graphql/blob/master/README-en.md)
+
+有别于和 ORM 或者 GraphQL 之类的数据获取方案， pydantic-resolve 的后处理能力，为构建业务数据提供了强大的解决方案， 避免了业务代码中经常实现的循环遍历， 定义临时变量等等容易影响代码可读性的处理逻辑，简化了代码量，提高了可维护性。
+
 
 ## 安装
 
@@ -31,15 +88,15 @@ pip install pydantic-resolve
 - **示例仓库**: [https://github.com/allmonday/pydantic-resolve-demo](https://github.com/allmonday/pydantic-resolve-demo)
 - **面向组合的开发模式**: [https://github.com/allmonday/composition-oriented-development-pattern](https://github.com/allmonday/composition-oriented-development-pattern)
 
-## 架构概览
+## 三步构建复杂数据
 
-构建复杂数据结构只需 3 个系统化步骤：
+用 Agile 中的 Story， Task 为例：
 
 ### 1. 定义领域模型
 
-建立实体关系作为基础数据模型（稳定，作为架构蓝图）
+建立实体关系作为基础数据模型（作为数据持久层， 这里的关系非常稳定， 不轻易变化。）
 
-<img width="639" alt="image" src="https://github.com/user-attachments/assets/2656f72e-1af5-467a-96f9-cab95760b720" />
+<img width="630px" alt="image" src="https://github.com/user-attachments/assets/2656f72e-1af5-467a-96f9-cab95760b720" />
 
 ```python
 from pydantic import BaseModel
@@ -79,11 +136,15 @@ class UserLoader(DataLoader):
         return build_object(users, keys, lambda x: x.id)
 ```
 
-DataLoader 实现支持灵活的数据源，从数据库查询到微服务 RPC 调用。
+DataLoader 的实现支持各种数据获取方式，从数据库查询到微服务 RPC 调用。
 
-### 2. 组合业务模型
+### 2. 根据实际业务组合模型
 
-通过选择性组合和关系映射创建特定领域的数据结构（稳定，可在不同用例中复用）
+比如我们需要构建 Story (包含 tasks 和 assinee, report), Task (包含 user) 这样的业务模型
+
+可以通过继承 Base 模型和扩展字段的方式来实现， 这样的组合可以非常灵活，根据实际需要动态修改，但是依赖关系是被上一步的定义所约束的。
+
+可以将其视为 ER 模型的子集。
 
 <img width="709" alt="image" src="https://github.com/user-attachments/assets/ffc74e60-0670-475c-85ab-cb0d03460813" />
 
@@ -124,17 +185,21 @@ class Story(BaseModel):
 
 ```
 
-> 业务模型验证完成后，考虑使用专门的查询来替换 DataLoader 以提升性能。
+> 业务模型的稳定性和必要性验证完成后，后期可以使用专门的特殊查询来替换 DataLoader 以提升性能， 比如使用 join 的 orm relationship。
 
 ### 3. 实现视图层转换
 
-应用特定于展示的修改和数据聚合（灵活，依赖于上下文）
+面向具体业务的场景下， 通过数据持久层获取的数据并不能满足所有需要， 往往需要添加额外的计算字段，比如总和的计算或者过滤等等。
 
-利用 post_field 方法进行祖先数据访问、节点传输和就地转换。
+pydantic-resolve 的后处理能力就能精准满足这种场景。
+
+利用 post_field 方法可以跨节点在祖先节点后子孙节点之间传递数据， 并且对已经获取的节点做额外的修改。
 
 #### 模式 1：跨层收集对象
 
-<img width="701" alt="image" src="https://github.com/user-attachments/assets/2e3b1345-9e5e-489b-a81d-dc220b9d6334" />
+<img width="630px" alt="image" src="https://github.com/user-attachments/assets/2e3b1345-9e5e-489b-a81d-dc220b9d6334" />
+
+使用 `__pydantic_resolve_collect__` 可以将当前对象中的字段， 向上发送给申明了 `related_users` collector 的祖先节点。 
 
 ```python
 from pydantic_resolve import LoaderDepend, Collector
@@ -169,6 +234,8 @@ class Story(BaseStory):
 
 <img width="687" alt="image" src="https://github.com/user-attachments/assets/fd5897d6-1c6a-49ec-aab0-495070054b83" />
 
+post 会在当前层的所有 resolve 方法，以及所有子孙层的 resolve， post 方法执行完毕之后触发， 因此对 post 方法来说， 默认所有的普通字段以及 resolve 字段的内容都是获取以及计算完毕的。 所以 post 方法可以用来对数据进行后处理， 比如计算所有 task 的 estimate 的总和。
+
 ```python
 class Story(BaseStory):
     tasks: list[Task] = []
@@ -189,7 +256,10 @@ class Story(BaseStory):
         return sum(task.estimate for task in self.tasks)
 ```
 
-### 模式 3：传播祖先上下文
+### 模式 3：获取祖先节点的数据
+
+使用 `__pydantic_resolve_expose__` 可以将当前对象中的字段， 暴露给所有的子孙节点
+在子孙节点中使用 `ancestor_context['alias_name']` 的方式来读取。
 
 ```python
 from pydantic_resolve import LoaderDepend
@@ -224,119 +294,36 @@ class Story(BaseStory):
 ```python
 from pydantic_resolve import Resolver
 
-stories: List[Story] = await query_stories()
-await Resolver().resolve(stories)
+stories: [Story(**s) for s in await query_stories()]
+data = await Resolver().resolve(stories)
 ```
 
-处理完成！
+`query_stories()` 方法会返回一个 BaseStory 的数据数组， 我们可以将其转换成 Story 方法。
+然后通过 Resolver() 实例对其进行自动转换， 就能获取完整的子孙节点和后处理数据了。
+
+
 
 ## 技术架构
 
-该框架通过保持与实体关系模型的一致性，显著降低了数据组合的复杂性，增强了可维护性。
+pydantic-resolve 通过保持与实体关系模型的一致性，降低了数据组合的复杂性，增强了可维护性。 使用面向 ER 的建模方法可以提供 3-5 倍的开发效率提升和 50% 以上的代码减少。
 
-> 使用面向 ER 的建模方法可以提供 3-5 倍的开发效率提升和 50% 以上的代码减少。
-
-利用 pydantic 的能力，它支持类似 GraphQL 的层次化数据结构，同时在数据解析过程中提供灵活的业务逻辑集成。
-
-与 FastAPI 无缝集成，构建前端优化的数据结构并生成 TypeScript SDK 以实现类型安全的客户端集成。
-
-核心架构为 pydantic 和 dataclass 对象提供 `resolve` 和 `post` 方法钩子：
+pydantic-resolve 为 pydantic 和 dataclass 对象提供 `resolve` 和 `post` 方法钩子：
 
 - `resolve`：处理数据获取操作
 - `post`：执行后处理转换
 
-这实现了一个递归解析管道，在所有后代节点处理完成时完成。
+它实现了一个递归解析流程，每一个节点一次执行所有的 resolve 方法， post 方法， 以及 post_default_handler 方法， 当这个流程结束之后， 父节点的 resolve 方法执行结束。
 
 ![](images/life-cycle.png)
 
-考虑 Sprint、Story 和 Task 关系层次结构：
+使用 Sprint、Story 和 Task 关系层次结构来举例。
+
+Sprint 的 resolve_stories 会被先执行，然后是 Story 中的 resolve_tasks 方法， Task 作为叶子节点结束之后， Story 的  post_task_time 和 post_done_task 会被执行， 然后 Story 的遍历就算结束了， 接下来会触发父节点 Sprint 的 post_task_time 和 post_total_done_task_time 方法。
+
+可以发现， post 方法触发的时候， 已经默认所有相关的子孙节点处理获取/处理完毕的状态， 因此 resolve 方法的重构不会影响到 post 方法的逻辑 （比如删除 resolve 方法， 在上层节点就直接提供关联数据， 比如 orm 的 relationship 查询或者从 no-sql 中直接获取完整的树状数据）。
+
+实现了 resolve 和 post 方法责任上的完全解耦， 比如处理从 GraphQL 获取的数据源时， 因为关联数据已经就绪， 就可以完全不实用 resolve 方法， 只用 post 方法来做各种后处理需求。
 
 ![](images/real-sample.png)
 
-在使用定义方法的对象实例化后，pydantic-resolve 遍历数据图，执行解析方法，并产生完整的数据结构。
-
-DataLoader 集成消除了多级数据获取中容易出现的 N+1 查询问题，优化了性能。
-
-此外，该框架提供暴露和收集器机制，用于复杂的跨层数据处理模式。
-
-## 测试和覆盖率
-
-```shell
-tox
-```
-
-```shell
-tox -e coverage
-python -m http.server
-```
-
-当前测试覆盖率：97%
-
-## 基准测试
-
-基于 FastAPI 的 `ab -c 50 -n 1000` 测试。
-
-strawberry-graphql
-
-```
-Server Software:        uvicorn
-Server Hostname:        localhost
-Server Port:            8000
-
-Document Path:          /graphql
-Document Length:        5303 bytes
-
-Concurrency Level:      50
-Time taken for tests:   3.630 seconds
-Complete requests:      1000
-Failed requests:        0
-Total transferred:      5430000 bytes
-Total body sent:        395000
-HTML transferred:       5303000 bytes
-Requests per second:    275.49 [#/sec] (mean)
-Time per request:       181.498 [ms] (mean)
-Time per request:       3.630 [ms] (mean, across all concurrent requests)
-Transfer rate:          1460.82 [Kbytes/sec] received
-                        106.27 kb/s sent
-                        1567.09 kb/s total
-
-Connection Times (ms)
-              min  mean[+/-sd] median   max
-Connect:        0    0   0.2      0       1
-Processing:    31  178  14.3    178     272
-Waiting:       30  176  14.3    176     270
-Total:         31  178  14.4    179     273
-```
-
-pydantic-resolve
-
-```
-Server Software: uvicorn
-Server Hostname: localhost
-Server Port: 8000
-
-Document Path: /sprints
-Document Length: 4621 bytes
-
-Concurrency Level: 50
-Time taken for tests: 2.194 seconds
-Complete requests: 1000
-Failed requests: 0
-Total transferred: 4748000 bytes
-HTML transferred: 4621000 bytes
-Requests per second: 455.79 [#/sec] (mean)
-Time per request: 109.700 [ms] (mean)
-Time per request: 2.194 [ms] (mean, across all concurrent requests)
-Transfer rate: 2113.36 [Kbytes/sec] received
-
-Connection Times (ms)
-min mean[+/-sd] median max
-Connect: 0 0 0.3 0 1
-Processing: 30 107 10.9 106 138
-Waiting: 28 105 10.7 104 138
-Total: 30 107 11.0 106 140
-```
-
-## 社区
-
-[Discord](https://discord.com/channels/1197929379951558797/1197929379951558800)
+> 其中 DataLoader 消除了多级数据获取中容易出现的 N+1 查询问题。

@@ -1,26 +1,77 @@
-[![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
-[![PyPI Downloads](https://static.pepy.tech/badge/pydantic-resolve/month)](https://pepy.tech/projects/pydantic-resolve)
-![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
-[![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
+pydantic-resolve is a general-purpose data composition tool that supports multi-level data fetching, node-level post-processing, and cross-node data transmission.
 
-pydantic-resolve is a sophisticated framework for composing complex data structures with an intuitive, resolver-based architecture that eliminates the N+1 query problem.
+It organizes and manages data in a declarative way, greatly improving code readability and maintainability.
+
+In the example, you inherit BaseStory and BaseTask to reuse and extend required fields, add tasks to BaseStory, and add a user field to each task.
 
 ```python
+from pydantic_resolve import Resolver
+from biz_models import BaseTask, BaseStory, BaseUser
+from biz_services import UserLoader, StoryTaskLoader
+
 class Task(BaseTask):
     user: Optional[BaseUser] = None
-    def resolve_user(self, loader=LoaderDepend(UserLoader)):
+    def resolve_user(self, loader=Loader(UserLoader)):
         return loader.load(self.assignee_id) if self.assignee_id else None
+
+class Story(BaseStory):
+    tasks: list[Task] = []
+    def resolve_tasks(self, loader=Loader(StoryTaskLoader)):
+        # this loader returns BaseTask,
+        # Task inherits from BaseTask so it can be initialized from it, then fetch the user.
+        return loader.load(self.id)
+
+stories = [Story(**s) for s in await query_stories()]
+data = await Resolver().resolve(stories)
 ```
 
-If you have experience with GraphQL, this article provides comprehensive insights: [Resolver Pattern: A Better Alternative to GraphQL in BFF.](https://github.com/allmonday/resolver-vs-graphql/blob/master/README-en.md)
+Given initial BaseStory data:
 
-The framework enables progressive data enrichment through incremental field resolution, allowing seamless API evolution from flat to hierarchical data structures.
+```json
+[
+  { "id": 1, "name": "story - 1" },
+  { "id": 2, "name": "story - 2" }
+]
+```
 
-Extend your data models by implementing `resolve_field` methods for data fetching and `post_field` methods for transformations, enabling node creation, in-place modifications, or cross-node data aggregation.
+pydantic-resolve can expand it into the complex structure you declare:
 
-Seamlessly integrates with modern Python web frameworks including FastAPI, Litestar, and Django-ninja.
+```json
+[
+  {
+    "id": 1,
+    "name": "story - 1",
+    "tasks": [
+      {
+        "id": 1,
+        "name": "design",
+        "user": {
+          "id": 1,
+          "name": "tangkikodo"
+        }
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "name": "story - 2",
+    "tasks": [
+      {
+        "id": 2,
+        "name": "add ut",
+        "user": {
+          "id": 2,
+          "name": "john"
+        }
+      }
+    ]
+  }
+]
+```
 
-> dataclass support is also available
+If you have GraphQL experience, this article provides a comprehensive discussion and comparison: [Resolver Pattern: A Better Alternative to GraphQL in BFF](https://github.com/allmonday/resolver-vs-graphql/blob/master/README-en.md)
+
+Unlike ORM or GraphQL data fetching solutions, pydantic-resolve's post-processing capability provides a powerful solution for building business data, avoiding repetitive loops and temporary variables in business code, simplifying logic, and improving maintainability.
 
 ## Installation
 
@@ -28,23 +79,23 @@ Seamlessly integrates with modern Python web frameworks including FastAPI, Lites
 pip install pydantic-resolve
 ```
 
-Starting from pydantic-resolve v1.11.0, both pydantic v1 and v2 are supported.
+From v1.11.0, pydantic-resolve supports both pydantic v1 and v2.
 
 ## Documentation
 
-- **Documentation**: [https://allmonday.github.io/pydantic-resolve/v2/introduction/](https://allmonday.github.io/pydantic-resolve/v2/introduction/)
-- **Demo Repository**: [https://github.com/allmonday/pydantic-resolve-demo](https://github.com/allmonday/pydantic-resolve-demo)
-- **Composition-Oriented Pattern**: [https://github.com/allmonday/composition-oriented-development-pattern](https://github.com/allmonday/composition-oriented-development-pattern)
+- **Docs**: [https://allmonday.github.io/pydantic-resolve/v2/introduction/](https://allmonday.github.io/pydantic-resolve/v2/introduction/)
+- **Demo repository**: [https://github.com/allmonday/pydantic-resolve-demo](https://github.com/allmonday/pydantic-resolve-demo)
+- **Composition-oriented development pattern**: [https://github.com/allmonday/composition-oriented-development-pattern](https://github.com/allmonday/composition-oriented-development-pattern)
 
-## Architecture Overview
+## Three Steps to Build Complex Data
 
-Building complex data structures requires only 3 systematic steps:
+Using Story and Task from Agile as an example:
 
 ### 1. Define Domain Models
 
-Establish entity relationships as foundational data models (stable, serves as architectural blueprint)
+Establish entity relationships as the base data model (for persistence layer; these relationships are stable and rarely change).
 
-<img width="639" alt="image" src="https://github.com/user-attachments/assets/2656f72e-1af5-467a-96f9-cab95760b720" />
+<img width="630px" alt="image" src="https://github.com/user-attachments/assets/2656f72e-1af5-467a-96f9-cab95760b720" />
 
 ```python
 from pydantic import BaseModel
@@ -84,11 +135,15 @@ class UserLoader(DataLoader):
         return build_object(users, keys, lambda x: x.id)
 ```
 
-DataLoader implementations support flexible data sources, from database queries to microservice RPC calls.
+DataLoader implementations support various data sources, from database queries to microservice RPC calls.
 
-### 2. Compose Business Models
+### 2. Compose Models for Business Needs
 
-Create domain-specific data structures through selective composition and relationship mapping (stable, reusable across use cases)
+For example, you may need to build Story (with tasks, assignee, reporter), Task (with user) business models.
+
+You can inherit base models and extend fields as needed. This composition is flexible and can be dynamically modified, but dependencies are constrained by the previous definitions.
+
+You can treat it as a subset of the ER model.
 
 <img width="709" alt="image" src="https://github.com/user-attachments/assets/ffc74e60-0670-475c-85ab-cb0d03460813" />
 
@@ -114,7 +169,7 @@ class Story(BaseStory):
         return loader.load(self.report_to) if self.report_to else None
 ```
 
-Utilize `ensure_subset` decorator for field validation and consistency enforcement:
+Use the `ensure_subset` decorator for field validation and consistency enforcement:
 
 ```python
 @ensure_subset(BaseStory)
@@ -126,26 +181,29 @@ class Story(BaseModel):
     tasks: list[BaseTask] = []
     def resolve_tasks(self, loader=LoaderDepend(StoryTaskLoader)):
         return loader.load(self.id)
-
 ```
 
-> Once business models are validated, consider optimizing with specialized queries to replace DataLoader for enhanced performance.
+> Once the stability and necessity of the business model are validated, you can later replace DataLoader with specialized queries for performance, such as ORM relationships with joins.
 
-### 3. Implement View-Layer Transformations
+### 3. Implement View Layer Transformation
 
-Apply presentation-specific modifications and data aggregations (flexible, context-dependent)
+In real business scenarios, data from the persistence layer often needs extra computed fields, such as totals or filters.
 
-Leverage post_field methods for ancestor data access, node transfers, and in-place transformations.
+pydantic-resolve's post-processing capability is ideal for these scenarios.
 
-#### Pattern 1: Aggregate Related Entities
+The `post_field` method allows data to be passed across nodes and modified after fetching.
 
-<img width="701" alt="image" src="https://github.com/user-attachments/assets/2e3b1345-9e5e-489b-a81d-dc220b9d6334" />
+#### Pattern 1: Collect Objects Across Layers
+
+<img width="630px" alt="image" src="https://github.com/user-attachments/assets/2e3b1345-9e5e-489b-a81d-dc220b9d6334" />
+
+Use `__pydantic_resolve_collect__` to send fields from the current object up to ancestor nodes that declare a collector.
 
 ```python
 from pydantic_resolve import LoaderDepend, Collector
 
 class Task(BaseTask):
-    __pydantic_resolve_collect__ = {'user': 'related_users'}  # Propagate user to collector: 'related_users'
+    __pydantic_resolve_collect__ = {'user': 'related_users'}  # send user to 'related_users' collector
 
     user: Optional[BaseUser] = None
     def resolve_user(self, loader=LoaderDepend(UserLoader)):
@@ -170,9 +228,11 @@ class Story(BaseStory):
         return collector.values()
 ```
 
-#### Pattern 2: Compute Derived Metrics
+#### Pattern 2: Compute New Fields
 
 <img width="687" alt="image" src="https://github.com/user-attachments/assets/fd5897d6-1c6a-49ec-aab0-495070054b83" />
+
+The post method is triggered after all resolve and post methods of the current and descendant nodes are executed, so all fields are ready for post-processing, such as calculating the total estimate of all tasks.
 
 ```python
 class Story(BaseStory):
@@ -194,7 +254,9 @@ class Story(BaseStory):
         return sum(task.estimate for task in self.tasks)
 ```
 
-### Pattern 3: Propagate Ancestor Context
+### Pattern 3: Access Ancestor Node Data
+
+Use `__pydantic_resolve_expose__` to expose fields from the current object to all descendants, which can access them via `ancestor_context['alias_name']`.
 
 ```python
 from pydantic_resolve import LoaderDepend
@@ -205,7 +267,7 @@ class Task(BaseTask):
         return loader.load(self.assignee_id)
 
     # ---------- Post-processing ------------
-    def post_name(self, ancestor_context):  # Access story.name from parent context
+    def post_name(self, ancestor_context):  # access story.name from parent context
         return f'{ancestor_context['story_name']} - {self.name}'
 
 class Story(BaseStory):
@@ -224,126 +286,38 @@ class Story(BaseStory):
         return loader.load(self.report_to)
 ```
 
-### 4. Execute Resolution Pipeline
+### 4. Run the Resolver
 
 ```python
 from pydantic_resolve import Resolver
 
-stories: List[Story] = await query_stories()
-await Resolver().resolve(stories)
+stories: [Story(**s) for s in await query_stories()]
+data = await Resolver().resolve(stories)
 ```
 
-Resolution complete!
+The `query_stories()` method returns an array of BaseStory data, which can be converted to Story objects. Then, use a Resolver instance to automatically transform and obtain complete descendant nodes and post-processed data.
 
 ## Technical Architecture
 
-The framework significantly reduces complexity in data composition by maintaining alignment with entity-relationship models, resulting in enhanced maintainability.
+pydantic-resolve maintains consistency with the entity relationship model, reducing data composition complexity and enhancing maintainability. Using ER-based modeling can improve development efficiency by 3-5x and reduce code by over 50%.
 
-> Utilizing an ER-oriented modeling approach delivers 3-5x development efficiency gains and 50%+ code reduction.
+pydantic-resolve provides `resolve` and `post` method hooks for pydantic and dataclass objects:
 
-Leveraging pydantic's capabilities, it enables GraphQL-like hierarchical data structures while providing flexible business logic integration during data resolution.
+- `resolve`: handles data fetching
+- `post`: performs post-processing transformations
 
-Seamlessly integrates with FastAPI to construct frontend-optimized data structures and generate TypeScript SDKs for type-safe client integration.
-
-The core architecture provides `resolve` and `post` method hooks for pydantic and dataclass objects:
-
-- `resolve`: Handles data fetching operations
-- `post`: Executes post-processing transformations
-
-This implements a recursive resolution pipeline that completes when all descendant nodes are processed.
+It implements a recursive parsing process, where each node executes all resolve, post, and post_default_handler methods once. After this process, the parent node's resolve method finishes.
 
 ![](images/life-cycle.png)
 
-Consider the Sprint, Story, and Task relationship hierarchy:
+For example, in a Sprint, Story, and Task hierarchy:
+
+Sprint's resolve_stories is executed first, then Story's resolve_tasks, Task as a leaf node finishes, then Story's post_task_time and post_done_task are executed, and Story's traversal ends. Next, Sprint's post_task_time and post_total_done_task_time are triggered.
+
+When the post method is triggered, all related descendant nodes are already processed, so refactoring resolve methods does not affect post logic (e.g., removing resolve methods and providing related data directly at the parent node, such as ORM relationships or fetching complete tree data from NoSQL).
+
+This achieves complete decoupling of resolve and post responsibilities. For example, when handling data from GraphQL, since related data is ready, you can skip resolve methods and use post methods for various post-processing needs.
 
 ![](images/real-sample.png)
 
-Upon object instantiation with defined methods, pydantic-resolve traverses the data graph, executes resolution methods, and produces the complete data structure.
-
-DataLoader integration eliminates N+1 query problems inherent in multi-level data fetching, optimizing performance characteristics.
-
-DataLoader architecture enables modular class composition and reusability across different contexts.
-
-Additionally, the framework provides expose and collector mechanisms for sophisticated cross-layer data processing patterns.
-
-## Testing and Coverage
-
-```shell
-tox
-```
-
-```shell
-tox -e coverage
-python -m http.server
-```
-
-Current test coverage: 97%
-
-## Benchmark
-
-`ab -c 50 -n 1000` based on FastAPI.
-
-strawberry-graphql
-
-```
-Server Software:        uvicorn
-Server Hostname:        localhost
-Server Port:            8000
-
-Document Path:          /graphql
-Document Length:        5303 bytes
-
-Concurrency Level:      50
-Time taken for tests:   3.630 seconds
-Complete requests:      1000
-Failed requests:        0
-Total transferred:      5430000 bytes
-Total body sent:        395000
-HTML transferred:       5303000 bytes
-Requests per second:    275.49 [#/sec] (mean)
-Time per request:       181.498 [ms] (mean)
-Time per request:       3.630 [ms] (mean, across all concurrent requests)
-Transfer rate:          1460.82 [Kbytes/sec] received
-                        106.27 kb/s sent
-                        1567.09 kb/s total
-
-Connection Times (ms)
-              min  mean[+/-sd] median   max
-Connect:        0    0   0.2      0       1
-Processing:    31  178  14.3    178     272
-Waiting:       30  176  14.3    176     270
-Total:         31  178  14.4    179     273
-```
-
-pydantic-resolve
-
-```
-Server Software: uvicorn
-Server Hostname: localhost
-Server Port: 8000
-
-Document Path: /sprints
-Document Length: 4621 bytes
-
-Concurrency Level: 50
-Time taken for tests: 2.194 seconds
-Complete requests: 1000
-Failed requests: 0
-Total transferred: 4748000 bytes
-HTML transferred: 4621000 bytes
-Requests per second: 455.79 [#/sec] (mean)
-Time per request: 109.700 [ms] (mean)
-Time per request: 2.194 [ms] (mean, across all concurrent requests)
-Transfer rate: 2113.36 [Kbytes/sec] received
-
-Connection Times (ms)
-min mean[+/-sd] median max
-Connect: 0 0 0.3 0 1
-Processing: 30 107 10.9 106 138
-Waiting: 28 105 10.7 104 138
-Total: 30 107 11.0 106 140
-```
-
-## Community
-
-[Discord](https://discord.com/channels/1197929379951558797/1197929379951558800)
+> DataLoader eliminates the N+1 query problem common in multi-level data fetching.
