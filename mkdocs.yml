@@ -81,3 +81,8 @@ plugins:
             Let's start: "开始"
             Inheritance: "继承"
             Philosophy: "迷思"
+
+extra:
+  analytics:
+    provider: google
+    property: G-9P2E638G4H
