@@ -17,38 +17,13 @@ It supports:
 - pydantic v2
 - dataclass `from pydantic.dataclasses import dataclass`
 
-If you have experience with GraphQL, this article provides comprehensive insights: [Resolver Pattern: A Better Alternative to GraphQL in BFF.](https://github.com/allmonday/resolver-vs-graphql/blob/master/README-en.md)
+If you have experience with GraphQL, this article provides comprehensive insights: [Resolver Pattern: A Better Alternative to GraphQL in BFF (api-integration).](https://github.com/allmonday/resolver-vs-graphql/blob/master/README-en.md)
 
 It could be seamlessly integrated with modern Python web frameworks including FastAPI, Litestar, and Django-ninja.
 
 ## Hello world
 
-This snippet shows the basic capability of fetching descendant nodes in a declarative way, the specific query details are encapsulated inside the dataloader.
-
-```python
-from pydantic_resolve import Resolver
-from biz_models import BaseTask, BaseStory, BaseUser
-from biz_services import UserLoader, StoryTaskLoader
-
-class Task(BaseTask):
-    user: Optional[BaseUser] = None
-    def resolve_user(self, loader=Loader(UserLoader)):
-        return loader.load(self.assignee_id) if self.assignee_id else None
-
-class Story(BaseStory):
-    tasks: list[Task] = []
-    def resolve_tasks(self, loader=Loader(StoryTaskLoader)):
-        # this loader returns BaseTask,
-        # Task inhert from BaseTask so that it can be initialized from it, then fetch the user.
-        return loader.load(self.id)
-
-stories = [Story(**s) for s in await query_stories()]
-data = await Resolver().resolve(stories)
-```
-
-then it will transform flat stories into complicated stories with rich details:
-
-BaseStory
+Here is the root data we have, it belongs to type BaseStory:
 
 ```json
 [
@@ -57,7 +32,68 @@ BaseStory
 ]
 ```
 
-Story
+First let's define Story, which inherit from BaseStory, and add tasks field.
+
+All the details of query process are encapsulated inside the dataloader, no worry about N+1 query.
+
+```python
+from pydantic_resolve import Resolver
+from biz_models import BaseTask, BaseStory, BaseUser
+from biz_services import UserLoader, StoryTaskLoader
+
+class Story(BaseStory):
+    tasks: list[BaseTask] = []
+    def resolve_tasks(self, loader=Loader(StoryTaskLoader)):
+        return loader.load(self.id)
+
+stories = [Story(**s) for s in await query_stories()]
+data = await Resolver().resolve(stories)
+```
+
+Then the data looks like:
+
+```json
+[
+  {
+    "id": 1,
+    "name": "story - 1",
+    "tasks": [
+      {
+        "id": 1,
+        "name": "design",
+        "user_id": 2
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "name": "story - 2",
+    "tasks": [
+      {
+        "id": 2,
+        "name": "add ut",
+        "user_id": 2
+      }
+    ]
+  }
+]
+```
+
+If you continue extend the BaseTask and replace the return type of Story.tasks
+
+```python
+class Task(BaseTask):
+    user: Optional[BaseUser] = None
+    def resolve_user(self, loader=Loader(UserLoader)):
+        return loader.load(self.assignee_id) if self.assignee_id else None
+
+class Story(BaseStory):
+    tasks: list[Task] = [] # BaseTask -> Task
+    def resolve_tasks(self, loader=Loader(StoryTaskLoader)):
+        return loader.load(self.id)
+```
+
+You will get the user info immediately.
 
 ```json
 [
@@ -91,6 +127,8 @@ Story
   }
 ]
 ```
+
+With `openapi-ts` you could transfer those types to the clients seamlessly.
 
 ## Installation
 
@@ -160,7 +198,7 @@ DataLoader implementations support flexible data sources, from database queries 
 
 ### 2. Compose Business Models
 
-Based on a our business logic, create domain-specific data structures through selective schemas and relationship dataloader 
+Based on a our business logic, create domain-specific data structures through selective schemas and relationship dataloader
 
 We need to extend `tasks`, `assignee` and `reporter` for `Story`, extend `user` for `Task`
 
@@ -320,7 +358,6 @@ data = await Resolver().resolve(stories)
 ```
 
 `query_stories()` returns `BaseStory` list, after we transformed it into `Story`, resolve and post fields are initialized as default value, after `Resolver().resolve()` finished, all these fields will be resolved and post-processed to what we expected.
-
 
 ## Testing and Coverage
 
