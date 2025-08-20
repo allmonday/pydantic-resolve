@@ -1,9 +1,14 @@
 site_name: Pydantic-resolve
+site_description: "a business model friendly data orchestration tool, simple way to implement the core concept of clean architecture."
+site_url: https://allmonday.github.io/pydantic-resolve
+site_author: tangkikodo
 theme:
   name: material
   icon:
     repo: fontawesome/brands/github
   features:
+    # - navigation.instant
+    # - navigation.sections
     - navigation.tabs
     - navigation.tabs.sticky
 
