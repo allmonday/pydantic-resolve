@@ -1,4 +1,4 @@
-from pydantic_resolve.utils.types import _is_optional_3_x
+from pydantic_resolve.utils.types import _is_optional_3_x, shelling_type2
 from typing import Optional, Union, List
 import pytest
 import sys
@@ -18,3 +18,11 @@ import sys
 def test_is_optional_3_x(annotation, expected):
     assert _is_optional_3_x(annotation) == expected
 
+
+def test_shelling_type2():
+    assert shelling_type2(Optional[int]) == (int, )
+    assert shelling_type2(Union[int, None]) == (int, )
+    assert shelling_type2(Union[None, int]) == (int, )
+    assert shelling_type2(int) == (int, )
+    assert shelling_type2(List[int]) == (int, )
+    assert shelling_type2(Union[int, str]) == (int, str)
