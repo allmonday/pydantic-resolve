@@ -1,4 +1,4 @@
-from typing import Type, Union
+from typing import Type, Union, List
 from pydantic_resolve.compat import PYDANTIC_V2, OVER_PYTHON_3_7
 
 if OVER_PYTHON_3_7:
@@ -26,10 +26,12 @@ def _is_optional_3_x(annotation):
 
 
 _is_optional = _is_optional_3_x if OVER_PYTHON_3_7 else _is_optional_3_7
+_get_origin = get_origin if OVER_PYTHON_3_7 else lambda x: getattr(x, "__origin__", None)
+_get_args = get_args if OVER_PYTHON_3_7 else lambda x: getattr(x, "__args__", ())
 
 
 def _is_list(annotation):
-    return getattr(annotation, "__origin__", None) == list
+    return _get_origin(annotation) in (list, List)
 
 
 def shelling_type(tp):
@@ -38,39 +40,39 @@ def shelling_type(tp):
     return tp
 
 
-def shelling_type2(tp):
+def get_core_types(tp):
     """
     - get the core type
     - always return a tuple of core types
     """
+    if tp is type(None):
+        return tuple()
+
     # 1. Unwrap list layers
-    while _is_list(tp):
-        args = getattr(tp, "__args__", ())
-        if args:
-            tp = args[0]
-        else:
-            break
+    def _shell_list(_tp):
+        while _is_list(_tp):
+            args = getattr(_tp, "__args__", ())
+            if args:
+                _tp = args[0]
+            else:
+                break
+        return _tp
+    
+    tp = _shell_list(tp)
 
-    # 2. Handle Optional / Union
-    def _origin(x):
-        return (
-            get_origin(x)
-            if OVER_PYTHON_3_7
-            else getattr(x, "__origin__", None)
-        )
-
-    def _args(x):
-        return get_args(x) if OVER_PYTHON_3_7 else getattr(x, "__args__", ())
+    if tp is type(None): # check again
+        return tuple()
 
     while True:
-        orig = _origin(tp)
+        orig = _get_origin(tp)
         if orig is Union:
-            args = list(_args(tp))
+            args = list(_get_args(tp))
             non_none = [a for a in args if a is not type(None)]  # noqa: E721
             has_none = len(non_none) != len(args)
             # Optional[T] case -> keep unwrapping
             if has_none and len(non_none) == 1:
                 tp = non_none[0]
+                tp = _shell_list(tp)
                 continue
             # Union (with or without None) -> return tuple of real types
             if non_none:
