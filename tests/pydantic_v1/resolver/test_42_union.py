@@ -25,7 +25,7 @@ class Container(BaseModel):
     items: list[Item] = []
 
     def resolve_items(self):
-        return [A(id='1'), B(id='2', name='Item 2')]
+        return [dict(id='1'), dict(id='2', name='Item 2')]
 
 
 @pytest.mark.asyncio
@@ -38,4 +38,37 @@ async def test_type_definition():
             {'id': '2', 'name': 'Item 2'}
         ]
     }
-    assert result.model_dump() == expected
+    assert result.dict() == expected
+
+class Container1(BaseModel):
+    items: list[Item] = []
+
+    def resolve_items(self):
+        return [A(id='1'), B(id='2', name='Item 2')]
+
+
+@pytest.mark.asyncio
+async def test_type_definition_1():
+    c = Container1()
+    result = await Resolver().resolve(c)
+    expected = {
+        'items': [
+            {'id': '1'},
+            {'id': '2', 'name': 'Item 2'}
+        ]
+    }
+    assert result.dict() == expected
+
+class Container2(BaseModel):
+    items: list[Item] = [A(id='1'), B(id='2', name='Item 2')]
+
+@pytest.mark.asyncio
+async def test_type_definition_2():
+    c = Container2()
+    expected = {
+        'items': [
+            {'id': '1'},
+            {'id': '2', 'name': 'Item 2'}
+        ]
+    }
+    assert c.dict() == expected
