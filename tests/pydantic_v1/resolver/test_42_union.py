@@ -1,5 +1,5 @@
 from typing import Union
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pydantic_resolve import Resolver
 import pytest
 
@@ -13,16 +13,8 @@ class B(BaseModel):
     name: str
 
 
-class C(BaseModel):
-    id: str
-    name: str
-
-
-Item = Union[A, B, C]
-
-
 class Container(BaseModel):
-    items: list[Item] = []
+    items: list[Union[B, A]] = Field(default_factory=list)
 
     def resolve_items(self):
         return [dict(id='1'), dict(id='2', name='Item 2')]
@@ -41,7 +33,7 @@ async def test_type_definition():
     assert result.dict() == expected
 
 class Container1(BaseModel):
-    items: list[Item] = []
+    items: list[Union[B, A]] = Field(default_factory=list)
 
     def resolve_items(self):
         return [A(id='1'), B(id='2', name='Item 2')]
@@ -60,7 +52,7 @@ async def test_type_definition_1():
     assert result.dict() == expected
 
 class Container2(BaseModel):
-    items: list[Item] = [A(id='1'), B(id='2', name='Item 2')]
+    items: list[Union[A, B]] = [A(id='1'), B(id='2', name='Item 2')]
 
 @pytest.mark.asyncio
 async def test_type_definition_2():
