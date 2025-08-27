@@ -24,7 +24,7 @@ class DataLoaderType(TypedDict):
     param: str
     kls: Type
     path: str
-    request_type: Optional[Type]
+    request_type: List[Type]
 
 class CollectorType(TypedDict):
     field: str 
@@ -84,7 +84,7 @@ class MappedMetaMemberType(KlsMetaType):
 MappedMetaType = Dict[Type, MappedMetaMemberType]
 
 
-def _scan_resolve_method(method, field: str, request_type: Optional[Type]) -> ResolveMethodType:
+def _scan_resolve_method(method, field: str, request_types: List[Type]) -> ResolveMethodType:
     result: ResolveMethodType = {
         'trim_field': field.replace(const.RESOLVE_PREFIX, ''),
         'context': False,
@@ -109,7 +109,7 @@ def _scan_resolve_method(method, field: str, request_type: Optional[Type]) -> Re
                 'param': name,
                 'kls': param.default.dependency,  # for later initialization
                 'path': class_util.get_kls_full_name(param.default.dependency),
-                'request_type': request_type
+                'request_type': request_types
             }
             result['dataloaders'].append(info)
 
@@ -120,7 +120,7 @@ def _scan_resolve_method(method, field: str, request_type: Optional[Type]) -> Re
     return result
 
 
-def _scan_post_method(method, field: str, request_type: Optional[Type]) -> PostMethodType:
+def _scan_post_method(method, field: str, request_types: List[Type]) -> PostMethodType:
     result: PostMethodType = {
         'trim_field': field.replace(const.POST_PREFIX, ''),
         'context': False,
@@ -147,7 +147,7 @@ def _scan_post_method(method, field: str, request_type: Optional[Type]) -> PostM
                 'param': name,
                 'kls': param.default.dependency,  # for later initialization
                 'path': class_util.get_kls_full_name(param.default.dependency),
-                'request_type': request_type
+                'request_type': request_types
             }
             result['dataloaders'].append(loader_info)
 
@@ -257,17 +257,18 @@ def validate_and_create_loader_instance(
         else:
             raise AttributeError('invalid type: should be pydantic object or dataclass object')  #noqa
 
-    def _generate_meta(types: List[Type]):
+    def _generate_meta(types: List[List[Type]]):
         _fields = set()
         meta: LoaderQueryMeta = {
             'fields': [],
             'request_types': []
         }
 
-        for t in types:
-            fields = _get_all_fields(t)
-            meta['request_types'].append(dict(name=t, fields=fields))
-            _fields.update(fields)
+        for tt in types:
+            for t in tt:
+                fields = _get_all_fields(t)
+                meta['request_types'].append(dict(name=t, fields=fields))
+                _fields.update(fields)
         meta['fields'] = list(_fields)
         return meta
     
@@ -480,12 +481,14 @@ def scan_and_store_metadata(root_class: Type) -> MetaType:
         metadata[kls_name] = info
 
         # object fields
-        for field, shelled_type in (obj for obj in object_fields if obj[0] in object_fields_without_resolver):
-            walker(shelled_type, ancestors + [(field, kls_name)])
+        for field, shelled_types in (obj for obj in object_fields if obj[0] in object_fields_without_resolver):
+            for shelled_type in shelled_types:
+                walker(shelled_type, ancestors + [(field, kls_name)])
 
         # resolve fields
-        for field, shelled_type in (obj for obj in object_fields if obj[0] in fields_with_resolver):
-            walker(shelled_type, ancestors + [(field, kls_name)])
+        for field, shelled_types in (obj for obj in object_fields if obj[0] in fields_with_resolver):
+            for shelled_type in shelled_types:
+                walker(shelled_type, ancestors + [(field, kls_name)])
 
         should_traverse = info['should_traverse'] or _has_config(info)
 

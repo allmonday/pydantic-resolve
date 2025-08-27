@@ -5,7 +5,7 @@ import pydantic_resolve.constant as const
 from pydantic_resolve.compat import PYDANTIC_V2
 import pydantic_resolve.utils.class_util as class_util
 from pydantic_resolve.analysis import is_acceptable_kls
-from pydantic_resolve.utils.types import shelling_type, get_type, _is_optional
+from pydantic_resolve.utils.types import get_type, _is_optional, get_core_types
 from pydantic import BaseModel
 
 
@@ -171,17 +171,18 @@ def get_pydantic_fields(kls):
 
     for name, v in items:
         t = get_type(v)
-
-        shelled_type = shelling_type(t)
-        if is_acceptable_kls(shelled_type):
-            yield (name, shelled_type)  # type_ is the most inner type
+        shelled_types = get_core_types(t)
+        allowed_types = [st for st in shelled_types if is_acceptable_kls(st)]
+        if allowed_types:
+            yield (name, allowed_types)  # type_ is the most inner type
 
 
 def get_dataclass_fields(kls):
     for name, v in kls.__annotations__.items():
-        shelled_type = shelling_type(v)
-        if is_acceptable_kls(shelled_type):
-            yield (name, shelled_type)
+        shelled_types = get_core_types(v)
+        allowed_types = [st for st in shelled_types if is_acceptable_kls(st)]
+        if allowed_types:
+            yield (name, allowed_types)
 
 
 def get_class_of_object(target):
@@ -214,9 +215,9 @@ def update_forward_refs(kls):
         values = get_pydantic_field_values(kls)
 
         for field in values:
-            shelled_type = shelling_type(get_type(field))
-
-            update_forward_refs(shelled_type)
+            shelled_types = get_core_types(get_type(field))
+            for shelled_type in shelled_types:
+                update_forward_refs(shelled_type)
 
     def update_dataclass_forward_refs(kls):
         if not getattr(kls, const.DATACLASS_FORWARD_REF_UPDATED, False):
@@ -225,8 +226,9 @@ def update_forward_refs(kls):
             setattr(kls, const.DATACLASS_FORWARD_REF_UPDATED, True)
 
             for _, v in kls.__annotations__.items():
-                shelled_type = shelling_type(v)
-                update_forward_refs(shelled_type)
+                shelled_types = get_core_types(v)
+                for shelled_type in shelled_types:
+                    update_forward_refs(shelled_type)
 
     if safe_issubclass(kls, BaseModel):
         update_pydantic_forward_refs(kls)
