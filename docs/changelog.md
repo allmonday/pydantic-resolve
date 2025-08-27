@@ -1,14 +1,27 @@
 # Changelog
 
+## v1.13
+
+### v1.13.1 (2025.8.27)
+
+feature:
+
+- add support for resolving Union[A, B]
+  - **known issue**: for pydantic v1, use it in caution, union_smart not yet works with `parse_obj_as`, see `tests/pydantic_v1/resolver/test_43_union_bad.py`
+  - it fully support pydantic v2
+  - prefer to return pydantic/dataclass object instead of dict
+
 ## v1.12
 
 ### v1.12.5 (2025.7.24)
 
 feature:
+
 - add short name `Loader` for `LoaderDepend`
 - set Loader return type as DataLoader
 
 non-functional:
+
 - add more tests
 - rename internal variable names
 
