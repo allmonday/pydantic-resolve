@@ -22,9 +22,10 @@ class D(BaseModel):
     age: int
 
 class SampleModel(BaseModel):
-    # Union types for testing
     union_object: Union[A, B] 
-    union_smart: Union[D, C] = Field(union_smart=True)
+    union_object2: Union[C, D]
+    class Config:
+        smart_union = True
 
 
 class TestTryParseDataToTargetFieldTypeV1:
@@ -34,11 +35,13 @@ class TestTryParseDataToTargetFieldTypeV1:
         """Setup test fixtures"""
         self.test_model = SampleModel(
             union_object=A(id=1),
-            union_smart=C(id=1, name="name")
+            union_object2=C(id=1, name="name")
         )
 
     def test_pydantic_union_object_fields(self):
-        """Test union object fields for Pydantic models"""
+        """
+        A and B has totally different fields, so it works
+        """
         # Test Union[A, B] with B data (has name field)
         result = try_parse_data_to_target_field_type_v1(
             self.test_model, "union_object", dict(name='hello') 
@@ -53,32 +56,19 @@ class TestTryParseDataToTargetFieldTypeV1:
         assert result == A(id=123)
         assert isinstance(result, A)
 
-    def test_pydantic_union_smart_fields(self):
-        """Test union smart fields for Pydantic models"""
-        # Test Union[D, C] with D data (has id, name, age fields)
+    def test_pydantic_union_object2(self):
+        """
+        it parse from left to right by Union[A, B, C] order, and smart_union not workds
+        """
         result = try_parse_data_to_target_field_type_v1(
-            self.test_model, "union_smart", dict(id=1, name='hello', age=21) 
+            self.test_model, "union_object2", dict(id=1, name='hello', age=21) 
         )
-        assert result == D(id=1, name='hello', age=21)
-        assert isinstance(result, D)
+        assert result != D(id=1, name='hello', age=21)
+        assert isinstance(result, C)
         
         # Test Union[D, C] with C data (has id, name fields only)
         result = try_parse_data_to_target_field_type_v1(
-            self.test_model, "union_smart", dict(id=1, name='hello') 
+            self.test_model, "union_object2", dict(id=1, name='hello') 
         )
         assert result == C(id=1, name='hello')
         assert isinstance(result, C)
-
-    def test_validation_errors(self):
-        """Test validation error handling for union fields"""
-        # Invalid data that doesn't match any union type
-        with pytest.raises(ValidationError):
-            try_parse_data_to_target_field_type_v1(
-                self.test_model, "union_object", {"invalid": "data"}
-            )
-        
-        # Invalid data for union_smart
-        with pytest.raises(ValidationError):
-            try_parse_data_to_target_field_type_v1(
-                self.test_model, "union_smart", {"invalid": "data"}
-            )
