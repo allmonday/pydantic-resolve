@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, List
 from pydantic import BaseModel, Field
 from pydantic_resolve import Resolver
 import pytest
@@ -14,7 +14,7 @@ class B(BaseModel):
 
 
 class Container1(BaseModel):
-    items: list[Union[A, B]] = Field(default_factory=list)
+    items: List[Union[A, B]] = Field(default_factory=list)
 
     def resolve_items(self):
         return [A(id='1'), B(id='2', name='Item 2')]
