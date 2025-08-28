@@ -25,10 +25,10 @@ It could be seamlessly integrated with modern Python web frameworks including Fa
 
 Here is the root data we have, it belongs to type BaseStory:
 
-```json
-[
-  { "id": 1, "name": "story - 1" },
-  { "id": 2, "name": "story - 2" }
+```python
+base_stories = [
+  BaseStory(id=1, name="story - 1"),
+  BaseStory(id=2, name="story - 2")
 ]
 ```
 
@@ -43,14 +43,14 @@ from biz_services import UserLoader, StoryTaskLoader
 
 class Story(BaseStory):
     tasks: list[BaseTask] = []
-    def resolve_tasks(self, loader=Loader(StoryTaskLoader)):
+    def resolve_tasks(self, loader=Loader(StoryTaskLoader)): # StoryTaskLoader return list of BaseTasks of each story by story_id
         return loader.load(self.id)
 
-stories = [Story(**s) for s in await query_stories()]
+stories = [Story.model_validate(s, from_attributes=True) for s in base_stories]
 data = await Resolver().resolve(stories)
 ```
 
-Then the data looks like:
+Then the json output of data looks like:
 
 ```json
 [
@@ -104,6 +104,7 @@ You will get the user info immediately.
       {
         "id": 1,
         "name": "design",
+        "user_id": 1,
         "user": {
           "id": 1,
           "name": "tangkikodo"
@@ -118,6 +119,7 @@ You will get the user info immediately.
       {
         "id": 2,
         "name": "add ut",
+        "user_id": 2,
         "user": {
           "id": 2,
           "name": "john"
