@@ -40,6 +40,7 @@ jobs:
 
       - run: poetry install --no-interaction
       - run: pip install pydantic
+      - run: pip install --upgrade pydantic
 
       - name: Test with pytest
         run: poetry run pytest tests/pydantic_v2 tests/common
