@@ -107,7 +107,6 @@ def test_is_list(annotation, expected):
 )
 def test_get_core_types(tp, expected):
     result = get_core_types(tp) 
-    print(result)
     assert result == expected
 
 

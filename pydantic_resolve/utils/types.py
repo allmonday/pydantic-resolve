@@ -1,4 +1,8 @@
 from typing import Type, Union, List
+try:  # Python 3.10+ provides PEP 604 unions using types.UnionType
+    from types import UnionType as _UnionType
+except ImportError:  # pragma: no cover - prior to 3.10
+    _UnionType = ()  # sentinel so membership tests still work
 from pydantic_resolve.compat import PYDANTIC_V2, OVER_PYTHON_3_7
 
 if OVER_PYTHON_3_7:
@@ -65,16 +69,17 @@ def get_core_types(tp):
 
     while True:
         orig = _get_origin(tp)
-        if orig is Union:
+
+        if orig in (Union, _UnionType):
             args = list(_get_args(tp))
             non_none = [a for a in args if a is not type(None)]  # noqa: E721
             has_none = len(non_none) != len(args)
-            # Optional[T] case -> keep unwrapping
+            # Optional[T] case -> keep unwrapping (exactly one real type + None)
             if has_none and len(non_none) == 1:
                 tp = non_none[0]
                 tp = _shell_list(tp)
                 continue
-            # Union (with or without None) -> return tuple of real types
+            # General union: return all non-None members (order preserved)
             if non_none:
                 return tuple(non_none)
             return tuple()

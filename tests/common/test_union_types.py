@@ -1,0 +1,33 @@
+
+from pydantic_resolve.utils.types import (
+    get_core_types, 
+)
+from typing import Optional, List
+import pytest
+
+@pytest.mark.parametrize(
+    "tp,expected",
+    [
+        
+        # Optional types
+        (int | None, (int,)),
+        (None | int, (int,)),
+
+        # Union types (multiple non-None types)
+        (int | str, (int, str)),
+        (int | str | float, (int, str, float)),
+        (str | int, (str, int)),  # Order matters
+
+        # Union with None
+        (int | str | None, (int, str)),
+        (None | int | str, (int, str)),
+        (int | None | str, (int, str)),
+        
+        # Complex nested types
+        (List[int | str], (int, str)),
+        (Optional[List[int | str]], (int, str)),
+    ]
+)
+def test_get_core_types_3_10(tp, expected):
+    result = get_core_types(tp) 
+    assert result == expected
