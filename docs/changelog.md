@@ -2,6 +2,11 @@
 
 ## v1.13
 
+### v1.13.1 (2025.8.28)
+
+- fix: add support for UnionType such as `A | B`
+- update: upgrade python version to 3.10 in ci
+
 ### v1.13.0 (2025.8.27)
 
 feature:

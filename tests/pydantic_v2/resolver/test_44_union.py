@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, List
 from pydantic import BaseModel
 from pydantic_resolve import Resolver, Loader
 import pytest
@@ -35,7 +35,7 @@ Item = Union[A, B, C]
 
 
 class Container(BaseModel):
-    items: list[Item] = []
+    items: List[Item] = []
 
     def resolve_items(self):
         return [A(id='1'), B(id='2', name='Item 2')]

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pydantic-resolve"
-version = "1.13.0"
+version = "1.13.1"
 description = "A business model friendly data orchestration tool, simple way to implement the core concept of clean architecture."
 authors = ["tangkikodo <allmonday@126.com>"]
 readme = "README.md"
