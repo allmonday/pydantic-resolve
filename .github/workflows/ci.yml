@@ -40,8 +40,8 @@ jobs:
 
       - run: poetry install --no-interaction
       - run: pip uninstall pydantic
-      - run: pip install pydantic=2.11.7
-      - run: pip install pydantic_core=2.33.2
+      - run: pip install pydantic==2.11.7
+      - run: pip install pydantic_core==2.33.2
 
       - name: Test with pytest
         run: poetry run pytest tests/pydantic_v2 tests/common
