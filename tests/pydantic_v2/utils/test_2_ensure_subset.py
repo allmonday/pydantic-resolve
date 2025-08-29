@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 from pydantic import BaseModel
 from pydantic_resolve.utils import class_util
+import pydantic_resolve.constant as const
 import pytest
 
 def test_ensure_subset():
@@ -29,6 +30,14 @@ def test_ensure_subset():
     class ChildB1(BaseModel):
         a: str
         d: Optional[int] = 0
+
+    # Test that ENSURE_SUBSET_REFERENCE is set correctly
+    assert hasattr(ChildA, const.ENSURE_SUBSET_REFERENCE)
+    assert getattr(ChildA, const.ENSURE_SUBSET_REFERENCE) is Base
+    assert hasattr(ChildB, const.ENSURE_SUBSET_REFERENCE)
+    assert getattr(ChildB, const.ENSURE_SUBSET_REFERENCE) is Base
+    assert hasattr(ChildB1, const.ENSURE_SUBSET_REFERENCE)
+    assert getattr(ChildB1, const.ENSURE_SUBSET_REFERENCE) is Base
 
     with pytest.raises(AttributeError):
         @class_util.ensure_subset(Base)
@@ -76,6 +85,14 @@ def test_ensure_subset_dataclass():
     class ChildB1:
         a: str
         d: Optional[int]
+
+    # Test that ENSURE_SUBSET_REFERENCE is set correctly for dataclasses
+    assert hasattr(ChildA, const.ENSURE_SUBSET_REFERENCE)
+    assert getattr(ChildA, const.ENSURE_SUBSET_REFERENCE) is Base
+    assert hasattr(ChildB, const.ENSURE_SUBSET_REFERENCE)
+    assert getattr(ChildB, const.ENSURE_SUBSET_REFERENCE) is Base
+    assert hasattr(ChildB1, const.ENSURE_SUBSET_REFERENCE)
+    assert getattr(ChildB1, const.ENSURE_SUBSET_REFERENCE) is Base
 
     with pytest.raises(AttributeError):
         @class_util.ensure_subset(Base)
