@@ -184,7 +184,3 @@ def create_subset(parent: Type[BaseModel], fields: List[str], name: str = "Subse
     
     return subset_class
     
-    return subset_class
-
-
-    
