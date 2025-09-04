@@ -29,8 +29,6 @@ class X(BaseModel):
 
 def test_get_all_fields():
     result = scan_and_store_metadata(X)
-    from pprint import pprint
-    pprint(result)
     expect = {
         'test_union.X': {
             'resolve': ['resolve_items2'],
