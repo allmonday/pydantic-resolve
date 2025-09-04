@@ -33,6 +33,9 @@ def ensure_subset_v1(base):
         is_base_dataclass = is_dataclass(base)
         is_kls_dataclass = is_dataclass(kls)
 
+        setattr(kls, const.ENSURE_SUBSET_REFERENCE, base)
+
+
         if is_base_pydantic and is_kls_pydantic:
             @functools.wraps(kls)
             def inner():
@@ -89,6 +92,8 @@ def ensure_subset_v2(base):
         is_kls_pydantic = safe_issubclass(kls, BaseModel)
         is_base_dataclass = is_dataclass(base)
         is_kls_dataclass = is_dataclass(kls)
+
+        setattr(kls, const.ENSURE_SUBSET_REFERENCE, base)
 
         if is_base_pydantic and is_kls_pydantic:
             @functools.wraps(kls)
