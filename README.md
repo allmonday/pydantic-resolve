@@ -361,6 +361,14 @@ data = await Resolver().resolve(stories)
 
 `query_stories()` returns `BaseStory` list, after we transformed it into `Story`, resolve and post fields are initialized as default value, after `Resolver().resolve()` finished, all these fields will be resolved and post-processed to what we expected.
 
+## FastAPI
+
+In FastAPI, we can visualize the dependencies between schemas with [fastapi-router-viz](https://github.com/allmonday/fastapi-router-viz)
+
+
+![](https://private-user-images.githubusercontent.com/2917822/486611472-d5dceee8-995b-4dab-a016-46fa98e74d77.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NTc0Mjc2ODYsIm5iZiI6MTc1NzQyNzM4NiwicGF0aCI6Ii8yOTE3ODIyLzQ4NjYxMTQ3Mi1kNWRjZWVlOC05OTViLTRkYWItYTAxNi00NmZhOThlNzRkNzcucG5nP1gtQW16LUFsZ29yaXRobT1BV1M0LUhNQUMtU0hBMjU2JlgtQW16LUNyZWRlbnRpYWw9QUtJQVZDT0RZTFNBNTNQUUs0WkElMkYyMDI1MDkwOSUyRnVzLWVhc3QtMSUyRnMzJTJGYXdzNF9yZXF1ZXN0JlgtQW16LURhdGU9MjAyNTA5MDlUMTQxNjI2WiZYLUFtei1FeHBpcmVzPTMwMCZYLUFtei1TaWduYXR1cmU9ZTkxMmFhYTliOTc0OWY1ZjBlY2U4ZjM5MzhlYWYxZTBhYzAwMDUxMDA0OWIwYzBlYjEzMjBhZDU1ZGJlZDIyMSZYLUFtei1TaWduZWRIZWFkZXJzPWhvc3QifQ.eC_8F_ge4vgWUV1t9S5I3GFWIQKtr_RgW_x424Vdm40)
+
+
 ## Testing and Coverage
 
 ```shell
