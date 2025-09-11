@@ -3,6 +3,8 @@
 ![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
+**Whether the process of data transformation is intuitive is one of the determining factors of project quality.**
+
 Pydantic-resolve is a framework for composing complex data structures with an intuitive, declarative, resolver-based way, and then let the data easy to understand and adjust.
 
 It provides three major functions to facilitate the acquisition and modification of multi-layered data.
@@ -20,6 +22,10 @@ It supports:
 If you have experience with GraphQL, this article provides comprehensive insights: [Resolver Pattern: A Better Alternative to GraphQL in BFF (api-integration).](https://github.com/allmonday/resolver-vs-graphql/blob/master/README-en.md)
 
 It could be seamlessly integrated with modern Python web frameworks including FastAPI, Litestar, and Django-ninja.
+
+In FastAPI, we can even visualize the dependencies between schemas with [fastapi-router-viz](https://github.com/allmonday/fastapi-router-viz)
+
+[![Video Title](https://img.youtube.com/vi/9ywdMt1wPOY/0.jpg)](https://www.youtube.com/watch?v=9ywdMt1wPOY)
 
 ## Hello world
 
@@ -360,14 +366,6 @@ data = await Resolver().resolve(stories)
 ```
 
 `query_stories()` returns `BaseStory` list, after we transformed it into `Story`, resolve and post fields are initialized as default value, after `Resolver().resolve()` finished, all these fields will be resolved and post-processed to what we expected.
-
-## FastAPI
-
-In FastAPI, we can visualize the dependencies between schemas with [fastapi-router-viz](https://github.com/allmonday/fastapi-router-viz)
-
-
-![](https://private-user-images.githubusercontent.com/2917822/486611472-d5dceee8-995b-4dab-a016-46fa98e74d77.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NTc0Mjc2ODYsIm5iZiI6MTc1NzQyNzM4NiwicGF0aCI6Ii8yOTE3ODIyLzQ4NjYxMTQ3Mi1kNWRjZWVlOC05OTViLTRkYWItYTAxNi00NmZhOThlNzRkNzcucG5nP1gtQW16LUFsZ29yaXRobT1BV1M0LUhNQUMtU0hBMjU2JlgtQW16LUNyZWRlbnRpYWw9QUtJQVZDT0RZTFNBNTNQUUs0WkElMkYyMDI1MDkwOSUyRnVzLWVhc3QtMSUyRnMzJTJGYXdzNF9yZXF1ZXN0JlgtQW16LURhdGU9MjAyNTA5MDlUMTQxNjI2WiZYLUFtei1FeHBpcmVzPTMwMCZYLUFtei1TaWduYXR1cmU9ZTkxMmFhYTliOTc0OWY1ZjBlY2U4ZjM5MzhlYWYxZTBhYzAwMDUxMDA0OWIwYzBlYjEzMjBhZDU1ZGJlZDIyMSZYLUFtei1TaWduZWRIZWFkZXJzPWhvc3QifQ.eC_8F_ge4vgWUV1t9S5I3GFWIQKtr_RgW_x424Vdm40)
-
 
 ## Testing and Coverage
 
