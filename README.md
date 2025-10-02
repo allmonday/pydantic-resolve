@@ -5,7 +5,7 @@
 
 **Whether the process of data transformation is intuitive is one of the determining factors of project quality.**
 
-pydantic-resolve turns pydantic from a static data container into dynamic calculation container.
+pydantic-resolve turns pydantic from a static data container into a powerful dynamic computing tool.
 
 It extends three major functions based on pydantic class to facilitate the acquisition and modification of multi-layered data.
 
