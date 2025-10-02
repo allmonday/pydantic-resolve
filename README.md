@@ -5,9 +5,9 @@
 
 **Whether the process of data transformation is intuitive is one of the determining factors of project quality.**
 
-Pydantic-resolve is a framework for composing complex data structures with an intuitive, declarative, resolver-based way, and then let the data easy to understand and adjust.
+pydantic-resolve turns pydantic from a static data container into dynamic calculation container.
 
-It provides three major functions to facilitate the acquisition and modification of multi-layered data.
+It extends three major functions based on pydantic class to facilitate the acquisition and modification of multi-layered data.
 
 - pluggable resolve methods and post methods, they can define how to fetch and modify nodes.
 - transporting field data from ancestor nodes to their descendant nodes, through multiple layers.
@@ -23,7 +23,7 @@ If you have experience with GraphQL, this article provides comprehensive insight
 
 It could be seamlessly integrated with modern Python web frameworks including FastAPI, Litestar, and Django-ninja.
 
-In FastAPI, we can even visualize the dependencies between schemas with [fastapi-router-viz](https://github.com/allmonday/fastapi-router-viz)
+In **FastAPI**, we can even visualize the dependencies between schemas with [fastapi-router-viz](https://github.com/allmonday/fastapi-router-viz)
 
 [![Video Title](https://img.youtube.com/vi/9ywdMt1wPOY/0.jpg)](https://www.youtube.com/watch?v=9ywdMt1wPOY)
 
