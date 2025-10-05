@@ -23,9 +23,10 @@ If you have experience with GraphQL, this article provides comprehensive insight
 
 It could be seamlessly integrated with modern Python web frameworks including FastAPI, Litestar, and Django-ninja.
 
-In **FastAPI**, we can even visualize the dependencies between schemas with [fastapi-router-viz](https://github.com/allmonday/fastapi-router-viz)
+In **FastAPI**, we can even explore the dependencies of schemas with [fastapi-voyager](https://github.com/allmonday/fastapi-voyager)
 
-[![Video Title](https://img.youtube.com/vi/9ywdMt1wPOY/0.jpg)](https://www.youtube.com/watch?v=9ywdMt1wPOY)
+
+![](https://private-user-images.githubusercontent.com/2917822/497147536-a6ccc9f1-cf06-493a-b99b-eb07767564bd.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NTk2NjUzNzQsIm5iZiI6MTc1OTY2NTA3NCwicGF0aCI6Ii8yOTE3ODIyLzQ5NzE0NzUzNi1hNmNjYzlmMS1jZjA2LTQ5M2EtYjk5Yi1lYjA3NzY3NTY0YmQucG5nP1gtQW16LUFsZ29yaXRobT1BV1M0LUhNQUMtU0hBMjU2JlgtQW16LUNyZWRlbnRpYWw9QUtJQVZDT0RZTFNBNTNQUUs0WkElMkYyMDI1MTAwNSUyRnVzLWVhc3QtMSUyRnMzJTJGYXdzNF9yZXF1ZXN0JlgtQW16LURhdGU9MjAyNTEwMDVUMTE1MTE0WiZYLUFtei1FeHBpcmVzPTMwMCZYLUFtei1TaWduYXR1cmU9ZThlNjVmMWIwMjYzOTVmZTRiYmExNTdhM2IyZGYzNTIyNzJkMjM1ZDBlNWU4ZDRlMGMyNDZiOGI5M2I3NGM4ZSZYLUFtei1TaWduZWRIZWFkZXJzPWhvc3QifQ.blswuM08hTfJx_wDjUbul0O5dg9E5UzyUlljOt0PHek)
 
 ## Hello world
 
