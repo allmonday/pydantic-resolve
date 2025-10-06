@@ -166,7 +166,9 @@ That's the basic sample of `resolve_method` in fetching related data.
 
 ## Construct complex data in 3 steps
 
-Let's take Agile's model for example, it includes Story, Task and Member
+Let's take Agile's model for example, it includes Story, Task and User
+
+[source code](https://github.com/allmonday/composition-oriented-development-pattern/tree/master/src/services)
 
 ### 1. Define Domain Models
 
@@ -179,42 +181,49 @@ Establish entity relationships model based on business concept.
 ```python
 from pydantic import BaseModel
 
-class BaseStory(BaseModel):
+class Story(BaseModel):    
     id: int
     name: str
-    assignee_id: Optional[int]
-    report_to: Optional[int]
+    owner_id: int
+    sprint_id: int
 
-class BaseTask(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+class Task(BaseModel):
     id: int
+    name: str
+    owner_id: int
     story_id: int
-    name: str
     estimate: int
-    done: bool
-    assignee_id: Optional[int]
 
-class BaseUser(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+class User(BaseModel):
     id: int
     name: str
-    title: str
+    level: str
+
+    model_config = ConfigDict(from_attributes=True)
 ```
 
 The dataloader is defined for general usage, if other approach such as ORM relationship is available, it can be easily replaced.
 DataLoader's implementation supports all kinds of data sources, from database queries to microservice RPC calls.
 
 ```python
-from aiodataloader import DataLoader
-from pydantic_resolve import build_list, build_object
+from .model import Task
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+import src.db as db
+from pydantic_resolve import build_list
 
-class StoryTaskLoader(DataLoader):
-    async def batch_load_fn(self, keys: list[int]):
-        tasks = await get_tasks_by_story_ids(keys)
-        return build_list(tasks, keys, lambda x: x.story_id)
+async def batch_get_tasks_by_ids(session: AsyncSession, story_ids: list[int]):
+    users = (await session.execute(select(Task).where(Task.story_id.in_(story_ids)))).scalars().all()
+    return users
 
-class UserLoader(DataLoader):
-    async def batch_load_fn(self, keys: list[int]):
-        users = await get_tuser_by_ids(keys)
-        return build_object(users, keys, lambda x: x.id)
+# user_id -> user 
+async def batch_get_users_by_ids(session: AsyncSession, user_ids: list[int]):
+    users = (await session.execute(select(User).where(User.id.in_(user_ids)))).scalars().all()
+    return users
 ```
 
 
