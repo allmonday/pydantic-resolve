@@ -42,129 +42,7 @@ Starting from pydantic-resolve v1.11.0, both pydantic v1 and v2 are supported.
 - [Resolver Pattern: A Better Alternative to GraphQL in BFF (api-integration).](https://github.com/allmonday/resolver-vs-graphql/blob/master/README-en.md)
 
 
-## Hello world
-
-Here is the root data, a list of `BaseStory`.
-
-```python
-base_stories = [
-  BaseStory(id=1, name="story - 1"),
-  BaseStory(id=2, name="story - 2")
-]
-```
-
-let's import Resolver and resolve the base_stories, currently `Resolver().resolve` will do nothing becuase pydantic-resolve related configuration is not applied yet.
-
-```python
-from pydantic_resolve import Resolver
-
-data = await Resolver().resolve(base_stories)
-```
-
-Then let's define the `Story`, which inherit from `BaseStory`, add `tasks` field.
-
-Now let's define `resolve_tasks` method and use `StoryTskLoader` to load the tasks (inside DataLoader it will gather the ids and run query in batch)
-
-Let's initialize `stories` from `base_stories`
-
-```python
-from pydantic_resolve import Resolver
-from biz_models import BaseTask, BaseStory, BaseUser
-from biz_services import UserLoader, StoryTaskLoader
-
-class Story(BaseStory):
-    tasks: list[BaseTask] = []
-    def resolve_tasks(self, loader=Loader(StoryTaskLoader)): # StoryTaskLoader return list of BaseTasks of each story by story_id
-        return loader.load(self.id)
-
-stories = [Story.model_validate(s, from_attributes=True) for s in base_stories]
-data = await Resolver().resolve(stories)
-```
-
-Here is where magic happens, let's check the data (in json), the `tasks` field are fetched automatically:
-
-```json
-[
-  {
-    "id": 1,
-    "name": "story - 1",
-    "tasks": [
-      {
-        "id": 1,
-        "name": "design",
-        "user_id": 2
-      }
-    ]
-  },
-  {
-    "id": 2,
-    "name": "story - 2",
-    "tasks": [
-      {
-        "id": 2,
-        "name": "add ut",
-        "user_id": 2
-      }
-    ]
-  }
-]
-```
-
-Let's continue extend the `BaseTask` and replace the return type of `Story.tasks`
-
-```python
-class Task(BaseTask):
-    user: Optional[BaseUser] = None
-    def resolve_user(self, loader=Loader(UserLoader)):
-        return loader.load(self.assignee_id) if self.assignee_id else None
-
-class Story(BaseStory):
-    tasks: list[Task] = [] # BaseTask -> Task
-    def resolve_tasks(self, loader=Loader(StoryTaskLoader)):
-        return loader.load(self.id)
-```
-
-Then user data is available immediately.
-
-```json
-[
-  {
-    "id": 1,
-    "name": "story - 1",
-    "tasks": [
-      {
-        "id": 1,
-        "name": "design",
-        "user_id": 1,
-        "user": {
-          "id": 1,
-          "name": "tangkikodo"
-        }
-      }
-    ]
-  },
-  {
-    "id": 2,
-    "name": "story - 2",
-    "tasks": [
-      {
-        "id": 2,
-        "name": "add ut",
-        "user_id": 2,
-        "user": {
-          "id": 2,
-          "name": "john"
-        }
-      }
-    ]
-  }
-]
-```
-
-That's the basic sample of `resolve_method` in fetching related data.
-
-
-## Construct complex data in 3 steps
+## Constructing complex data in 3 steps
 
 Let's take Agile's model for example, it includes Story, Task and User
 
@@ -224,6 +102,21 @@ async def batch_get_tasks_by_ids(session: AsyncSession, story_ids: list[int]):
 async def batch_get_users_by_ids(session: AsyncSession, user_ids: list[int]):
     users = (await session.execute(select(User).where(User.id.in_(user_ids)))).scalars().all()
     return users
+
+async def user_batch_loader(user_ids: list[int]):
+    async with db.async_session() as session:
+        users = await batch_get_users_by_ids(session, user_ids)
+        return build_object(users, user_ids, lambda u: u.id)
+
+# task id -> task
+async def batch_get_tasks_by_ids(session: AsyncSession, story_ids: list[int]):
+    users = (await session.execute(select(Task).where(Task.story_id.in_(story_ids)))).scalars().all()
+    return users
+
+async def story_to_task_loader(story_ids: list[int]):
+    async with db.async_session() as session:
+        tasks = await batch_get_tasks_by_ids(session, story_ids)
+        return build_list(tasks, story_ids, lambda u: u.story_id)
 ```
 
 
