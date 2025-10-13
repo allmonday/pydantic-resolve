@@ -2,6 +2,10 @@
 
 ## v1.13
 
+### v1.13.3 (2025.10.13)
+
+- fix memory leak due to haven't properly reset contextvars.ContextVar
+
 ### v1.13.2 (2025.9.4)
 
 - minor: @ensure_subset(base_kls) will attach kls info into target class, prepare for dependency analysis in future
