@@ -100,6 +100,7 @@ class Resolver:
             self.object_level_collect_alias_map_store[id(node)] = alias_map  
 
             # expose to descendant
+            token_pairs = []
             for alias_name, sign_collector_kv in alias_map.items():
                 if not self.collector_contextvars.get(alias_name):
                     self.collector_contextvars[alias_name] = contextvars.ContextVar(alias_name, default={})
@@ -107,16 +108,22 @@ class Resolver:
                 current_pair = self.collector_contextvars[alias_name].get()
                 if set(sign_collector_kv.keys()) - set(current_pair.keys()):  # update only when new sign is found
                     updated_pair = {**current_pair, **sign_collector_kv}
-                    self.collector_contextvars[alias_name].set(updated_pair)
+                    token = self.collector_contextvars[alias_name].set(updated_pair)
+                    token_pairs.append((alias_name, token))
+            return lambda : [self.collector_contextvars[alias_name].reset(token) for alias_name, token in token_pairs]
+            
+        return lambda : None
 
     def _prepare_parent(self, node: object):
         if not self.parent_contextvars.get('parent'):
             self.parent_contextvars['parent'] = contextvars.ContextVar('parent')
-        self.parent_contextvars['parent'].set(node)
+        token = self.parent_contextvars['parent'].set(node)
+        return lambda : self.parent_contextvars['parent'].reset(token)
 
     def _prepare_expose_fields(self, node: object):
         expose_dict: Optional[dict] = getattr(node, const.EXPOSE_TO_DESCENDANT, None)
         if expose_dict:
+            token_pairs = []
             for field, alias in expose_dict.items():  # eg: {'name': 'bar_name'}
                 if not self.ancestor_vars.get(alias):
                     self.ancestor_vars[alias] = contextvars.ContextVar(alias)
@@ -126,7 +133,11 @@ class Resolver:
                 except AttributeError:
                     raise AttributeError(f'{field} does not existed')
 
-                self.ancestor_vars[alias].set(val)
+                token = self.ancestor_vars[alias].set(val)
+                token_pairs.append((alias, token))
+            return lambda : [self.ancestor_vars[alias].reset(token) for alias, token in token_pairs]
+
+        return lambda : None
 
     def _prepare_ancestor_context(self):
         return {k: v.get() for k, v in self.ancestor_vars.items()}
@@ -301,15 +312,15 @@ class Resolver:
         kls = node.__class__
         kls_path = class_util.get_kls_full_name(kls)
 
-        self._prepare_collectors(node, kls)
-        self._prepare_expose_fields(node)
-        self._prepare_parent(parent)
+        reset1 = self._prepare_collectors(node, kls)
+        reset2 = self._prepare_expose_fields(node)
+        reset3 = self._prepare_parent(parent)
 
 
         if self.debug:
             ancestors = self.ancestor_list.get()
             new_ancestors = ancestors + [node.__class__.__name__]
-            self.ancestor_list.set(new_ancestors)
+            token = self.ancestor_list.set(new_ancestors)
             tid = self.performance.get_timer(new_ancestors).start()
 
 
@@ -351,6 +362,12 @@ class Resolver:
 
         if self.debug:
             self.performance.get_timer(new_ancestors).end(tid) # type: ignore
+        
+        # reset all contextvars
+        reset1()
+        reset2()
+        reset3()
+        if self.debug: self.ancestor_list.reset(token)
 
         return node
 
