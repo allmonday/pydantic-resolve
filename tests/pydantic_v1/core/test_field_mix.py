@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, List
 from pydantic import BaseModel
-from pydantic_resolve.analysis import scan_and_store_metadata
+from pydantic_resolve.analysis import Analytic
 
 @dataclass
 class Book:
@@ -19,7 +19,7 @@ class Student(BaseModel):
 
 
 def test_get_all_fields():
-    result = scan_and_store_metadata(Student)
+    result = Analytic().scan(Student)
     expect = {
         'test_field_mix.Student': {
             'resolve': ['resolve_books'],

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Union, Optional
 from pydantic import BaseModel
-from pydantic_resolve.analysis import scan_and_store_metadata
+from pydantic_resolve.analysis import Analytic
 
 async def loader_fn(keys):
     return keys
@@ -28,7 +28,7 @@ class X(BaseModel):
     
 
 def test_get_all_fields():
-    result = scan_and_store_metadata(X)
+    result = Analytic().scan(X)
     expect = {
         'test_union.X': {
             'resolve': ['resolve_items2'],

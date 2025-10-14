@@ -1,6 +1,6 @@
 from typing import Optional
 from pydantic import BaseModel
-from pydantic_resolve.analysis import scan_and_store_metadata
+from pydantic_resolve.analysis import Analytic
 
 class E(BaseModel):
     id: int
@@ -41,7 +41,7 @@ class A(BaseModel):
 
 
 def test_long_distance_resolve():
-    result = scan_and_store_metadata(A)
+    result = Analytic().scan(A)
     prefix = 'tests.common.test_analysis_object_fields_4'
     expect = {
         f'{prefix}.A': {

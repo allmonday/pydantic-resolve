@@ -2,6 +2,10 @@
 
 ## v1.13
 
+### v1.13.4 (2025.10.14)
+
+- fix memory leak due inner function closure
+
 ### v1.13.3 (2025.10.13)
 
 - fix memory leak due to haven't properly reset contextvars.ContextVar

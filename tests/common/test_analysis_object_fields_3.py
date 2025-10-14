@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from pydantic_resolve.analysis import scan_and_store_metadata
+from pydantic_resolve.analysis import Analytic
 
 class Tree(BaseModel):
     a: 'Tree'
@@ -12,7 +12,7 @@ class Tree2(BaseModel):
         return self.b
 
 def test_long_distance_resolve():
-    result = scan_and_store_metadata(Tree)
+    result = Analytic().scan(Tree)
     prefix = 'tests.common.test_analysis_object_fields_3'
     expect = {
         f'{prefix}.Tree': {
@@ -27,7 +27,7 @@ def test_long_distance_resolve():
         assert expect[k].items() <= v.items()
 
 def test_long_distance_resolve_2():
-    result = scan_and_store_metadata(Tree2)
+    result = Analytic().scan(Tree2)
     prefix = 'tests.common.test_analysis_object_fields_3'
     expect = {
         f'{prefix}.Tree2': {

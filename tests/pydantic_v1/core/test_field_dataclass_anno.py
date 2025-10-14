@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional, List
-from pydantic_resolve.analysis import scan_and_store_metadata
+from pydantic_resolve.analysis import Analytic
 from pydantic_resolve import LoaderDepend, Collector
 
 
@@ -49,7 +49,7 @@ def test_get_all_fields():
     """
     post params is not included
     """
-    result = scan_and_store_metadata(Student)
+    result = Analytic().scan(Student)
     expect = {
         'test_field_dataclass_anno.Student': {
             'resolve': ['resolve_name', 'resolve_zeta'],

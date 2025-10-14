@@ -3,7 +3,7 @@ import pytest
 from typing import Optional, List
 from pydantic import BaseModel
 from aiodataloader import DataLoader
-from pydantic_resolve.analysis import scan_and_store_metadata, validate_and_create_loader_instance
+from pydantic_resolve.analysis import Analytic, validate_and_create_loader_instance
 from pydantic_resolve import LoaderDepend, LoaderFieldNotProvidedError
 
 async def loader_fn(keys):
@@ -58,7 +58,7 @@ global_loader_param = {
 
 @pytest.mark.asyncio
 async def test_instance_1():
-    metadata = scan_and_store_metadata(Student)
+    metadata = Analytic().scan(Student)
     loader_instance = validate_and_create_loader_instance(loader_params, {}, {}, metadata)
 
     assert isinstance(loader_instance['test_field_validate_and_create_loader_instance.loader_fn'] , DataLoader)
@@ -67,7 +67,7 @@ async def test_instance_1():
 @pytest.mark.asyncio
 async def test_instance_2():
     """ test cache works """
-    metadata = scan_and_store_metadata(Student)
+    metadata = Analytic().scan(Student)
     loader_instance = validate_and_create_loader_instance(loader_params, {}, {}, metadata)
 
     assert len(loader_instance) == 2
@@ -75,7 +75,7 @@ async def test_instance_2():
 @pytest.mark.asyncio
 async def test_instance_3():
     """test global param"""
-    metadata = scan_and_store_metadata(Student)
+    metadata = Analytic().scan(Student)
     loader_instance = validate_and_create_loader_instance({}, global_loader_param, {}, metadata)
 
     assert isinstance(loader_instance['test_field_validate_and_create_loader_instance.loader_fn'] , DataLoader)
@@ -84,7 +84,7 @@ async def test_instance_3():
 @pytest.mark.asyncio
 async def test_instance_4():
     """raise missing param error"""
-    metadata = scan_and_store_metadata(Student)
+    metadata = Analytic().scan(Student)
 
     with pytest.raises(LoaderFieldNotProvidedError):
         loader_instance = validate_and_create_loader_instance({}, {}, {}, metadata)

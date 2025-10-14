@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from pydantic_resolve.analysis import scan_and_store_metadata
+from pydantic_resolve.analysis import Analytic
 from typing import Optional
 
 # ┌────────┐                             
@@ -84,7 +84,7 @@ class Kls(BaseModel):
 # this is known issue
 # self reference will not support early skip traversal.
 def test_analysis_object_fields():
-    result = scan_and_store_metadata(Kls)
+    result = Analytic().scan(Kls)
     prefix = 'tests.common.test_analysis_object_fields_1'
     expect = {
         f'{prefix}.Kls': {

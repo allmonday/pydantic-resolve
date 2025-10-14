@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pydantic-resolve"
-version = "1.13.3"
+version = "1.13.4"
 description = "A business model friendly data orchestration tool, simple way to implement the core concept of clean architecture."
 authors = ["tangkikodo <allmonday@126.com>"]
 readme = "README.md"
@@ -42,6 +42,7 @@ fastapi = "^0.101.0"
 uvicorn = "^0.22.0"
 mkdocs-material = "9.*"
 mkdocs-static-i18n = {version = "1.2.0", extras = ["material"]}
+psutil = "^7.1.0"
 
 [build-system]
 requires = ["poetry-core"]
