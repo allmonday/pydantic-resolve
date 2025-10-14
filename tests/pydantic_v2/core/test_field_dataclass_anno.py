@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Optional, List
-from pydantic_resolve.analysis import scan_and_store_metadata
+from pydantic_resolve.analysis import Analytic
 from pydantic_resolve import LoaderDepend, Collector
 
 
@@ -44,7 +44,7 @@ class Zeta:
 
 
 def test_get_all_fields():
-    result = scan_and_store_metadata(Student)
+    result = Analytic().scan(Student)
     expect = {
         'test_field_dataclass_anno.Student': {
             'resolve': ['resolve_name', 'resolve_zeta'],
@@ -83,7 +83,7 @@ def test_get_all_fields():
         assert expect[k].items() <= v.items()
 
 def test_resolve_params():
-    result = scan_and_store_metadata(Student)
+    result = Analytic().scan(Student)
     expect = {
         'test_field_dataclass_anno.Student': {
             'resolve_params': {

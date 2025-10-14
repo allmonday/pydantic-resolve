@@ -375,8 +375,7 @@ class Resolver:
         if isinstance(node, list) and node == []: return node
 
         root_class = class_util.get_class_of_object(node)
-        metadata = analysis.scan_and_store_metadata(root_class)
-        self.metadata = analysis.convert_metadata_key_as_kls(metadata)
+        self.metadata = analysis.convert_metadata_key_as_kls(analysis.Analytic().scan(root_class))
 
         self.loader_instance_cache = analysis.validate_and_create_loader_instance(
             self.loader_params,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Optional, List
 from pydantic import BaseModel
-from pydantic_resolve.analysis import scan_and_store_metadata, convert_metadata_key_as_kls
+from pydantic_resolve.analysis import Analytic, convert_metadata_key_as_kls
 from pydantic_resolve import LoaderDepend
 
 async def loader_fn(keys):
@@ -40,7 +40,7 @@ class Zeta(BaseModel):
 
 
 def test_get_all_fields():
-    result = scan_and_store_metadata(Student)
+    result = Analytic().scan(Student)
     expect = {
         'test_field_pydantic.Student': {
             'resolve': ['resolve_name', 'resolve_zeta'],
@@ -80,7 +80,7 @@ def test_get_all_fields():
 
 
 def test_convert_metadata():
-    result = scan_and_store_metadata(Student)
+    result = Analytic().scan(Student)
     result = convert_metadata_key_as_kls(result)
     expect = {
         Student: {
@@ -129,7 +129,7 @@ def test_convert_metadata():
 
 
 def test_resolve_params():
-    result = scan_and_store_metadata(Student)
+    result = Analytic().scan(Student)
     expect = {
         'test_field_pydantic.Student': {
             # ... others
