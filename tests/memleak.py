@@ -7,6 +7,17 @@ from pydantic_resolve import Resolver
 class Model(BaseModel):
     id: int
 
+    compound_id: str = ''
+    def post_compound_id(self, parent, ancestor_context):
+        return f'{parent.id}-{self.id}-{ancestor_context.get("parent_id")}'
+
+class Parent(BaseModel):
+    __pydantic_resolve_expose__ = {'id': 'parent_id'}
+    id: int
+    m: Model
+    
+
+
 class Demo:
     def __init__(self):
         self.vars = contextvars.ContextVar("demo_var")
@@ -21,7 +32,7 @@ async def test_memleak():
     snapshot1 = tracemalloc.take_snapshot()
 
     for _ in range(10000):
-        await Resolver().resolve(Model(id=1))
+        await Resolver().resolve(Parent(id=1, m=Model(id=2)))
         # Demo().do()
 
     snapshot2 = tracemalloc.take_snapshot()
