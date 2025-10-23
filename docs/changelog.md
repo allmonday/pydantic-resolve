@@ -2,6 +2,12 @@
 
 ## v1.13
 
+### v1.13.5 (2025.10.23)
+
+- add annotation param in Resolver to specify the root class when resolving list of Union types.
+    - refer to `tests/common/test_annotation_param.py`
+- support type alias: `type U = A | B` 
+
 ### v1.13.4 (2025.10.14)
 
 - fix memory leak due inner function closure

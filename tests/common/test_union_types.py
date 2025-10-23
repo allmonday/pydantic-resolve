@@ -1,4 +1,4 @@
-
+import sys
 from pydantic_resolve.utils.types import (
     get_core_types, 
 )
@@ -31,3 +31,27 @@ import pytest
 def test_get_core_types_3_10(tp, expected):
     result = get_core_types(tp) 
     assert result == expected
+
+
+@pytest.mark.skipif(sys.version_info < (3, 12), reason="PEP 695 type aliases require Python 3.12+")
+def test_union_type_alias_and_list():
+    # Dynamically exec a type alias using the new syntax so test file stays valid on <3.12 (even though skipped)
+    ns: dict = {}
+    code = """
+class A: ...
+class B: ...
+
+type MyAlias = A | B
+"""
+    exec(code, ns, ns)
+    MyAlias = ns['MyAlias']
+    A = ns['A']
+    B = ns['B']
+
+    # list[MyAlias] should yield (A, B)
+    core = get_core_types(list[MyAlias])
+    assert set(core) == {A, B}
+
+    # Direct alias should also work
+    core2 = get_core_types(MyAlias)
+    assert set(core2) == {A, B}
