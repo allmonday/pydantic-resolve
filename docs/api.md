@@ -88,7 +88,8 @@ class Resolver:
             loader_instances: Optional[Dict[Any, Any]] = None,
             context: Optional[Dict[str, Any]] = None,
             debug: bool = False,
-            enable_from_attribute_in_type_adapter = False
+            enable_from_attribute_in_type_adapter = False,
+            annotation: Optional[Type[T]] = None
             ):
 ```
 
@@ -178,6 +179,11 @@ class B(BaseModel):
 in pydantc v1, parse_obj_as can parse B from A, but in v2, it will raise exception, however, with typeAdapter.validate_python(data, from_attribute=True), it works
 
 the cost is performance (abount 10% overhead), so it is disabled by default
+
+### annotation
+
+Specifies the root class when resolving data. This is useful when the input data is a list of Union types, making it impossible to deduce the root class automatically.
+
 
 ## Method Parameter Description
 

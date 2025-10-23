@@ -1,9 +1,18 @@
-from typing import Type, Union, List
+from typing import Type, Union, List, Annotated
 try:  # Python 3.10+ provides PEP 604 unions using types.UnionType
     from types import UnionType as _UnionType
 except ImportError:  # pragma: no cover - prior to 3.10
     _UnionType = ()  # sentinel so membership tests still work
 from pydantic_resolve.compat import PYDANTIC_V2, OVER_PYTHON_3_7
+
+# Python <3.12 compatibility: TypeAliasType exists only from 3.12 (PEP 695)
+try:  # pragma: no cover - import guard
+    from typing import TypeAliasType  # type: ignore
+except Exception:  # pragma: no cover
+    class _DummyTypeAliasType:  # minimal sentinel so isinstance checks are safe
+        pass
+    TypeAliasType = _DummyTypeAliasType  # type: ignore
+
 
 if OVER_PYTHON_3_7:
     from typing import get_origin, get_args
@@ -49,44 +58,66 @@ def get_core_types(tp):
     - get the core type
     - always return a tuple of core types
     """
-    if tp is type(None):
-        return tuple()
-
-    # 1. Unwrap list layers
-    def _shell_list(_tp):
-        while _is_list(_tp):
-            args = getattr(_tp, "__args__", ())
-            if args:
-                _tp = args[0]
-            else:
+    # Helpers
+    def _unwrap_alias(t):
+        """Unwrap PEP 695 type aliases by following __value__ repeatedly."""
+        while isinstance(t, TypeAliasType) or (
+            t.__class__.__name__ == 'TypeAliasType' and hasattr(t, '__value__')
+        ):
+            try:
+                t = t.__value__
+            except Exception:  # pragma: no cover - defensive
                 break
-        return _tp
-    
-    tp = _shell_list(tp)
+        return t
 
-    if tp is type(None): # check again
-        return tuple()
+    def _enqueue(items, q):
+        for it in items:
+            if it is not type(None):  # skip None in unions
+                q.append(it)
 
-    while True:
-        orig = _get_origin(tp)
+    # Queue-based shelling to reach concrete core types
+    queue: list[object] = [tp]
+    result: list[object] = []
 
+    while queue:
+        cur = queue.pop(0)
+        if cur is type(None):
+            continue
+
+        cur = _unwrap_alias(cur)
+
+        # Handle Annotated[T, ...] as a shell
+        if get_origin(cur) is Annotated:
+            args = get_args(cur)
+            if args:
+                queue.append(args[0])
+            continue
+
+        # Handle Union / Optional / PEP 604 UnionType
+        orig = get_origin(cur)
         if orig in (Union, _UnionType):
-            args = list(_get_args(tp))
-            non_none = [a for a in args if a is not type(None)]  # noqa: E721
-            has_none = len(non_none) != len(args)
-            # Optional[T] case -> keep unwrapping (exactly one real type + None)
-            if has_none and len(non_none) == 1:
-                tp = non_none[0]
-                tp = _shell_list(tp)
-                continue
-            # General union: return all non-None members (order preserved)
-            if non_none:
-                return tuple(non_none)
-            return tuple()
-        break
+            args = get_args(cur)
+            # push all non-None members back for further shelling
+            _enqueue(args, queue)
+            continue
 
-    # single concrete type
-    return (tp,)
+        # Handle list shells
+        if _is_list(cur):
+            args = getattr(cur, "__args__", ())
+            if args:
+                queue.append(args[0])
+            continue
+
+        # If still an alias-like wrapper, unwrap again and re-process
+        _cur2 = _unwrap_alias(cur)
+        if _cur2 is not cur:
+            queue.append(_cur2)
+            continue
+
+        # Otherwise treat as a concrete core type (could be a class, typing.Final, etc.)
+        result.append(cur)
+
+    return tuple(result)
 
 
 def get_class_field_annotations(cls: Type):

@@ -87,7 +87,10 @@ class Resolver:
             global_loader_param: Optional[Dict[str, Any]] = None,
             loader_instances: Optional[Dict[Any, Any]] = None,
             context: Optional[Dict[str, Any]] = None
-            debug: bool = False):
+            debug: bool = False
+            enable_from_attribute_in_type_adapter = False,
+            annotation: Optional[Type[T]] = None
+            ):
 ```
 
 ### loader_params
@@ -170,6 +173,10 @@ class B(BaseModel):
 ```
 
 v2 中可以通过 `typeAdapter.validate_python(data, from_attribute=True)` 进行兜底，但该方法会对数据转换产生 10%+的性能影响， 因此默认为 False， 按需启用
+
+### annotation
+指定解析数据时的根类。 当输入数据是 Union 类型的列表时， 无法自动推断出根类， 这时可以通过该参数来指定根类。
+
 
 ## 方法参数说明
 

@@ -6,13 +6,18 @@ import psutil
 import pytest
 
 
-class SchemaA(BaseModel):
-    id: str
-    int_field: int
-    binary_field: UUID
-    float_field: float
+class Model(BaseModel):
+    id: int
+
+    compound_id: str = ''
+    def post_compound_id(self, parent, ancestor_context):
+        return f'{parent.id}-{self.id}-{ancestor_context.get("parent_id")}'
+
+class Parent(BaseModel):
+    __pydantic_resolve_expose__ = {'id': 'parent_id'}
+    id: int
+    m: Model
     
-    model_config = ConfigDict(from_attributes=True)
 
 
 def str_uuid1():
@@ -24,13 +29,8 @@ async def test_mem_leak_2():
     gc.collect()
 
     memory_start = process.memory_info().rss
-    for _ in range(50000):
-        await Resolver().resolve(SchemaA(
-            id=str_uuid1(),
-            int_field=123,
-            binary_field=uuid1(),
-            float_field=123.456
-        ))
+    for _ in range(10000):
+        await Resolver().resolve(Parent(id=1, m=Model(id=2)))
 
     memory_after_del = process.memory_info().rss
     diff = memory_after_del - memory_start

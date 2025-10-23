@@ -539,8 +539,14 @@ class Analytic:
         self.collect_set = set()
         self.metadata = {}
 
-        class_util.update_forward_refs(root_class)
-        self._walker(root_class, [])
+        core_types = class_util.get_core_types(root_class)
+
+        for ct in core_types:
+            class_util.update_forward_refs(ct)
+
+        for ct in core_types:
+            self._walker(ct, [])
+
         return self.metadata
 
 

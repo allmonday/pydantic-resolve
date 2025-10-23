@@ -29,6 +29,7 @@ class Resolver:
             context: Optional[Dict[str, Any]] = None,
             debug=False,
             enable_from_attribute_in_type_adapter=False,
+            annotation: Optional[Type[T]]=None
             ):
         
         self.debug = debug or os.getenv("PYDANTIC_RESOLVE_DEBUG", "false").lower() == "true"
@@ -84,6 +85,9 @@ class Resolver:
         self.context = MappingProxyType(context) if context else None
         self.metadata = {}
         self.object_level_collect_alias_map_store: Dict[int, Dict] = {}
+
+        # if user provide annotation, it will skip the deduction from input value
+        self.annotation = annotation
 
     def _validate_loader_instance(self, loader_instances: Dict[Any, Any]):
         for cls, loader in loader_instances.items():
@@ -374,7 +378,11 @@ class Resolver:
     async def resolve(self, node: T) -> T:
         if isinstance(node, list) and node == []: return node
 
-        root_class = class_util.get_class_of_object(node)
+        # by default pydantic-resolve will deduce the root class from input node
+        # but in some scenario like Union types, it is unable to deduce the root class
+        # so user can provide the root class by annotation parameter
+        root_class = self.annotation if self.annotation else class_util.get_class_of_object(node)
+
         self.metadata = analysis.convert_metadata_key_as_kls(analysis.Analytic().scan(root_class))
 
         self.loader_instance_cache = analysis.validate_and_create_loader_instance(
