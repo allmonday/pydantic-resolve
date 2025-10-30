@@ -3,27 +3,27 @@
 ![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
-**Whether the process of data transformation is intuitive is one of the determining factors of project quality.**
 
-pydantic-resolve turns pydantic from a static data container into a powerful dynamic computing tool.
+Pydantic Resolve provides a class-based approach to composing complex data models without imperative glue code.
 
-It provides major features based on pydantic class:
-- pluggable resolve methods and post methods, to define how to fetch and modify nodes.
-- transporting field data from ancestor nodes to their descendant nodes.
-- collecting data from any descendants nodes to their ancestor nodes.
+It elevates Pydantic from a static data container to a powerful, flexible computation layer.
 
-It supports:
+Built on Pydantic models, it introduces resolve hooks for on-demand data fetching and post hooks for normalization, transformation, and reorganization to meet diverse requirements.
 
-- pydantic v1
-- pydantic v2
-- dataclass `from pydantic.dataclasses import dataclass`
+The resolution lifecycle is straightforward: data is loaded level by level through the object.
+
+Compared with GraphQL, both traverse descendant nodes recursively and support resolver functions and DataLoaders. The key difference is post-processing: from the post-processing perspective, resolved data is always ready for further transformation, regardless of whether it came from resolvers or initial input.
+
+Within post hooks, developers can read descendant data, adjust existing fields, compute derived fields, and route values anywhere in the hierarchy.
+
+![](./docs/images/lifecycle.jpeg)
+
+Post hooks also enable bidirectional data flow: they can read from ancestor nodes and push values up to ancestors, which is useful for adapting data to varied business requirements.
+
+
+![](./docs/images/communication.jpeg)
 
 It could be seamlessly integrated with modern Python web frameworks including FastAPI, Litestar, and Django-ninja.
-
-For **FastAPI**, we can explore the dependencies of schemas with [fastapi-voyager](https://github.com/allmonday/fastapi-voyager)
-
-![](https://private-user-images.githubusercontent.com/2917822/497147536-a6ccc9f1-cf06-493a-b99b-eb07767564bd.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NTk2NjUzNzQsIm5iZiI6MTc1OTY2NTA3NCwicGF0aCI6Ii8yOTE3ODIyLzQ5NzE0NzUzNi1hNmNjYzlmMS1jZjA2LTQ5M2EtYjk5Yi1lYjA3NzY3NTY0YmQucG5nP1gtQW16LUFsZ29yaXRobT1BV1M0LUhNQUMtU0hBMjU2JlgtQW16LUNyZWRlbnRpYWw9QUtJQVZDT0RZTFNBNTNQUUs0WkElMkYyMDI1MTAwNSUyRnVzLWVhc3QtMSUyRnMzJTJGYXdzNF9yZXF1ZXN0JlgtQW16LURhdGU9MjAyNTEwMDVUMTE1MTE0WiZYLUFtei1FeHBpcmVzPTMwMCZYLUFtei1TaWduYXR1cmU9ZThlNjVmMWIwMjYzOTVmZTRiYmExNTdhM2IyZGYzNTIyNzJkMjM1ZDBlNWU4ZDRlMGMyNDZiOGI5M2I3NGM4ZSZYLUFtei1TaWduZWRIZWFkZXJzPWhvc3QifQ.blswuM08hTfJx_wDjUbul0O5dg9E5UzyUlljOt0PHek)
-
 
 ## Installation
 
@@ -34,6 +34,13 @@ pip install pydantic-resolve
 Starting from pydantic-resolve v1.11.0, both pydantic v1 and v2 are supported.
 
 
+## Supports
+
+- pydantic v1  (stop support in ver 2)
+- pydantic v2
+- dataclass `from pydantic.dataclasses import dataclass`
+
+
 ## Documentation
 
 - **Documentation**: https://allmonday.github.io/pydantic-resolve/
@@ -41,8 +48,14 @@ Starting from pydantic-resolve v1.11.0, both pydantic v1 and v2 are supported.
 - **Composition-Oriented Pattern**: https://github.com/allmonday/composition-oriented-development-pattern
 - [Resolver Pattern: A Better Alternative to GraphQL in BFF (api-integration).](https://github.com/allmonday/resolver-vs-graphql/blob/master/README-en.md)
 
+## FastAPI Voyager
 
-## Constructing complex data in 3 steps
+For FastAPI developers, we can visualize the dependencies of schemas by installing [fastapi-voyager](https://github.com/allmonday/fastapi-voyager)
+
+![](./docs/images/voyager.jpg)
+
+
+## Demo: constructing complicated data in 3 steps
 
 Let's take Agile's model for example, it includes Story, Task and User
 
@@ -94,11 +107,7 @@ from sqlalchemy import select
 import src.db as db
 from pydantic_resolve import build_list
 
-async def batch_get_tasks_by_ids(session: AsyncSession, story_ids: list[int]):
-    users = (await session.execute(select(Task).where(Task.story_id.in_(story_ids)))).scalars().all()
-    return users
-
-# user_id -> user 
+# --------- user_id -> user ----------
 async def batch_get_users_by_ids(session: AsyncSession, user_ids: list[int]):
     users = (await session.execute(select(User).where(User.id.in_(user_ids)))).scalars().all()
     return users
@@ -108,7 +117,7 @@ async def user_batch_loader(user_ids: list[int]):
         users = await batch_get_users_by_ids(session, user_ids)
         return build_object(users, user_ids, lambda u: u.id)
 
-# task id -> task
+# ---------- task id -> task ------------
 async def batch_get_tasks_by_ids(session: AsyncSession, story_ids: list[int]):
     users = (await session.execute(select(Task).where(Task.story_id.in_(story_ids)))).scalars().all()
     return users
