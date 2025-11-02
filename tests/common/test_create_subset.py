@@ -2,8 +2,9 @@
 
 import pytest
 from typing import Optional
-from pydantic import BaseModel, Field, validator
-from pydantic_resolve.utils.subset import create_subset
+from pydantic import BaseModel, Field
+from pydantic_resolve.utils.subset import create_subset, DefineSubset
+import pydantic_resolve.constant as const
 
 
 class TestCreateSubset:
@@ -276,3 +277,54 @@ class TestCreateSubsetIntegration:
         assert Subset1.__name__ == 'Subset1'
         assert Subset2.__name__ == 'Subset2'
         assert Subset3.__name__ == 'Subset3'
+
+
+class TestSubsetMeta:
+    """Test cases for SubsetMeta metaclass and Subset base class."""
+    
+    def test_basic_subset_metaclass(self):
+        """Test basic usage of Subset metaclass to create subset classes."""
+        class Parent(BaseModel):
+            id: int
+            name: str
+            age: int
+            email: str
+        
+        class MySubset(DefineSubset):
+            __pydantic_resolve_subset__ = (Parent, ['id', 'name'])
+            new_field: str
+        
+        # Test that MySubset is a proper subset
+        instance = MySubset(id=1, name='test', new_field='extra')
+        assert instance.id == 1
+        assert instance.name == 'test'
+        assert instance.new_field == 'extra'
+
+        # Test that excluded fields are not present
+        field_names = list(MySubset.model_fields.keys())
+        assert 'id' in field_names
+        assert 'name' in field_names
+        assert 'age' not in field_names
+        assert 'email' not in field_names
+        
+        # Test that MySubset is a subclass of BaseModel
+        assert issubclass(MySubset, BaseModel)
+        assert getattr(MySubset, const.ENSURE_SUBSET_REFERENCE) is Parent
+    
+    def test_wrongly_create_subset_metaclass(self):
+        """Test basic usage of Subset metaclass to create subset classes."""
+        class Parent(BaseModel):
+            id: int
+            name: str
+            age: int
+            email: str
+        
+        with pytest.raises(ValueError):
+            class MySubset(DefineSubset):
+                __pydantic_resolve_subset__ = (Parent, ['id', 'name'])
+                id: str
+        
+        with pytest.raises(ValueError):
+            class MySubset2(DefineSubset):
+                id: str
+        
