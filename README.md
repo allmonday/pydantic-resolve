@@ -36,7 +36,6 @@ Starting from pydantic-resolve v1.11.0, both pydantic v1 and v2 are supported.
 
 ## Supports
 
-- pydantic v1  (stop support in ver 2)
 - pydantic v2
 - dataclass `from pydantic.dataclasses import dataclass`
 

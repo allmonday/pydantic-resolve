@@ -1,6 +1,5 @@
 from pydantic_resolve.utils.types import (
-    _is_optional_3_x, 
-    _is_optional_3_7,
+    _is_optional, 
     _is_list,
     get_core_types, 
     shelling_type,
@@ -9,7 +8,6 @@ from pydantic_resolve.utils.types import (
 )
 from typing import Optional, Union, List, Dict, Tuple, Set
 import pytest
-import sys
 
 @pytest.mark.parametrize(
     "annotation,expected",
@@ -24,25 +22,8 @@ import sys
         (Union[None, int, str], True),  # None at the beginning
     ]
 )
-@pytest.mark.skipif(sys.version_info == (3, 7), reason="This test is for Python 3.8 and higher")
 def test_is_optional(annotation, expected):
-    assert _is_optional_3_x(annotation) == expected
-
-
-@pytest.mark.parametrize(
-    "annotation,expected",
-    [
-        (Optional[int], True),
-        (Union[int, None], True),
-        (Union[None, int], True),
-        (int, False),
-        (List[int], False),
-        (Union[int, str], False),
-    ]
-)
-@pytest.mark.skipif(sys.version_info != (3, 7), reason="This test is for Python 3.7 only")
-def test_is_optional_3_7(annotation, expected):
-    assert _is_optional_3_7(annotation) == expected
+    assert _is_optional(annotation) == expected
 
 
 @pytest.mark.parametrize(
