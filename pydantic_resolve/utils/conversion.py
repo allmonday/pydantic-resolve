@@ -3,13 +3,11 @@ import functools
 import types
 from inspect import iscoroutine
 from typing import Any, Callable, Optional, Type, Union
-from pydantic import BaseModel, ValidationError, parse_obj_as
+from pydantic import BaseModel, ValidationError, TypeAdapter
 from dataclasses import is_dataclass
 import pydantic_resolve.constant as const
 from pydantic_resolve.utils.class_util import safe_issubclass
 
-
-from pydantic import BaseModel, TypeAdapter, ValidationError
 class TypeAdapterManager:
     apapters = {}
     

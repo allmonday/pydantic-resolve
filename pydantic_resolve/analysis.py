@@ -6,19 +6,14 @@ from collections import defaultdict
 from aiodataloader import DataLoader
 from pydantic import BaseModel
 from dataclasses import is_dataclass, fields as dc_fields
-
 import pydantic_resolve.constant as const
 import pydantic_resolve.utils.class_util as class_util
 from pydantic_resolve.utils.collector import ICollector
 from pydantic_resolve.utils.depend import Depends
 import pydantic_resolve.utils.params as params_util
 from pydantic_resolve.exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingCollector
-import sys
 
-if sys.version_info >= (3, 8):
-    from typing import TypedDict
-else:
-    from typing_extensions import TypedDict
+from typing import TypedDict
 
 class DataLoaderType(TypedDict):
     param: str
