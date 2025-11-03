@@ -10,11 +10,6 @@ def test_ensure_subset():
         a: str
         b: int
 
-    @dataclass
-    class BaseX():
-        a: str
-        b: int
-    
     @class_util.ensure_subset(Base)
     class ChildA(BaseModel):
         a: str
@@ -60,59 +55,3 @@ def test_ensure_subset():
             b: int
             c: int
 
-
-def test_ensure_subset_dataclass():
-    @dataclass
-    class Base:
-        a: str
-        b: int
-
-    @class_util.ensure_subset(Base)
-    @dataclass
-    class ChildA:
-        a: str
-
-    @class_util.ensure_subset(Base)
-    @dataclass
-    class ChildB:
-        a: str
-        c: int = 0
-        def resolve_c(self):
-            return 21
-
-    @class_util.ensure_subset(Base)
-    @dataclass
-    class ChildB1:
-        a: str
-        d: Optional[int]
-
-    # Test that ENSURE_SUBSET_REFERENCE is set correctly for dataclasses
-    assert hasattr(ChildA, const.ENSURE_SUBSET_REFERENCE)
-    assert getattr(ChildA, const.ENSURE_SUBSET_REFERENCE) is Base
-    assert hasattr(ChildB, const.ENSURE_SUBSET_REFERENCE)
-    assert getattr(ChildB, const.ENSURE_SUBSET_REFERENCE) is Base
-    assert hasattr(ChildB1, const.ENSURE_SUBSET_REFERENCE)
-    assert getattr(ChildB1, const.ENSURE_SUBSET_REFERENCE) is Base
-
-    with pytest.raises(AttributeError):
-        @class_util.ensure_subset(Base)
-        @dataclass
-        class ChildC:
-            x: str
-            y: str
-
-    with pytest.raises(AttributeError):
-        @class_util.ensure_subset(Base)
-        @dataclass
-        class ChildD:
-            x: str
-            y: int
-            z: int
-
-
-    with pytest.raises(TypeError):
-        @class_util.ensure_subset(Base)
-        class ChildE(BaseModel):
-            a: str
-            b: int
-            c: int

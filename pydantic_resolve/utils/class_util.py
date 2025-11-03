@@ -1,6 +1,5 @@
 import functools
-from dataclasses import is_dataclass, fields, MISSING
-from typing import Type, get_type_hints, List, Tuple
+from typing import Type, List, Tuple
 import pydantic_resolve.constant as const
 import pydantic_resolve.utils.class_util as class_util
 from pydantic_resolve.analysis import is_acceptable_kls
@@ -13,7 +12,7 @@ def rebuild(kls):
 
 def ensure_subset(base):
     """
-    used with pydantic class or dataclass to make sure a class's field is 
+    used with pydantic class to make sure a class's field is 
     subset of target class
 
     for pydantic v2, subclass with Optional[T] but without default value will raise exception
@@ -35,8 +34,6 @@ def ensure_subset(base):
     def wrap(kls):
         is_base_pydantic = safe_issubclass(base, BaseModel)
         is_kls_pydantic = safe_issubclass(kls, BaseModel)
-        is_base_dataclass = is_dataclass(base)
-        is_kls_dataclass = is_dataclass(kls)
 
         setattr(kls, const.ENSURE_SUBSET_REFERENCE, base)
 
@@ -52,22 +49,8 @@ def ensure_subset(base):
                             raise AttributeError(f'type of {k} not consistent with {base.__name__}')
                 return kls
             return inner()
-
-        elif is_base_dataclass and is_kls_dataclass:
-            @functools.wraps(kls)
-            def inner():
-                base_fields = {f.name: f.type for f in fields(base)}
-                for f in fields(kls):
-                    has_default = is_dataclass_field_has_default_value(f)
-                    if not has_default:
-                        if f.name not in base_fields:
-                            raise AttributeError(f'{f.name} not existed in {base.__name__}.')
-                        if base_fields[f.name] != f.type:
-                            raise AttributeError(f'type of {f.name} not consistent with {base.__name__}')
-                return kls
-            return inner()
         else:
-            raise TypeError('base and kls should both be Pydantic BaseModel or both be dataclass')
+            raise TypeError('base and kls should both be Pydantic BaseModel')
     return wrap
 
 
@@ -98,27 +81,11 @@ def get_pydantic_fields(kls):
             yield (name, allowed_types)  # type_ is the most inner type
 
 
-def get_dataclass_fields(kls):
-    for name, v in kls.__annotations__.items():
-        shelled_types = get_core_types(v)
-        allowed_types = [st for st in shelled_types if is_acceptable_kls(st)]
-        if allowed_types:
-            yield (name, allowed_types)
-
-
 def get_class_of_object(target):
     if isinstance(target, list):
         return target[0].__class__
     else:
         return target.__class__
-
-
-def is_dataclass_field_has_default_value(field):
-    if field.default is not MISSING or field.default_factory is not MISSING:
-        return True
-
-    typ = field.type
-    return _is_optional(typ)
 
 
 def update_forward_refs(kls):
@@ -140,22 +107,8 @@ def update_forward_refs(kls):
             for shelled_type in shelled_types:
                 update_forward_refs(shelled_type)
 
-    def update_dataclass_forward_refs(kls):
-        if not getattr(kls, const.DATACLASS_FORWARD_REF_UPDATED, False):
-            anno = get_type_hints(kls)
-            kls.__annotations__ = anno
-            setattr(kls, const.DATACLASS_FORWARD_REF_UPDATED, True)
-
-            for _, v in kls.__annotations__.items():
-                shelled_types = get_core_types(v)
-                for shelled_type in shelled_types:
-                    update_forward_refs(shelled_type)
-
     if safe_issubclass(kls, BaseModel):
         update_pydantic_forward_refs(kls)
-
-    if is_dataclass(kls):
-        update_dataclass_forward_refs(kls)
 
 
 def get_kls_full_name(kls):

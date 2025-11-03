@@ -1,6 +1,5 @@
 from __future__ import annotations
 from collections import defaultdict
-from dataclasses import dataclass, field, asdict
 from typing import List
 from pydantic import BaseModel
 from pydantic_resolve import Resolver, LoaderDepend, mapper

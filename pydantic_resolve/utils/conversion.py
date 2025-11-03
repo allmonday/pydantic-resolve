@@ -4,7 +4,6 @@ import types
 from inspect import iscoroutine
 from typing import Any, Callable, Optional, Type, Union
 from pydantic import BaseModel, ValidationError, TypeAdapter
-from dataclasses import is_dataclass
 import pydantic_resolve.constant as const
 from pydantic_resolve.utils.class_util import safe_issubclass
 
@@ -28,7 +27,7 @@ def try_parse_data_to_target_field_type(
         data,
         enable_from_attribute=False):
     """
-    parse to pydantic or dataclass object
+    parse input to pydantic object
     1. get type of target field
     2. parse
     """
@@ -46,9 +45,6 @@ def try_parse_data_to_target_field_type(
         # handle optional logic
         if data is None and _fields[field_name].is_required() == False:
             return data
-
-    elif is_dataclass(target):
-        field_type = target.__class__.__annotations__[field_name]
 
     # 2. parse
     if field_type:
@@ -90,11 +86,6 @@ def _get_mapping_rule(target, source) -> Optional[Callable]:
         else:
             raise AttributeError(f"{type(source)} -> {target.__name__}: pydantic can't handle non-dict data")
 
-    # dataclass
-    if is_dataclass(target):
-        if isinstance(source, dict):
-            return lambda t, s: t(**s)
-
     raise NotImplementedError(f"{type(source)} -> {target.__name__}: faild to get auto mapping rule and execut mapping, use your own rule instead.")
 
 
@@ -115,8 +106,7 @@ def mapper(func_or_class: Union[Callable, Type]):
         is func: run func
         is class: call auto_mapping to have a try
 
-    @dataclass
-    class K:
+    class K(BaseModel):
         id: int
 
         field: str = ''

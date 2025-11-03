@@ -1,11 +1,9 @@
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Optional, List
+from typing import List
 from pydantic import BaseModel
 from pydantic_resolve.analysis import Analytic
 
-@dataclass
-class Book:
+class Book(BaseModel):
     name: str
 
 class Student(BaseModel):

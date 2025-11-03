@@ -1,21 +1,6 @@
 from __future__ import annotations  # which will cause config error
-from dataclasses import dataclass
 from typing import Optional
-from pydantic import ConfigDict, BaseModel, ValidationError
-import pytest
-
-def test_dc():
-    @dataclass
-    class A:
-        name: str
-
-    @dataclass
-    class B:
-        a: A
-
-    b = B(a=A(name='kikodo'))
-    assert isinstance(b, B)
-
+from pydantic import ConfigDict, BaseModel
 
 def test_parse():
     class B(BaseModel):

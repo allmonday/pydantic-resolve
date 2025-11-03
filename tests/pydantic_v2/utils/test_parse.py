@@ -2,7 +2,6 @@ from pydantic_resolve.utils import conversion
 from typing import Optional
 from pydantic import ConfigDict, BaseModel, ValidationError
 import pytest
-from dataclasses import dataclass
 
 def test_pydantic():
     class A(BaseModel):
@@ -19,50 +18,12 @@ def test_pydantic():
         conversion.try_parse_data_to_target_field_type(a, 'name', [1,2,3])
 
 
-def test_dataclass():
-    @dataclass
-    class B:
-        age: int
-
-    @dataclass
-    class A:
-        b: Optional[B] 
-    
-    a = A(b=None)
-    value = conversion.try_parse_data_to_target_field_type(a, 'b', None)
-    assert value is None 
-
-    value = conversion.try_parse_data_to_target_field_type(a, 'b', {'age': 21})
-    assert value == B(age=21)
-
-    with pytest.raises(ValidationError):
-        conversion.try_parse_data_to_target_field_type(a, 'b', [1,2,3])
-
-def test_mix():
-    class B(BaseModel):
-        age: int
-
-    @dataclass
-    class A:
-        b: Optional[B] 
-    
-    a = A(b=None)
-    value = conversion.try_parse_data_to_target_field_type(a, 'b', None)
-    assert value is None 
-
-    value = conversion.try_parse_data_to_target_field_type(a, 'b', {'age': 21})
-    assert value == B(age=21)
-
-    with pytest.raises(ValidationError):
-        conversion.try_parse_data_to_target_field_type(a, 'b', [1,2,3])
-
 def test_orm():
     class B(BaseModel):
         age: int
         model_config = ConfigDict(from_attributes=True)
 
-    @dataclass
-    class A:
+    class A(BaseModel):
         b: Optional[B] 
 
     class BB():

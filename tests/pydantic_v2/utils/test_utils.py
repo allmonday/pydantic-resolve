@@ -1,5 +1,4 @@
 import asyncio
-from dataclasses import dataclass
 from typing import List
 from pydantic_resolve.utils import experiment
 from pydantic import ConfigDict, BaseModel
@@ -119,23 +118,6 @@ async def test_mapper_1():
     ret2 = await bar()
     assert ret == A(a=1)
     assert ret2 == A(a=1)
-
-
-def test_auto_mapper_1():
-    class A(BaseModel):
-        a: int
-    
-    params = (A, {'a': 1})
-    ret = pydantic_resolve.utils.conversion._get_mapping_rule(*params)(*params)  # type:ignore
-    assert ret == A(a=1)
-    
-    @dataclass
-    class B:
-        a: int
-
-    params2 = (B, {'a': 1})
-    ret2 = pydantic_resolve.utils.conversion._get_mapping_rule(*params2)(*params2) # type:ignore
-    assert ret2 == B(a=1)
 
 
 def test_auto_mapper_2():
