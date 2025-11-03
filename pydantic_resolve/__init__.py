@@ -10,6 +10,7 @@ from .exceptions import (
     MissingCollector)
 from .resolver import Resolver
 from .utils.depend import LoaderDepend, Loader
+from .utils.subset import DefineSubset
 from .utils.openapi import (
     model_config)
 
@@ -33,4 +34,5 @@ __all__ = [
     'ensure_subset',
     'model_config',
     'copy_dataloader_kls',
+    'DefineSubset',
 ]
