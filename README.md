@@ -17,6 +17,10 @@ Compared with GraphQL, both traverse descendant nodes recursively and support re
 
 ![](./docs/images/lifecycle.jpeg)
 
+pydantic class can be initialized by deep nested data (which means descendant are provided in advance), then just need to run the post process.
+
+![](./docs/images/preload.png)
+
 Within post hooks, developers can read descendant data, adjust existing fields, compute derived fields.
 
 Post hooks also enable bidirectional data flow: they can read from ancestor nodes and push values up to ancestors, which is useful for adapting data to varied business requirements.
