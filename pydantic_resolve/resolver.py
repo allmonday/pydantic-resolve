@@ -14,7 +14,6 @@ import pydantic_resolve.utils.class_util as class_util
 import pydantic_resolve.constant as const
 import pydantic_resolve.utils.profile as profile_util
 
-
 T = TypeVar("T")
 
 class Resolver:
@@ -383,7 +382,13 @@ class Resolver:
         # so user can provide the root class by annotation parameter
         root_class = self.annotation if self.annotation else class_util.get_class_of_object(node)
 
-        self.metadata = analysis.convert_metadata_key_as_kls(analysis.Analytic().scan(root_class))
+        meta = getattr(root_class, const.METADATA_CACHE, None)
+        if meta:
+            self.metadata = meta
+        else:
+            metadata = analysis.convert_metadata_key_as_kls(analysis.Analytic().scan(root_class))
+            setattr(root_class, const.METADATA_CACHE, metadata) 
+            self.metadata = metadata
 
         self.loader_instance_cache = analysis.validate_and_create_loader_instance(
             self.loader_params,
