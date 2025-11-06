@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from pydantic_resolve import Resolver
-from pydantic_resolve.constant import METADATA_CACHE
+from pydantic_resolve.resolver import METADATA_CACHE
 import pytest
 
 
@@ -18,7 +18,8 @@ async def test_cache_of_metadata():
         'name': 'hello',
     }
     assert result.model_dump() == expected
-    assert getattr(Container, METADATA_CACHE) is not None
+
+    assert Container in METADATA_CACHE.keys()
 
     c2 = Container()
     result2 = await Resolver().resolve(c2)
