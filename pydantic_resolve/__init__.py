@@ -13,6 +13,7 @@ from .utils.depend import LoaderDepend, Loader
 from .utils.subset import DefineSubset
 from .utils.openapi import (
     model_config)
+from .utils.er_diagram import Relationship, ErConfig, LoadBy
 
 
 __all__ = [
@@ -35,4 +36,8 @@ __all__ = [
     'model_config',
     'copy_dataloader_kls',
     'DefineSubset',
+
+    'ErConfig',
+    'Relationship',
+    'LoadBy',
 ]
