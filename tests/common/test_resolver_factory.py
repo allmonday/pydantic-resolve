@@ -1,9 +1,9 @@
 import pytest
 from typing import Optional, Annotated
 import pydantic_resolve.constant as const
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from pydantic_resolve.utils.resolver_factory import config_resolver
-from pydantic_resolve import ErConfig, Relationship, LoadBy
+from pydantic_resolve import ErConfig, Relationship, LoadBy, DefineSubset
 from aiodataloader import DataLoader
 
 
@@ -53,8 +53,22 @@ class QQ(Q):
     
 
 @pytest.mark.asyncio
-async def test_resolver_factory_():
+async def test_resolver_factory_with_er_configs_inherit():
     MyResolver = config_resolver('MyResolver', er_configs=configs)
     qq = QQ(id=1, name="qq", user_id=1)
+    qq = await MyResolver().resolve(qq)
+    assert qq.user is not None
+
+
+class QQQ(DefineSubset):
+    __pydantic_resolve_subset__ = (Q, (id))
+
+    user: Annotated[Optional[User], LoadBy('user_id')] = None
+
+
+@pytest.mark.asyncio
+async def test_resolver_factory_with_er_configs_subset():
+    MyResolver = config_resolver('MyResolver', er_configs=configs)
+    qq = QQQ(id=1, user_id=1)
     qq = await MyResolver().resolve(qq)
     assert qq.user is not None
