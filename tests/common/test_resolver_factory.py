@@ -23,7 +23,7 @@ async def test_resolver_factory():
     assert getattr(MyResolver, const.ER_DIAGRAM, None) == []
 
 
-class Q(BaseModel):
+class Biz(BaseModel):
     id: int
     name: str
     user_id: int
@@ -43,25 +43,38 @@ class UserLoader(DataLoader):
         return {user_map.get(k, None) for k in keys}
 
 configs = [
-    ErConfig(kls=Q, relationships=[
+    ErConfig(kls=Biz, relationships=[
         Relationship(field='user_id', target_kls=User, loader=UserLoader)
     ])
 ]
 
-class QQ(Q):
+class BizCase1(Biz):
     user: Annotated[Optional[User], LoadBy('user_id')] = None
     
 
 @pytest.mark.asyncio
 async def test_resolver_factory_with_er_configs_inherit():
     MyResolver = config_resolver('MyResolver', er_configs=configs)
-    qq = QQ(id=1, name="qq", user_id=1)
+    qq = BizCase1(id=1, name="qq", user_id=1)
     qq = await MyResolver().resolve(qq)
-    assert qq.user is not None
+    assert qq.user.name == "a"
+
+class SubUser(DefineSubset):
+    __pydantic_resolve_subset__ = (User, ('id'))
+
+class BizCase2(Biz):
+    user: Annotated[Optional[SubUser], LoadBy('user_id')] = None
+
+@pytest.mark.asyncio
+async def test_resolver_factory_with_er_configs_inherit_2():
+    MyResolver = config_resolver('MyResolver', er_configs=configs)
+    qq = BizCase2(id=1, name="qq", user_id=1)
+    qq = await MyResolver().resolve(qq)
+    assert qq.user.id == 1
 
 
 class QQQ(DefineSubset):
-    __pydantic_resolve_subset__ = (Q, (id))
+    __pydantic_resolve_subset__ = (Biz, (id))
 
     user: Annotated[Optional[User], LoadBy('user_id')] = None
 
