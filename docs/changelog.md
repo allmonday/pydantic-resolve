@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.0
+
+### v2.0.0
+- features
+    - add er_config
+    - a new version of subset: DefineSubset
+- enhancements
+    - caching metadata generated from analysis process
+- changes
+    - remove support of pydantic v1 and dataclass
+    - 3.10 now is the minimal requirement
+
 ## v1.13
 
 ### v1.13.5 (2025.10.23)
