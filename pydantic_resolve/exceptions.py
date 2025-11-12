@@ -12,3 +12,15 @@ class GlobalLoaderFieldOverlappedError(Exception):
 
 class MissingCollector(Exception):
     pass
+
+
+class DuplicateErConfigError(Exception):
+    pass
+
+
+class DuplicateRelationshipError(Exception):
+    pass
+
+
+class InvalidRelationshipError(Exception):
+    pass

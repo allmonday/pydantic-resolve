@@ -7,8 +7,8 @@ from aiodataloader import DataLoader
 @dataclass
 class Relationship:
     field: str
-    target_kls: list[Type[BaseModel]] | Type[BaseModel] | Optional[Type[BaseModel]]
-    loader: Callable | Type[DataLoader]
+    target_kls: Any
+    loader: Callable
 
 @dataclass
 class ErConfig:

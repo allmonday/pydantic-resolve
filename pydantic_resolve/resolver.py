@@ -18,6 +18,8 @@ METADATA_CACHE = {}
 T = TypeVar("T")
 
 class Resolver:
+    __pydantic_resolve_er_diagram__ = None
+
     def __init__(
             self,
             loader_filters: Optional[Dict[Any, Dict[str, Any]]] = None,  # deprecated
@@ -386,7 +388,8 @@ class Resolver:
         if root_class in METADATA_CACHE:
             self.metadata = METADATA_CACHE[root_class]
         else:
-            metadata = analysis.convert_metadata_key_as_kls(analysis.Analytic().scan(root_class))
+            metadata = analysis.convert_metadata_key_as_kls(
+                analysis.Analytic(er_configs=getattr(self, const.ER_DIAGRAM)).scan(root_class))
             METADATA_CACHE[root_class] = metadata
             self.metadata = metadata
 

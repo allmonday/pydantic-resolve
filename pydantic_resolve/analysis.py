@@ -8,7 +8,8 @@ from pydantic import BaseModel
 import pydantic_resolve.constant as const
 import pydantic_resolve.utils.class_util as class_util
 from pydantic_resolve.utils.collector import ICollector
-from pydantic_resolve.utils.depend import Depends
+from pydantic_resolve.utils.depend import Depends, LoaderDepend
+from pydantic_resolve.utils.er_diagram import ErConfig
 import pydantic_resolve.utils.params as params_util
 from pydantic_resolve.exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingCollector
 
@@ -334,10 +335,88 @@ class Analytic:
     Internal helpers mirror the original inner functions as instance methods.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, er_configs: Optional[List[ErConfig]]=None) -> None:
         self.expose_set = set()
         self.collect_set = set()
         self.metadata: MetaType = {}
+        self.er_configs_map = { config.kls: config for config in er_configs } if er_configs else None
+    
+    def _pre_generate_resolve_method_with_dataloader(self, kls: Type):
+        """
+        handle kls with er_config
+        - confirm the base of kls and find it's config
+            - find relationship by field name
+                - ensure field name exist
+                - get class's base class, and try to find the corresponding relationship
+                    - if not found, raise error
+            - attach resolver with dataloader, take user for example
+                - resolve_user(self, loader=Loader(UserDataLoader)):
+                    return loader.load(self.user_id)
+        """
+        if self.er_configs_map is None:
+            return
+
+        loadby_fields = list(class_util.get_pydantic_field_items_with_load_by_in_metadata(kls))
+        if not loadby_fields:
+            return
+        
+        def find_relationships(target: Type):
+            seen: set[Type] = set()
+            stack: list[Type] = [target]
+
+            while stack:
+                current = stack.pop()
+                if current in seen or current is object:  # TODO: confirm this part
+                    continue
+                seen.add(current)
+
+                config = self.er_configs_map.get(current)
+                if config:
+                    relationship_map = {rel.field: rel for rel in config.relationships}
+                    return relationship_map
+
+                subset_parent = getattr(current, const.ENSURE_SUBSET_REFERENCE, None)
+                if subset_parent and subset_parent not in seen:
+                    stack.append(subset_parent)
+
+                for base in getattr(current, '__bases__', ()):  # type: ignore[attr-defined]
+                    if class_util.safe_issubclass(base, BaseModel) and base not in seen:
+                        stack.append(base)
+            return {}
+
+        candidate_relationship_map = find_relationships(kls)
+
+        for field_name, loader_info in loadby_fields:
+            method_name = f'{const.RESOLVE_PREFIX}{field_name}'
+
+            # if already has resolve_method, use it instead.
+            if hasattr(kls, method_name): 
+                continue
+
+            relationship = candidate_relationship_map.get(loader_info.by)
+
+            if relationship is None:
+                raise AttributeError(
+                    f'Relationship for field "{field_name}" using "{loader_info.by}" not found'
+                )
+            # TODO: validate target_kls match
+            # Optional[list[T]] is compatible with list[T] 
+            # but list[T] is not compatible with T
+
+            loader = relationship.loader
+            if loader is None:
+                raise AttributeError(
+                    f'Loader is required for relationship "{loader_info.by}" on {kls.__name__}'
+                )
+
+            def resolver_factory(key: str, default_loader):
+                def resolve_method(self, loader=default_loader):
+                    return loader.load(getattr(self, key))
+                resolve_method.__name__ = method_name
+                resolve_method.__qualname__ = f'{kls.__name__}.{method_name}'
+                return resolve_method
+
+            setattr(kls, method_name, resolver_factory(loader_info.by, LoaderDepend(loader)))
 
     def _get_request_type_for_loader(self, object_field_pairs, field_name: str):
         return object_field_pairs.get(field_name)
@@ -348,7 +427,7 @@ class Analytic:
             object_fields = list(class_util.get_pydantic_fields(kls))  # dive and recursively analysis
         else:
             raise AttributeError('invalid type: should be pydantic object')  # noqa
-        return all_fields, object_fields, {x: y for x, y in object_fields}
+        return all_fields, object_fields, {k: v for k, v in object_fields}
 
     def _has_post_default_handler(self, kls: Type) -> bool:
         fields = dir(kls)
@@ -445,6 +524,8 @@ class Analytic:
             if hit['should_traverse'] or self._has_config(hit):
                 self._populate_ancestors(ancestors)
             return
+
+        self._pre_generate_resolve_method_with_dataloader(kls)
 
         # - prepare fields, with resolve_, post_ reserved
         all_fields, object_fields, object_field_pairs = self._get_all_fields_and_object_fields(kls)

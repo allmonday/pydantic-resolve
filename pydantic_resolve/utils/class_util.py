@@ -1,9 +1,10 @@
 import functools
-from typing import Type, List, Tuple
+from typing import Type, List, Tuple, Iterator
 import pydantic_resolve.constant as const
 import pydantic_resolve.utils.class_util as class_util
 from pydantic_resolve.analysis import is_acceptable_kls
-from pydantic_resolve.utils.types import get_type, _is_optional, get_core_types
+from pydantic_resolve.utils.er_diagram import LoaderInfo
+from pydantic_resolve.utils.types import get_type, get_core_types
 from pydantic import BaseModel
 
 def rebuild(kls):
@@ -60,6 +61,16 @@ def get_pydantic_field_items(kls):
 
 def get_pydantic_field_keys(kls) -> str:
     return kls.model_fields.keys()
+
+
+def get_pydantic_field_items_with_load_by_in_metadata(kls) -> Iterator[Tuple[str, LoaderInfo]]:
+    items = kls.model_fields.items()
+
+    for name, v in items:
+        metadata = v.metadata
+        for meta in metadata:
+            if isinstance(meta, LoaderInfo):
+                yield name, meta 
 
 
 def get_pydantic_field_values(kls):
