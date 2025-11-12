@@ -63,7 +63,27 @@ def get_pydantic_field_keys(kls) -> str:
     return kls.model_fields.keys()
 
 
-def get_pydantic_field_items_with_load_by_in_metadata(kls) -> Iterator[Tuple[str, LoaderInfo]]:
+def get_pydantic_field_items_with_load_by(kls) -> Iterator[Tuple[str, LoaderInfo]]:
+    """
+    find fields which have LoadBy metadata.
+
+    example:
+
+    class Base(BaseModel):
+        id: int
+        name: str
+        b_id: int
+    
+    class B(BaseModel):
+        id: int
+        name: str
+
+    class A(Base):
+        b: Annotated[Optional[B], LoadBy('b_id')] = None
+        extra: str = ''
+    
+    return ('b', LoadBy('b_id'))
+    """
     items = kls.model_fields.items()
 
     for name, v in items:

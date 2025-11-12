@@ -39,9 +39,9 @@ class BizCase1(Biz):
 @pytest.mark.asyncio
 async def test_resolver_factory_with_er_configs_inherit():
     MyResolver = config_resolver('MyResolver', er_configs=configs)
-    qq = BizCase1(id=1, name="qq", user_id=1)
-    qq = await MyResolver().resolve(qq)
-    assert qq.user.name == "a"
+    d = BizCase1(id=1, name="qq", user_id=1)
+    d = await MyResolver().resolve(d)
+    assert d.user.name == "a"
 
 class SubUser(DefineSubset):
     __pydantic_resolve_subset__ = (User, ['id'])
@@ -52,12 +52,12 @@ class BizCase2(Biz):
 @pytest.mark.asyncio
 async def test_resolver_factory_with_er_configs_inherit_2():
     MyResolver = config_resolver('MyResolver', er_configs=configs)
-    qq = BizCase2(id=1, name="qq", user_id=1)
-    qq = await MyResolver().resolve(qq)
-    assert qq.user.id == 1
+    d = BizCase2(id=1, name="qq", user_id=1)
+    d = await MyResolver().resolve(d)
+    assert d.user.id == 1
 
 
-class QQQ(DefineSubset):
+class BizCase3(DefineSubset):
     __pydantic_resolve_subset__ = (Biz, ['id', 'user_id'])
     user: Annotated[Optional[User], LoadBy('user_id')] = None
 
@@ -65,6 +65,16 @@ class QQQ(DefineSubset):
 @pytest.mark.asyncio
 async def test_resolver_factory_with_er_configs_subset():
     MyResolver = config_resolver('MyResolver', er_configs=configs)
-    qq = QQQ(id=1, user_id=1)
-    qq = await MyResolver().resolve(qq)
-    assert qq.user is not None
+    d = BizCase3(id=1, user_id=1)
+    d = await MyResolver().resolve(d)
+    assert d.user is not None
+
+class BizCase4(BaseModel):
+    user: Annotated[Optional[User], LoadBy('user_id')] = None
+
+@pytest.mark.asyncio
+async def test_resolver_factory_of_er_config_not_found():
+    MyResolver = config_resolver('MyResolver', er_configs=configs)
+    d = BizCase4(id=1, user_id=1)
+    with pytest.raises(AttributeError):
+        await MyResolver().resolve(d)

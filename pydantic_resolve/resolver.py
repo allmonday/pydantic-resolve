@@ -18,7 +18,8 @@ METADATA_CACHE = {}
 T = TypeVar("T")
 
 class Resolver:
-    __pydantic_resolve_er_diagram__ = None
+    # define class attribute using constant to avoid hardcoded name
+    locals()[const.ER_DIAGRAM] = None
 
     def __init__(
             self,
@@ -389,7 +390,10 @@ class Resolver:
             self.metadata = METADATA_CACHE[root_class]
         else:
             metadata = analysis.convert_metadata_key_as_kls(
-                analysis.Analytic(er_configs=getattr(self, const.ER_DIAGRAM)).scan(root_class))
+                analysis.Analytic(
+                    er_configs=getattr(self, const.ER_DIAGRAM)
+                ).scan(root_class)
+            )
             METADATA_CACHE[root_class] = metadata
             self.metadata = metadata
 

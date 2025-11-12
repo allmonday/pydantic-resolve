@@ -327,14 +327,6 @@ def validate_and_create_loader_instance(
 
 
 class Analytic:
-    """Refactor of scan_and_store_metadata into a class-based analyzer.
-
-    Public API:
-      - scan(self, root_class) -> MetaType
-
-    Internal helpers mirror the original inner functions as instance methods.
-    """
-
     def __init__(self, er_configs: Optional[List[ErConfig]]=None) -> None:
         self.expose_set = set()
         self.collect_set = set()
@@ -356,8 +348,8 @@ class Analytic:
         if self.er_configs_map is None:
             return
 
-        loadby_fields = list(class_util.get_pydantic_field_items_with_load_by_in_metadata(kls))
-        if not loadby_fields:
+        auto_loader_resolver_pairs = list(class_util.get_pydantic_field_items_with_load_by(kls))
+        if not auto_loader_resolver_pairs:
             return
         
         def find_relationships(target: Type):
@@ -382,18 +374,19 @@ class Analytic:
                 for base in getattr(current, '__bases__', ()):  # type: ignore[attr-defined]
                     if class_util.safe_issubclass(base, BaseModel) and base not in seen:
                         stack.append(base)
-            return {}
 
-        candidate_relationship_map = find_relationships(kls)
+            raise AttributeError(f'Relationships not found for {target.__name__}')
 
-        for field_name, loader_info in loadby_fields:
+        relationship_map = find_relationships(kls)
+
+        for field_name, loader_info in auto_loader_resolver_pairs:
             method_name = f'{const.RESOLVE_PREFIX}{field_name}'
 
             # if already has resolve_method, use it instead.
             if hasattr(kls, method_name): 
                 continue
 
-            relationship = candidate_relationship_map.get(loader_info.by)
+            relationship = relationship_map.get(loader_info.by)
 
             if relationship is None:
                 raise AttributeError(
