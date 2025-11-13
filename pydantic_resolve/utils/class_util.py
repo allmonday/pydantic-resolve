@@ -1,5 +1,5 @@
 import functools
-from typing import Type, List, Tuple, Iterator
+from typing import Type, List, Tuple, Iterator, get_origin, get_args
 import pydantic_resolve.constant as const
 import pydantic_resolve.utils.class_util as class_util
 from pydantic_resolve.analysis import is_acceptable_kls
@@ -63,7 +63,7 @@ def get_pydantic_field_keys(kls) -> str:
     return kls.model_fields.keys()
 
 
-def get_pydantic_field_items_with_load_by(kls) -> Iterator[Tuple[str, LoaderInfo]]:
+def get_pydantic_field_items_with_load_by(kls) -> Iterator[Tuple[str, LoaderInfo, Type]]:
     """
     find fields which have LoadBy metadata.
 
@@ -90,7 +90,7 @@ def get_pydantic_field_items_with_load_by(kls) -> Iterator[Tuple[str, LoaderInfo
         metadata = v.metadata
         for meta in metadata:
             if isinstance(meta, LoaderInfo):
-                yield name, meta 
+                yield name, meta, v.annotation 
 
 
 def get_pydantic_field_values(kls):
@@ -166,3 +166,79 @@ def safe_issubclass(kls, classinfo):
         return issubclass(kls, classinfo)
     except TypeError:
         return False
+    
+
+def is_compatible_type(src_type, target_type) -> bool:
+    """
+    1. try to shell optional in src_type and then compare with target_type
+    2. if src_type is a subset of target_type, or subset of subset (visit recursively until find), return True
+    3. if src_type is subclass of target_type, or subclass of subclass (visit recursively until find), return True
+    4. Union and UnionType is not compatible
+    """
+    # Helper: unwrap Optional[X] in source type only
+    def unwrap_optional(tp):
+        origin = get_origin(tp)
+        if origin is None:
+            return tp
+        # typing.Union and PEP604 (types.UnionType) both have origin of Union/UnionType
+        if str(origin) in {"typing.Union", "types.UnionType"}:
+            args = [a for a in get_args(tp) if a is not type(None)]
+            if len(args) == 1:
+                return args[0]
+        return tp
+
+    # Helper: detect any non-optional union
+    def is_union(tp):
+        origin = get_origin(tp)
+        return str(origin) in {"typing.Union", "types.UnionType"}
+
+    # Helper: subset ancestry check via ENSURE_SUBSET_REFERENCE chain
+    def is_subset_of(src, tgt) -> bool:
+        current = src
+        while current is not None:
+            if current is tgt:
+                return True
+            current = getattr(current, const.ENSURE_SUBSET_REFERENCE, None)
+        return False
+
+    # Helper: list element compatibility
+    def is_list_compatible(src, tgt) -> bool:
+        src_origin, tgt_origin = get_origin(src), get_origin(tgt)
+        if src_origin is list and tgt_origin is list:
+            src_args, tgt_args = get_args(src), get_args(tgt)
+            if not src_args or not tgt_args:
+                return False
+            return is_compatible_type(src_args[0], tgt_args[0])
+        return False
+
+    # 1) unwrap Optional in src_type
+    src = unwrap_optional(src_type)
+    tgt = target_type
+
+    # 4) unions (other than Optional case already unwrapped) are incompatible
+    if is_union(src) or is_union(tgt):
+        return False
+
+    # 3) handle list generics (typing.List and built-in list share origin list)
+    if is_list_compatible(src, tgt):
+        return True
+
+    # Direct equality
+    if src is tgt:
+        return True
+
+    # 2) subset chain match
+    try:
+        if is_subset_of(src, tgt):
+            return True
+    except Exception:
+        pass
+
+    # 3) subclass chain
+    try:
+        if safe_issubclass(src, tgt):
+            return True
+    except Exception:
+        pass
+
+    return False

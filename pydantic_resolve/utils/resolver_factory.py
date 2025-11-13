@@ -35,8 +35,8 @@ def ensure_unique_er_configs(er_configs: Optional[list[ErConfig]]) -> None:
 
     # Validate relationships within each ErConfig
     for cfg in er_configs:
-        field_seen: set[str] = set()
-        field_dups: set[str] = set()
+        pair_seen: set[tuple[str, frozenset]] = set()  # (field, frozenset(target_kls))
+        pair_dups: set[tuple[str, frozenset]] = set()
 
         for rel in cfg.relationships or []:
             # validate required fields
@@ -55,19 +55,22 @@ def ensure_unique_er_configs(er_configs: Optional[list[ErConfig]]) -> None:
                     raise InvalidRelationshipError(f'relationship.target_kls list must not be empty on {cfg.kls.__name__}')
                 if any(t is None for t in rel.target_kls):
                     raise InvalidRelationshipError(f'relationship.target_kls must not contain None on {cfg.kls.__name__}')
+                targets = frozenset(rel.target_kls)
+            else:
+                targets = frozenset({rel.target_kls})
 
             if rel.loader is None:
                 raise InvalidRelationshipError(f'relationship.loader must not be None on {cfg.kls.__name__}')
 
-            # check duplicate field within the same ErConfig
-            if rel.field in field_seen:
-                field_dups.add(rel.field)
+            key = (rel.field, targets)
+            if key in pair_seen:
+                pair_dups.add(key)
             else:
-                field_seen.add(rel.field)
+                pair_seen.add(key)
 
-        if field_dups:
-            dups = ', '.join(sorted(field_dups))
-            raise DuplicateRelationshipError(f'duplicate relationships by field on {cfg.kls.__name__}: {dups}')
+        if pair_dups:
+            details = ', '.join([f"{field} -> {[t.__name__ for t in targets]}" for field, targets in sorted(pair_dups, key=lambda x: x[0])])
+            raise DuplicateRelationshipError(f'duplicate relationships (same field and target_kls) on {cfg.kls.__name__}: {details}')
 
 
 def config_resolver(name: Optional[str]=None, 

@@ -12,6 +12,9 @@ class User(BaseModel):
     def resolve_name(self):
         return self.name + '!!!'
 
+class Admin(BaseModel):
+    name: str
+
 @pytest.mark.asyncio
 async def test_resolver_factory():
     MyResolver = config_resolver('MyResolver', [])
@@ -45,7 +48,7 @@ def test_config_resolver_duplicate_er_config():
         config_resolver('MyResolver', er_configs)
 
 
-def test_config_resolver_duplicate_relationship_field():
+def test_config_resolver_duplicate_relationship_same_target():
     er_configs = [
         ErConfig(
             kls=User,
@@ -58,6 +61,22 @@ def test_config_resolver_duplicate_relationship_field():
 
     with pytest.raises(DuplicateRelationshipError):
         config_resolver('MyResolver', er_configs)
+
+
+def test_config_resolver_allow_duplicate_field_different_target():
+    er_configs = [
+        ErConfig(
+            kls=User,
+            relationships=[
+                Relationship(field='name', target_kls=User, loader=lambda keys: keys),
+                Relationship(field='name', target_kls=Admin, loader=lambda keys: keys),
+            ],
+        )
+    ]
+
+    # should not raise
+    MyResolver = config_resolver('MyResolver', er_configs)
+    assert MyResolver is not None
 
 
 def test_config_resolver_invalid_relationship_empty_fields():

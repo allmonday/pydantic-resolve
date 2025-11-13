@@ -332,84 +332,60 @@ class Analytic:
         self.collect_set = set()
         self.metadata: MetaType = {}
         self.er_configs_map = { config.kls: config for config in er_configs } if er_configs else None
+
+    def _identify_config(self, target: Type):
+        print(target)
+        for kls, cfg in self.er_configs_map.items():
+            if class_util.is_compatible_type(target, kls):
+                return cfg
+        raise AttributeError(f'No ErConfig found for {target.__name__}')
+    
+    def _identify_relationship(self, config: ErConfig, loadby: str, target_kls: Type):
+        for rel in config.relationships:
+            if rel.field != loadby:
+                continue
+
+            if class_util.is_compatible_type(target_kls, rel.target_kls):
+                return rel
+
+        raise AttributeError(
+            f'Relationship for "{target_kls.__name__}" using "{loadby}" not found'
+        )
     
     def _pre_generate_resolve_method_with_dataloader(self, kls: Type):
         """
         handle kls with er_config
+
         - confirm the base of kls and find it's config
-            - find relationship by field name
-                - ensure field name exist
-                - get class's base class, and try to find the corresponding relationship
-                    - if not found, raise error
+            - find er_config by kls
+                - find one or more er_config's relationships by field_name, otherwise raise exception
+                    - find target relationship by compare field's annotation and target_kls (use is_compatible_type function)
             - attach resolver with dataloader, take user for example
                 - resolve_user(self, loader=Loader(UserDataLoader)):
                     return loader.load(self.user_id)
         """
-        if self.er_configs_map is None:
-            return
+        def resolver_factory(key: str, default_loader):
+            def resolve_method(self, loader=default_loader):
+                return loader.load(getattr(self, key))
+            resolve_method.__name__ = method_name
+            resolve_method.__qualname__ = f'{kls.__name__}.{method_name}'
+            return resolve_method
 
-        auto_loader_resolver_pairs = list(class_util.get_pydantic_field_items_with_load_by(kls))
-        if not auto_loader_resolver_pairs:
-            return
-        
-        def find_relationships(target: Type):
-            seen: set[Type] = set()
-            stack: list[Type] = [target]
+        if self.er_configs_map is None: return
 
-            while stack:
-                current = stack.pop()
-                if current in seen or current is object:  # TODO: confirm this part
-                    continue
-                seen.add(current)
+        auto_loader_fields = list(class_util.get_pydantic_field_items_with_load_by(kls))
+        if not auto_loader_fields: return
 
-                config = self.er_configs_map.get(current)
-                if config:
-                    relationship_map = {rel.field: rel for rel in config.relationships}
-                    return relationship_map
-
-                subset_parent = getattr(current, const.ENSURE_SUBSET_REFERENCE, None)
-                if subset_parent and subset_parent not in seen:
-                    stack.append(subset_parent)
-
-                for base in getattr(current, '__bases__', ()):  # type: ignore[attr-defined]
-                    if class_util.safe_issubclass(base, BaseModel) and base not in seen:
-                        stack.append(base)
-
-            raise AttributeError(f'Relationships not found for {target.__name__}')
-
-        relationship_map = find_relationships(kls)
-
-        for field_name, loader_info in auto_loader_resolver_pairs:
+        candidate_cfg = self._identify_config(kls)
+        for field_name, loader_info, annotation in auto_loader_fields:
             method_name = f'{const.RESOLVE_PREFIX}{field_name}'
+            if hasattr(kls, method_name): continue # skip
+            relationship = self._identify_relationship(
+                config=candidate_cfg, 
+                loadby=loader_info.by,
+                target_kls=annotation)
+            setattr(kls, method_name, resolver_factory(loader_info.by, LoaderDepend(relationship.loader)))
 
-            # if already has resolve_method, use it instead.
-            if hasattr(kls, method_name): 
-                continue
-
-            relationship = relationship_map.get(loader_info.by)
-
-            if relationship is None:
-                raise AttributeError(
-                    f'Relationship for field "{field_name}" using "{loader_info.by}" not found'
-                )
-            # TODO: validate target_kls match
-            # Optional[list[T]] is compatible with list[T] 
-            # but list[T] is not compatible with T
-
-            loader = relationship.loader
-            if loader is None:
-                raise AttributeError(
-                    f'Loader is required for relationship "{loader_info.by}" on {kls.__name__}'
-                )
-
-            def resolver_factory(key: str, default_loader):
-                def resolve_method(self, loader=default_loader):
-                    return loader.load(getattr(self, key))
-                resolve_method.__name__ = method_name
-                resolve_method.__qualname__ = f'{kls.__name__}.{method_name}'
-                return resolve_method
-
-            setattr(kls, method_name, resolver_factory(loader_info.by, LoaderDepend(loader)))
 
     def _get_request_type_for_loader(self, object_field_pairs, field_name: str):
         return object_field_pairs.get(field_name)

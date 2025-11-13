@@ -6,7 +6,7 @@ from aiodataloader import DataLoader
 
 @dataclass
 class Relationship:
-    field: str
+    field: str  # fk name
     target_kls: Any
     loader: Callable
 
