@@ -10,7 +10,7 @@ import pydantic_resolve.constant as const
 import pydantic_resolve.utils.class_util as class_util
 from pydantic_resolve.utils.collector import ICollector
 from pydantic_resolve.utils.depend import Depends, LoaderDepend
-from pydantic_resolve.utils.er_diagram import ErConfig
+from pydantic_resolve.utils.er_diagram import ErConfig, ErDiagram
 import pydantic_resolve.utils.params as params_util
 from pydantic_resolve.exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingCollector
 
@@ -328,11 +328,11 @@ def validate_and_create_loader_instance(
 
 
 class Analytic:
-    def __init__(self, er_configs: Optional[List[ErConfig]]=None) -> None:
+    def __init__(self, er_diagram: Optional[ErDiagram]=None) -> None:
         self.expose_set = set()
         self.collect_set = set()
         self.metadata: MetaType = {}
-        self.er_configs_map = { config.kls: config for config in er_configs } if er_configs else None
+        self.er_configs_map = { config.kls: config for config in er_diagram.configs } if er_diagram else None
 
     def _identify_config(self, target: Type):
         for kls, cfg in self.er_configs_map.items():

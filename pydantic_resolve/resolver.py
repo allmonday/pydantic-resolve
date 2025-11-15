@@ -391,7 +391,7 @@ class Resolver:
         else:
             metadata = analysis.convert_metadata_key_as_kls(
                 analysis.Analytic(
-                    er_configs=getattr(self, const.ER_DIAGRAM)
+                    er_diagram=getattr(self, const.ER_DIAGRAM)
                 ).scan(root_class)
             )
             METADATA_CACHE[root_class] = metadata
