@@ -1,4 +1,5 @@
 import copy
+import warnings
 import inspect
 from typing import List, Type, Dict, Optional, Tuple
 from inspect import isfunction, isclass
@@ -334,7 +335,6 @@ class Analytic:
         self.er_configs_map = { config.kls: config for config in er_configs } if er_configs else None
 
     def _identify_config(self, target: Type):
-        print(target)
         for kls, cfg in self.er_configs_map.items():
             if class_util.is_compatible_type(target, kls):
                 return cfg
@@ -353,19 +353,10 @@ class Analytic:
         )
     
     def _pre_generate_resolve_method_with_dataloader(self, kls: Type):
-        """
-        handle kls with er_config
+        """check fields with auto load (LoadBy) from class and generate the resolve method with dataloader automatically"""
 
-        - confirm the base of kls and find it's config
-            - find er_config by kls
-                - find one or more er_config's relationships by field_name, otherwise raise exception
-                    - find target relationship by compare field's annotation and target_kls (use is_compatible_type function)
-            - attach resolver with dataloader, take user for example
-                - resolve_user(self, loader=Loader(UserDataLoader)):
-                    return loader.load(self.user_id)
-        """
-        def resolver_factory(key: str, default_loader):
-            def resolve_method(self, loader=default_loader):
+        def create_resolve_method(key: str, default_loader):
+            def resolve_method(self, loader=LoaderDepend(default_loader)):
                 return loader.load(getattr(self, key))
             resolve_method.__name__ = method_name
             resolve_method.__qualname__ = f'{kls.__name__}.{method_name}'
@@ -376,15 +367,18 @@ class Analytic:
         auto_loader_fields = list(class_util.get_pydantic_field_items_with_load_by(kls))
         if not auto_loader_fields: return
 
-        candidate_cfg = self._identify_config(kls)
+        config = self._identify_config(kls)
         for field_name, loader_info, annotation in auto_loader_fields:
             method_name = f'{const.RESOLVE_PREFIX}{field_name}'
-            if hasattr(kls, method_name): continue # skip
+            if hasattr(kls, method_name): 
+                warnings.warn(f'{method_name} already exists in {kls.__name__}, skipping auto-generation.')
+                continue
+
             relationship = self._identify_relationship(
-                config=candidate_cfg, 
+                config=config, 
                 loadby=loader_info.by,
                 target_kls=annotation)
-            setattr(kls, method_name, resolver_factory(loader_info.by, LoaderDepend(relationship.loader)))
+            setattr(kls, method_name, create_resolve_method(loader_info.by, relationship.loader))
 
 
     def _get_request_type_for_loader(self, object_field_pairs, field_name: str):
