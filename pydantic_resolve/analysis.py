@@ -340,13 +340,14 @@ class Analytic:
                 return cfg
         raise AttributeError(f'No ErConfig found for {target.__name__}')
     
-    def _identify_relationship(self, config: ErConfig, loadby: str, target_kls: Type):
+    def _identify_relationship(self, config: ErConfig, loadby: str, biz: Optional[str], target_kls: Type):
         for rel in config.relationships:
             if rel.field != loadby:
                 continue
 
-            if class_util.is_compatible_type(target_kls, rel.target_kls):
+            if class_util.is_compatible_type(target_kls, rel.target_kls) and biz == rel.biz:
                 return rel
+
 
         raise AttributeError(
             f'Relationship for "{target_kls.__name__}" using "{loadby}" not found'
@@ -377,6 +378,7 @@ class Analytic:
             relationship = self._identify_relationship(
                 config=config, 
                 loadby=loader_info.field,
+                biz=loader_info.biz,
                 target_kls=annotation)
             setattr(kls, method_name, create_resolve_method(loader_info.field, relationship.loader))
 

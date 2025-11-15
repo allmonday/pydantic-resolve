@@ -60,5 +60,5 @@ class LoaderInfo:
     biz: Optional[str] = None
 
 
-def LoadBy(key: str) -> LoaderInfo:
-    return LoaderInfo(field=key)
+def LoadBy(key: str, biz: Optional[str] = None) -> LoaderInfo:
+    return LoaderInfo(field=key, biz=biz)

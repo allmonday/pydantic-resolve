@@ -47,6 +47,18 @@ class BarLoader(DataLoader):
             bar_map.setdefault(b['biz_id'], []).append(b)
         return [bar_map.get(k, []) for k in keys]
 
+class SpecialBarLoader(DataLoader):
+    async def batch_load_fn(self, keys):
+        bars = [
+            dict(id=1, name="special-bar1", biz_id=1),
+            dict(id=2, name="special-bar2", biz_id=1),
+            dict(id=3, name="special-bar3", biz_id=2),
+        ]
+        bar_map = {}
+        for b in bars:
+            bar_map.setdefault(b['biz_id'], []).append(b)
+        return [bar_map.get(k, []) for k in keys]
+
 class FooLoader(DataLoader):
     async def batch_load_fn(self, keys):
         foos = [
@@ -65,6 +77,7 @@ diagram = ErDiagram(
             Relationship(field='user_id', target_kls=User, loader=UserLoader),
             Relationship(field='id', target_kls=List[Foo], loader=FooLoader),
             Relationship(field='id', target_kls=List[Bar], loader=BarLoader),
+            Relationship(field='id', biz='special', target_kls=List[Bar], loader=SpecialBarLoader),
         ])
     ]
 )
@@ -73,6 +86,7 @@ class BizCase1(Biz):
     user: Annotated[Optional[User], LoadBy('user_id')] = None
     foos: Annotated[List[Foo], LoadBy('id')] = []
     bars: Annotated[List[Bar], LoadBy('id')] = []
+    special_bars: Annotated[list[Bar], LoadBy('id', biz='special')] = []
     
 
 @pytest.mark.asyncio
@@ -83,6 +97,8 @@ async def test_resolver_factory_with_er_configs_inherit():
 
     assert d[0].user.name == "a"
     assert d[0].bars == [Bar(id=1, name="bar1", biz_id=1), Bar(id=2, name="bar2", biz_id=1)]
+    assert d[0].special_bars == [Bar(id=1, name="special-bar1", biz_id=1), Bar(id=2, name="special-bar2", biz_id=1)]
+
     assert d[1].user.name == "b"
     assert d[1].foos == [Foo(id=3, name="foo3", biz_id=2)]
 
