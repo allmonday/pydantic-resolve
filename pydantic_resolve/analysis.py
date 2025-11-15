@@ -10,7 +10,7 @@ import pydantic_resolve.constant as const
 import pydantic_resolve.utils.class_util as class_util
 from pydantic_resolve.utils.collector import ICollector
 from pydantic_resolve.utils.depend import Depends, LoaderDepend
-from pydantic_resolve.utils.er_diagram import ErConfig, ErDiagram
+from pydantic_resolve.utils.er_diagram import ErConfig, ErDiagram, ErPreGenerator
 import pydantic_resolve.utils.params as params_util
 from pydantic_resolve.exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingCollector
 
@@ -332,56 +332,7 @@ class Analytic:
         self.expose_set = set()
         self.collect_set = set()
         self.metadata: MetaType = {}
-        self.er_configs_map = { config.kls: config for config in er_diagram.configs } if er_diagram else None
-
-    def _identify_config(self, target: Type):
-        for kls, cfg in self.er_configs_map.items():
-            if class_util.is_compatible_type(target, kls):
-                return cfg
-        raise AttributeError(f'No ErConfig found for {target.__name__}')
-    
-    def _identify_relationship(self, config: ErConfig, loadby: str, biz: Optional[str], target_kls: Type):
-        for rel in config.relationships:
-            if rel.field != loadby:
-                continue
-
-            if class_util.is_compatible_type(target_kls, rel.target_kls) and biz == rel.biz:
-                return rel
-
-
-        raise AttributeError(
-            f'Relationship for "{target_kls.__name__}" using "{loadby}" not found'
-        )
-    
-    def _pre_generate_resolve_method_with_dataloader(self, kls: Type):
-        """check fields with auto load (LoadBy) from class and generate the resolve method with dataloader automatically"""
-
-        def create_resolve_method(key: str, default_loader):
-            def resolve_method(self, loader=LoaderDepend(default_loader)):
-                return loader.load(getattr(self, key))
-            resolve_method.__name__ = method_name
-            resolve_method.__qualname__ = f'{kls.__name__}.{method_name}'
-            return resolve_method
-
-        if self.er_configs_map is None: return
-
-        auto_loader_fields = list(class_util.get_pydantic_field_items_with_load_by(kls))
-        if not auto_loader_fields: return
-
-        config = self._identify_config(kls)
-        for field_name, loader_info, annotation in auto_loader_fields:
-            method_name = f'{const.RESOLVE_PREFIX}{field_name}'
-            if hasattr(kls, method_name): 
-                warnings.warn(f'{method_name} already exists in {kls.__name__}, skipping auto-generation.')
-                continue
-
-            relationship = self._identify_relationship(
-                config=config, 
-                loadby=loader_info.field,
-                biz=loader_info.biz,
-                target_kls=annotation)
-            setattr(kls, method_name, create_resolve_method(loader_info.field, relationship.loader))
-
+        self.er_pre_generator = ErPreGenerator(er_diagram)
 
     def _get_request_type_for_loader(self, object_field_pairs, field_name: str):
         return object_field_pairs.get(field_name)
@@ -489,8 +440,7 @@ class Analytic:
             if hit['should_traverse'] or self._has_config(hit):
                 self._populate_ancestors(ancestors)
             return
-
-        self._pre_generate_resolve_method_with_dataloader(kls)
+        self.er_pre_generator.prepare_loader(kls)
 
         # - prepare fields, with resolve_, post_ reserved
         all_fields, object_fields, object_field_pairs = self._get_all_fields_and_object_fields(kls)
