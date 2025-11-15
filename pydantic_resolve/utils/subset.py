@@ -79,6 +79,23 @@ def _extract_extra_fields_from_namespace(namespace: Dict[str, Any], disallow: Se
     return extras
 
 
+def _normalize_unique_fields(fields: Any) -> List[str]:
+    """Coerce incoming fields into a unique, ordered list of strings.
+
+    Only accepts list or tuple. Other types raise TypeError. All elements must be strings.
+    """
+    if not isinstance(fields, (list, tuple)):
+        raise TypeError('fields must be a list or tuple of field names')
+    seq: List[Any] = list(fields)
+
+    for f in seq:
+        if not isinstance(f, str):
+            raise TypeError('each field name must be a string')
+
+    # Preserve order while removing duplicates
+    return list(dict.fromkeys(seq))
+
+
 def create_subset(parent: Type[BaseModel], fields: List[str], name: str = "SubsetModel") -> Type[BaseModel]:
     """
     Create a subset model from a parent BaseModel using Pydantic's create_model.
@@ -94,7 +111,7 @@ def create_subset(parent: Type[BaseModel], fields: List[str], name: str = "Subse
     if not issubclass(parent, BaseModel):
         raise TypeError('parent must be a pydantic BaseModel')
     
-    unique_fields = list(dict.fromkeys(fields))
+    unique_fields = _normalize_unique_fields(fields)
     field_definitions = _extract_field_definitions_for_create_model(parent, unique_fields)
     validators = _get_parent_validators(parent, unique_fields)
 
@@ -120,7 +137,7 @@ class SubsetMeta(type):
         if subset_info:
             parent, fields = subset_info
             # Build subset fields from parent first
-            unique_fields = list(dict.fromkeys(fields))
+            unique_fields = _normalize_unique_fields(fields)
             parent_fields = _extract_field_definitions_for_create_model(parent, unique_fields)
 
             # Then extract extra fields defined in class body
@@ -150,7 +167,8 @@ class SubsetMeta(type):
             _apply_validators(subset_class, validators)
             setattr(subset_class, const.ENSURE_SUBSET_REFERENCE, parent)
             return subset_class
-        # Allow defining the base marker class without warning
+            
+        # Allow defining the base marker class without warning, bypass
         if name == 'DefineSubset' and not bases:
             return super().__new__(cls, name, bases, namespace, **kwargs)
 

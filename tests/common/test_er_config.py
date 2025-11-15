@@ -100,6 +100,7 @@ async def test_resolver_factory_with_er_configs_inherit_2():
 
 class BizCase3(DefineSubset):
     __pydantic_resolve_subset__ = (Biz, ['id', 'user_id'])
+
     user: Annotated[Optional[User], LoadBy('user_id')] = None
 
 
@@ -110,7 +111,9 @@ async def test_resolver_factory_with_er_configs_subset():
     d = await MyResolver().resolve(d)
     assert d.user is not None
 
-class BizCase4(BaseModel):
+class BizCase4(DefineSubset):
+    __pydantic_resolve_subset__ = (Biz, ['id'])
+
     user: Annotated[Optional[User], LoadBy('user_id')] = None
 
 @pytest.mark.asyncio

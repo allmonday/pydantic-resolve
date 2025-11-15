@@ -376,9 +376,9 @@ class Analytic:
 
             relationship = self._identify_relationship(
                 config=config, 
-                loadby=loader_info.by,
+                loadby=loader_info.field,
                 target_kls=annotation)
-            setattr(kls, method_name, create_resolve_method(loader_info.by, relationship.loader))
+            setattr(kls, method_name, create_resolve_method(loader_info.field, relationship.loader))
 
 
     def _get_request_type_for_loader(self, object_field_pairs, field_name: str):

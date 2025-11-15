@@ -311,6 +311,28 @@ class TestSubsetMeta:
         assert issubclass(MySubset, BaseModel)
         assert getattr(MySubset, const.ENSURE_SUBSET_REFERENCE) is Parent
     
+    def test_basic_subset_metaclass_with_fields_in_tuple(self):
+        """Test basic usage of Subset metaclass to create subset classes."""
+        class Parent(BaseModel):
+            id: int
+            name: str
+            age: int
+            email: str
+        
+        class MySubset(DefineSubset):
+            __pydantic_resolve_subset__ = (Parent, ('id', 'name'))
+            new_field: str
+        
+        # Test that MySubset is a proper subset
+        instance = MySubset(id=1, name='test', new_field='extra')
+        assert instance.id == 1
+        assert instance.name == 'test'
+        assert instance.new_field == 'extra'
+        
+        # Test that MySubset is a subclass of BaseModel
+        assert issubclass(MySubset, BaseModel)
+        assert getattr(MySubset, const.ENSURE_SUBSET_REFERENCE) is Parent
+    
     def test_wrongly_create_subset_metaclass(self):
         """Test basic usage of Subset metaclass to create subset classes."""
         class Parent(BaseModel):
