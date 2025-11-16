@@ -12,9 +12,28 @@ class Relationship(BaseModel):
     field: str  # fk name
 
     # use biz to distinguish multiple same target_kls under same field
-    biz: Optional[str] = Field(default=None, min_length=1) # Optional or non-empty string
+    biz: Optional[str] = Field(default=None, min_length=1)  # Optional or non-empty string
     target_kls: Any
+
+    # default value when fk is None.
+    # Two params are exclusive. A user may explicitly set default_none_val=None.
+    # We must distinguish "not provided" vs "provided with value None".
+    field_none_default: Optional[Any] = None
+    field_none_default_factory: Optional[Callable[[], Any]] = None
+
     loader: Callable
+
+    @model_validator(mode="after")
+    def _validate_defaults(self) -> "Relationship":
+        # Avoid evaluating the deprecated fallback unless necessary to prevent warnings.
+        fields_set = getattr(self, 'model_fields_set', set())
+        val_set = 'field_none_default' in fields_set
+        factory_set = 'field_none_default_factory' in fields_set
+        if val_set and factory_set:
+            raise ValueError(
+                "field_none_default and field_none_default_factory cannot both be defined"
+            )
+        return self
 
 class ErConfig(BaseModel):
     kls: Type[BaseModel]
@@ -93,7 +112,7 @@ class ErPreGenerator:
             f'Relationship for "{target_kls.__name__}" using "{loadby}" not found'
         )
 
-    def prepare_loader(self, kls: Type):
+    def prepare(self, kls: Type):
         """Auto-generate resolve_XXX methods for fields annotated with LoadBy metadata.
 
         For each pydantic field carrying LoadBy, create a resolve method that uses the
@@ -123,11 +142,20 @@ class ErPreGenerator:
                 target_kls=annotation,
             )
 
-            def create_resolve_method(key: str, default_loader):  # closure per field
-                def resolve_method(self, loader=LoaderDepend(default_loader)):
-                    return loader.load(getattr(self, key))
+            def create_resolve_method(key: str, rel: Relationship):  # closure per field
+                def resolve_method(self, loader=LoaderDepend(rel.loader)):
+                    fk = getattr(self, key)
+                    if fk is None:
+                        fields_set = getattr(rel, 'model_fields_set', set())
+                        if 'field_none_default' in fields_set:
+                            return rel.field_none_default  # may be None intentionally
+
+                        if rel.field_none_default_factory is not None:
+                            return rel.field_none_default_factory()
+                        return None
+                    return loader.load(fk)
                 resolve_method.__name__ = method_name
                 resolve_method.__qualname__ = f'{kls.__name__}.{method_name}'
                 return resolve_method
 
-            setattr(kls, method_name, create_resolve_method(loader_info.field, relationship.loader))
+            setattr(kls, method_name, create_resolve_method(loader_info.field, relationship),)

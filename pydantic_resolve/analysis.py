@@ -440,7 +440,7 @@ class Analytic:
             if hit['should_traverse'] or self._has_config(hit):
                 self._populate_ancestors(ancestors)
             return
-        self.er_pre_generator.prepare_loader(kls)
+        self.er_pre_generator.prepare(kls)
 
         # - prepare fields, with resolve_, post_ reserved
         all_fields, object_fields, object_field_pairs = self._get_all_fields_and_object_fields(kls)
