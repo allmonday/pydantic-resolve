@@ -34,14 +34,19 @@ It could be seamlessly integrated with modern Python web frameworks including Fa
 ## Installation
 
 ```
+# latest v1
+pip install pydantic-resolve==1.13.5
+
+# v2
 pip install pydantic-resolve
 ```
 
 Starting from pydantic-resolve v1.11.0, both pydantic v1 and v2 are supported.
 
-The latest v1 version is v1.13.5
 
-Starting from pydantic-resolve v2.0.0a1, it only supports pydantic v2.
+Starting from pydantic-resolve v2.0.0a1, it only supports pydantic v2, support of pydantic v1 and dataclass are dropped.
+
+everything else are backward compatible.
 
 
 ## Supports
