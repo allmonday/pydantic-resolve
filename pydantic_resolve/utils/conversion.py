@@ -3,71 +3,31 @@ import functools
 import types
 from inspect import iscoroutine
 from typing import Any, Callable, Optional, Type, Union
-from pydantic import BaseModel, ValidationError, parse_obj_as
-from dataclasses import is_dataclass
-from pydantic_resolve.compat import PYDANTIC_V2
+from pydantic import BaseModel, ValidationError, TypeAdapter
 import pydantic_resolve.constant as const
 from pydantic_resolve.utils.class_util import safe_issubclass
 
+class TypeAdapterManager:
+    apapters = {}
+    
+    @classmethod
+    def get(cls, type):
+        adapter = cls.apapters.get(type)
+        if adapter:
+            return adapter
+        else:
+            new_adapter = TypeAdapter(type)
+            cls.apapters[type] = new_adapter
+            return new_adapter
 
-if PYDANTIC_V2:
-    from pydantic import BaseModel, TypeAdapter, ValidationError
-    class TypeAdapterManager:
-        apapters = {}
-        
-        @classmethod
-        def get(cls, type):
-            adapter = cls.apapters.get(type)
-            if adapter:
-                return adapter
-            else:
-                new_adapter = TypeAdapter(type)
-                cls.apapters[type] = new_adapter
-                return new_adapter
 
-def try_parse_data_to_target_field_type_v1(
+def try_parse_data_to_target_field_type(
         target: object,
         field_name: str,
         data,
         enable_from_attribute=False):
     """
-    parse to pydantic or dataclass object
-    1. get type of target field
-    2. parse
-    """
-    field_type = None
-
-    # 1. get type of target field
-    if isinstance(target, BaseModel):
-        _fields = target.__class__.__fields__
-        field_type = _fields[field_name].outer_type_
-
-        # handle optional logic
-        if data is None and _fields[field_name].required == False:
-            return data
-
-    elif is_dataclass(target):
-        field_type = target.__class__.__annotations__[field_name]
-
-    # 2. parse
-    if field_type:
-        try:
-            result = parse_obj_as(field_type, data)
-            return result
-        except ValidationError as e:
-            print(f'Warning: type mismatch, pls check the return type for "{field_name}", expected: {field_type}')
-            raise e
-    else:
-        return data  #noqa
-
-
-def try_parse_data_to_target_field_type_v2(
-        target: object,
-        field_name: str,
-        data,
-        enable_from_attribute=False):
-    """
-    parse to pydantic or dataclass object
+    parse input to pydantic object
     1. get type of target field
     2. parse
     """
@@ -86,9 +46,6 @@ def try_parse_data_to_target_field_type_v2(
         if data is None and _fields[field_name].is_required() == False:
             return data
 
-    elif is_dataclass(target):
-        field_type = target.__class__.__annotations__[field_name]
-
     # 2. parse
     if field_type:
         try:
@@ -104,37 +61,7 @@ def try_parse_data_to_target_field_type_v2(
         return data  #noqa
 
 
-try_parse_data_to_target_field_type = try_parse_data_to_target_field_type_v2 if PYDANTIC_V2 else try_parse_data_to_target_field_type_v1
-
-
-def _get_mapping_rule_v1(target, source) -> Optional[Callable]:
-    # do noting
-    if isinstance(source, target):
-        return None
-
-    # pydantic
-    if safe_issubclass(target, BaseModel):
-        if target.__config__.orm_mode:
-            if isinstance(source, dict):
-                raise AttributeError(f"{type(source)} -> {target.__name__}: pydantic from_orm can't handle dict object")
-            else:
-                return lambda t, s: t.from_orm(s)
-
-        if isinstance(source, (dict, BaseModel)):
-            return lambda t, s: t.parse_obj(s)
-
-        else:
-            raise AttributeError(f"{type(source)} -> {target.__name__}: pydantic can't handle non-dict data")
-
-    # dataclass
-    if is_dataclass(target):
-        if isinstance(source, dict):
-            return lambda t, s: t(**s)
-
-    raise NotImplementedError(f"{type(source)} -> {target.__name__}: faild to get auto mapping rule and execut mapping, use your own rule instead.")
-
-
-def _get_mapping_rule_v2(target, source) -> Optional[Callable]:
+def _get_mapping_rule(target, source) -> Optional[Callable]:
     # do noting
     if isinstance(source, target):
         return None
@@ -159,15 +86,7 @@ def _get_mapping_rule_v2(target, source) -> Optional[Callable]:
         else:
             raise AttributeError(f"{type(source)} -> {target.__name__}: pydantic can't handle non-dict data")
 
-    # dataclass
-    if is_dataclass(target):
-        if isinstance(source, dict):
-            return lambda t, s: t(**s)
-
     raise NotImplementedError(f"{type(source)} -> {target.__name__}: faild to get auto mapping rule and execut mapping, use your own rule instead.")
-
-
-_get_mapping_rule = _get_mapping_rule_v2 if PYDANTIC_V2 else _get_mapping_rule_v1
 
 
 def _apply_rule(rule: Optional[Callable], target, source: Any, is_list: bool):
@@ -187,8 +106,7 @@ def mapper(func_or_class: Union[Callable, Type]):
         is func: run func
         is class: call auto_mapping to have a try
 
-    @dataclass
-    class K:
+    class K(BaseModel):
         id: int
 
         field: str = ''

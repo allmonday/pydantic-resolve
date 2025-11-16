@@ -1,9 +1,7 @@
 from typing import Any, Dict
 from inspect import isfunction
-from dataclasses import is_dataclass
 from pydantic import BaseModel
 import pydantic_resolve.constant as const
-from pydantic_resolve.compat import PYDANTIC_V2
 from pydantic_resolve.utils.class_util import safe_issubclass, is_pydantic_field_required_field, get_pydantic_field_items
 
 
@@ -30,47 +28,7 @@ def _get_required_fields(kls: BaseModel):
     return required_fields
 
 
-def model_config_v1(default_required: bool = True):
-    """
-    - default_required: 
-        if resolve field has default value, it will not be listed in schema['required']
-        set default_required=True to add it into required list.
-    """
-    def _get_pydantic_model(kls):
-        if safe_issubclass(kls, BaseModel):
-            return kls
-        elif hasattr(kls, '__pydantic_model__'):
-            return kls.__pydantic_model__
-        else:
-            raise AttributeError(f'target class {kls.__name__} is not subclass of BaseModel, or decorated by pydantic.dataclass')
-
-    def wrapper(kls):
-        pydantic_model = _get_pydantic_model(kls)
-        def _schema_extra(schema: Dict[str, Any], model) -> None:
-            # define schema.properties
-            excludes = set()
-
-            if pydantic_model.__exclude_fields__:
-                for k in pydantic_model.__exclude_fields__.keys():
-                    excludes.add(k)
-
-            props = {}
-            for k, v in schema.get('properties', {}).items():
-                if k not in excludes:
-                    props[k] = v
-            schema['properties'] = props
-
-            # define schema.required
-            if default_required:
-                fnames = _get_required_fields(model)
-                schema['required'] = fnames
-
-        pydantic_model.__config__.schema_extra = staticmethod(_schema_extra)
-        return kls
-    return wrapper
-
-
-def model_config_v2(default_required: bool=True):
+def model_config(default_required: bool=True):
     """
     in pydantic v2, we can not use __exclude_field__ to set hidden field in model_config hidden_field params
     model_config now is just a simple decorator to remove fields (with exclude=True) from schema.properties
@@ -87,9 +45,7 @@ def model_config_v2(default_required: bool=True):
     reference: fastapi/_compat.py::get_definitions
     """
     def wrapper(kls):
-        if is_dataclass(kls):
-            return kls
-        elif safe_issubclass(kls, BaseModel):
+        if safe_issubclass(kls, BaseModel):
             # TODO: check the behavior of generating json schema in other frameworks using pydantic
             def build():
                 def _schema_extra(schema: Dict[str, Any], model) -> None:
@@ -116,8 +72,6 @@ def model_config_v2(default_required: bool=True):
             kls.model_config['json_schema_extra'] = staticmethod(build())
             return kls
         else:
-            raise AttributeError(f'target class {kls.__name__} is not BaseModel or dataclass')
+            raise AttributeError(f'target class {kls.__name__} is not BaseModel')
     return wrapper
 
-
-model_config = model_config_v2 if PYDANTIC_V2 else model_config_v1

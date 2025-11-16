@@ -1,24 +1,20 @@
 import copy
+import warnings
 import inspect
 from typing import List, Type, Dict, Optional, Tuple
 from inspect import isfunction, isclass
 from collections import defaultdict
 from aiodataloader import DataLoader
 from pydantic import BaseModel
-from dataclasses import is_dataclass, fields as dc_fields
-
 import pydantic_resolve.constant as const
 import pydantic_resolve.utils.class_util as class_util
 from pydantic_resolve.utils.collector import ICollector
-from pydantic_resolve.utils.depend import Depends
+from pydantic_resolve.utils.depend import Depends, LoaderDepend
+from pydantic_resolve.utils.er_diagram import ErConfig, ErDiagram, ErPreGenerator
 import pydantic_resolve.utils.params as params_util
 from pydantic_resolve.exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingCollector
-import sys
 
-if sys.version_info >= (3, 8):
-    from typing import TypedDict
-else:
-    from typing_extensions import TypedDict
+from typing import TypedDict
 
 class DataLoaderType(TypedDict):
     param: str
@@ -245,10 +241,8 @@ class LoaderManager:
     def _get_all_fields(self, kls: Type):
         if class_util.safe_issubclass(kls, BaseModel):
             return list(class_util.get_pydantic_field_keys(kls))
-        elif is_dataclass(kls):
-            return [f.name for f in dc_fields(kls)]
         else:
-            raise AttributeError('invalid type: should be pydantic object or dataclass object')  # noqa
+            raise AttributeError('invalid type: should be pydantic object')  # noqa
 
     def _generate_meta(self, types: List[List[Type]]):
         _fields = set()
@@ -334,18 +328,11 @@ def validate_and_create_loader_instance(
 
 
 class Analytic:
-    """Refactor of scan_and_store_metadata into a class-based analyzer.
-
-    Public API:
-      - scan(self, root_class) -> MetaType
-
-    Internal helpers mirror the original inner functions as instance methods.
-    """
-
-    def __init__(self) -> None:
+    def __init__(self, er_diagram: Optional[ErDiagram]=None) -> None:
         self.expose_set = set()
         self.collect_set = set()
         self.metadata: MetaType = {}
+        self.er_pre_generator = ErPreGenerator(er_diagram)
 
     def _get_request_type_for_loader(self, object_field_pairs, field_name: str):
         return object_field_pairs.get(field_name)
@@ -354,12 +341,9 @@ class Analytic:
         if class_util.safe_issubclass(kls, BaseModel):
             all_fields = set(class_util.get_pydantic_field_keys(kls))
             object_fields = list(class_util.get_pydantic_fields(kls))  # dive and recursively analysis
-        elif is_dataclass(kls):
-            all_fields = set([f.name for f in dc_fields(kls)])
-            object_fields = list(class_util.get_dataclass_fields(kls))
         else:
-            raise AttributeError('invalid type: should be pydantic object or dataclass object')  # noqa
-        return all_fields, object_fields, {x: y for x, y in object_fields}
+            raise AttributeError('invalid type: should be pydantic object')  # noqa
+        return all_fields, object_fields, {k: v for k, v in object_fields}
 
     def _has_post_default_handler(self, kls: Type) -> bool:
         fields = dir(kls)
@@ -456,6 +440,7 @@ class Analytic:
             if hit['should_traverse'] or self._has_config(hit):
                 self._populate_ancestors(ancestors)
             return
+        self.er_pre_generator.prepare(kls)
 
         # - prepare fields, with resolve_, post_ reserved
         all_fields, object_fields, object_field_pairs = self._get_all_fields_and_object_fields(kls)
@@ -602,12 +587,11 @@ def _calc_alias_map_from_collectors(kls_meta: MappedMetaMemberType):
 
 
 def is_acceptable_kls(kls: Type) -> bool:
-    return class_util.safe_issubclass(kls, BaseModel) or is_dataclass(kls)
+    return class_util.safe_issubclass(kls, BaseModel)
 
 
 def is_acceptable_instance(target: object):
-    """ check whether target is Pydantic object or Dataclass object """
-    return isinstance(target, BaseModel) or is_dataclass(target)
+    return isinstance(target, BaseModel)
 
 
 def get_resolve_fields_and_object_fields_from_object(node: object, kls: Type, mapped_metadata: MappedMetaType):

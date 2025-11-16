@@ -8,18 +8,24 @@ Pydantic Resolve provides a class-based approach to composing complex data model
 
 It elevates Pydantic from a static data container to a powerful, flexible computation layer.
 
+> from pydantic-resolve v2, `ErDiagram` are introduced, your can declare Entity Relationship and their default dataloader in application level, so that dataloader related resolve method can be simpilfied.
+
 Built on Pydantic models, it introduces resolve hooks for on-demand data fetching and post hooks for normalization, transformation, and reorganization to meet diverse requirements.
 
-The resolution lifecycle is straightforward: data is loaded level by level through the object.
+The resolution lifecycle is kind like lazy evaluation: data is loaded level by level through the object.
 
 Compared with GraphQL, both traverse descendant nodes recursively and support resolver functions and DataLoaders. The key difference is post-processing: from the post-processing perspective, resolved data is always ready for further transformation, regardless of whether it came from resolvers or initial input.
 
-Within post hooks, developers can read descendant data, adjust existing fields, compute derived fields, and route values anywhere in the hierarchy.
 
 ![](./docs/images/lifecycle.jpeg)
 
-Post hooks also enable bidirectional data flow: they can read from ancestor nodes and push values up to ancestors, which is useful for adapting data to varied business requirements.
+pydantic class can be initialized by deep nested data (which means descendant are provided in advance), then just need to run the post process.
 
+![](./docs/images/preload.png)
+
+Within post hooks, developers can read descendant data, adjust existing fields, compute derived fields.
+
+Post hooks also enable bidirectional data flow: they can read from ancestor nodes and push values up to ancestors, which is useful for adapting data to varied business requirements.
 
 ![](./docs/images/communication.jpeg)
 
@@ -33,12 +39,14 @@ pip install pydantic-resolve
 
 Starting from pydantic-resolve v1.11.0, both pydantic v1 and v2 are supported.
 
+The latest v1 version is v1.13.5
+
+Starting from pydantic-resolve v2.0.0a1, it only supports pydantic v2.
+
 
 ## Supports
 
-- pydantic v1  (stop support in ver 2)
-- pydantic v2
-- dataclass `from pydantic.dataclasses import dataclass`
+- pydantic (v2)
 
 
 ## Documentation

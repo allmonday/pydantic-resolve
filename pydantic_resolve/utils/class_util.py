@@ -1,74 +1,19 @@
 import functools
-from dataclasses import is_dataclass, fields, MISSING
-from typing import Type, get_type_hints, List, Tuple
+from typing import Type, List, Tuple, Iterator, get_origin, get_args
 import pydantic_resolve.constant as const
-from pydantic_resolve.compat import PYDANTIC_V2
 import pydantic_resolve.utils.class_util as class_util
 from pydantic_resolve.analysis import is_acceptable_kls
-from pydantic_resolve.utils.types import get_type, _is_optional, get_core_types
+from pydantic_resolve.utils.er_diagram import LoaderInfo
+from pydantic_resolve.utils.types import get_type, get_core_types
 from pydantic import BaseModel
 
-
-# ----------------------- rebuild -----------------------
-def rebuild_v1(kls):
-    kls.update_forward_refs()
-
-
-def rebuild_v2(kls):
+def rebuild(kls):
     kls.model_rebuild()
 
 
-rebuild = rebuild_v2 if PYDANTIC_V2 else rebuild_v1
-
-
-# ---------------------- ensure_subset ------------------
-def ensure_subset_v1(base):
+def ensure_subset(base):
     """
-    used with pydantic class or dataclass to make sure a class's field is 
-    subset of target class
-    """
-    def wrap(kls):
-        is_base_pydantic = safe_issubclass(base, BaseModel)
-        is_kls_pydantic = safe_issubclass(kls, BaseModel)
-        is_base_dataclass = is_dataclass(base)
-        is_kls_dataclass = is_dataclass(kls)
-
-        setattr(kls, const.ENSURE_SUBSET_REFERENCE, base)
-
-
-        if is_base_pydantic and is_kls_pydantic:
-            @functools.wraps(kls)
-            def inner():
-                for k, field in kls.__fields__.items():
-                    if field.required:
-                        base_field = base.__fields__.get(k)
-                        if not base_field:
-                            raise AttributeError(f'{k} not existed in {base.__name__}.')
-                        if base_field and base_field.type_ != field.type_:
-                            raise AttributeError(f'type of {k} not consistent with {base.__name__}')
-                return kls
-            return inner()
-        elif is_base_dataclass and is_kls_dataclass:
-            @functools.wraps(kls)
-            def inner():
-                base_fields = {f.name: f.type for f in fields(base)}
-                for f in fields(kls):
-                    has_default = is_dataclass_field_has_default_value(f)
-                    if not has_default:
-                        if f.name not in base_fields:
-                            raise AttributeError(f'{f.name} not existed in {base.__name__}.')
-                        if base_fields[f.name] != f.type:
-                            raise AttributeError(f'type of {f.name} not consistent with {base.__name__}')
-                return kls
-            return inner()
-        else:
-            raise TypeError('base and kls should both be Pydantic BaseModel or both be dataclass')
-    return wrap
-
-
-def ensure_subset_v2(base):
-    """
-    used with pydantic class or dataclass to make sure a class's field is 
+    used with pydantic class to make sure a class's field is 
     subset of target class
 
     for pydantic v2, subclass with Optional[T] but without default value will raise exception
@@ -90,8 +35,6 @@ def ensure_subset_v2(base):
     def wrap(kls):
         is_base_pydantic = safe_issubclass(base, BaseModel)
         is_kls_pydantic = safe_issubclass(kls, BaseModel)
-        is_base_dataclass = is_dataclass(base)
-        is_kls_dataclass = is_dataclass(kls)
 
         setattr(kls, const.ENSURE_SUBSET_REFERENCE, base)
 
@@ -107,68 +50,55 @@ def ensure_subset_v2(base):
                             raise AttributeError(f'type of {k} not consistent with {base.__name__}')
                 return kls
             return inner()
-
-        elif is_base_dataclass and is_kls_dataclass:
-            @functools.wraps(kls)
-            def inner():
-                base_fields = {f.name: f.type for f in fields(base)}
-                for f in fields(kls):
-                    has_default = is_dataclass_field_has_default_value(f)
-                    if not has_default:
-                        if f.name not in base_fields:
-                            raise AttributeError(f'{f.name} not existed in {base.__name__}.')
-                        if base_fields[f.name] != f.type:
-                            raise AttributeError(f'type of {f.name} not consistent with {base.__name__}')
-                return kls
-            return inner()
         else:
-            raise TypeError('base and kls should both be Pydantic BaseModel or both be dataclass')
+            raise TypeError('base and kls should both be Pydantic BaseModel')
     return wrap
 
 
-ensure_subset = ensure_subset_v2 if PYDANTIC_V2 else ensure_subset_v1
-
-
-def _get_pydantic_field_items_v1(kls):
-    return kls.__fields__.items()
-
-
-def _get_pydantic_field_items_v2(kls):
+def get_pydantic_field_items(kls):
     return kls.model_fields.items()
 
 
-get_pydantic_field_items = _get_pydantic_field_items_v2 if PYDANTIC_V2 else _get_pydantic_field_items_v1
-
-
-def _get_pydantic_field_keys_v1(kls) -> str:
-    return kls.__fields__.keys()
-
-
-def _get_pydantic_field_keys_v2(kls) -> str:
+def get_pydantic_field_keys(kls) -> str:
     return kls.model_fields.keys()
 
 
-get_pydantic_field_keys = _get_pydantic_field_keys_v2 if PYDANTIC_V2 else _get_pydantic_field_keys_v1
+def get_pydantic_field_items_with_load_by(kls) -> Iterator[Tuple[str, LoaderInfo, Type]]:
+    """
+    find fields which have LoadBy metadata.
+
+    example:
+
+    class Base(BaseModel):
+        id: int
+        name: str
+        b_id: int
+    
+    class B(BaseModel):
+        id: int
+        name: str
+
+    class A(Base):
+        b: Annotated[Optional[B], LoadBy('b_id')] = None
+        extra: str = ''
+    
+    return ('b', LoadBy('b_id'))
+    """
+    items = kls.model_fields.items()
+
+    for name, v in items:
+        metadata = v.metadata
+        for meta in metadata:
+            if isinstance(meta, LoaderInfo):
+                yield name, meta, v.annotation 
 
 
-def _get_pydantic_field_values_v1(kls):
-    return kls.__fields__.values()
-
-
-def _get_pydantic_field_values_v2(kls):
+def get_pydantic_field_values(kls):
     return kls.model_fields.values()
 
 
-get_pydantic_field_values = _get_pydantic_field_values_v2 if PYDANTIC_V2 else _get_pydantic_field_values_v1
-
-
-def _is_pydantic_field_required_v1(field):
-    return field.required
-
-def _is_pydantic_field_required_v2(field):
+def is_pydantic_field_required_field(field):
     return field.is_required()
-
-is_pydantic_field_required_field = _is_pydantic_field_required_v2 if PYDANTIC_V2 else _is_pydantic_field_required_v1
 
 
 def get_pydantic_fields(kls):
@@ -182,27 +112,11 @@ def get_pydantic_fields(kls):
             yield (name, allowed_types)  # type_ is the most inner type
 
 
-def get_dataclass_fields(kls):
-    for name, v in kls.__annotations__.items():
-        shelled_types = get_core_types(v)
-        allowed_types = [st for st in shelled_types if is_acceptable_kls(st)]
-        if allowed_types:
-            yield (name, allowed_types)
-
-
 def get_class_of_object(target):
     if isinstance(target, list):
         return target[0].__class__
     else:
         return target.__class__
-
-
-def is_dataclass_field_has_default_value(field):
-    if field.default is not MISSING or field.default_factory is not MISSING:
-        return True
-
-    typ = field.type
-    return _is_optional(typ)
 
 
 def update_forward_refs(kls):
@@ -224,22 +138,8 @@ def update_forward_refs(kls):
             for shelled_type in shelled_types:
                 update_forward_refs(shelled_type)
 
-    def update_dataclass_forward_refs(kls):
-        if not getattr(kls, const.DATACLASS_FORWARD_REF_UPDATED, False):
-            anno = get_type_hints(kls)
-            kls.__annotations__ = anno
-            setattr(kls, const.DATACLASS_FORWARD_REF_UPDATED, True)
-
-            for _, v in kls.__annotations__.items():
-                shelled_types = get_core_types(v)
-                for shelled_type in shelled_types:
-                    update_forward_refs(shelled_type)
-
     if safe_issubclass(kls, BaseModel):
         update_pydantic_forward_refs(kls)
-
-    if is_dataclass(kls):
-        update_dataclass_forward_refs(kls)
 
 
 def get_kls_full_name(kls):
@@ -266,3 +166,79 @@ def safe_issubclass(kls, classinfo):
         return issubclass(kls, classinfo)
     except TypeError:
         return False
+    
+
+def is_compatible_type(src_type, target_type) -> bool:
+    """
+    1. try to shell optional in src_type and then compare with target_type
+    2. if src_type is a subset of target_type, or subset of subset (visit recursively until find), return True
+    3. if src_type is subclass of target_type, or subclass of subclass (visit recursively until find), return True
+    4. Union and UnionType is not compatible
+    """
+    # Helper: unwrap Optional[X] in source type only
+    def unwrap_optional(tp):
+        origin = get_origin(tp)
+        if origin is None:
+            return tp
+        # typing.Union and PEP604 (types.UnionType) both have origin of Union/UnionType
+        if str(origin) in {"typing.Union", "types.UnionType"}:
+            args = [a for a in get_args(tp) if a is not type(None)]
+            if len(args) == 1:
+                return args[0]
+        return tp
+
+    # Helper: detect any non-optional union
+    def is_union(tp):
+        origin = get_origin(tp)
+        return str(origin) in {"typing.Union", "types.UnionType"}
+
+    # Helper: subset ancestry check via ENSURE_SUBSET_REFERENCE chain
+    def is_subset_of(src, tgt) -> bool:
+        current = src
+        while current is not None:
+            if current is tgt:
+                return True
+            current = getattr(current, const.ENSURE_SUBSET_REFERENCE, None)
+        return False
+
+    # Helper: list element compatibility
+    def is_list_compatible(src, tgt) -> bool:
+        src_origin, tgt_origin = get_origin(src), get_origin(tgt)
+        if src_origin is list and tgt_origin is list:
+            src_args, tgt_args = get_args(src), get_args(tgt)
+            if not src_args or not tgt_args:
+                return False
+            return is_compatible_type(src_args[0], tgt_args[0])
+        return False
+
+    # 1) unwrap Optional in src_type
+    src = unwrap_optional(src_type)
+    tgt = target_type
+
+    # 4) unions (other than Optional case already unwrapped) are incompatible
+    if is_union(src) or is_union(tgt):
+        return False
+
+    # 3) handle list generics (typing.List and built-in list share origin list)
+    if is_list_compatible(src, tgt):
+        return True
+
+    # Direct equality
+    if src is tgt:
+        return True
+
+    # 2) subset chain match
+    try:
+        if is_subset_of(src, tgt):
+            return True
+    except Exception:
+        pass
+
+    # 3) subclass chain
+    try:
+        if safe_issubclass(src, tgt):
+            return True
+    except Exception:
+        pass
+
+    return False

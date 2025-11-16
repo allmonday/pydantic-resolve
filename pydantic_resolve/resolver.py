@@ -14,10 +14,13 @@ import pydantic_resolve.utils.class_util as class_util
 import pydantic_resolve.constant as const
 import pydantic_resolve.utils.profile as profile_util
 
-
+METADATA_CACHE = {}
 T = TypeVar("T")
 
 class Resolver:
+    # define class attribute using constant to avoid hardcoded name
+    locals()[const.ER_DIAGRAM] = None
+
     def __init__(
             self,
             loader_filters: Optional[Dict[Any, Dict[str, Any]]] = None,  # deprecated
@@ -64,8 +67,8 @@ class Resolver:
 
         # only use with pydantic v2
         # for scenario of upgrading from pydantic v1
-        # in v1, it supports parsing from another pydantic object which contains all fields the target
-        # class required, but in v2, this will raise exception, type adapter by default only support parsing from 
+        # in v1, it supports parsing from another pydantic object which contains not only the fields target
+        # class required but also other fields, but in v2, this will raise exception, type adapter by default only support parsing from 
         # dict or pydantic object which is exactly the same with target class
         #
         # class A(BaseModel):
@@ -383,7 +386,16 @@ class Resolver:
         # so user can provide the root class by annotation parameter
         root_class = self.annotation if self.annotation else class_util.get_class_of_object(node)
 
-        self.metadata = analysis.convert_metadata_key_as_kls(analysis.Analytic().scan(root_class))
+        if root_class in METADATA_CACHE:
+            self.metadata = METADATA_CACHE[root_class]
+        else:
+            metadata = analysis.convert_metadata_key_as_kls(
+                analysis.Analytic(
+                    er_diagram=getattr(self, const.ER_DIAGRAM)
+                ).scan(root_class)
+            )
+            METADATA_CACHE[root_class] = metadata
+            self.metadata = metadata
 
         self.loader_instance_cache = analysis.validate_and_create_loader_instance(
             self.loader_params,

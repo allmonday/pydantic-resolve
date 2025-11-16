@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pydantic-resolve"
-version = "1.13.5"
+version = "2.0.0a1"
 description = "A business model friendly data orchestration tool, simple way to implement the core concept of clean architecture."
 authors = ["tangkikodo <allmonday@126.com>"]
 readme = "README.md"
@@ -13,13 +13,11 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
     "Framework :: FastAPI",
@@ -27,7 +25,7 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.9"
 aiodataloader = "^0.4.0"
 
 [tool.poetry.group.dev.dependencies]
@@ -36,6 +34,7 @@ pytest = "^7.2.2"
 pytest-cov = "^4.0.0"
 coverage = "^7.2.1"
 aiosqlite = "^0.18.0"
+pydantic = "^2.12.0"
 sqlalchemy = {extras = ["asyncio"], version = "^2.0.7"}
 pytest-asyncio = "^0.21.0"
 fastapi = "^0.101.0"
