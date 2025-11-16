@@ -4,14 +4,104 @@
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
 
-Pydantic Resolve provides a class-based approach to composing complex data models without imperative glue code.
+pydantic-resolve is a Pydantic based approach to composing complex data models without imperative glue code. It elevates Pydantic from a static data container to a powerful, flexible computation layer.
 
-It elevates Pydantic from a static data container to a powerful, flexible computation layer.
+> from pydantic-resolve v2 alpha, `ErDiagram` are introduced, your can declare Entity Relationship and their default dataloader in application level, then loaders will be applied automatically.
 
-> from pydantic-resolve v2, `ErDiagram` are introduced, your can declare Entity Relationship and their default dataloader in application level, so that dataloader related resolve method can be simpilfied.
+It introduces resolve hooks for on-demand data fetching, and post hooks for normalization, transformation, and reorganization to meet diverse requirements.
 
-Built on Pydantic models, it introduces resolve hooks for on-demand data fetching and post hooks for normalization, transformation, and reorganization to meet diverse requirements.
+## Installation
 
+```
+# latest v1
+pip install pydantic-resolve==1.13.5
+
+# v2 alpha
+pip install pydantic-resolve==2.0.0a1
+```
+
+Starting from pydantic-resolve v1.11.0, both pydantic v1 and v2 are supported.
+
+
+Starting from pydantic-resolve v2.0.0a1, it only supports pydantic v2, support of pydantic v1 and dataclass are dropped.
+
+everything else are backward compatible.
+
+## Quick start
+
+get teams with sprints and memebers, build data struct on demand.
+
+```python
+from pydantic_resolve import Loader
+
+class Sample1TeamDetail(tms.Team):
+    sprints: list[Sample1SprintDetail] = []
+    def resolve_sprints(self, loader=Loader(spl.team_to_sprint_loader)):
+        return loader.load(self.id)
+    
+    members: list[us.User] = []
+    def resolve_members(self, loader=Loader(ul.team_to_user_loader)):
+        return loader.load(self.id)
+
+@route.get('/teams-with-detail', response_model=List[Sample1TeamDetail])
+async def get_teams_with_detail(session: AsyncSession = Depends(db.get_session)):
+    teams = await tmq.get_teams(session)
+    teams = [Sample1TeamDetail.model_validate(t) for t in teams]
+    teams = await Resolver().resolve(teams)
+    return teams
+
+```
+
+## New in V2.0.0 (alpha)
+
+`ErDiagram` was introduced, which provides a clear ER description for the model and the default dataloader used.
+
+Once after we have it defined [source code](https://github.com/allmonday/composition-oriented-development-pattern/blob/master/src/services/er_diagram.py): 
+
+```python
+diagram = ErDiagram(
+    configs=[
+        ErConfig(
+            kls=Team,
+            relationships=[
+                Relationship( field='id', target_kls=list[Sprint], loader=sprint_loader.team_to_sprint_loader),
+                Relationship( field='id', target_kls=list[User], loader=user_loader.team_to_user_loader)
+            ]
+        ),
+        ErConfig(
+            kls=Sprint,
+            relationships=[
+                Relationship( field='id', target_kls=list[Story], loader=story_loader.sprint_to_story_loader)
+            ]
+        ),
+        ErConfig(
+            kls=Story,
+            relationships=[
+                Relationship( field='id', target_kls=list[Task], loader=task_loader.story_to_task_loader),
+                Relationship( field='owner_id', target_kls=User, loader=user_loader.user_batch_loader)
+            ]
+        ),
+        ErConfig(
+            kls=Task,
+            relationships=[
+                Relationship( field='owner_id', target_kls=User, loader=user_loader.user_batch_loader)
+            ]
+        )
+    ]
+)
+```
+
+Then the code above can be simplified as, The required dataloader will be automatically inferred.
+
+```python
+@model_config()
+class Sample1TeamDetail(tms.Team):
+    sprints: Annotated[list[Sample1SprintDetail], LoadBy('id')] = []
+    members: Annotated[list[us.User], LoadBy('id')] = []
+```
+
+
+## How it works
 The resolution lifecycle is kind like lazy evaluation: data is loaded level by level through the object.
 
 Compared with GraphQL, both traverse descendant nodes recursively and support resolver functions and DataLoaders. The key difference is post-processing: from the post-processing perspective, resolved data is always ready for further transformation, regardless of whether it came from resolvers or initial input.
@@ -31,28 +121,6 @@ Post hooks also enable bidirectional data flow: they can read from ancestor node
 
 It could be seamlessly integrated with modern Python web frameworks including FastAPI, Litestar, and Django-ninja.
 
-## Installation
-
-```
-# latest v1
-pip install pydantic-resolve==1.13.5
-
-# v2
-pip install pydantic-resolve
-```
-
-Starting from pydantic-resolve v1.11.0, both pydantic v1 and v2 are supported.
-
-
-Starting from pydantic-resolve v2.0.0a1, it only supports pydantic v2, support of pydantic v1 and dataclass are dropped.
-
-everything else are backward compatible.
-
-
-## Supports
-
-- pydantic (v2)
-
 
 ## Documentation
 
@@ -69,7 +137,7 @@ For FastAPI developers, we can visualize the dependencies of schemas by installi
 
 
 
-## Demo: constructing complicated data in 3 steps
+## Demo: constructing complicated data in 3 steps (before v2)
 
 Let's take Agile's model for example, it includes Story, Task and User, here is a [live demo](https://www.newsyeah.fun/voyager/)
 
