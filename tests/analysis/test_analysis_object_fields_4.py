@@ -42,7 +42,7 @@ class A(BaseModel):
 
 def test_long_distance_resolve():
     result = Analytic().scan(A)
-    prefix = 'tests.common.test_analysis_object_fields_4'
+    prefix = 'tests.analysis.test_analysis_object_fields_4'
     expect = {
         f'{prefix}.A': {
             'resolve': [],

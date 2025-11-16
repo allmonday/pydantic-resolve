@@ -85,7 +85,7 @@ class Kls(BaseModel):
 # self reference will not support early skip traversal.
 def test_analysis_object_fields():
     result = Analytic().scan(Kls)
-    prefix = 'tests.common.test_analysis_object_fields_1'
+    prefix = 'tests.analysis.test_analysis_object_fields_1'
     expect = {
         f'{prefix}.Kls': {
             'resolve': [],

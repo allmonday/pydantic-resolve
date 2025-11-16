@@ -2,7 +2,7 @@ import pytest
 from typing import List
 import pydantic_resolve.constant as const
 from pydantic import BaseModel
-from pydantic_resolve.utils.resolver_factory import config_resolver
+from pydantic_resolve.utils.resolver_configurator import config_resolver
 from pydantic_resolve import ErConfig, Relationship
 
 

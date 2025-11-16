@@ -14,6 +14,7 @@ from .utils.subset import DefineSubset
 from .utils.openapi import (
     model_config)
 from .utils.er_diagram import Relationship, ErConfig, ErDiagram, LoadBy
+from .utils.resolver_configurator import config_resolver, config_global_resolver
 
 
 __all__ = [
@@ -41,4 +42,7 @@ __all__ = [
     'Relationship',
     'ErDiagram',
     'LoadBy',
+
+    'config_resolver',
+    'config_global_resolver',
 ]

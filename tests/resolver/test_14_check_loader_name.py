@@ -3,8 +3,8 @@ from typing import List
 import pytest
 from pydantic import BaseModel
 from pydantic_resolve import Resolver, LoaderDepend
-import tests.pydantic_v2.resolver.test_14_deps.mod_a as a
-import tests.pydantic_v2.resolver.test_14_deps.mod_b as b
+import tests.resolver.test_14_deps.mod_a as a
+import tests.resolver.test_14_deps.mod_b as b
 
 @pytest.mark.asyncio
 async def test_loader_depends():

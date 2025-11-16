@@ -36,7 +36,7 @@ async def test_loader_query_meta():
     ]
     resolver = Resolver()
     classrooms = await resolver.resolve(classrooms)
-    loader_instance = resolver.loader_instance_cache['tests.common.test_loader_query_meta.SampleLoader']
+    loader_instance = resolver.loader_instance_cache['tests.resolver.test_49_loader_query_meta.SampleLoader']
 
     # _query_meta should be ready after first scan
     assert loader_instance._query_meta['request_types'] == [
