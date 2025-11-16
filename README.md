@@ -8,6 +8,8 @@ Pydantic Resolve provides a class-based approach to composing complex data model
 
 It elevates Pydantic from a static data container to a powerful, flexible computation layer.
 
+> from pydantic-resolve v2, `ErDiagram` are introduced, your can declare Entity Relationship and their default dataloader in application level, so that dataloader related resolve method can be simpilfied.
+
 Built on Pydantic models, it introduces resolve hooks for on-demand data fetching and post hooks for normalization, transformation, and reorganization to meet diverse requirements.
 
 The resolution lifecycle is kind like lazy evaluation: data is loaded level by level through the object.
@@ -36,6 +38,10 @@ pip install pydantic-resolve
 ```
 
 Starting from pydantic-resolve v1.11.0, both pydantic v1 and v2 are supported.
+
+The latest v1 version is v1.13.5
+
+Starting from pydantic-resolve v2.0.0a1, it only supports pydantic v2.
 
 
 ## Supports

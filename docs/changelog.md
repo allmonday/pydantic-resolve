@@ -2,13 +2,14 @@
 
 ## v2.0
 
-### v2.0.0
-- features
-    - add er_config
-    - a new version of subset: DefineSubset
-- enhancements
-    - caching metadata generated from analysis process
-- changes
+### v2.0.0a1
+- features:
+    - add `er_diagram` to define application level entity relationships.
+    - add `config_resolver` and `config_global_resolver` to bind Resolver with er_diagram.
+    - a new version of subset: `DefineSubset`.
+- enhancements:
+    - caching metadata generated during analysis process
+- breaks:
     - remove support of pydantic v1 and dataclass
     - 3.10 now is the minimal requirement
 
