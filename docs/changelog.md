@@ -2,7 +2,12 @@
 
 ## v2.0
 
-### v2.0.0a1
+### v2.0.0a2 (2025.11.17)
+- fix:
+    - raise ValueError if er_diagram are not provided when LoadBy are used in somewhere
+    - relationship.loader is optional, but required if used in LoadBy 
+
+### v2.0.0a1 (2025.11.16)
 - features:
     - add `er_diagram` to define application level entity relationships.
     - add `config_resolver` and `config_global_resolver` to bind Resolver with er_diagram.
