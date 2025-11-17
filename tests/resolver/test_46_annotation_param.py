@@ -44,4 +44,4 @@ async def test_without_annotation_param():
         A(id=3, name='item3'),
     ]
     with pytest.raises(Exception):
-        resolved_items = await Resolver().resolve(items)
+        await Resolver().resolve(items)

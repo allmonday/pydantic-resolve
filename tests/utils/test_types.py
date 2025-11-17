@@ -148,12 +148,12 @@ def test_get_class_field_annotations_with_inheritance():
 
 def test_is_optional_compatibility():
     """Test that _is_optional works correctly across Python versions"""
-    assert _is_optional(Optional[int]) == True
-    assert _is_optional(Union[int, None]) == True
-    assert _is_optional(Union[None, int]) == True
-    assert _is_optional(int) == False
-    assert _is_optional(List[int]) == False
-    assert _is_optional(Union[int, str]) == False
+    assert _is_optional(Optional[int])
+    assert _is_optional(Union[int, None])
+    assert _is_optional(Union[None, int])
+    assert not _is_optional(int)
+    assert not _is_optional(List[int])
+    assert not _is_optional(Union[int, str])
 
 
 # Additional edge case tests
@@ -198,6 +198,6 @@ def test_union_edge_cases():
 )
 def test_non_list_container_types(annotation):
     """Test that non-list container types are not treated as lists"""
-    assert _is_list(annotation) == False
+    assert not _is_list(annotation)
     # These should return as single types
     assert get_core_types(annotation) == (annotation,)

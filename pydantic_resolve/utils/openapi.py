@@ -50,7 +50,7 @@ def model_config(default_required: bool=True):
             def build():
                 def _schema_extra(schema: Dict[str, Any], model) -> None:
                     # 1. collect exclude fields and then hide in both schema and dump (default action)
-                    excluded_fields = [k for k, v in kls.model_fields.items() if v.exclude == True]
+                    excluded_fields = [k for k, v in kls.model_fields.items() if v.exclude]
                     props = {}
 
                     # config schema properties

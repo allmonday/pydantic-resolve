@@ -87,4 +87,4 @@ async def test_instance_4():
     metadata = Analytic().scan(Student)
 
     with pytest.raises(LoaderFieldNotProvidedError):
-        loader_instance = validate_and_create_loader_instance({}, {}, {}, metadata)
+        validate_and_create_loader_instance({}, {}, {}, metadata)

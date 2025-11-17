@@ -73,7 +73,7 @@ def test_scan_post_method_4():
         
     result = _scan_post_default_handler(A.post_default_handler)
 
-    assert result['context'] == True
-    assert result['parent'] == True
-    assert result['ancestor_context'] == True
+    assert result['context']
+    assert result['parent']
+    assert result['ancestor_context']
 

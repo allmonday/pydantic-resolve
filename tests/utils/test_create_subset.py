@@ -78,7 +78,7 @@ class TestCreateSubset:
         # Test constraint validation (if constraints are preserved)
         # Note: This may depend on how well create_model preserves constraints
         try:
-            invalid_instance = Subset(id=0, name='a')  # id should be > 0, name too short
+            Subset(id=0, name='a')  # id should be > 0, name too short
             # If no exception is raised, constraints might not be fully preserved
             # This is expected behavior with basic create_model usage
         except Exception:
@@ -179,7 +179,7 @@ class TestCreateSubset:
         Subset = create_subset(Parent, [], 'EmptySubset')
         
         # Should be able to create instance with no fields
-        instance = Subset()
+        Subset()
         
         # Should have no fields
         field_names = list(Subset.model_fields.keys())

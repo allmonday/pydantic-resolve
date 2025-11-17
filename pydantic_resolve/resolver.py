@@ -374,12 +374,14 @@ class Resolver:
         reset1()
         reset2()
         reset3()
-        if self.debug: self.ancestor_list.reset(token)
+        if self.debug: 
+            self.ancestor_list.reset(token)
 
         return node
 
     async def resolve(self, node: T) -> T:
-        if isinstance(node, list) and node == []: return node
+        if isinstance(node, list) and node == []:
+            return node
 
         # by default pydantic-resolve will deduce the root class from input node
         # but in some scenario like Union types, it is unable to deduce the root class

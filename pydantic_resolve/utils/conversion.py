@@ -43,7 +43,7 @@ def try_parse_data_to_target_field_type(
         field_type = _fields[field_name].annotation
 
         # handle optional logic
-        if data is None and _fields[field_name].is_required() == False:
+        if data is None and not _fields[field_name].is_required():
             return data
 
     # 2. parse
