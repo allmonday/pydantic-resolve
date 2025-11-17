@@ -2,7 +2,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import List
 from pydantic import BaseModel
-from pydantic_resolve import Resolver, LoaderDepend, mapper
+from pydantic_resolve import Resolver, LoaderDepend
 from aiodataloader import DataLoader
 import pytest
 

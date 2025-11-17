@@ -21,7 +21,7 @@ class Relationship(BaseModel):
     field_none_default: Optional[Any] = None
     field_none_default_factory: Optional[Callable[[], Any]] = None
 
-    loader: Callable
+    loader: Optional[Callable]
 
     @model_validator(mode="after")
     def _validate_defaults(self) -> "Relationship":
@@ -77,6 +77,8 @@ class ErDiagram(BaseModel):
             seen.add(kls)
         return self
 
+    description: Optional[str] = None
+
 
 @dataclass
 class LoaderInfo:
@@ -94,8 +96,6 @@ class ErPreGenerator:
 
     def _identify_config(self, target: Type) -> ErConfig:
         """Locate the matching ErConfig for a target class via compatibility check."""
-        if self.er_configs_map is None:
-            raise AttributeError('er_configs_map is None, cannot identify config')
         for kls, cfg in self.er_configs_map.items():
             if class_util.is_compatible_type(target, kls):
                 return cfg
@@ -118,12 +118,13 @@ class ErPreGenerator:
         For each pydantic field carrying LoadBy, create a resolve method that uses the
         corresponding relationship's loader via LoaderDepend.
         """
-        if self.er_configs_map is None:
-            return
-
         auto_loader_fields = list(class_util.get_pydantic_field_items_with_load_by(kls))
+
         if not auto_loader_fields:
-            return
+            return 
+
+        if self.er_configs_map is None:
+            raise ValueError('er_configs_map is None, cannot identify config')
 
         config = self._identify_config(kls)
 
@@ -141,6 +142,10 @@ class ErPreGenerator:
                 biz=loader_info.biz,
                 target_kls=annotation,
             )
+
+            if relationship.loader is None:
+                # loader is optional in Relationship, but required for auto-generation
+                raise AttributeError(f'Loader not provided in relationship for field "{loader_info.field}" in class "{kls.__name__}"')
 
             def create_resolve_method(key: str, rel: Relationship):  # closure per field
                 def resolve_method(self, loader=LoaderDepend(rel.loader)):

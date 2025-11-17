@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import List
 import pytest
-from collections import Counter, defaultdict
+from collections import Counter
 from aiodataloader import DataLoader
 from pydantic import ConfigDict, BaseModel
 from sqlalchemy import select

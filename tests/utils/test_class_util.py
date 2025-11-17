@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from pydantic_resolve.utils.class_util import is_compatible_type
 from pydantic_resolve.utils.subset import DefineSubset
-from typing import List, Optional, Union
+from typing import List, Optional
 
 class A(BaseModel):
     id: int

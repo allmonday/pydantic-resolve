@@ -1,5 +1,5 @@
 from pydantic_resolve.utils.openapi import model_config
-from pydantic import BaseModel, Field, TypeAdapter
+from pydantic import BaseModel, Field
 from pydantic_resolve import Resolver
 from pydantic.json_schema import GenerateJsonSchema as GenerateJsonSchema
 import pytest

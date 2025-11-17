@@ -1,8 +1,8 @@
 import pytest
-from typing import Optional, Annotated, List
+from typing import Optional, Annotated
 from pydantic import BaseModel
 from pydantic_resolve import config_resolver
-from pydantic_resolve import ErConfig, Relationship, LoadBy, DefineSubset, ErDiagram
+from pydantic_resolve import ErConfig, Relationship, LoadBy, ErDiagram
 from aiodataloader import DataLoader
 
 

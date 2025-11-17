@@ -1,5 +1,4 @@
 from pydantic_resolve.utils.types import (
-    _is_optional, 
     _is_list,
     get_core_types, 
     shelling_type,

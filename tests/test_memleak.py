@@ -1,7 +1,7 @@
-from uuid import uuid1, UUID
+from uuid import uuid1
 from pydantic_resolve import Resolver
 import gc
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 import psutil
 import pytest
 

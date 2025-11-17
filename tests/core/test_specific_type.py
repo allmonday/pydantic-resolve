@@ -1,8 +1,7 @@
 from __future__ import annotations
 from typing import Tuple
 from pydantic import BaseModel
-from pydantic_resolve.analysis import Analytic, convert_metadata_key_as_kls
-from pydantic_resolve import LoaderDepend
+from pydantic_resolve.analysis import Analytic
 
 async def loader_fn(keys):
     return keys

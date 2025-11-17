@@ -1,7 +1,6 @@
 from typing import List
 import pytest
 from collections import Counter, defaultdict
-from typing import Tuple
 from aiodataloader import DataLoader
 from pydantic import ConfigDict, BaseModel
 from sqlalchemy import select

@@ -1,6 +1,6 @@
 from __future__ import annotations
 from pydantic import BaseModel, ValidationError
-from pydantic_resolve import build_object, LoaderDepend, Resolver, build_list
+from pydantic_resolve import LoaderDepend, Resolver, build_list
 from typing import List, Optional
 import pytest
 

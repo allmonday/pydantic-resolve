@@ -3,7 +3,6 @@ from typing import List
 from pydantic_resolve import Resolver, LoaderDepend
 from aiodataloader import DataLoader
 import pytest
-from pydantic_resolve.exceptions import GlobalLoaderFieldOverlappedError
 
 class LoaderA(DataLoader):
     power: int

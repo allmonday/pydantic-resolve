@@ -1,5 +1,4 @@
 import copy
-import warnings
 import inspect
 from typing import List, Type, Dict, Optional, Tuple
 from inspect import isfunction, isclass
@@ -9,8 +8,8 @@ from pydantic import BaseModel
 import pydantic_resolve.constant as const
 import pydantic_resolve.utils.class_util as class_util
 from pydantic_resolve.utils.collector import ICollector
-from pydantic_resolve.utils.depend import Depends, LoaderDepend
-from pydantic_resolve.utils.er_diagram import ErConfig, ErDiagram, ErPreGenerator
+from pydantic_resolve.utils.depend import Depends
+from pydantic_resolve.utils.er_diagram import ErDiagram, ErPreGenerator
 import pydantic_resolve.utils.params as params_util
 from pydantic_resolve.exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingCollector
 
