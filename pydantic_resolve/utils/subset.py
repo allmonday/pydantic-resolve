@@ -135,29 +135,42 @@ class SubsetMeta(type):
     def __new__(cls, name, bases, namespace, **kwargs):
         subset_info = namespace.get('__pydantic_resolve_subset__')
         if subset_info:
-            parent, fields = subset_info
-            # Build subset fields from parent first
-            unique_fields = _normalize_unique_fields(fields)
-            parent_fields = _extract_field_definitions_for_create_model(parent, unique_fields)
+            parent_kls, picked_field = subset_info
+
+            unique_fields = _normalize_unique_fields(picked_field)
+            parent_fields = _extract_field_definitions_for_create_model(parent_kls, unique_fields)
 
             # Then extract extra fields defined in class body
             extra_fields = _extract_extra_fields_from_namespace(namespace, set(unique_fields))
 
             # Parent validators and config should still apply to subset fields
-            validators = _get_parent_validators(parent, unique_fields)
             create_model_kwargs: Dict[str, Any] = {}
-            config = _get_parent_config(parent)
+            methods_to_attach: Dict[str, Any] = {}
+            attributes_to_attach: Dict[str, Any] = {}
+
+            validators = _get_parent_validators(parent_kls, unique_fields)
+            config = _get_parent_config(parent_kls)
             if config:
                 create_model_kwargs['__config__'] = config
 
             # Use the caller's module for better reprs and pickling
             create_model_kwargs['__module__'] = namespace.get('__module__', __name__)
 
+            for nk, nv in namespace.items():
+                if nk.startswith('__pydantic_resolve') and nk != '__pydantic_resolve_subset__':
+                    attributes_to_attach[nk] = nv
+                    continue
+
+                if callable(nv) and (nk.startswith(const.RESOLVE_PREFIX) or nk.startswith(const.POST_PREFIX)):
+                    methods_to_attach[nk] = nv
+
+
             # Merge field definitions: keep subset order first, then extras
             field_definitions: Dict[str, Tuple[Any, Any]] = {}
             field_definitions.update(parent_fields)
             field_definitions.update(extra_fields)
 
+            print(create_model_kwargs)
             subset_class = create_model(
                 name,
                 **field_definitions,
@@ -165,7 +178,13 @@ class SubsetMeta(type):
             )
 
             _apply_validators(subset_class, validators)
-            setattr(subset_class, const.ENSURE_SUBSET_REFERENCE, parent)
+
+            for method_name, method in methods_to_attach.items():
+                setattr(subset_class, method_name, method)
+            for attr_name, attr_value in attributes_to_attach.items():
+                setattr(subset_class, attr_name, attr_value)
+            setattr(subset_class, const.ENSURE_SUBSET_REFERENCE, parent_kls)
+
             return subset_class
             
         # Allow defining the base marker class without warning, bypass

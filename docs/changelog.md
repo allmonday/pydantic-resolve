@@ -2,6 +2,10 @@
 
 ## v2.0
 
+### v2.0.0a3 (2025.11.19)
+- fix:
+    - DefineSubset lost resolve/post methods and `__pydantic_resolve_xxx__` configs
+
 ### v2.0.0a2 (2025.11.17)
 - fix:
     - raise ValueError if er_diagram are not provided when LoadBy are used in somewhere

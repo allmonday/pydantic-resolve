@@ -4,6 +4,7 @@ import pytest
 from typing import Optional
 from pydantic import BaseModel, Field
 from pydantic_resolve.utils.subset import create_subset, DefineSubset
+from pydantic_resolve import Resolver, Collector
 import pydantic_resolve.constant as const
 
 
@@ -349,4 +350,53 @@ class TestSubsetMeta:
         with pytest.raises(ValueError):
             class MySubset2(DefineSubset):
                 id: str
+        
+
+class TestSubsetResolve:
+    @pytest.mark.asyncio
+    async def test_basic_subset_creation(self):
+        class Parent(BaseModel):
+            id: int
+            name: str
+            age: int
+            email: str
+
+        class Item(BaseModel):
+            __pydantic_resolve_collect__ = {
+                'count': 'collector'
+            }
+            name: str = ''
+            def resolve_name(self, ancestor_context):
+                return ancestor_context['my_subset_name']
+            
+            count: int
+        
+        class MySubset(DefineSubset):
+            __pydantic_resolve_subset__ = (Parent, ('id', 'name'))
+            __pydantic_resolve_expose__ = {
+                'name': 'my_subset_name'
+            }
+            new_field: str = ''
+
+            def resolve_new_field(self) -> str:
+                return f"{self.id}-{self.name}"
+            
+            items: list[Item] = []
+            def resolve_items(self):
+                return [Item(count=1), Item(count=2)] 
+            
+            total: int = 0
+            def post_total(self, collector=Collector(alias='collector')):
+                return sum(collector.values())
+            
+            hello: str = 'world'
+            def post_default_handler(self):
+                self.hello = 'hello world'
+        
+        instance = MySubset(id=1, name='test')
+        await Resolver().resolve(instance)
+        assert instance.new_field == '1-test'
+        assert instance.items[0].name == 'test'
+        assert instance.total == 3
+        assert instance.hello == 'hello world'
         

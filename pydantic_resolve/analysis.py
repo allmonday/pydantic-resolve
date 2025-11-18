@@ -439,6 +439,7 @@ class Analytic:
             if hit['should_traverse'] or self._has_config(hit):
                 self._populate_ancestors(ancestors)
             return
+
         self.er_pre_generator.prepare(kls)
 
         # - prepare fields, with resolve_, post_ reserved
