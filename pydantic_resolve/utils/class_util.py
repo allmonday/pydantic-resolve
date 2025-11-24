@@ -7,9 +7,6 @@ from pydantic_resolve.utils.er_diagram import LoaderInfo
 from pydantic_resolve.utils.types import get_type, get_core_types
 from pydantic import BaseModel
 
-def rebuild(kls):
-    kls.model_rebuild()
-
 
 def ensure_subset(base):
     """
@@ -120,26 +117,26 @@ def get_class_of_object(target):
 
 
 def update_forward_refs(kls):
-    def update_pydantic_forward_refs(kls: Type[BaseModel]):
+    def update_pydantic_forward_refs(pydantic_kls: type[BaseModel]):
         """
         recursively update refs.
         """
-        if getattr(kls, const.PYDANTIC_FORWARD_REF_UPDATED, False):
-            return
 
-        rebuild(kls)
+        pydantic_kls.model_rebuild()
+        setattr(pydantic_kls, const.PYDANTIC_FORWARD_REF_UPDATED, True)
 
-        setattr(kls, const.PYDANTIC_FORWARD_REF_UPDATED, True)
-        
-        values = get_pydantic_field_values(kls)
-
+        values = pydantic_kls.model_fields.values()
         for field in values:
-            shelled_types = get_core_types(get_type(field))
-            for shelled_type in shelled_types:
-                update_forward_refs(shelled_type)
+            update_forward_refs(field.annotation)
+        
+    for shelled_type in get_core_types(kls):
+        # Only treat as updated if the flag is set on the class itself, not via inheritance
+        local_attrs = getattr(shelled_type, '__dict__', {})
+        if local_attrs.get(const.PYDANTIC_FORWARD_REF_UPDATED, False):
+            continue
 
-    if safe_issubclass(kls, BaseModel):
-        update_pydantic_forward_refs(kls)
+        if safe_issubclass(shelled_type, BaseModel):
+            update_pydantic_forward_refs(shelled_type)
 
 
 def get_kls_full_name(kls):
