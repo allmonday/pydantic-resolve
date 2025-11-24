@@ -90,7 +90,7 @@ def LoadBy(key: str, biz: Optional[str] = None) -> LoaderInfo:
     return LoaderInfo(field=key, biz=biz)
 
 
-class ErPreGenerator:
+class ErLoaderPreGenerator:
     def __init__(self, er_diagram: Optional[ErDiagram]) -> None:
         self.er_configs_map = {config.kls: config for config in er_diagram.configs} if er_diagram else None
 

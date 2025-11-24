@@ -3,7 +3,7 @@ from typing import List
 import pydantic_resolve.constant as const
 from pydantic import BaseModel
 from pydantic_resolve.utils.resolver_configurator import config_resolver
-from pydantic_resolve import ErConfig, Relationship
+from pydantic_resolve import ErConfig, Relationship, ErDiagram
 
 
 class User(BaseModel):
@@ -26,19 +26,18 @@ async def test_resolver_factory():
 
 
 def test_config_resolver_good_case():
-    er_configs = [
-        ErConfig(
-            kls=User,
-            relationships=[
-                Relationship(field='name', target_kls=List[User], loader=lambda keys: keys),  # type: ignore[list-item]
-            ],
-        )
-    ]
+    er_configs = ErDiagram(
+        configs=[
+            ErConfig(
+                kls=User,
+                relationships=[
+                    Relationship(field='name', target_kls=List[User], loader=lambda keys: keys),  # type: ignore[list-item]
+                ],)])
     config_resolver('MyResolver', er_configs)
 
 
 def test_config_resolver_allow_duplicate_field_different_target():
-    er_configs = [
+    er_configs = ErDiagram(configs=[
         ErConfig(
             kls=User,
             relationships=[
@@ -46,7 +45,7 @@ def test_config_resolver_allow_duplicate_field_different_target():
                 Relationship(field='name', target_kls=Admin, loader=lambda keys: keys),
             ],
         )
-    ]
+    ])
 
     # should not raise
     MyResolver = config_resolver('MyResolver', er_configs)

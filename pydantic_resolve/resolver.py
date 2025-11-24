@@ -20,6 +20,7 @@ T = TypeVar("T")
 class Resolver:
     # define class attribute using constant to avoid hardcoded name
     locals()[const.ER_DIAGRAM] = None
+    locals()[const.ER_DIAGRAM_PRE_GENERATOR] = None
 
     def __init__(
             self,
@@ -393,7 +394,7 @@ class Resolver:
         else:
             metadata = analysis.convert_metadata_key_as_kls(
                 analysis.Analytic(
-                    er_diagram=getattr(self, const.ER_DIAGRAM)
+                    er_pre_generator=getattr(self, const.ER_DIAGRAM_PRE_GENERATOR)
                 ).scan(root_class)
             )
             METADATA_CACHE[root_class] = metadata
