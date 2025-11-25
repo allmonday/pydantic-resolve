@@ -10,6 +10,8 @@ class Biz(BaseModel):
     id: int
     name: str
     user_id: int
+    user_ids: list[int] = []
+    user_ids_str:str = ''
 
 class Foo(BaseModel):
     id: int
@@ -75,6 +77,12 @@ diagram = ErDiagram(
     configs=[
         ErConfig(kls=Biz, relationships=[
             Relationship(field='user_id', target_kls=User, loader=UserLoader),
+            Relationship(field='user_ids', target_kls=list[User], load_many=True, loader=UserLoader),
+            Relationship(field='user_ids_str', 
+                         target_kls=list[User],
+                         load_many=True,
+                         load_many_fn=lambda x: [int(xx) for xx in x.split(',')] if x else [],
+                         loader=UserLoader),
             Relationship(field='id', target_kls=List[Foo], loader=FooLoader),
             Relationship(field='id', target_kls=List[Bar], loader=BarLoader),
             Relationship(field='id', biz='special', target_kls=List[Bar], loader=SpecialBarLoader),
@@ -87,20 +95,27 @@ class BizCase1(Biz):
     foos: Annotated[List[Foo], LoadBy('id')] = []
     bars: Annotated[List[Bar], LoadBy('id')] = []
     special_bars: Annotated[list[Bar], LoadBy('id', biz='special')] = []
+    users_a: Annotated[list[User], LoadBy('user_ids')] = []
+    users_b: Annotated[list[User], LoadBy('user_ids_str')] = []
     
 
 @pytest.mark.asyncio
 async def test_resolver_factory_with_er_configs_inherit():
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
-    d = [BizCase1(id=1, name="qq", user_id=1), BizCase1(id=2, name="ww", user_id=2)]
+    d = [BizCase1(id=1, name="qq", user_id=1, user_ids=[1], user_ids_str='1,2'), BizCase1(id=2, name="ww", user_id=2)]
     d = await MyResolver().resolve(d)
 
     assert d[0].user.name == "a"
     assert d[0].bars == [Bar(id=1, name="bar1", biz_id=1), Bar(id=2, name="bar2", biz_id=1)]
     assert d[0].special_bars == [Bar(id=1, name="special-bar1", biz_id=1), Bar(id=2, name="special-bar2", biz_id=1)]
+    assert d[0].users_a == [User(id=1, name="a")]
+    assert d[0].users_b == [User(id=1, name="a"), User(id=2, name="b")]
 
     assert d[1].user.name == "b"
     assert d[1].foos == [Foo(id=3, name="foo3", biz_id=2)]
+    assert d[1].users_a == []
+    assert d[1].users_b == []
+    
 
 class SubUser(DefineSubset):
     __pydantic_resolve_subset__ = (User, ['id'])

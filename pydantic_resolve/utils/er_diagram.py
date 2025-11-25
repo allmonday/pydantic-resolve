@@ -21,6 +21,14 @@ class Relationship(BaseModel):
     field_none_default: Optional[Any] = None
     field_none_default_factory: Optional[Callable[[], Any]] = None
 
+    # load_many
+    load_many: bool = False
+
+    # in case of fk itself is not list, for example: str
+    # and need to seperate manually,
+    # call load_many_fn to handle it.
+    load_many_fn: Callable[[Any], Any] = None  
+
     loader: Optional[Callable]
 
     @model_validator(mode="after")
@@ -163,4 +171,27 @@ class ErLoaderPreGenerator:
                 resolve_method.__qualname__ = f'{kls.__name__}.{method_name}'
                 return resolve_method
 
-            setattr(kls, method_name, create_resolve_method(loader_info.field, relationship),)
+            def create_resolve_method_with_load_many(key: str, rel: Relationship):  # closure per field
+                def resolve_method(self, loader=LoaderDepend(rel.loader)):
+                    fk = getattr(self, key)
+                    if fk is None:
+                        fields_set = getattr(rel, 'model_fields_set', set())
+                        if 'field_none_default' in fields_set:
+                            return rel.field_none_default  # may be None intentionally
+
+                        if rel.field_none_default_factory is not None:
+                            return rel.field_none_default_factory()
+                        return None
+
+                    if rel.load_many_fn is not None:
+                        fk = rel.load_many_fn(fk)
+                    return loader.load_many(fk)
+
+                resolve_method.__name__ = method_name
+                resolve_method.__qualname__ = f'{kls.__name__}.{method_name}'
+                return resolve_method
+
+            if relationship.load_many:
+                setattr(kls, method_name, create_resolve_method_with_load_many(loader_info.field, relationship))
+            else:
+                setattr(kls, method_name, create_resolve_method(loader_info.field, relationship))
