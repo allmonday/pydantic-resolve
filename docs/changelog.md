@@ -2,6 +2,17 @@
 
 ## v2.0
 
+### v2.0.0 (2025.11.26)
+- release
+
+### v2.0.0a5 (2025.11.25)
+- feat:
+    - support load_many in Relationship
+
+### v2.0.0a4 (2025.11.23)
+- refactor:
+    - optimize ErPreGenerator
+
 ### v2.0.0a3 (2025.11.19)
 - fix:
     - DefineSubset lost resolve/post methods and `__pydantic_resolve_xxx__` configs
