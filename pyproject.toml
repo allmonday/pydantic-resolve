@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "pydantic-resolve"
 version = "2.0.0a4"
-description = "A business model friendly data orchestration tool, simple way to implement the core concept of clean architecture."
+description = "pydantic-resolve turns pydantic from a static data container into a powerful composable component."
 authors = ["tangkikodo <allmonday@126.com>"]
 readme = "README.md"
 repository = "https://github.com/allmonday/pydantic_resolve"
