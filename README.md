@@ -16,7 +16,8 @@ It introduces resolve hooks for on-demand data fetching, and post hooks for norm
 # latest v1
 pip install pydantic-resolve==1.13.5
 
-pip install pydantic-resolve==2.0.0
+# v2
+pip install pydantic-resolve
 ```
 
 Starting from pydantic-resolve v1.11.0, both pydantic v1 and v2 are supported.
