@@ -29,7 +29,7 @@ class Relationship(BaseModel):
     # call load_many_fn to handle it.
     load_many_fn: Callable[[Any], Any] = None  
 
-    loader: Optional[Callable]
+    loader: Optional[Callable] = None
 
     @model_validator(mode="after")
     def _validate_defaults(self) -> "Relationship":
@@ -43,12 +43,12 @@ class Relationship(BaseModel):
             )
         return self
 
-class ErConfig(BaseModel):
+class Entity(BaseModel):
     kls: Type[BaseModel]
     relationships: list[Relationship]
 
     @model_validator(mode="after")
-    def _validate_relationships(self) -> "ErConfig":
+    def _validate_relationships(self) -> "Entity":
         rels = self.relationships or []
 
         # helper to make potentially unhashable target_kls hashable for set/dict keys
@@ -72,7 +72,7 @@ class ErConfig(BaseModel):
         return self
 
 class ErDiagram(BaseModel):
-    configs: list[ErConfig]
+    configs: list[Entity]
 
     @model_validator(mode="after")
     def _validate_configs(self) -> "ErDiagram":
@@ -102,14 +102,14 @@ class ErLoaderPreGenerator:
     def __init__(self, er_diagram: Optional[ErDiagram]) -> None:
         self.er_configs_map = {config.kls: config for config in er_diagram.configs} if er_diagram else None
 
-    def _identify_config(self, target: Type) -> ErConfig:
+    def _identify_config(self, target: Type) -> Entity:
         """Locate the matching ErConfig for a target class via compatibility check."""
         for kls, cfg in self.er_configs_map.items():
             if class_util.is_compatible_type(target, kls):
                 return cfg
         raise AttributeError(f'No ErConfig found for {target.__name__}')
 
-    def _identify_relationship(self, config: ErConfig, loadby: str, biz: Optional[str], target_kls: Type) -> Relationship:
+    def _identify_relationship(self, config: Entity, loadby: str, biz: Optional[str], target_kls: Type) -> Relationship:
         """Find the relationship matching (field=loadby, biz, target_kls)."""
         for rel in config.relationships:
             if rel.field != loadby:

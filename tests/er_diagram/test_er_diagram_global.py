@@ -2,7 +2,7 @@ import pytest
 from typing import Optional, Annotated, List
 from pydantic import BaseModel
 from pydantic_resolve.utils.resolver_configurator import config_global_resolver
-from pydantic_resolve import ErConfig, Relationship, LoadBy, DefineSubset, ErDiagram, Resolver
+from pydantic_resolve import Entity, Relationship, LoadBy, DefineSubset, ErDiagram, Resolver
 from aiodataloader import DataLoader
 
 
@@ -74,7 +74,7 @@ class FooLoader(DataLoader):
 
 diagram = ErDiagram(
     configs=[
-        ErConfig(kls=Biz, relationships=[
+        Entity(kls=Biz, relationships=[
             Relationship(field='user_id', target_kls=User, loader=UserLoader),
             Relationship(field='id', target_kls=List[Foo], loader=FooLoader),
             Relationship(field='id', target_kls=List[Bar], loader=BarLoader),

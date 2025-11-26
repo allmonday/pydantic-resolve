@@ -2,6 +2,9 @@
 
 ## v2.0
 
+### v2.0.1 (2025.11.26)
+- rename `ErConfig` to `Entity` (caution: will break current code)
+
 ### v2.0.0 (2025.11.26)
 - release
 

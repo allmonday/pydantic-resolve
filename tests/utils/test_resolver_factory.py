@@ -3,7 +3,7 @@ from typing import List
 import pydantic_resolve.constant as const
 from pydantic import BaseModel
 from pydantic_resolve.utils.resolver_configurator import config_resolver
-from pydantic_resolve import ErConfig, Relationship, ErDiagram
+from pydantic_resolve import Entity, Relationship, ErDiagram
 
 
 class User(BaseModel):
@@ -28,7 +28,7 @@ async def test_resolver_factory():
 def test_config_resolver_good_case():
     er_configs = ErDiagram(
         configs=[
-            ErConfig(
+            Entity(
                 kls=User,
                 relationships=[
                     Relationship(field='name', target_kls=List[User], loader=lambda keys: keys),  # type: ignore[list-item]
@@ -38,7 +38,7 @@ def test_config_resolver_good_case():
 
 def test_config_resolver_allow_duplicate_field_different_target():
     er_configs = ErDiagram(configs=[
-        ErConfig(
+        Entity(
             kls=User,
             relationships=[
                 Relationship(field='name', target_kls=User, loader=lambda keys: keys),
