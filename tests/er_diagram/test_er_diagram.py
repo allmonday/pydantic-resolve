@@ -1,7 +1,7 @@
 import pytest
 from typing import Optional, Annotated, List
 from pydantic import BaseModel
-from pydantic_resolve import config_resolver
+from pydantic_resolve import config_resolver, Loader
 from pydantic_resolve import Entity, Relationship, LoadBy, DefineSubset, ErDiagram, ensure_subset
 from aiodataloader import DataLoader
 
@@ -187,9 +187,25 @@ class BizCase5(BaseModel):
 
 
 @pytest.mark.asyncio
-async def test_resolver_factory_with_er_configs_subset():
+async def test_resolver_factory_with_permitive_annotation():
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
     d = BizCase5(id=1, user_id=1)
     d = await MyResolver().resolve(d)
     assert d.user is not None
     assert d.foos_in_str_x == ["foo1", "foo2"]
+
+
+class BizCase6(Biz):
+    user: Annotated[Optional[User], LoadBy('user_id')] = None
+    def resolve_user(self, loader=Loader(UserLoader)):
+        return loader.load(self.user_id)
+    foos_in_str_x: Annotated[List[str], LoadBy('id', biz='x')] = []
+
+
+@pytest.mark.asyncio
+async def test_resolver_factory_with_permitive_annotation_2():
+    MyResolver = config_resolver('MyResolver', er_diagram=diagram)
+    d = BizCase6(id=1, user_id=1, name="qq")
+    with pytest.warns(UserWarning):
+        d = await MyResolver().resolve(d)
+
