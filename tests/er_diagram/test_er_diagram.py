@@ -2,7 +2,7 @@ import pytest
 from typing import Optional, Annotated, List
 from pydantic import BaseModel
 from pydantic_resolve import config_resolver
-from pydantic_resolve import Entity, Relationship, LoadBy, DefineSubset, ErDiagram
+from pydantic_resolve import Entity, Relationship, LoadBy, DefineSubset, ErDiagram, ensure_subset
 from aiodataloader import DataLoader
 
 
@@ -73,6 +73,20 @@ class FooLoader(DataLoader):
             foo_map.setdefault(f['biz_id'], []).append(f)
         return [foo_map.get(k, []) for k in keys]
 
+class FooNameLoader(DataLoader):
+    async def batch_load_fn(self, keys):
+        foos = [
+            dict(id=1, name="foo1", biz_id=1),
+            dict(id=2, name="foo2", biz_id=1),
+            dict(id=3, name="foo3", biz_id=2),
+        ]
+        foo_map = {}
+        for f in foos:
+            foo_map.setdefault(f['biz_id'], []).append(f)
+        val = [foo_map.get(k, []) for k in keys]
+        return [[vv['name'] for vv in v] for v in val]
+
+
 diagram = ErDiagram(
     configs=[
         Entity(kls=Biz, relationships=[
@@ -84,6 +98,8 @@ diagram = ErDiagram(
                          load_many_fn=lambda x: [int(xx) for xx in x.split(',')] if x else [],
                          loader=UserLoader),
             Relationship(field='id', target_kls=List[Foo], loader=FooLoader),
+            Relationship(field='id', target_kls=List[str], biz="x", loader=FooNameLoader),
+            Relationship(field='id', target_kls=List[str], biz="y", loader=FooNameLoader),
             Relationship(field='id', target_kls=List[Bar], loader=BarLoader),
             Relationship(field='id', biz='special', target_kls=List[Bar], loader=SpecialBarLoader),
         ])
@@ -93,6 +109,8 @@ diagram = ErDiagram(
 class BizCase1(Biz):
     user: Annotated[Optional[User], LoadBy('user_id')] = None
     foos: Annotated[List[Foo], LoadBy('id')] = []
+    foos_in_str_x: Annotated[List[str], LoadBy('id', biz='x')] = []
+    foos_in_str_y: Annotated[List[str], LoadBy('id', biz='y')] = []
     bars: Annotated[List[Bar], LoadBy('id')] = []
     special_bars: Annotated[list[Bar], LoadBy('id', biz='special')] = []
     users_a: Annotated[list[User], LoadBy('user_ids')] = []
@@ -110,11 +128,14 @@ async def test_resolver_factory_with_er_configs_inherit():
     assert d[0].special_bars == [Bar(id=1, name="special-bar1", biz_id=1), Bar(id=2, name="special-bar2", biz_id=1)]
     assert d[0].users_a == [User(id=1, name="a")]
     assert d[0].users_b == [User(id=1, name="a"), User(id=2, name="b")]
+    assert d[0].foos_in_str_x == ["foo1", "foo2"]
+    assert d[0].foos_in_str_y == ["foo1", "foo2"]
 
     assert d[1].user.name == "b"
     assert d[1].foos == [Foo(id=3, name="foo3", biz_id=2)]
     assert d[1].users_a == []
     assert d[1].users_b == []
+
     
 
 class SubUser(DefineSubset):
@@ -155,3 +176,20 @@ async def test_resolver_factory_of_er_config_not_found():
     d = BizCase4(id=1, user_id=1)
     with pytest.raises(AttributeError):
         await MyResolver().resolve(d)
+
+@ensure_subset(Biz)
+class BizCase5(BaseModel):
+    id: int
+    user_id: int
+
+    user: Annotated[Optional[User], LoadBy('user_id')] = None
+    foos_in_str_x: Annotated[List[str], LoadBy('id', biz='x')] = []
+
+
+@pytest.mark.asyncio
+async def test_resolver_factory_with_er_configs_subset():
+    MyResolver = config_resolver('MyResolver', er_diagram=diagram)
+    d = BizCase5(id=1, user_id=1)
+    d = await MyResolver().resolve(d)
+    assert d.user is not None
+    assert d.foos_in_str_x == ["foo1", "foo2"]
