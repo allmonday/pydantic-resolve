@@ -28,10 +28,10 @@ everything else are backward compatible.
 
 ## Quick start
 
-get teams with sprints and memebers, build data struct on demand.
+get teams with sprints and memebers, build data struct on demand, using dataloader to batch load related data on-demand.
 
 ```python
-from pydantic_resolve import Loader
+from pydantic_resolve import Loader, Resolver
 
 class Sample1TeamDetail(tms.Team):
     sprints: list[Sample1SprintDetail] = []
