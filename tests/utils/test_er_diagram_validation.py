@@ -1,7 +1,13 @@
 import pytest
-from pydantic import BaseModel
-from pydantic import ValidationError
-from pydantic_resolve.utils.er_diagram import Entity, Relationship, ErDiagram
+from pydantic import BaseModel, ValidationError
+
+from pydantic_resolve.utils.er_diagram import (
+	Entity,
+	ErDiagram,
+	Link,
+	MultipleRelationship,
+	Relationship,
+)
 
 
 class A(BaseModel):
@@ -20,8 +26,7 @@ def dummy_loader(*args, **kwargs):
 	return None
 
 
-def test_valid_single_target_no_biz_required():
-	# Single target_kls for a field doesn't require biz
+def test_relationship_single_target_no_biz_required():
 	cfg = Entity(
 		kls=A,
 		relationships=[
@@ -31,70 +36,93 @@ def test_valid_single_target_no_biz_required():
 	assert isinstance(cfg, Entity)
 
 
-def test_duplicate_triple_raises():
-	with pytest.raises(ValueError):
+def test_relationship_none_default_conflict_raises():
+	with pytest.raises(ValidationError):
+		Relationship(
+			field="fk",
+			target_kls=T1,
+			loader=dummy_loader,
+			field_none_default=None,
+			field_none_default_factory=list,
+		)
+
+
+def test_entity_duplicate_field_target_raises():
+	with pytest.raises(ValidationError):
 		Entity(
 			kls=A,
 			relationships=[
-				Relationship(field="fk", biz="x", target_kls=T1, loader=dummy_loader),
-				Relationship(field="fk", biz="x", target_kls=T1, loader=dummy_loader),
+				Relationship(field="fk", target_kls=T1, loader=dummy_loader),
+				Relationship(field="fk", target_kls=T1, loader=dummy_loader),
 			],
 		)
 
 
-def test_multiple_targets_require_non_empty_unique_biz_empty_or_duplicate():
-	# duplicate biz under same field but different target_kls is ok
-	Entity(
+def test_entity_duplicate_multiple_relationship_raises():
+	with pytest.raises(ValidationError):
+		Entity(
+			kls=A,
+			relationships=[
+				MultipleRelationship(
+					field="fk",
+					target_kls=list[T1],
+					links=[Link(biz="a", loader=dummy_loader)],
+				),
+				MultipleRelationship(
+					field="fk",
+					target_kls=list[T1],
+					links=[Link(biz="b", loader=dummy_loader)],
+				),
+			],
+		)
+
+def test_multiple_relationship_unique_links_allowed():
+	entity = Entity(
 		kls=A,
 		relationships=[
-			Relationship(field="fk", biz="x", target_kls=T1, loader=dummy_loader),
-			Relationship(field="fk", biz="x", target_kls=T2, loader=dummy_loader),
+			MultipleRelationship(
+				field="fk",
+				target_kls=list[T1],
+				links=[
+					Link(biz="a", loader=dummy_loader),
+					Link(biz="b", loader=dummy_loader),
+				],
+			)
 		],
 	)
+	assert isinstance(entity, Entity)
 
+def test_multiple_relationship_duplicated_disallowed():
+	with pytest.raises(ValidationError):
+		Entity(
+			kls=A,
+			relationships=[
+				MultipleRelationship(
+					field="fk",
+					target_kls=list[T1],
+					links=[
+						Link(biz="a", loader=dummy_loader),
+						Link(biz="a", loader=dummy_loader),
+					],
+				)
+			],
+		)
 
-def test_multiple_targets_with_unique_biz_is_ok():
-	cfg = Entity(
-		kls=A,
-		relationships=[
-			Relationship(field="fk", biz="alpha", target_kls=T1, loader=dummy_loader),
-			Relationship(field="fk", biz="beta", target_kls=T2, loader=dummy_loader),
-		],
-	)
-	assert isinstance(cfg, Entity)
-
-
-def test_multiple_targets_with_unique_target_kls_is_ok():
-	cfg = Entity(
+def test_entity_allows_distinct_targets_per_field():
+	entity = Entity(
 		kls=A,
 		relationships=[
 			Relationship(field="fk", target_kls=T1, loader=dummy_loader),
 			Relationship(field="fk", target_kls=T2, loader=dummy_loader),
 		],
 	)
-	assert isinstance(cfg, Entity)
+	assert isinstance(entity, Entity)
 
 
-def test_erdiagram_valid_distinct_kls():
-	cfg1 = Entity(kls=A, relationships=[Relationship(field="fk", target_kls=T1, loader=dummy_loader)])
-	cfg2 = Entity(kls=T1, relationships=[])  # using T1 as a model with no relationships
-	diagram = ErDiagram(configs=[cfg1, cfg2])
-	assert isinstance(diagram, ErDiagram)
-
-
-def test_erdiagram_duplicate_kls_raises():
-	cfg1 = Entity(kls=A, relationships=[Relationship(field="fk", target_kls=T1, loader=dummy_loader)])
-	cfg2 = Entity(kls=A, relationships=[])  # duplicate kls
-	with pytest.raises(ValueError):
-		ErDiagram(configs=[cfg1, cfg2])
-
-
-def test_multiple_targets_biz_none_or_non_empty():
-	# duplicate biz under same field should fail
+def test_erdiagram_duplicate_entity_kls_raises():
+	cfg = Entity(
+		kls=A,
+		relationships=[Relationship(field="fk", target_kls=T1, loader=dummy_loader)],
+	)
 	with pytest.raises(ValidationError):
-		Entity(
-			kls=A,
-			relationships=[
-				Relationship(field="fk", biz="", target_kls=T2, loader=dummy_loader),
-			],
-		)
+		ErDiagram(configs=[cfg, cfg])
