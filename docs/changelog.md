@@ -2,6 +2,13 @@
 
 ## v2.0
 
+### v2.1.0 (2025.11.29)
+- change: 
+    - inside ErDiagram, `biz` of Relationship is moved into Link, and is not Opitonal anymore
+- feature:
+    - add MultipleRelationship for scenarios having mulitple links between entity and target_entity.
+
+
 ### v2.0.1 (2025.11.26)
 - rename `ErConfig` to `Entity` (caution: will break current code)
 
