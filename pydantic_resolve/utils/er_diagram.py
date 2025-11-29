@@ -8,16 +8,7 @@ from pydantic_resolve.utils import class_util
 from pydantic_resolve.utils.depend import LoaderDepend
 
 
-class Relationship(BaseModel):
-    field: str  # fk name
-
-    # use biz to distinguish multiple same target_kls under same field
-    biz: Optional[str] = Field(default=None, min_length=1)  # Optional or non-empty string
-    target_kls: Any
-
-    # default value when fk is None.
-    # Two params are exclusive. A user may explicitly set default_none_val=None.
-    # We must distinguish "not provided" vs "provided with value None".
+class BaseLinkProps(BaseModel):
     field_none_default: Optional[Any] = None
     field_none_default_factory: Optional[Callable[[], Any]] = None
 
@@ -30,6 +21,23 @@ class Relationship(BaseModel):
     load_many_fn: Callable[[Any], Any] = None  
 
     loader: Optional[Callable] = None
+
+class Link(BaseLinkProps):
+    biz: str
+    
+class MultipleRelationship(BaseModel):
+    field: str  # fk name
+    # use biz to distinguish multiple same target_kls under same field
+    target_kls: Any
+    links: list[Link] = Field(default_factory=list)
+
+
+class Relationship(BaseLinkProps):
+    field: str  # fk name
+
+    # use biz to distinguish multiple same target_kls under same field
+    # TODO: ensure type basemodel
+    target_kls: Any
 
     @model_validator(mode="after")
     def _validate_defaults(self) -> "Relationship":

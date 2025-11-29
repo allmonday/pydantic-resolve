@@ -98,8 +98,7 @@ diagram = ErDiagram(
                          load_many_fn=lambda x: [int(xx) for xx in x.split(',')] if x else [],
                          loader=UserLoader),
             Relationship(field='id', target_kls=List[Foo], loader=FooLoader),
-            Relationship(field='id', target_kls=List[str], biz="x", loader=FooNameLoader),
-            Relationship(field='id', target_kls=List[str], biz="y", loader=FooNameLoader),
+            Relationship(field='id', target_kls=List[Foo], target_field='name', loader=FooNameLoader),
             Relationship(field='id', target_kls=List[Bar], loader=BarLoader),
             Relationship(field='id', biz='special', target_kls=List[Bar], loader=SpecialBarLoader),
         ])
@@ -194,18 +193,4 @@ async def test_resolver_factory_with_permitive_annotation():
     assert d.user is not None
     assert d.foos_in_str_x == ["foo1", "foo2"]
 
-
-class BizCase6(Biz):
-    user: Annotated[Optional[User], LoadBy('user_id')] = None
-    def resolve_user(self, loader=Loader(UserLoader)):
-        return loader.load(self.user_id)
-    foos_in_str_x: Annotated[List[str], LoadBy('id', biz='x')] = []
-
-
-@pytest.mark.asyncio
-async def test_resolver_factory_with_permitive_annotation_2():
-    MyResolver = config_resolver('MyResolver', er_diagram=diagram)
-    d = BizCase6(id=1, user_id=1, name="qq")
-    with pytest.warns(UserWarning):
-        d = await MyResolver().resolve(d)
 
