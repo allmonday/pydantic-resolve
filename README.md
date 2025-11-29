@@ -356,7 +356,7 @@ class Story2(DefineSubset):
         return sum(task.estimate for task in self.tasks)
 ```
 
-### #3: Propagate ancestor data to descendants through `ancestor_context`
+#### #3: Propagate ancestor data to descendants through `ancestor_context`
 
 [view in voyager](https://www.newsyeah.fun/voyager/?tag=demo&route=src.router.demo.router.get_stories_with_detail_3), double click `Story3`
 
