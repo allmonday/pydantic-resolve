@@ -440,7 +440,8 @@ class Analytic:
                 self._populate_ancestors(ancestors)
             return
 
-        if self.er_pre_generator: self.er_pre_generator.prepare(kls)
+        if self.er_pre_generator: 
+            self.er_pre_generator.prepare(kls)
 
         # - prepare fields, with resolve_, post_ reserved
         all_fields, object_fields, object_field_pairs = self._get_all_fields_and_object_fields(kls)

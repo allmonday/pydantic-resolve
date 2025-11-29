@@ -8,16 +8,7 @@ from pydantic_resolve.utils import class_util
 from pydantic_resolve.utils.depend import LoaderDepend
 
 
-class Relationship(BaseModel):
-    field: str  # fk name
-
-    # use biz to distinguish multiple same target_kls under same field
-    biz: Optional[str] = Field(default=None, min_length=1)  # Optional or non-empty string
-    target_kls: Any
-
-    # default value when fk is None.
-    # Two params are exclusive. A user may explicitly set default_none_val=None.
-    # We must distinguish "not provided" vs "provided with value None".
+class BaseLinkProps(BaseModel):
     field_none_default: Optional[Any] = None
     field_none_default_factory: Optional[Callable[[], Any]] = None
 
@@ -27,9 +18,37 @@ class Relationship(BaseModel):
     # in case of fk itself is not list, for example: str
     # and need to seperate manually,
     # call load_many_fn to handle it.
-    load_many_fn: Callable[[Any], Any] = None  
+    load_many_fn: Optional[Callable[[Any], Any]] = None  
 
     loader: Optional[Callable] = None
+
+class Link(BaseLinkProps):
+    biz: str
+
+    # specific a loader which only return one field of target model
+    field_name: Optional[str] = None  
+    
+class MultipleRelationship(BaseModel):
+    field: str  # fk name
+    # use biz to distinguish multiple same target_kls under same field
+    target_kls: Any
+    links: list[Link] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_links(self) -> "MultipleRelationship":
+        biz_set = set()
+        for link in self.links:
+            if link.biz in biz_set:
+                raise ValueError(
+                    f"Duplicate link.biz detected in MultipleRelationship for field {self.field!r}: {link.biz!r}"
+                )
+            biz_set.add(link.biz)
+        return self
+
+
+class Relationship(BaseLinkProps):
+    field: str  # fk name
+    target_kls: Any
 
     @model_validator(mode="after")
     def _validate_defaults(self) -> "Relationship":
@@ -45,7 +64,7 @@ class Relationship(BaseModel):
 
 class Entity(BaseModel):
     kls: Type[BaseModel]
-    relationships: list[Relationship]
+    relationships: list[Relationship | MultipleRelationship]
 
     @model_validator(mode="after")
     def _validate_relationships(self) -> "Entity":
@@ -62,10 +81,10 @@ class Entity(BaseModel):
         # Disallow duplicate (field, biz, target_kls) triples
         seen = set()
         for r in rels:
-            key = (r.field, r.biz, _hashable(r.target_kls))
+            key = (r.field, _hashable(r.target_kls))
             if key in seen:
                 raise ValueError(
-                    f"Duplicate relationship detected for (field={r.field!r}, biz={r.biz!r}, target_kls={r.target_kls!r})"
+                    f"Duplicate relationship detected for (field={r.field!r}, target_kls={r.target_kls!r})"
                 )
             seen.add(key)
 
@@ -102,7 +121,7 @@ class ErLoaderPreGenerator:
     def __init__(self, er_diagram: Optional[ErDiagram]) -> None:
         self.er_configs_map = {config.kls: config for config in er_diagram.configs} if er_diagram else None
 
-    def _identify_config(self, target: Type) -> Entity:
+    def _identify_entity(self, target: Type) -> Entity:
         """Locate the matching ErConfig for a target class via compatibility check."""
         for kls, cfg in self.er_configs_map.items():
             if class_util.is_compatible_type(target, kls):
@@ -110,14 +129,33 @@ class ErLoaderPreGenerator:
         raise AttributeError(f'No ErConfig found for {target.__name__}')
 
     def _identify_relationship(self, config: Entity, loadby: str, biz: Optional[str], target_kls: Type) -> Relationship:
-        """Find the relationship matching (field=loadby, biz, target_kls)."""
+        """
+            Find the relationship matching (field=loadby, biz, target_kls).
+
+            if biz is provided and field_name of Link is set, validate the target_kls with target_kls's field_name type
+        """
         for rel in config.relationships:
             if rel.field != loadby:
                 continue
-            if class_util.is_compatible_type(target_kls, rel.target_kls) and biz == rel.biz:
+
+            if isinstance(rel, Relationship) and class_util.is_compatible_type(target_kls, rel.target_kls):
                 return rel
+            
+            elif isinstance(rel, MultipleRelationship):
+                for link in rel.links:
+                    if link.biz == biz:
+                        if link.field_name:
+                            # TODO: validate types, currently just bypass
+                            # str == kls[field_name]
+                            # list[str] == list[kls[field_name]]
+                            # currently field name can provide field hint for voyager
+                            return link
+
+                        elif class_util.is_compatible_type(target_kls, rel.target_kls):
+                            return link
+
         raise AttributeError(
-            f'Relationship for "{target_kls.__name__}" using "{loadby}" not found'
+            f'Relationship for "{target_kls.__name__}" using "{loadby}", biz: "{biz}", not found'
         )
 
     def prepare(self, kls: Type):
@@ -134,7 +172,7 @@ class ErLoaderPreGenerator:
         if self.er_configs_map is None:
             raise ValueError('er_configs_map is None, cannot identify config')
 
-        config = self._identify_config(kls)
+        config = self._identify_entity(kls)
 
         for field_name, loader_info, annotation in auto_loader_fields:
             method_name = f'{const.RESOLVE_PREFIX}{field_name}'

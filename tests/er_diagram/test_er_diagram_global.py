@@ -2,7 +2,7 @@ import pytest
 from typing import Optional, Annotated, List
 from pydantic import BaseModel
 from pydantic_resolve.utils.resolver_configurator import config_global_resolver
-from pydantic_resolve import Entity, Relationship, LoadBy, DefineSubset, ErDiagram, Resolver
+from pydantic_resolve import Entity, Relationship, MultipleRelationship, Link, LoadBy, DefineSubset, ErDiagram, Resolver
 from aiodataloader import DataLoader
 
 
@@ -77,8 +77,14 @@ diagram = ErDiagram(
         Entity(kls=Biz, relationships=[
             Relationship(field='user_id', target_kls=User, loader=UserLoader),
             Relationship(field='id', target_kls=List[Foo], loader=FooLoader),
-            Relationship(field='id', target_kls=List[Bar], loader=BarLoader),
-            Relationship(field='id', biz='special', target_kls=List[Bar], loader=SpecialBarLoader),
+            MultipleRelationship(
+                field='id',
+                target_kls=list[Bar],
+                links=[
+                    Link(biz='a', loader=BarLoader),
+                    Link(biz='special', loader=SpecialBarLoader),
+                ]
+            )
         ])
     ]
 )
@@ -90,7 +96,7 @@ class BizCase1(DefineSubset):
 
     user: Annotated[Optional[User], LoadBy('user_id')] = None
     foos: Annotated[List[Foo], LoadBy('id')] = []
-    bars: Annotated[List[Bar], LoadBy('id')] = []
+    bars: Annotated[List[Bar], LoadBy('id', biz='a')] = []
     special_bars: Annotated[list[Bar], LoadBy('id', biz='special')] = []
     
 
