@@ -117,6 +117,31 @@ def LoadBy(key: str, biz: Optional[str] = None) -> LoaderInfo:
     return LoaderInfo(field=key, biz=biz)
 
 
+def declarative_base() -> Type:
+    """
+    Creates a base class similar to SQLAlchemy's declarative_base().
+    All classes inheriting from the returned Base class will be collected in Base.entities.
+    """
+    entities: list[Type] = []
+    configs = []
+    get_diagram = lambda: ErDiagram(configs=configs)
+
+    class Base:
+        def __init_subclass__(cls, **kwargs):
+            super().__init_subclass__(**kwargs)
+            entities.append(cls)
+            # Check for inline relationships
+            inline_rels = getattr(cls, const.ER_DIAGRAM_INLINE_RELATIONSHIPS, None)
+            if inline_rels:
+                entity = dict(kls=cls, relationships=inline_rels)
+                configs.append(entity)
+
+    # Attach the entities list and diagram to the Base class
+    Base.entities = entities
+    Base.get_diagram = get_diagram
+    return Base
+
+
 class ErLoaderPreGenerator:
     def __init__(self, er_diagram: Optional[ErDiagram]) -> None:
         self.er_configs_map = {config.kls: config for config in er_diagram.configs} if er_diagram else None
