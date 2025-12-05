@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pydantic-resolve"
-version = "2.1.0"
+version = "2.2.0"
 description = "pydantic-resolve turns pydantic from a static data container into a powerful composable component."
 authors = ["tangkikodo <allmonday@126.com>"]
 readme = "README.md"

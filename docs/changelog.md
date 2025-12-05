@@ -2,6 +2,25 @@
 
 ## v2.0
 
+### v2.2.0 (2025.12.5)
+
+feat: relationship can be defined inside class
+```python
+class Biz(BaseModel, BaseEntity):
+    __pydantic_resolve_relationships__ = [
+        Relationship(field='user_id', target_kls=User, loader=UserLoader),
+        Relationship(field='id', target_kls=list[Bar], field_none_default_factory=list, loader=BarLoader),
+    ]
+    id: Optional[int]
+    name: str
+    user_id: Optional[int]
+
+MyResolver = config_resolver('MyResolver', er_diagram=BaseEntity.get_diagram())
+# or
+# config_global_resolver(er_diagram=BaseEntity.get_diagram())
+```
+
+
 ### v2.1.0 (2025.11.29)
 - change: 
     - inside ErDiagram, `biz` of Relationship is moved into Link, and is not Opitonal anymore
