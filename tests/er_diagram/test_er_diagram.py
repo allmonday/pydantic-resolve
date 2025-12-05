@@ -10,6 +10,7 @@ class Biz(BaseModel):
     id: int
     name: str
     user_id: int
+    user_id_str: str
     user_ids: list[int] = []
     user_ids_str:str = ''
 
@@ -91,6 +92,7 @@ diagram = ErDiagram(
     configs=[
         Entity(kls=Biz, relationships=[
             Relationship(field='user_id', target_kls=User, loader=UserLoader),
+            Relationship(field='user_id_str', field_fn=int, target_kls=User, loader=UserLoader),
             Relationship(field='user_ids', target_kls=list[User], load_many=True, loader=UserLoader),
             Relationship(field='user_ids_str', 
                          target_kls=list[User],
@@ -115,6 +117,7 @@ diagram = ErDiagram(
 
 class BizCase1(Biz):
     user: Annotated[Optional[User], LoadBy('user_id')] = None
+    user_2: Annotated[Optional[User], LoadBy('user_id_str')] = None
     foos: Annotated[List[Foo], LoadBy('id', biz='foo_item')] = []
     foos_in_str: Annotated[List[str], LoadBy('id', biz='foo_name')] = []
     bars: Annotated[List[Bar], LoadBy('id', biz='normal')] = []
@@ -126,10 +129,11 @@ class BizCase1(Biz):
 @pytest.mark.asyncio
 async def test_resolver_factory_with_er_configs_inherit():
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
-    d = [BizCase1(id=1, name="qq", user_id=1, user_ids=[1], user_ids_str='1,2'), BizCase1(id=2, name="ww", user_id=2)]
+    d = [BizCase1(id=1, name="qq", user_id=1, user_id_str='1', user_ids=[1], user_ids_str='1,2'), BizCase1(id=2, name="ww", user_id=2, user_id_str='2')]
     d = await MyResolver().resolve(d)
 
     assert d[0].user.name == "a"
+    assert d[0].user_2.name == "a"
     assert d[0].bars == [Bar(id=1, name="bar1", biz_id=1), Bar(id=2, name="bar2", biz_id=1)]
     assert d[0].special_bars == [Bar(id=1, name="special-bar1", biz_id=1), Bar(id=2, name="special-bar2", biz_id=1)]
     assert d[0].users_a == [User(id=1, name="a")]
@@ -137,6 +141,7 @@ async def test_resolver_factory_with_er_configs_inherit():
     assert d[0].foos_in_str == ["foo1", "foo2"]
 
     assert d[1].user.name == "b"
+    assert d[1].user_2.name == "b"
     assert d[1].foos == [Foo(id=3, name="foo3", biz_id=2)]
     assert d[1].users_a == []
     assert d[1].users_b == []
@@ -152,7 +157,7 @@ class BizCase2(Biz):
 @pytest.mark.asyncio
 async def test_resolver_factory_with_er_configs_inherit_2():
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
-    d = BizCase2(id=1, name="qq", user_id=1)
+    d = BizCase2(id=1, name="qq", user_id=1, user_id_str='1')
     d = await MyResolver().resolve(d)
     assert d.user.id == 1
 

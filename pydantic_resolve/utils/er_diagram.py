@@ -9,6 +9,9 @@ from pydantic_resolve.utils.depend import LoaderDepend
 
 
 class BaseLinkProps(BaseModel):
+    # field_fn will not work if load_many is True, use load_many_fn instead
+    field_fn: Optional[Callable] = None  
+
     field_none_default: Optional[Any] = None
     field_none_default_factory: Optional[Callable[[], Any]] = None
 
@@ -229,6 +232,10 @@ class ErLoaderPreGenerator:
                         if rel.field_none_default_factory is not None:
                             return rel.field_none_default_factory()
                         return None
+
+                    if rel.field_fn is not None:
+                        fk = rel.field_fn(fk)
+
                     return loader.load(fk)
                 resolve_method.__name__ = method_name
                 resolve_method.__qualname__ = f'{kls.__name__}.{method_name}'
