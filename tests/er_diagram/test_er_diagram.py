@@ -1,8 +1,18 @@
 import pytest
 from typing import Optional, Annotated, List
 from pydantic import BaseModel
-from pydantic_resolve import config_resolver
-from pydantic_resolve import Entity, Relationship, MultipleRelationship, Link, LoadBy, DefineSubset, ErDiagram, ensure_subset
+from pydantic_resolve import (
+    config_resolver,
+    Entity,
+    Relationship,
+    MultipleRelationship,
+    Link,
+    LoadBy,
+    DefineSubset,
+    ErDiagram,
+    ensure_subset, 
+    Loader
+)
 from aiodataloader import DataLoader
 
 
@@ -115,6 +125,19 @@ diagram = ErDiagram(
     ]
 )
 
+class BizCase0(Biz):
+    user: Annotated[Optional[User], LoadBy('user_id')] = None
+    def resolve_user(self, loader=Loader(UserLoader)):
+        return loader.load(self.user_id)
+
+
+@pytest.mark.asyncio
+async def test_resolver_factory_warning():
+    MyResolver = config_resolver('MyResolver', er_diagram=diagram)
+    d = [BizCase0(id=1, name="qq", user_id=1, user_id_str='1', user_ids=[1], user_ids_str='1,2'), BizCase0(id=2, name="ww", user_id=2, user_id_str='2')]
+    with pytest.warns(UserWarning):
+        await MyResolver().resolve(d)
+
 class BizCase1(Biz):
     user: Annotated[Optional[User], LoadBy('user_id')] = None
     user_2: Annotated[Optional[User], LoadBy('user_id_str')] = None
@@ -146,7 +169,6 @@ async def test_resolver_factory_with_er_configs_inherit():
     assert d[1].users_a == []
     assert d[1].users_b == []
 
-    
 
 class SubUser(DefineSubset):
     __pydantic_resolve_subset__ = (User, ['id'])
