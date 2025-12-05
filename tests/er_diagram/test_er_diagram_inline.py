@@ -4,9 +4,9 @@ from pydantic import BaseModel
 from pydantic_resolve import config_resolver
 from pydantic_resolve import Relationship, LoadBy
 from aiodataloader import DataLoader
-from pydantic_resolve.utils.er_diagram import declarative_base
+from pydantic_resolve.utils.er_diagram import base_entity
 
-BaseEntity = declarative_base()
+BaseEntity = base_entity()
 
 class Bar(BaseModel):
     id: int

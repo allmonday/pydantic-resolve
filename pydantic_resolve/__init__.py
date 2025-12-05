@@ -13,7 +13,7 @@ from .utils.depend import LoaderDepend, Loader
 from .utils.subset import DefineSubset
 from .utils.openapi import (
     model_config)
-from .utils.er_diagram import Relationship, MultipleRelationship, Link, Entity, ErDiagram, LoadBy, declarative_base
+from .utils.er_diagram import Relationship, MultipleRelationship, Link, Entity, ErDiagram, LoadBy, base_entity
 from .utils.resolver_configurator import config_resolver, config_global_resolver
 
 
@@ -44,7 +44,7 @@ __all__ = [
     'Link',
     'ErDiagram',
     'LoadBy',
-    'declarative_base',
+    'base_entity',
 
     'config_resolver',
     'config_global_resolver',

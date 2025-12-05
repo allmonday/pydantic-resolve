@@ -1,7 +1,7 @@
 from pydantic import BaseModel
-from pydantic_resolve.utils.er_diagram import declarative_base, Relationship
+from pydantic_resolve.utils.er_diagram import base_entity, Relationship
 
-Base = declarative_base()
+Base = base_entity()
 
 class Sub(BaseModel):
     id: int

@@ -117,7 +117,7 @@ def LoadBy(key: str, biz: Optional[str] = None) -> LoaderInfo:
     return LoaderInfo(field=key, biz=biz)
 
 
-def declarative_base() -> Type:
+def base_entity() -> Type:
     """
     Creates a base class similar to SQLAlchemy's declarative_base().
     All classes inheriting from the returned Base class will be collected in Base.entities.
