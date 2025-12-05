@@ -124,6 +124,16 @@ def base_entity() -> Type:
     """
     Creates a base class similar to SQLAlchemy's declarative_base().
     All classes inheriting from the returned Base class will be collected in Base.entities.
+
+    CAUTION: make sure to import modules defining entities before calling Base.get_diagram()
+
+    ```python
+    from service.base import BaseEntity
+    import service.a.schema
+    import service.b.schema
+
+    BaseEntity.get_diagram()
+    ```
     """
     entities: list[Type] = []
     configs = []
