@@ -1,6 +1,12 @@
 # Changelog
 
-## v2.0
+## v2.0.2 (2025.12.5)
+
+feat: add origin_kls in LoadBy to avoid blurring during matching loader
+
+## v2.0.1 (2025.12.5)
+
+feat: add field_fn in er diagram, receive callable object to process key before loader.load
 
 ### v2.2.0 (2025.12.5)
 

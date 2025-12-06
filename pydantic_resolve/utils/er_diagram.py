@@ -114,10 +114,11 @@ class ErDiagram(BaseModel):
 class LoaderInfo:
     field: str
     biz: Optional[str] = None
+    origin_kls: Optional[Type] = None
 
 
-def LoadBy(key: str, biz: Optional[str] = None) -> LoaderInfo:
-    return LoaderInfo(field=key, biz=biz)
+def LoadBy(key: str, biz: Optional[str] = None, origin_kls: Optional[Type] = None) -> LoaderInfo:
+    return LoaderInfo(field=key, biz=biz, origin_kls=origin_kls)
 
 
 def base_entity() -> Type:
@@ -166,14 +167,14 @@ class ErLoaderPreGenerator:
                 return cfg
         raise AttributeError(f'No ErConfig found for {target.__name__}')
 
-    def _identify_relationship(self, config: Entity, loadby: str, biz: Optional[str], target_kls: Type) -> Relationship:
+    def _identify_relationship(self, config: Entity, loader_info: LoaderInfo, target_kls: Type) -> Relationship:
         """
             Find the relationship matching (field=loadby, biz, target_kls).
 
             if biz is provided and field_name of Link is set, validate the target_kls with target_kls's field_name type
         """
         for rel in config.relationships:
-            if rel.field != loadby:
+            if rel.field != loader_info.field:
                 continue
 
             if isinstance(rel, Relationship) and class_util.is_compatible_type(target_kls, rel.target_kls):
@@ -181,19 +182,25 @@ class ErLoaderPreGenerator:
             
             elif isinstance(rel, MultipleRelationship):
                 for link in rel.links:
-                    if link.biz == biz:
+                    if link.biz == loader_info.biz:
                         if link.field_name:
-                            # TODO: validate types, currently just bypass
-                            # str == kls[field_name]
-                            # list[str] == list[kls[field_name]]
-                            # currently field name can provide field hint for voyager
-                            return link
-
+                            if loader_info.origin_kls is None:
+                                raise ValueError( f'origin_kls must be provided in LoaderInfo when field_name is set in Link')
+                            else:
+                                if class_util.is_compatible_type(loader_info.origin_kls, rel.target_kls):
+                                    # TODO: validate types, currently just bypass
+                                    # str == kls[field_name]
+                                    # list[str] == list[kls[field_name]]
+                                    # currently field name can provide field hint for voyager
+                                    # and leave validation to pydantic
+                                    return link
+                                else:
+                                    raise TypeError( f'Target_kls {target_kls.__name__} is not compatible with origin_kls {loader_info.origin_kls.__name__} in Link for biz {link.biz}')
                         elif class_util.is_compatible_type(target_kls, rel.target_kls):
                             return link
 
         raise AttributeError(
-            f'Relationship for "{target_kls.__name__}" using "{loadby}", biz: "{biz}", not found'
+            f'Relationship for "{target_kls.__name__}" using "{loader_info.field}", biz: "{loader_info.biz}", not found'
         )
 
     def prepare(self, kls: Type):
@@ -222,8 +229,7 @@ class ErLoaderPreGenerator:
 
             relationship = self._identify_relationship(
                 config=config,
-                loadby=loader_info.field,
-                biz=loader_info.biz,
+                loader_info=loader_info,
                 target_kls=annotation,
             )
 

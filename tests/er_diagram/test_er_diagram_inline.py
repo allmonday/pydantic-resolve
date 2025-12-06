@@ -115,7 +115,7 @@ class Biz(BaseModel, BASE_ENTITY):
 class BizCase1(Biz):
     user: Annotated[Optional[User], LoadBy('user_id')] = None
     foos: Annotated[List[Foo], LoadBy('id', biz='foo_item')] = []
-    foos_in_str: Annotated[List[str], LoadBy('id', biz='foo_name')] = []
+    foos_in_str: Annotated[List[str], LoadBy('id', biz='foo_name', origin_kls=list[Foo])] = []
     bars: Annotated[List[Bar], LoadBy('id', biz='normal')] = []
     special_bars: Annotated[list[Bar], LoadBy('id', biz='special')] = []
     users_a: Annotated[list[User], LoadBy('user_ids')] = []
