@@ -1,10 +1,32 @@
 # Changelog
 
-## v2.0.2 (2025.12.5)
+## v2.2.3 (2025.12.7)
+
+feat: for ininline relationships str are allowed to represent the class name
+
+for example, use `target_kls='User'` if User is defined after current class
+
+```python
+class Biz(BaseModel, BaseEntity):
+    __pydantic_resolve_relationships__ = [
+        Relationship(field='user_id', target_kls='User', loader=UserLoader),
+        Relationship(field='id', target_kls=list[Bar], field_none_default_factory=list, loader=BarLoader),
+    ]
+    id: Optional[int]
+    name: str
+    user_id: Optional[int]
+
+class User(BaseModel):
+    ...
+```
+
+Only use this in inline mode.
+
+## v2.2.2 (2025.12.5)
 
 feat: add origin_kls in LoadBy to avoid blurring during matching loader
 
-## v2.0.1 (2025.12.5)
+## v2.2.1 (2025.12.5)
 
 feat: add field_fn in er diagram, receive callable object to process key before loader.load
 

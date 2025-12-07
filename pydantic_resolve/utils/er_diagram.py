@@ -4,7 +4,7 @@ from pydantic import BaseModel, model_validator, Field
 import warnings
 
 import pydantic_resolve.constant as const
-from pydantic_resolve.utils import class_util
+from pydantic_resolve.utils import class_util, types
 from pydantic_resolve.utils.depend import LoaderDepend
 
 
@@ -136,9 +136,41 @@ def base_entity() -> Type:
     BaseEntity.get_diagram()
     ```
     """
+    import sys
+    from types import GenericAlias
+
     entities: list[Type] = []
-    configs = []
-    get_diagram = lambda: ErDiagram(configs=configs)
+    inline_configs: list[tuple[Type, Any]] = []
+
+    def _resolve_ref(ref: Any, module_name: str) -> Any:
+        """Resolve forward refs expressed as strings or list['Cls'] generics within the declaring module."""
+        if isinstance(ref, str):
+            mod = sys.modules.get(module_name)
+            if mod and hasattr(mod, ref):
+                return getattr(mod, ref)
+            raise AttributeError(f"Unable to resolve reference '{ref}' in module '{module_name}'")
+
+        if isinstance(ref, GenericAlias):  # e.g., list['Foo']
+            args = ref.__args__
+            if types._is_list(ref) and args:
+                resolved_arg = _resolve_ref(args[0], module_name)
+                return list[resolved_arg]
+        return ref
+
+    def get_diagram() -> ErDiagram:
+        resolved_configs: list[Entity] = []
+        for kls, rels in inline_configs:
+            module_name = getattr(kls, '__module__', '')
+            resolved_rels = []
+            for rel in rels:
+                resolved_rels.append(
+                    rel.model_copy(update={
+                        'target_kls': _resolve_ref(rel.target_kls, module_name),
+                    })
+                )
+
+            resolved_configs.append(Entity(kls=kls, relationships=resolved_rels))
+        return ErDiagram(configs=resolved_configs)
 
     class Base:
         def __init_subclass__(cls, **kwargs):
@@ -147,8 +179,7 @@ def base_entity() -> Type:
             # Check for inline relationships
             inline_rels = getattr(cls, const.ER_DIAGRAM_INLINE_RELATIONSHIPS, None)
             if inline_rels:
-                entity = dict(kls=cls, relationships=inline_rels)
-                configs.append(entity)
+                inline_configs.append((cls, inline_rels))
 
     # Attach the entities list and diagram to the Base class
     Base.entities = entities
