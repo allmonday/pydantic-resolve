@@ -13,6 +13,9 @@ class MyModel(BaseModel, Base):
     ]
     id: int
 
+class MyModelSub(MyModel):
+    id: int
+
 class AnotherModel(BaseModel, Base):
     __pydantic_resolve_relationships__ = [
         Relationship(field='id', target_kls=Sub, loader=None)
@@ -22,4 +25,5 @@ class AnotherModel(BaseModel, Base):
 def test_bases():
     assert MyModel in Base.entities
     assert AnotherModel in Base.entities
+    assert MyModelSub not in Base.entities
     assert len(Base.entities) == 2

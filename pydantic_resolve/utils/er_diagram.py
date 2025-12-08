@@ -175,6 +175,10 @@ def base_entity() -> Type:
     class Base:
         def __init_subclass__(cls, **kwargs):
             super().__init_subclass__(**kwargs)
+            # only register direct subclasses of Base, ignore inherited descendants
+            if Base not in cls.__bases__:
+                return
+
             entities.append(cls)
             # Check for inline relationships
             inline_rels = getattr(cls, const.ER_DIAGRAM_INLINE_RELATIONSHIPS, None)

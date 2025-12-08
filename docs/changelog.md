@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.2.4 (2025.12.8)
+
+fix: ignore inherited descendant in inline relationship definition
+
+more details in test case: `tests/er_diagram/test_er_diagram_base.py`
+
+
 ## v2.2.3 (2025.12.7)
 
 feat: for ininline relationships str are allowed to represent the class name
