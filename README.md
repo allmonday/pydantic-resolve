@@ -28,6 +28,8 @@ everything else are backward compatible.
 
 ## Quick start
 
+[llms.txt](./llms.txt)
+
 get teams with sprints and memebers, build data struct on demand, using dataloader to batch load related data on-demand.
 
 ```python
@@ -60,27 +62,27 @@ Once after we have it defined [source code](https://github.com/allmonday/composi
 ```python
 diagram = ErDiagram(
     configs=[
-        ErConfig(
+        Entity(
             kls=Team,
             relationships=[
                 Relationship( field='id', target_kls=list[Sprint], loader=sprint_loader.team_to_sprint_loader),
                 Relationship( field='id', target_kls=list[User], loader=user_loader.team_to_user_loader)
             ]
         ),
-        ErConfig(
+        Entity(
             kls=Sprint,
             relationships=[
                 Relationship( field='id', target_kls=list[Story], loader=story_loader.sprint_to_story_loader)
             ]
         ),
-        ErConfig(
+        Entity(
             kls=Story,
             relationships=[
                 Relationship( field='id', target_kls=list[Task], loader=task_loader.story_to_task_loader),
                 Relationship( field='owner_id', target_kls=User, loader=user_loader.user_batch_loader)
             ]
         ),
-        ErConfig(
+        Entity(
             kls=Task,
             relationships=[
                 Relationship( field='owner_id', target_kls=User, loader=user_loader.user_batch_loader)
