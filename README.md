@@ -6,11 +6,13 @@
 
 Pydantic-resolve is a Pydantic based approach to constructing complex data without imperative glue code. 
 
-Its best use case is building complex API data.
+Its best use case is building complex API data, in UI integration scenarios, it can be used as a replacement for GraphQL, reusing most of the code while offering better performance and maintainability.
 
 It introduces resolve hooks for on-demand data fetching, and post hooks for normalization, transformation, and reorganization to meet diverse requirements.
 
 Starting from pydantic-resolve v2, `ErDiagram` feautre is introduced, we can declare application level `Entity Relationship` and their default dataloader, and loaders will be applied automatically.
+
+It could be seamlessly integrated with modern Python web frameworks including FastAPI, Litestar, and Django-ninja.
 
 For FastAPI developers, we can visualize the dependencies of schemas by installing [fastapi-voyager](https://github.com/allmonday/fastapi-voyager), visit [live demo](https://www.newsyeah.fun/voyager/?tag=sample_1)
 
@@ -129,7 +131,6 @@ Post hooks also enable bidirectional data flow: they can read from ancestor node
 
 ![](./docs/images/communication.jpeg)
 
-It could be seamlessly integrated with modern Python web frameworks including FastAPI, Litestar, and Django-ninja.
 
 
 ## Documentation
@@ -141,11 +142,11 @@ It could be seamlessly integrated with modern Python web frameworks including Fa
 
 
 
-## Demo: constructing complicated data in 3 steps
+## 3 steps to construct complex data
 
 Let's take Agile's model for example, it includes Story, Task and User, here is a [live demo](https://www.newsyeah.fun/voyager/) and [source code](https://github.com/allmonday/composition-oriented-development-pattern/tree/master/src/services)
 
-### 1. Define Domain Models
+### 1. Define entities and relationships (in form of dataloader)
 
 Establish entity relationships model based on business concept.
 
@@ -235,17 +236,13 @@ config_global_resolver(diagram)  # inject into Resolver
 <img width="758" height="444" alt="image" src="https://github.com/user-attachments/assets/58d95751-2871-40e2-a69a-8a52a2872621" />
 
 
-### 2. Compose Business Models
+### 2. Compose core business data structure.
 
-Based on a our business logic, create domain-specific data structures through schemas and relationship dataloader
-
-We just need to extend `tasks`, `assignee` and `reporter` for `Story`, and extend `user` for `Task`
-
-Extending new fields is dynamic, depends on business requirement, however the relationships / loaders are restricted by the definition in step 1.
+We can simpliy inherit or use `DefineSubset` to reuse Entity fields and extends new field and resolve them by dataloaders.
 
 [view in voyager](https://www.newsyeah.fun/voyager/?tag=demo&route=src.router.demo.router.get_stories_with_detail)
 
-If ErDiagram is not provided, you need to manually choose the loader
+If ErDiagram is not provided, we need to manually choose the loader:
 
 ```python
 class Task(BaseTask):
@@ -263,7 +260,7 @@ class Story(BaseStory):
         return loader.load(self.owner_id) if self.owner_id else None
 ```
 
-If ErDiagram is provided, you just need to provide the name of foreign key
+If ErDiagram is provided, we just need to provide the name of foreign key
 
 ```python
 class Task(BaseTask):
@@ -274,28 +271,10 @@ class Story(BaseStory):
     assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None        
 ```
 
-`ensure_subset` decorator is a helper function which ensures the target class's fields (without default value) are strictly subset of class in parameter.
+~~`ensure_subset` decorator is a helper function which ensures the target class's fields (without default value) are strictly subset of class in parameter.~~
 
-```python
-@ensure_subset(BaseStory)
-class Story1(BaseModel):
-    id: int
-    name: str
-    owner_id: int
-    # sprint_id: int # ignore some fields
+Meta class `DefineSubset` can be used to define new schema with picked fields.
 
-    model_config = ConfigDict(from_attributes=True)
-
-    tasks: list[Task1] = []
-    def resolve_tasks(self, loader=Loader(story_to_task_loader)):
-        return loader.load(self.id)
-
-    assignee: Optional[BaseUser] = None
-    def resolve_assignee(self, loader=Loader(user_batch_loader)):
-        return loader.load(self.owner_id) if self.owner_id else None
-```
-
-V2 provides a new choice, meta class `DefineSubset`
 ```python
 class Story1(DefineSubset):
     # define the base class and fields wanted
@@ -305,17 +284,15 @@ class Story1(DefineSubset):
     assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
 ```
 
-> Once this combination is stable, you can consider optimizing with specialized queries to replace DataLoader for enhanced performance, such as ORM's join relationship
+### 3. Make extra transformations based on business requirements.
 
-### 3. Implement View Model Transformations
+Dataset from base entities can not meet all requirements, adding extra computed fields or adjusting current data are common requirements.
 
-Dataset from data-persistent layer can not meet all requirements for view model, adding extra computed fields or adjusting current data is very common.
-
-`post_method` is what you need, it is triggered after all descendant nodes are resolved.
+`post_method` is what we need, it is triggered after all descendant nodes are resolved.
 
 It could read fields from ancestor, collect fields from descendants or modify the data fetched by resolve method.
 
-Let's show them case by case, we'll show code in `ErDiagram` mode.
+Let's show them case by case.
 
 #### #1: Collect items from descendants
 
@@ -392,7 +369,7 @@ class Story3(DefineSubset):
     assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
 ```
 
-### 4. Execute Resolver().resolve()
+### 4. Run with resolver
 
 ```python
 from pydantic_resolve import Resolver
