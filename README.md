@@ -4,11 +4,16 @@
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
 
-pydantic-resolve is a Pydantic based approach to composing complex data models without imperative glue code. It elevates Pydantic from a static data container to a powerful, flexible computation layer.
+Pydantic-resolve is a Pydantic based approach to constructing complex data without imperative glue code. 
 
-> from pydantic-resolve v2 alpha, `ErDiagram` are introduced, your can declare Entity Relationship and their default dataloader in application level, then loaders will be applied automatically.
+Its best use case is building complex API data.
 
 It introduces resolve hooks for on-demand data fetching, and post hooks for normalization, transformation, and reorganization to meet diverse requirements.
+
+Starting from pydantic-resolve v2, `ErDiagram` feautre is introduced, we can declare application level `Entity Relationship` and their default dataloader, and loaders will be applied automatically.
+
+For FastAPI developers, we can visualize the dependencies of schemas by installing [fastapi-voyager](https://github.com/allmonday/fastapi-voyager), visit [live demo](https://www.newsyeah.fun/voyager/?tag=sample_1)
+
 
 ## Installation
 
@@ -22,11 +27,9 @@ pip install pydantic-resolve
 
 Starting from pydantic-resolve v1.11.0, both pydantic v1 and v2 are supported.
 
-Starting from pydantic-resolve v2.0.0, it only supports pydantic v2, support of pydantic v1 and dataclass are dropped.
+Starting from pydantic-resolve v2.0.0, it only supports pydantic v2, pydantic v1 and dataclass are dropped, anything else are backward compatible.
 
-everything else are backward compatible.
-
-## Quick start
+## Hello world
 
 get teams with sprints and memebers, build data struct on demand, using dataloader to batch load related data on-demand.
 
@@ -48,12 +51,15 @@ async def get_teams_with_detail(session: AsyncSession = Depends(db.get_session))
     teams = [Sample1TeamDetail.model_validate(t) for t in teams]
     teams = await Resolver().resolve(teams)
     return teams
-
 ```
 
-## New in V2.0
+## ER diagram
 
-`ErDiagram` was introduced, which provides a clear ER description for the model and the default dataloader used.
+pydantic-resolve provided a powerful tool to define application level ER diagram, it's based on Entity and Relationships.
+
+Inside Relationship we can describe many cases like load, load_many, multiple relationship and primitive loader.
+
+this test case includes all the cases: https://github.com/allmonday/pydantic-resolve/blob/master/tests/er_diagram/test_er_diagram_inline.py#L85
 
 Once after we have it defined [source code](https://github.com/allmonday/composition-oriented-development-pattern/blob/master/src/services/er_diagram.py): 
 
@@ -90,6 +96,10 @@ diagram = ErDiagram(
 )
 ```
 
+> We can view it inside fastapi-voyager
+<img width="1267" height="549" alt="image" src="https://github.com/user-attachments/assets/f28e59f0-a96d-4c63-9ebc-037fe9ec23a8" />
+
+
 Then the code above can be simplified as, The required dataloader will be automatically inferred.
 
 ```python
@@ -98,12 +108,14 @@ class Sample1TeamDetail(tms.Team):
     members: Annotated[list[us.User], LoadBy('id')] = []
 ```
 
+It also support `SqlAlchemy ORM` Base style: https://github.com/allmonday/pydantic-resolve/blob/master/tests/er_diagram/test_er_diagram_inline.py
+
 
 ## How it works
-The resolution lifecycle is kind like lazy evaluation: data is loaded level by level through the object.
+
+The process is similar to breadth-first traversal, with additional hooks after the traversal of descendant nodes is completed.
 
 Compared with GraphQL, both traverse descendant nodes recursively and support resolver functions and DataLoaders. The key difference is post-processing: from the post-processing perspective, resolved data is always ready for further transformation, regardless of whether it came from resolvers or initial input.
-
 
 ![](./docs/images/lifecycle.jpeg)
 
@@ -123,15 +135,9 @@ It could be seamlessly integrated with modern Python web frameworks including Fa
 ## Documentation
 
 - **Documentation**: https://allmonday.github.io/pydantic-resolve/
-- **Demo**: https://github.com/allmonday/pydantic-resolve-demo
 - **Composition-Oriented Pattern**: https://github.com/allmonday/composition-oriented-development-pattern
+- **Live demo**: https://www.newsyeah.fun/voyager/?tag=sample_1
 - [Resolver Pattern: A Better Alternative to GraphQL in BFF (api-integration).](https://github.com/allmonday/resolver-vs-graphql/blob/master/README-en.md)
-
-## FastAPI Voyager
-
-For FastAPI developers, we can visualize the dependencies of schemas by installing [fastapi-voyager](https://github.com/allmonday/fastapi-voyager)
-
-<img width="1613" height="986" alt="image" src="https://github.com/user-attachments/assets/26d8b47c-f5c2-43d3-be98-e5e425b7ef9e" />
 
 
 
@@ -142,10 +148,6 @@ Let's take Agile's model for example, it includes Story, Task and User, here is 
 ### 1. Define Domain Models
 
 Establish entity relationships model based on business concept.
-
-> which is stable, serves as architectural blueprint
-
-<img width="630px" alt="image" src="https://github.com/user-attachments/assets/2656f72e-1af5-467a-96f9-cab95760b720" />
 
 ```python
 from pydantic import BaseModel
@@ -206,7 +208,7 @@ async def story_to_task_loader(story_ids: list[int]):
         return build_list(tasks, story_ids, lambda u: u.story_id)
 ```
 
-from V2, ErDiagram can help declare the entity relationships
+ErDiagram can help declare the entity relationships, and fastapi-voyager can display it.
 
 ```python
 diagram = ErDiagram(
@@ -229,6 +231,9 @@ diagram = ErDiagram(
 
 config_global_resolver(diagram)  # inject into Resolver
 ```
+
+<img width="758" height="444" alt="image" src="https://github.com/user-attachments/assets/58d95751-2871-40e2-a69a-8a52a2872621" />
+
 
 ### 2. Compose Business Models
 
@@ -259,6 +264,7 @@ class Story(BaseStory):
 ```
 
 If ErDiagram is provided, you just need to provide the name of foreign key
+
 ```python
 class Task(BaseTask):
     user: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
@@ -409,7 +415,3 @@ python -m http.server
 ```
 
 Current test coverage: 97%
-
-## Community
-
-[Discord](https://discord.com/channels/1197929379951558797/1197929379951558800)
