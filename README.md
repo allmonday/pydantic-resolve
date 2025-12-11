@@ -6,7 +6,7 @@
 <img width="1345" height="476" alt="image" src="https://github.com/user-attachments/assets/b7ce9742-40a4-4a61-97a0-61ed53076099" />
 
 
-Pydantic-resolve is a Pydantic based approach to constructing complex data without imperative glue code. 
+Pydantic-resolve is a Pydantic based approach to construct complex data without imperative glue code. 
 
 Its best use case is building complex API data, in UI integration scenarios, it can be used as a replacement for GraphQL, reusing most of the code while offering better performance and maintainability.
 
