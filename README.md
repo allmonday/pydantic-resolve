@@ -28,8 +28,6 @@ everything else are backward compatible.
 
 ## Quick start
 
-[llms.txt](./llms.txt)
-
 get teams with sprints and memebers, build data struct on demand, using dataloader to batch load related data on-demand.
 
 ```python
