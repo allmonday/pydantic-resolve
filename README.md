@@ -3,6 +3,8 @@
 ![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
+<img width="1345" height="476" alt="image" src="https://github.com/user-attachments/assets/b7ce9742-40a4-4a61-97a0-61ed53076099" />
+
 
 Pydantic-resolve is a Pydantic based approach to constructing complex data without imperative glue code. 
 
@@ -33,7 +35,7 @@ Starting from pydantic-resolve v2.0.0, it only supports pydantic v2, pydantic v1
 
 ## Hello world
 
-get teams with sprints and memebers, build data struct on demand, using dataloader to batch load related data on-demand.
+Getting teams along with sprints and memebers on-demand, using dataloader to batch load related data which eliminate N+1 query.
 
 ```python
 from pydantic_resolve import Loader, Resolver
@@ -57,11 +59,11 @@ async def get_teams_with_detail(session: AsyncSession = Depends(db.get_session))
 
 ## ER diagram
 
-pydantic-resolve provided a powerful tool to define application level ER diagram, it's based on Entity and Relationships.
+pydantic-resolve provided a powerful feature to define application level ER diagram, it's based on Entity and Relationships.
 
-Inside Relationship we can describe many cases like load, load_many, multiple relationship and primitive loader.
+Inside Relationship we can describe many things like load, load_many, multiple relationship or primitive loader.
 
-this test case includes all the cases: https://github.com/allmonday/pydantic-resolve/blob/master/tests/er_diagram/test_er_diagram_inline.py#L85
+Those cases are listed inside test file: https://github.com/allmonday/pydantic-resolve/blob/master/tests/er_diagram/test_er_diagram_inline.py#L85
 
 Once after we have it defined [source code](https://github.com/allmonday/composition-oriented-development-pattern/blob/master/src/services/er_diagram.py): 
 
@@ -105,48 +107,30 @@ diagram = ErDiagram(
 Then the code above can be simplified as, The required dataloader will be automatically inferred.
 
 ```python
+# old
+class Sample1TeamDetail(tms.Team):
+    sprints: list[Sample1SprintDetail] = []
+    def resolve_sprints(self, loader=Loader(spl.team_to_sprint_loader)):
+        return loader.load(self.id)
+    
+    members: list[us.User] = []
+    def resolve_members(self, loader=Loader(ul.team_to_user_loader)):
+        return loader.load(self.id)
+
+# new
 class Sample1TeamDetail(tms.Team):
     sprints: Annotated[list[Sample1SprintDetail], LoadBy('id')] = []
     members: Annotated[list[us.User], LoadBy('id')] = []
 ```
 
-It also support `SqlAlchemy ORM` Base style: https://github.com/allmonday/pydantic-resolve/blob/master/tests/er_diagram/test_er_diagram_inline.py
+It also support `SqlAlchemy ORM Base` style: https://github.com/allmonday/pydantic-resolve/blob/master/tests/er_diagram/test_er_diagram_inline.py
 
 
-## How it works
-
-The process is similar to breadth-first traversal, with additional hooks after the traversal of descendant nodes is completed.
-
-Compared with GraphQL, both traverse descendant nodes recursively and support resolver functions and DataLoaders. The key difference is post-processing: from the post-processing perspective, resolved data is always ready for further transformation, regardless of whether it came from resolvers or initial input.
-
-![](./docs/images/lifecycle.jpeg)
-
-pydantic class can be initialized by deep nested data (which means descendant are provided in advance), then just need to run the post process.
-
-![](./docs/images/preload.png)
-
-Within post hooks, developers can read descendant data, adjust existing fields, compute derived fields.
-
-Post hooks also enable bidirectional data flow: they can read from ancestor nodes and push values up to ancestors, which is useful for adapting data to varied business requirements.
-
-![](./docs/images/communication.jpeg)
-
-
-
-## Documentation
-
-- **Documentation**: https://allmonday.github.io/pydantic-resolve/
-- **Composition-Oriented Pattern**: https://github.com/allmonday/composition-oriented-development-pattern
-- **Live demo**: https://www.newsyeah.fun/voyager/?tag=sample_1
-- [Resolver Pattern: A Better Alternative to GraphQL in BFF (api-integration).](https://github.com/allmonday/resolver-vs-graphql/blob/master/README-en.md)
-
-
-
-## 3 steps to construct complex data
+## Use 3 steps to construct complex data
 
 Let's take Agile's model for example, it includes Story, Task and User, here is a [live demo](https://www.newsyeah.fun/voyager/) and [source code](https://github.com/allmonday/composition-oriented-development-pattern/tree/master/src/services)
 
-### 1. Define entities and relationships (in form of dataloader)
+### 1. Define entities and relationships
 
 Establish entity relationships model based on business concept.
 
@@ -273,7 +257,7 @@ class Story(BaseStory):
 
 ~~`ensure_subset` decorator is a helper function which ensures the target class's fields (without default value) are strictly subset of class in parameter.~~
 
-Meta class `DefineSubset` can be used to define new schema with picked fields.
+Meta class `DefineSubset` can be used to define schema with picked fields.
 
 ```python
 class Story1(DefineSubset):
@@ -284,7 +268,7 @@ class Story1(DefineSubset):
     assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
 ```
 
-### 3. Make extra transformations based on business requirements.
+### 3. Make additional transformations based on business requirements.
 
 Dataset from base entities can not meet all requirements, adding extra computed fields or adjusting current data are common requirements.
 
@@ -294,7 +278,30 @@ It could read fields from ancestor, collect fields from descendants or modify th
 
 Let's show them case by case.
 
-#### #1: Collect items from descendants
+
+
+#### #1: Compute new fields from current data
+
+[view in voyager](https://www.newsyeah.fun/voyager/?tag=demo&route=src.router.demo.router.get_stories_with_detail_2), double click `Story2`
+
+post methods are executed after all resolve_methods are resolved, so we can use it to calculate extra fields.
+
+```python
+class Task2(BaseTask):
+    user: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+
+class Story2(DefineSubset):
+    __pydantic_resolve_subset__ = (BaseStory, ('id', 'name', 'owner_id'))
+
+    tasks: Annotated[list[Task2], LoadBy('id')] = []
+    assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+
+    total_estimate: int = 0
+    def post_total_estimate(self):
+        return sum(task.estimate for task in self.tasks)
+```
+
+#### #2: Collect items from descendants
 
 [view in voyager](https://www.newsyeah.fun/voyager/?tag=demo&route=src.router.demo.router.get_stories_with_detail_1), double click `Task1`, choose `source code`
 
@@ -316,27 +323,6 @@ class Story1(DefineSubset):
     related_users: list[BaseUser] = []
     def post_related_users(self, collector=Collector(alias='related_users')):
         return collector.values()
-```
-
-#### #2: Compute extra fields from current data
-
-[view in voyager](https://www.newsyeah.fun/voyager/?tag=demo&route=src.router.demo.router.get_stories_with_detail_2), double click `Story2`
-
-post methods are executed after all resolve_methods are resolved, so we can use it to calculate extra fields.
-
-```python
-class Task2(BaseTask):
-    user: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
-
-class Story2(DefineSubset):
-    __pydantic_resolve_subset__ = (BaseStory, ('id', 'name', 'owner_id'))
-
-    tasks: Annotated[list[Task2], LoadBy('id')] = []
-    assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
-
-    total_estimate: int = 0
-    def post_total_estimate(self):
-        return sum(task.estimate for task in self.tasks)
 ```
 
 #### #3: Propagate ancestor data to descendants through `ancestor_context`
@@ -379,6 +365,35 @@ data = await Resolver().resolve(stories)
 ```
 
 `query_stories()` returns `BaseStory` list, after we transformed it into `Story`, resolve and post fields are initialized as default value, after `Resolver().resolve()` finished, all these fields will be resolved and post-processed to what we expected.
+
+
+## How it works
+
+The process is similar to breadth-first traversal, with additional hooks after the traversal of descendant nodes is completed.
+
+Compared with GraphQL, both traverse descendant nodes recursively and support resolver functions and DataLoaders. The key difference is post-processing: from the post-processing perspective, resolved data is always ready for further transformation, regardless of whether it came from resolvers or initial input.
+
+![](./docs/images/lifecycle.jpeg)
+
+pydantic class can be initialized by deep nested data (which means descendant are provided in advance), then just need to run the post process.
+
+![](./docs/images/preload.png)
+
+Within post hooks, developers can read descendant data, adjust existing fields, compute derived fields.
+
+Post hooks also enable bidirectional data flow: they can read from ancestor nodes and push values up to ancestors, which is useful for adapting data to varied business requirements.
+
+![](./docs/images/communication.jpeg)
+
+
+## Documentation
+
+- **Documentation**: https://allmonday.github.io/pydantic-resolve/
+- **Composition-Oriented Pattern**: https://github.com/allmonday/composition-oriented-development-pattern
+- **Live demo**: https://www.newsyeah.fun/voyager/?tag=sample_1
+- [Resolver Pattern: A Better Alternative to GraphQL in BFF (api-integration).](https://github.com/allmonday/resolver-vs-graphql/blob/master/README-en.md)
+
+
 
 ## Testing and Coverage
 
