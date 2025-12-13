@@ -69,7 +69,7 @@ def _extract_extra_fields_from_namespace(namespace: Dict[str, Any], disallow: Se
     extras: Dict[str, Tuple[Any, Any]] = {}
 
     for fname, anno in annotations.items():
-        if fname == '__pydantic_resolve_subset__':
+        if fname == const.ENSURE_SUBSET_DEFINITION:
             continue
         if fname in disallow:
             raise ValueError(f'additional field "{fname}" duplicates subset field')
@@ -133,7 +133,7 @@ def create_subset(parent: Type[BaseModel], fields: List[str], name: str = "Subse
 
 class SubsetMeta(type):
     def __new__(cls, name, bases, namespace, **kwargs):
-        subset_info = namespace.get('__pydantic_resolve_subset__')
+        subset_info = namespace.get(const.ENSURE_SUBSET_DEFINITION)
         if subset_info:
             parent_kls, picked_field = subset_info
 
@@ -157,7 +157,7 @@ class SubsetMeta(type):
             create_model_kwargs['__module__'] = namespace.get('__module__', __name__)
 
             for nk, nv in namespace.items():
-                if nk.startswith('__pydantic_resolve') and nk != '__pydantic_resolve_subset__':
+                if nk.startswith('__pydantic_resolve') and nk != const.ENSURE_SUBSET_DEFINITION:
                     attributes_to_attach[nk] = nv
                     continue
 
@@ -191,7 +191,7 @@ class SubsetMeta(type):
         if name == 'DefineSubset' and not bases:
             return super().__new__(cls, name, bases, namespace, **kwargs)
 
-        raise ValueError(f'Class {name} must define __pydantic_resolve_subset__ to use SubsetMeta')
+        raise ValueError(f'Class {name} must define {const.ENSURE_SUBSET_DEFINITION} to use SubsetMeta')
 
 class DefineSubset(metaclass=SubsetMeta):
     pass
