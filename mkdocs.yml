@@ -11,6 +11,7 @@ theme:
     # - navigation.sections
     - navigation.tabs
     - navigation.tabs.sticky
+    - content.links.target_blank
 
 repo_name: allmonday/pydantic-resolve
 repo_url: https://github.com/allmonday/pydantic-resolve
@@ -33,8 +34,7 @@ nav:
   - Quick Start:
       - Introduction: ./introduction.md
       - Use cases: ./use_case.md
-      - Schema first: ./schema_first.md
-      - Why create it: ./why.md
+      # - Schema first: ./schema_first.md
   - Features:
       - Dataloader: ./dataloader.md
       - Inherit and reuse: ./inherit_reuse.md
@@ -44,6 +44,8 @@ nav:
   - API:
       - Reference: ./api.md
       - Change log: ./changelog.md
+  - Others:
+      - Why create it: ./why.md
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -86,6 +88,7 @@ plugins:
             Let's start: "开始"
             Inheritance: "继承"
             Philosophy: "迷思"
+            Others: "其他"
 
 extra:
   analytics:

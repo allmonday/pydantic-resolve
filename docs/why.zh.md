@@ -1,4 +1,4 @@
-# 为什么写个新的库？
+# 为什么要写 Pydantic resolve？
 
 我是个 FastAPI（以及 starlette）的使用者，在写 pydantic-resolve 之前的一段时间，我写 API 用过两种方式：
 
