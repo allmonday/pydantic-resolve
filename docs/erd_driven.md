@@ -1,16 +1,17 @@
+
 # ERD-Driven Development
 
 ERD - Entity Relationship Diagram
 
-For backend developers, this is a very familiar concept. Many database tools have ERD visualization features.
+For backend engineers, this concept is very familiar. Many database tools provide ERD visualization.
 
-ERD itself can be a more abstract concept, independent of specific database implementations. It describes the entities and the relationships between them, so many product managers also use ERD to describe the core data relationships of a product.
+An ERD can also be a more abstract concept, independent of any specific database implementation. It describes relationships between entities, so many product managers also use ERDs to describe a product’s core data model.
 
-Therefore, ERD is an important tool that runs through both product design and implementation. If **the structure of the ERD can remain clear in all stages**, the overall product becomes more maintainable and scalable.
+Because of that, ERD is an important tool that runs through both product design and product implementation. If **the ERD structure stays clear across all stages**, the product becomes easier to maintain and extend.
 
-When ERD is combined with pydantic-resolve, it can achieve a 3-5x increase in development efficiency and a 50% reduction in code volume.
+When you combine ERD with pydantic-resolve, you can get a 3–5x boost in development efficiency and reduce code size by about 50%.
 
-Let's start by discussing some existing development methods, their capabilities, and limitations.
+Let’s start from some existing approaches and talk about what they can do—and where they fall short.
 
 ```mermaid
 ---
@@ -18,7 +19,7 @@ title: User and Post
 ---
 
 erDiagram
-    User ||--o{ Post : "has many"
+	User ||--o{ Post : "has many"
 
 ```
 
@@ -26,17 +27,17 @@ erDiagram
 
 ### SQL
 
-Relational databases can store related data, but it is not convenient to fetch objects and their related objects through SQL.
+Relational databases can store related data, but it’s not convenient to fetch an object together with its related objects using plain SQL.
 
-When using SQL for join queries, if the related table is one-to-many, it will cause an increase in the number of Cartesian products.
+When you do a join in SQL, if the relationship is one-to-many, the result size can explode due to the Cartesian product.
 
-Simple queries cannot generate nested related data (although there are some tricks to assemble JSON, the maintainability is poor), or deduplicate parent nodes through the application layer.
+Simple queries can’t naturally produce nested related data (there are tricks to stitch JSON together, but that tends to be hard to maintain), or you end up deduplicating parent rows in the application layer.
 
 ```sql
 select * from user join post on user.id = post.user_id
 ```
 
-So the result of SQL is a two-dimensional table, and the related data can only be displayed as aggregated results.
+So the SQL result is a 2D table. Related data often needs to be represented as aggregated results.
 
 ```sql
 select user.name, count(*) as post_count from user join post on user.id = post.user_id groupby user.id
@@ -44,9 +45,9 @@ select user.name, count(*) as post_count from user join post on user.id = post.u
 
 ### ORM
 
-If you need to fetch related information, you will use ORM. After defining the relationship in ORM, you can get the related objects.
+If you need relationship data, you typically use an ORM. After defining relationships in the ORM, you can access related objects.
 
-Take the commonly used SQLAlchemy as an example.
+Using SQLAlchemy as a common example:
 
 ```python
 from sqlalchemy import Column, Integer, String, ForeignKey
@@ -56,101 +57,101 @@ from sqlalchemy.ext.declarative import declarative_base
 Base = declarative_base()
 
 class User(Base):
-    __tablename__ = 'users'
+	__tablename__ = 'users'
 
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
+	id = Column(Integer, primary_key=True)
+	name = Column(String)
 
-    # Define relationship
-    posts = relationship("Post", back_populates="user")
+	# 定义 relationship
+	posts = relationship("Post", back_populates="user")
 
 class Post(Base):
-    __tablename__ = 'posts'
+	__tablename__ = 'posts'
 
-    id = Column(Integer, primary_key=True)
-    title = Column(String)
-    user_id = Column(Integer, ForeignKey('users.id'))
+	id = Column(Integer, primary_key=True)
+	title = Column(String)
+	user_id = Column(Integer, ForeignKey('users.id'))
 
-    # Define relationship
-    user = relationship("User", back_populates="posts")
+	# 定义 relationship
+	user = relationship("User", back_populates="posts")
 
 rows = session.query(User).options(joinedload(User.posts)).all()
 ```
 
-For fetching related data, you can adjust through various lazy options. Select will cause N+1 queries when looping through User, while joined and subquery will preload the data. These options need to be adjusted by developers to avoid performance issues.
+For fetching related data, you can tune different lazy-loading strategies. `select` can trigger N+1 queries when you iterate over Users, while `joined` / `subquery` can preload related data. You need to pay attention to these options to avoid performance issues.
 
-However, **ORM also has some limitations**. If some data is not in the database, such as data from a third-party API or local files, you cannot enjoy the convenience of automatic association.
+At the same time, **ORMs have limitations**: if some data is not in the database—for example, it comes from a third-party API or a local file—you can’t benefit from ORM-style automatic relationship loading.
 
 ### GraphQL
 
-The emergence of GraphQL provides a "new" idea. **Its schema is a way that is easy to approach ERD descriptions**.
+GraphQL introduced a “new” way of thinking: **its schema is naturally close to an ERD-style description**.
 
-In addition, it abstracts the concept of DataLoader, using the general format of `async def batch_load_fn(keys)` to define input parameters and return data. Users can decide the implementation method themselves.
+It also abstracts the DataLoader concept, using a general shape like `async def batch_loadn_fn(keys)` to define input parameters and return values, while letting users decide the actual implementation.
 
-For example, in the case of a database, you can use `where ..in ..` to batch search.
+For databases, you can batch fetch with `where .. in ..`.
 
 ```sql
 select * from post where user_id in (1, 2, 3)
 ```
 
-Then aggregate the fetched data in the code with the logic of groupby `post.user_id`.
+Then you group the result in code using something like `post.user_id`.
 
-If it is a third-party API, just make a simple asynchronous call.
+For a third-party API, it can be as simple as making a single async call.
 
 ```python
 async def batch_load_fn(user_ids):
-    posts = await get_posts_by_user_ids(user_ids)
-    return build_list(posts, user_ids, lambda x: x.user_id)
+	posts = await get_posts_by_user_ids(user_ids)
+	return build_list(posts, user_ids, lambda x: x.user_id)
 ```
 
-This mechanism of GraphQL achieves a general interface that is independent of specific implementations, leaving ample room for internal optimization.
+This GraphQL mechanism provides a generic interface that’s independent of the underlying data source, leaving plenty of room for internal optimizations.
 
-However, the power of DataLoader is limited under the GraphQL system.
+However, DataLoader’s power is limited inside the GraphQL ecosystem.
 
-The most common scenario is that DataLoader can only associate data through keys, which is a single foreign key. If you want to filter resources additionally, it will be difficult.
+The most common case: by default, a DataLoader can only join data by `keys` (usually a single foreign key). If you need additional filtering on the resource, it becomes hard.
 
-For example, `(1, 2, 3, 4)` are the keys passed in, and there is no suitable way to set the `where` condition.
+Using a query as an example, `(1, 2, 3, 4)` are the input keys, but there isn’t a clean way to add extra `where` conditions.
 
 ```sql
 select * from post where post.user_id in (1,2,3,4)
-    where post.created_at > '2021-12-12'
+	where post.created_at > '2021-12-12'
 ```
 
-From the perspective of setting parameters, keys are provided by `loader.load(key)` for each User object, while the `where` condition is directly configured for the loader.
+From a configuration perspective, keys are provided by individual User objects via `loader.load(key)`, while the `where` condition is configured directly on the loader.
 
-GraphQL itself does not have a convenient way to provide a general `where` parameter, which is a pity.
+GraphQL itself doesn’t provide a convenient, generic way to pass `where` parameters, which is unfortunate.
 
-GraphQL's description of data is already very close to ERD, but unfortunately, this architecture is relatively large, with too many framework constraints, and providing flexible query interfaces is also a double-edged sword.
+GraphQL describes data in a way that’s already very close to ERD, but the architecture is relatively heavy. There are many framework constraints, and exposing a flexible query interface is a double-edged sword.
 
-We hope to find a simpler way.
+We want a more lightweight approach.
 
-## Using Pydantic to Define ERD
+## Define ERD with Pydantic
 
-Pydantic is an excellent candidate. We can use it to define Entity and Relationship.
+Pydantic is a great candidate: we can use it to define Entities and Relationships.
 
 ```python
 class User(BaseModel):
-    id: int
-    name: str
+	id: int
+	name: str
 
 class Post(BaseModel):
-    id: int
-    user_id: int
-    title: str
+	id: int
+	user_id: int
+	title: str
 
 class PostLoader(DataLoader):
-    async def batch_load_fn(self, user_ids):
-        posts = await get_posts_by_user_ids(user_ids)
-        return build_list(posts, user_ids, lambda x: x.user_id)
+	async def batch_load_fn(self, user_ids):
+		posts = await get_posts_by_user_ids(user_ids)
+		return build_list(posts, user_ids, lambda x: x.user_id)
 ```
 
-Using Pydantic to define the structure of User and Post is very concise and clear. It can be used as an abstract expression independent of the persistence layer.
+Using Pydantic to define the structure of User and Post is concise and clear, and it can serve as an abstraction independent of the persistence layer.
 
-The association between User and Post is defined by DataLoader. The specific implementation is handled by `get_post_by_user_ids`.
+The relationship between User and Post is defined by a DataLoader. The actual implementation is handled by `get_post_by_user_ids`.
 
-For example, a query like `session.query(UserModel).all()`, or a remote request using `aiohttp`.
+For example, it could be a `session.query(UserModel).all()` database query, or a remote request via `aiohttp`.
 
-> The relationship between User and Post is not limited to being described by only one DataLoader. In fact, multiple DataLoaders can be defined and selected according to the actual scenario.
+> The relationship between User and Post is not limited to a single DataLoader. In practice, you can define multiple DataLoaders and choose one based on the scenario.
 
 ```mermaid
 ---
@@ -158,18 +159,71 @@ title:
 ---
 
 erDiagram
-    User ||..o{ Post : "PostLoader"
-    User ||..o{ Post : "AnotherLoader"
+	User ||..o{ Post : "PostLoader"
+	User ||..o{ Post : "AnotherLoader"
 
 ```
 
-Use dashed lines to indicate the possible associations between them.
+Here we use dashed lines to indicate that the relationship “can” happen.
 
-### Establishing Associations
+Starting from Pydantic resolve v2, this kind of ERD can be declared more explicitly. When there is only one relationship for User -> Post, you can use `Relationship`:
 
-Now let's assume there is a business requirement to establish an association between User and Post.
+```python
+from pydantic_resolve import Relationship, base_entity, config_global_resolver
 
-You can reuse User fields by inheriting User and define `posts` to link the data.
+class User(BaseModel):
+	id: int
+	name: str
+
+class Post(BaseModel):
+	__pydantic_resolve_relationships__ = [
+		Relationship(field='id', target_kls=list[User], loader=PostLoader)
+	]
+	id: int
+	user_id: int
+	title: str
+
+config_global_resolver(BaseEntity.get_diagram())
+```
+
+If there are multiple possible paths between User -> Post, you can use `MultipleRelationship`:
+
+```python
+from pydantic_resolve import MultipleRelationship, Link, base_entity, config_global_resolver
+
+BaseEntity = base_entity()
+
+class User(BaseModel):
+	id: int
+	name: str
+
+class Post(BaseModel, BaseEntity):
+	__pydantic_resolve_relationships__ = [
+		MultipleRelationship(
+			field='id', 
+			target_kls=list[User],
+			links=[
+				Link(biz='default', loader=PostLoader),
+				Link(biz='another', loader=AnotherLoader)
+			]
+		)
+	]
+	id: int
+	user_id: int
+	title: str
+
+config_global_resolver(BaseEntity.get_diagram())
+```
+
+If you are a FastAPI user, this ERD can also be visualized in FastAPI Voyager.
+
+
+
+### Build relationships
+
+Now let’s assume a business requirement: we want to connect User and Post.
+
+We can reuse User fields via inheritance, and connect the data by defining `posts`.
 
 ```mermaid
 ---
@@ -177,55 +231,67 @@ title: UserWithPostsForSpecificBusiness
 ---
 
 erDiagram
-    User ||--o{ Post : "PostLoader"
+	User ||--o{ Post : "PostLoader"
 
 ```
 
 ```python
 class UserWithPostsForSpecificBusiness(User):
-    posts: List[Post] = []
-    def resolve_posts(self, loader=LoaderDepend(PostLoader)):
-        return loader.load(self.id)
+	posts: List[Post] = []
+	def resolve_posts(self, loader=LoaderDepend(PostLoader)):
+		return loader.load(self.id)
 ```
 
-In this way, `UserWithPostsForSpecificBusiness` is a fixed combination of User and Post associations established for specific business requirements.
+This `UserWithPostsForSpecificBusiness` is a fixed composition of the User–Post relationship for a specific business requirement.
 
-By the way, as mentioned in "Data Loaders", DataLoader allows additional parameters to be provided.
+If you define an `ErDiagram`, you can simplify the code by removing the explicit DataLoader call.
 
-### The Secret to Maintainable Code: Keep Business ERD and Code Structure Definitions Consistent
+```python
+from pydantic_resolve import LoadBy
 
-Now we have obtained a code that is highly consistent with the business requirement ERD structure, and this code is dedicated.
+class UserWithPostsForSpecificBusiness(User):
+	posts: Annotated[List[Post], LoadBy('id')] = []
+```
 
-In other words, ERD defines a series of Entities and all possible Relationships, and the actual establishment of relationships depends on the specific business requirements.
 
-Two classes with exactly the same structure can have different names, representing different needs.
+### The key to maintainable code: keep business ERD consistent with your code structure
+
+Now we have code whose structure closely matches the business ERD, and this code is business-specific.
+
+In other words, the ERD defines a set of Entities and all possible Relationships, while the actual relationship wiring depends on the business requirement.
+
+Two classes with the same structure can have different names, representing different use cases.
 
 ```python
 class UserWithPostsForSpecificBusinessA(User):
-    posts: List[Post] = []
-    def resolve_posts(self, loader=LoaderDepend(PostLoader)):
-        return loader.load(self.id)
+	posts: List[Post] = []
+	def resolve_posts(self, loader=LoaderDepend(PostLoader)):
+		return loader.load(self.id)
 
 class UserWithPostsForSpecificBusinessB(User):
-    posts: List[Post] = []
-    def resolve_posts(self, loader=LoaderDepend(PostLoader)):
-        return loader.load(self.id)
+	posts: List[Post] = []
+	def resolve_posts(self, loader=LoaderDepend(PostLoader)):
+		return loader.load(self.id)
 ```
 
-Suppose the requirement of `UserWithPostsForSpecificBusinessA` changes, and it needs to load only the latest 3 posts for each user.
+Suppose the requirement for `UserWithPostsForSpecificBusinessA` changes: it should only load the latest 3 posts for each user.
 
-You only need to create a new DataLoader and replace it. (UserWithPostsForSpecificBusinessB is completely unaffected)
+You just create a new DataLoader and swap it in. (`UserWithPostsForSpecificBusinessB` is completely unaffected.)
 
 ```python
 class UserWithPostsForSpecificBusinessA(User):
-    posts: List[Post] = []
-    def resolve_posts(self, loader=LoaderDepend(LatestThreePostLoader)):
-        return loader.load(self.id)
+	posts: List[Post] = []
+	def resolve_posts(self, loader=LoaderDepend(LatestThreePostLoader)):
+		return loader.load(self.id)
 ```
 
-In the end, we achieved the goal of keeping the code structure highly consistent with the product design ERD structure, making subsequent changes and adjustments easier.
+In the end, we achieve the goal: the structure in code stays highly consistent with the ERD structure in product design, making future changes and iterations much easier.
 
-### More Examples
+### More examples
+
+We can keep inheriting and extending Post, adding `comments` and `likes`.
+
+In this scenario, each DataLoader only runs one query.
 
 ```mermaid
 ---
@@ -233,24 +299,25 @@ title: Business A ERD
 ---
 
 erDiagram
-    User ||--o{ Post : "PostLoader"
-    Post ||--o{ Comment : "CommentLoader"
-    Post ||--o{ Like : "LikeLoader"
+	User ||--o{ Post : "PostLoader"
+	Post ||--o{ Comment : "CommentLoader"
+	Post ||--o{ Like : "LikeLoader"
 
 ```
 
 ```python
 class BizAPost(Post):
-    comments: List[Comment] = []
-    def resolve_comments(self, loader=LoaderDepend(CommentLoader)):
-        return loader.load(self.id)
+	comments: List[Comment] = []
+	def resolve_comments(self, loader=LoaderDepend(CommentLoader)):
+		return loader.load(self.id)
 
-    likes: List[Like] = []
-    def resolve_likes(self, loader=LoaderDepend(LikeLoader)):
-        return loader.load(self.id)
+	likes: List[Like] = []
+	def resolve_likes(self, loader=LoaderDepend(LikeLoader)):
+		return loader.load(self.id)
 
 class BizAUser(User):
-    posts: List[BizAPost] = []
-    def resolve_posts(self, loader=LoaderDepend(PostLoader)):
-        return loader.load(self.id)
+	posts: List[BizAPost] = []
+	def resolve_posts(self, loader=LoaderDepend(PostLoader)):
+		return loader.load(self.id)
 ```
+

@@ -48,4 +48,4 @@ Therefore, the methods for obtaining data or DataLoader can be reused to provide
 
 Subclass inheritance can reuse the fields of the parent class, reducing the overhead of repeatedly defining fields.
 
-By making good use of inheritance, we can lay the groundwork for the efficient development model of "ERD-oriented development".
+Of course, using meta class `DefineSubset` can also works.

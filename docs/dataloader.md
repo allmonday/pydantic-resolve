@@ -1,12 +1,12 @@
-# DataLoader
+# Data Loader (DataLoader)
 
-DataLoader is a very important component in pydantic-resolve, utilizing a third-party independent library [aiodataloader](https://github.com/syrusakbary/aiodataloader). It is often used as a dependency in GraphQL-related libraries.
+DataLoader is a key component in `pydantic-resolve`. It is built on top of the third-party library [aiodataloader](https://github.com/syrusakbary/aiodataloader), which is commonly used as a dependency in GraphQL-related libraries.
 
-It can solve the N+1 query problem in GraphQL by combining multiple concurrent queries into a single batch query to optimize performance.
+It solves the GraphQL N+1 query problem by merging many concurrent lookups into a single batch query, which improves performance.
 
-The internal mechanism of pydantic-resolve is somewhat similar to GraphQL, so it can be directly used to handle data loading. For some simple DataLoaders, reuse with other Python GraphQL frameworks can also be achieved.
+`pydantic-resolve` works in a way that is similar to GraphQL, so DataLoader fits naturally for data fetching. For simple loaders, you can also reuse them across different Python GraphQL frameworks.
 
-For example, the code introduced in the introduction, when batch processing `get_cars_by_child`, multiple triggers occur, causing the N+1 query problem. We can solve this with DataLoader.
+In the example below, `get_cars_by_child` would be called many times and cause the N+1 query problem. We can fix it with DataLoader.
 
 ```python
 class Child(BaseModel):
@@ -15,11 +15,10 @@ class Child(BaseModel):
 
     cars: List[Car] = []
     # async def resolve_cars(self):
-    #     return await get_cars_by_child(self.id)
+    #     return await get_cars_by_child(self.id) # 产生 N+1 查询
 
-    cars: List[Car] = []
-    async def resolve_cars(self, loader=LoaderDepend(CarLoader)):
-        return await loader.load(self.id)
+    def resolve_cars(self, loader=LoaderDepend(CarLoader)):
+        return loader.load(self.id)
 
     description: str = ''
     def post_description(self):
@@ -30,106 +29,9 @@ children = await Resolver.resolve([
         Child(id=1, name="Titan"), Child(id=1, name="Siri")])
 ```
 
-## Sample
-
-```mermaid
-erDiagram
-    User ||--o{ Blog : owns
-    Blog ||--o{ Comment : owns
-    User {
-        int id
-        string name
-    }
-    Blog {
-        int id
-        int user_id
-        string title
-        string content
-    }
-    Comment {
-        int id
-        int blog_id
-        int user_id
-        string content
-    }
-```
-
-```python
-import asyncio
-import json
-from typing import Optional
-from pydantic import BaseModel
-from pydantic_resolve import Resolver, build_object, build_list, LoaderDepend
-from aiodataloader import DataLoader
-
-# Schema/ Entity
-class Comment(BaseModel):
-    id: int
-    content: str
-    user_id: int
-
-class Blog(BaseModel):
-    id: int
-    title: str
-    content: str
-
-class User(BaseModel):
-    id: int
-    name: str
-
-
-# Loaders/ relationships
-class CommentLoader(DataLoader):
-    async def batch_load_fn(self, comment_ids):
-        comments = [
-            dict(id=1, content="world is beautiful", blog_id=1, user_id=1),
-            dict(id=2, content="Mars is beautiful", blog_id=2, user_id=2),
-            dict(id=3, content="I love Mars", blog_id=2, user_id=3),
-        ]
-        return build_list(comments, comment_ids, lambda c: c['blog_id'])
-
-class UserLoader(DataLoader):
-    async def batch_load_fn(self, user_ids):
-        users = [ dict(id=1, name="Alice"), dict(id=2, name="Bob"), ]
-        return build_object(users, user_ids, lambda u: u['id'])
-
-
-# Compose schemas and dataloaders together
-class CommentWithUser(Comment):
-    user: Optional[User] = None
-    def resolve_user(self, loader=LoaderDepend(UserLoader)):
-        return loader.load(self.user_id)
-
-class BlogWithComments(Blog):
-    comments: list[CommentWithUser] = []
-    def resolve_comments(self, loader=LoaderDepend(CommentLoader)):
-        return loader.load(self.id)
-
-
-# Run
-async def main():
-    raw_blogs =[
-        dict(id=1, title="hello world", content="hello world detail"),
-        dict(id=2, title="hello Mars", content="hello Mars detail"),
-    ]
-    blogs = await Resolver().resolve([BlogWithComments.parse_obj(b) for b in raw_blogs])
-    print(json.dumps(blogs, indent=2, default=lambda o: o.dict()))
-
-asyncio.run(main())
-```
-
-Note:
-The purpose of this example is to demonstrate the ability to fetch related data. People often ask how to handle pagination. Generally, pagination is used when there is a large amount of root data, such as a paginated User list.
-
-If you want to paginate Blogs, one way is to treat Blogs as the root data entry and paginate using `api/blog?limit=10&offset=0`.
-
-Alternatively, you can use a single User and paginate the blogs with the `context` parameter. In this case, you cannot use DataLoader and need to replace it with a single method like `get_blogs_by_user_id_with_pagination`.
-
-Additionally, DataLoader can add range limits, such as fetching a batch of users' blogs from the last N days or comments from the last M days. This approach aligns with the data volume displayed in the UI.
-
 ## Creating a DataLoader
 
-There are two ways to create a DataLoader object. One is by inheritance:
+There are two ways to create a DataLoader object. The first one is to subclass `DataLoader`:
 
 ```python
 from aiodataloader import DataLoader
@@ -142,85 +44,47 @@ class UserLoader(DataLoader):
 user_loader = UserLoader()
 ```
 
-The inheritance method allows setting some `aiodataloader` related parameters, such as using `max_batch_size = 20` to slice and parallelize the keys.
+With subclassing, you can configure `aiodataloader` options. For example, `max_batch_size = 20` will split keys into chunks and run batches.
 
-These parameters are reserved parameter names for aiodataloader, so be careful not to use the same names when adding new parameters.
+These params are reserved by `aiodataloader`, so avoid naming conflicts when adding your own params (the reason for custom params is explained later):
 
-The other way is to directly create an `async def batch_load_fn(keys)` method, and pydantic-resolve will use `DataLoader(batch_load_fn)` to create an instance internally.
+- `batch`
+- `max_batch_size`
+- `cache`
+- `cache_key_fn`
+- `cache_map`.
 
-Generally, it is recommended to use the first method, and the reasons will be explained later.
+The second way is to define an `async def batch_load_fn(keys)` function. Inside `pydantic-resolve`, it will create an instance via `DataLoader(batch_load_fn)`.
 
-Next, we will introduce a series of features provided by pydantic-resolve based on DataLoader:
+In practice, the first approach (subclassing) is recommended because it gives you more flexibility later.
 
-## Multi-layer Data Stitching
+Next, we will introduce some extra features provided by `pydantic-resolve` on top of DataLoader.
 
-Take Company, Office, and Member as examples. Office and Member have dataloaders that return their data, as long as the corresponding office_id and member_id are provided.
+## Passing Params and Cloning
 
-- OfficeLoader gets the corresponding Office list through company_id
-- MemberLoader gets the Member list through office_id
+You can add params to a DataLoader, but be careful not to conflict with `aiodataloader` default params:
 
-Taking OfficeLoader as an example, passing in company_ids returns an array of offices obtained in the order of company_ids.
+- `batch`
+- `max_batch_size`
+- `cache`
+- `cache_key_fn`
+- `cache_map`.
 
-For example, input `company_ids = [1, 2, 3]`, return `[[office_1, office_2], [office_3], [office_4]]`, which means company 1 has `[office_1, office_2]`, and so on.
-
-> build_list is a helper method provided by pydantic-resolve to simplify the assembly process
-
-```python
-class OfficeLoader(DataLoader)
-    async def batch_load_fn(self, company_ids):
-        offices = await get_offices_by_company_ids(company_ids)
-        return build_list(offices, company_ids, lambda x: x['company_id'])  # Assuming the data is a dict
-
-class Company(BaseModel):
-    id: int
-    name: str
-
-    offices: List[Office] = []
-    def resolve_offices(self, loader=LoaderDepend(OfficeLoader)):
-        return loader.load(self.id)  # Returns a Future
-
-class Office(BaseModel):
-    id: int
-    company_id: int
-    name: str
-
-    members: List[Member] = []
-    def resolve_members(self, loader=LoaderDepend(MemberLoader)):
-        return loader.load(self.id)  # Returns a Future
-
-class Member(BaseModel):
-    id: int
-    office_id: int
-    name: str
-
-companies = [
-    Company(id=1, name='Aston'),
-    Compay(id=2, name="Nicc"),
-    Company(id=3, name="Carxx")
-]
-companies = await Resolver().resolve(companies)
-```
-
-In this code, Company extends the offices data, and then Office extends the members data. During the entire process, the batch_load_fn in OfficeLoader and MemberLoader only executes once, regardless of the number of Offices and members.
-
-> Of course, if max_batch_size is relatively small, multiple batch_load_fn may be executed concurrently
-
-## Providing Parameters and Cloning
-
-DataLoader can add parameters, but be careful to avoid conflicts with the default parameters in `aiodataloader`: `batch`, `max_batch_size`, `cache`, `cache_key_fn`, `cache_map`.
-
-For example, add a `status` parameter to OfficeLoader to filter `open` offices.
+For example, we add a `status` param to `OfficeLoader` to filter only `open` offices.
 
 ```python
 class OfficeLoader(DataLoader)
     status: Literal['open', 'closed', 'inactive']
+    # status: Literal['open', 'closed', 'inactive'] = 'open'
 
     async def batch_load_fn(self, company_ids):
         offices = await get_offices_by_company_ids_by_status(company_ids, self.status)
         return build_list(offices, company_ids, lambda x: x['company_id'])
 ```
 
-The defined parameters can be set in the Resolver through loader_params.
+You can set these params in `Resolver` via `loader_params`.
+
+> Note: params can have default values. If you use a default, you don't need to pass it in `Resolver`.
 
 ```python
 companies = [
@@ -237,7 +101,7 @@ companies = await Resolver(
 ).resolve(companies)
 ```
 
-There is still a problem here. What if you need to get both `open` and `closed` data at the same time?
+There is a common issue here: what if you have two fields that need different `status` values? For example, one needs `open`, another needs `closed`.
 
 ```python
 class Company(BaseModel):
@@ -253,7 +117,7 @@ class Company(BaseModel):
         return loader.load(self.id)
 ```
 
-Different conditions for the data cannot be provided by a single OfficeLoader. pydantic-resolve provides a tool to clone two OfficeLoaders.
+One `OfficeLoader` cannot serve two different filters at the same time. So `pydantic-resolve` provides a helper to clone the loader class.
 
 ```python
 from pydantic_resolve import copy_dataloader_kls
@@ -292,7 +156,7 @@ companies = await Resolver(
 
 ## Handling DataLoader Return Values
 
-If you need to process the return value of `loader.load(self.id)`, you can change resolve_offices to async.
+If you need to post-process the result of `loader.load(self.id)`, you can make your resolver method `async`, then `await` the result and transform it.
 
 ```python
 class Company(BaseModel):
@@ -305,7 +169,9 @@ class Company(BaseModel):
         return [of for of in offices if of['status'] == 'open']
 ```
 
-In addition, pydantic-resolve does not restrict the name or number of loaders, so the following usage is also allowed. The example given is a bit strange though.
+## Declaring Multiple Dataloaders
+
+`pydantic-resolve` does not restrict loader argument names or the number of loaders you can use. So this pattern is also valid.
 
 ```python
 class Company(BaseModel):
@@ -324,11 +190,11 @@ class Company(BaseModel):
         return offices
 ```
 
-## Pre-generating DataLoader Instances
+## Pre-building DataLoader Instances
 
-You can generate DataLoader instances in advance and set the data in advance, so you can use the cache mechanism of DataLoader to avoid query overhead during the resolve() phase.
+You can create a DataLoader instance ahead of time and prefill it with data. This lets you use the DataLoader cache and avoid runtime queries during the `resolve()` phase.
 
-This can be helpful in some specific scenarios.
+This can be useful in specific scenarios.
 
 ```python
 loader = SomeLoader()
@@ -337,12 +203,19 @@ loader.prime('john', ['mike', 'wallace'])
 data = await Resolver(loader_instances={SomeLoader: loader}).resolve(data)
 ```
 
-## Viewing DataLoader Instance Data
+## Getting Required Field Info
 
-If you want to know which instances DataLoader has initialized and what data it has obtained, you can print it out to check.
+DataLoader provides a hidden field `self._query_meta`, which contains metadata about the fields that are required for the output. You can use it to build a more efficient query.
+
+See the API definition here: [./api.md#self_query_meta](./api.md#self_query_meta)
+
+## Inspecting DataLoader Instances
+
+If you want to know which DataLoader instances were initialized and what data they loaded, you can print it.
 
 ```python
 resolver = Resolver()
 data = await resolver.resolve(data)
 print(resolver.loader_instance_cache)
 ```
+
