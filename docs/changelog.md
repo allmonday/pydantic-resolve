@@ -1,13 +1,15 @@
 # Changelog
 
-## v2.2.4 (2025.12.8)
+## v2.2
+
+### v2.2.4 (2025.12.8)
 
 fix: ignore inherited descendant in inline relationship definition
 
 more details in test case: `tests/er_diagram/test_er_diagram_base.py`
 
 
-## v2.2.3 (2025.12.7)
+### v2.2.3 (2025.12.7)
 
 feat: for ininline relationships str are allowed to represent the class name
 
@@ -29,11 +31,11 @@ class User(BaseModel):
 
 Only use this in inline mode.
 
-## v2.2.2 (2025.12.5)
+### v2.2.2 (2025.12.5)
 
 feat: add origin_kls in LoadBy to avoid blurring during matching loader
 
-## v2.2.1 (2025.12.5)
+### v2.2.1 (2025.12.5)
 
 feat: add field_fn in er diagram, receive callable object to process key before loader.load
 
@@ -55,6 +57,7 @@ MyResolver = config_resolver('MyResolver', er_diagram=BaseEntity.get_diagram())
 # config_global_resolver(er_diagram=BaseEntity.get_diagram())
 ```
 
+## v2.1
 
 ### v2.1.0 (2025.11.29)
 - change: 
@@ -62,6 +65,7 @@ MyResolver = config_resolver('MyResolver', er_diagram=BaseEntity.get_diagram())
 - feature:
     - add MultipleRelationship for scenarios having mulitple links between entity and target_entity.
 
+## v2.0
 
 ### v2.0.1 (2025.11.26)
 - rename `ErConfig` to `Entity` (caution: will break current code)
