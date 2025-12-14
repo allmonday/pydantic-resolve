@@ -33,12 +33,13 @@ edit_uri: ""
 nav:
   - Quick Start:
       - Introduction: ./introduction.md
-      - Use cases: ./use_case.md
+      - Install: ./install.md
+      # - Use cases: ./use_case.md
       # - Schema first: ./schema_first.md
   - Features:
       - Dataloader: ./dataloader.md
-      - Inherit and reuse: ./inherit_reuse.md
       - ERD Driven Pattern: ./erd_driven.md
+      - Inherit and reuse: ./inherit_reuse.md
       - Expose and collect: ./expose_and_collect.md
       - Connect to UI: ./connect_to_ui.md
   - API:
@@ -89,6 +90,7 @@ plugins:
             Inheritance: "继承"
             Philosophy: "迷思"
             Others: "其他"
+            Install: "安装"
 
 extra:
   analytics:

@@ -1,6 +1,6 @@
 # 应用场景
 
-介绍 pydantic-resolve 的常用场景， 并且总结一些开发心得。
+介绍 pydantic-resolve 的常用场景。
 
 ## 构建数据容器
 

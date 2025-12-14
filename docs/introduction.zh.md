@@ -1,4 +1,4 @@
-Pydantic resolve 是一个基于 Pydantic 的数据组装工具， 无需额外的胶水代码就可以用最小的成本构建复杂的数据。
+Pydantic resolve 是一个基于 Pydantic 的数据组装工具， 它无需额外的胶水代码就可以用最小的成本构建复杂的数据。
 
 它的最佳使用场景是构建 UI 所需的视图数据，可以在复用大部分的代码（比如 dataloader）的情况下，平替 GraphQL， 并提供更好的性能， 更好的维护性。
 
@@ -6,7 +6,7 @@ Pydantic resolve 是一个基于 Pydantic 的数据组装工具， 无需额外�
 
 从 Pydantic resolve v2 版本开始， 新增了 `ErDiagram` 功能， 用来定义应用层的 ER 图， 其中 Relationship 中可以定义默认使用的 dataloader， 来大幅简化关联数据的获取代码。
 
-它可以和许多现代 Python web 框架继承， 比如 FastAPI, Litestar 和 Diango-ninja
+它可以和许多现代 Python web 框架集成， 比如 FastAPI, Litestar 和 Diango-ninja
 
 FastAPI 的用户可以使用 [FastAPI Voyager](https://github.com/allmonday/fastapi-voyager) 来获取更好的开发体验, 它可以将复杂的 schema 关系用图的方式可视化出来， 并且能够点击交互。 可以查看 [Demo](https://www.newsyeah.fun/voyager/?tag=sample_1) 来快速体验。
 
@@ -277,7 +277,7 @@ config_global_resolver(diagram)  # 重要： 将 ER diagram 信息注入到 Reso
 
 
 
-## 2. 根据业务需求构建数据
+### 2. 根据业务需求构建数据
 
 通过简单的继承， 扩展字段来描述所需的业务数据结构。
 
@@ -379,7 +379,7 @@ class Story3(DefineSubset):
 
 [view in voyager](https://www.newsyeah.fun/voyager/?tag=demo&route=src.router.demo.router.get_stories_with_detail_2), 双击 `Story2`
 
-借助 post 的生命周期中执行晚于 resolve 的特性， 这个需求非常简单, 直接 sum 就完了。
+借助 post 的生命周期中执行晚于 resolve 的特性，这个需求非常简单，直接 sum 就完了。
 
 ```python
 class Task2(BaseTask):
@@ -406,7 +406,7 @@ class Story2(DefineSubset):
 
 然后通过 `collector.values()` 来读取数据。
 
-只是这个 `Collector` 中的别名并不需要“全局” 唯一， 所有同名的 `Collector` 会根据祖孙关系数据到范围内的数据。
+只是这个 `Collector` 中的别名并不需要“全局” 唯一， 所有同名的 `Collector` 会根据祖孙关系收集到范围内的数据。
 
 在子孙节点中， 使用 `__pydantic_resolve_collect__ = {'user': 'related_users'}` 申明了， 它将会把 user 数据， 发送给祖先节点中名字为 `related_users` 的收集器。
 
@@ -420,6 +420,7 @@ __pydantic_resolve_collect__ = {('id', 'user'): ('related_users', 'all_users')}:
 
 Pydantic resolve 提供的默认 `Collector` 会把数据收集到列表中， 你也可以通过实现 `ICollector` 来创建子集所需的 `Collector`
 
+更多收集器相关的可以阅读[这里](./expose_and_collect.zh.md#_2)
 
 来看一下完整代码, related_users 就能收集到所有的 user 数据了。（注意， 这个例子里面并未处理重复数据的问题）
 

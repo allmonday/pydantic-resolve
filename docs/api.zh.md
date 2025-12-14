@@ -6,13 +6,6 @@
 
 resolve_field 方法可以是 async 的， Resolver 会递归的解析子节点中的所有 resolve_field 方法来获取数据
 
-可以使用的参数
-
-- context
-- ancestor_context
-- parent
-- dataloaders（支持多个）
-
 ```python
 class Blog(BaseModel):
     id: int
@@ -27,17 +20,17 @@ class Blog(BaseModel):
         return ['tag-1', 'tag-2']
 ```
 
+可以使用的参数
+
+- context: 全局参数， 在 Resolver 中设置
+- ancestor_context：局部参数， 在`__pydantic_resolve_expose__` 中设置
+- parent：父节点
+- dataloader：允许申明多个 dataloader，形如 `loader=Loader(SomeLoader), loader_b=Loader(AnotherLoader)`
+
+
 ### post
 
 post_field 方法可以为 sync 或者 async, 在子孙节点的数据处理完毕之后触发，用来对获取到的数据做后续处理。
-
-可以使用的参数:
-
-- context
-- ancestor_context
-- parent
-- dataloaders（支持多个）
-- collectors (支持多个)
 
 ```python
 class Blog(BaseModel):
@@ -51,18 +44,21 @@ class Blog(BaseModel):
         return self.comments[-1:] # keep the last one
 ```
 
+可以使用的参数:
+
+- context: 全局参数， 在 Resolver 中设置
+- ancestor_context：局部参数， 在`__pydantic_resolve_expose__` 中设置
+- parent：父节点
+- dataloader：允许申明多个 dataloader，形如 `loader=Loader(SomeLoader), loader_b=Loader(AnotherLoader)`
+    - 注意post 中返回的对象不会被继续递归 resolve， 这点和 resolve 中不同
+- collector: 允许申明多个 collector， 形如 `collector_a=Collector('a'), collector_b=Collector('b')`
+
+
 ### post_default_handler
 
 `post_default_handler` 是一个特殊的 post 方法， 他会在所有 post 方法执行完毕之后执行。 适用于处理一些收尾工作。
 
 注意该方法没有自动赋值的逻辑， 需要自己手动指定。
-
-可以使用的参数:
-
-- context
-- ancestor_context
-- parent
-- collectors (支持多个)
 
 ```python
 class Blog(BaseModel):
@@ -73,6 +69,14 @@ class Blog(BaseModel):
     def post_default_handler(self):
         self.length = 100
 ```
+
+
+可以使用的参数:
+
+- context: 全局参数， 在 Resolver 中设置
+- ancestor_context：局部参数， 在`__pydantic_resolve_expose__` 中设置
+- parent：父节点
+- collector: 允许申明多个 collector， 形如 `collector_a=Collector('a'), collector_b=Collector('b')`
 
 ## Resolver
 
@@ -103,7 +107,7 @@ resolver = Resolver(loader_params={ LoaderA: { "param_x": 1, "param_y": 2 } })
 
 ### global_loader_param
 
-用来全局设置 DataLoader 参数
+用来全局设置 DataLoader 参数， 某些场景下会比较方便。
 
 ```python
 resolver = Resolver(global_loader_param={ { "param_x": 1, "param_y": 2 } })
@@ -176,6 +180,30 @@ v2 中可以通过 `typeAdapter.validate_python(data, from_attribute=True)` 进�
 
 ### annotation
 指定解析数据时的根类。 当输入数据是 Union 类型的列表时， 无法自动推断出根类， 这时可以通过该参数来指定根类。
+
+
+## ErDiagram
+
+ErDiagram 是 v2 中新增的功能， 可以申明应用层的 ERD， 用更精准的方式来建模业务模型
+
+相关类：
+
+- Relationship: Entity 之间只有一种关系的情况， 定义字段， 指向类型和默认的 dataloader
+- MultipleRelationship： Entity 之间存在多种关系的情况， 需要额外定义 Link， 在 Link 中定义业务含义和 dataloader
+- Entity： 实体信息， 使用 BaseEntity 的情况下不必使用
+- Link： 定义业务含义和 dataloder
+
+相关方法：
+
+- base_entity：创建元类的方法， 继承元类之后可以在类内部申明 relationships， 它会收集所有的 relationship 信息， 通过 BaseEntity.get_diagram() 获取
+- config_resolver： 如果存在多套 ERD，可以生成一个新的 Resolver 类
+- config_global_resolver： 直接将 ERD 注入到默认的 Resolver 类中
+
+使用：
+
+- LoadBy: 通过 Annotated 添加 LoadBy 可以自动寻找到所需的 relationship 和 dataloader
+
+目前可以通过查看 tests/er_diagram/test_er_diagram.py 中的测试来了解使用方法。
 
 
 ## 方法参数说明

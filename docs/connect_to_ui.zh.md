@@ -6,8 +6,8 @@ pydantic 本身可以生成支持 OpenAPI 规范的 json schema。 这意味着�
 
 这使得后端的改动可以直接传递到前端。
 
-简单样例可以参考 repo： [pydantic-resolve-demo](https://github.com/allmonday/pydantic-resolve-demo)
-
 借助 OpenAPI 和 sdk 生成， 前后端对接的成本直接锐减。
 
 当后端数据结构发生变化之后， 前端同步之后也能第一时间借助 TypeScript 感知到变更。
+
+极大的提升了开发效率。

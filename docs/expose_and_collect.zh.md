@@ -4,7 +4,9 @@
 
 ## 向所有子孙节点提供数据
 
-Company 类型的数据有三层， 为 Employee 类型添加 introduction 字段， 内容为 company - department - employee name。
+Company 类型的数据有三层， 现在要在 Employee 类中添加 introduction 字段， 内容为 company - department - employee name。
+
+对于这种只向子集子孙节点提供数据的需求， 我们可以使用 Expose 来实现。
 
 ```python hl_lines="2 9 21 22"
 class Company(BaseModel):
@@ -141,3 +143,5 @@ class Employee(BaseModel):
         department = ancestor_context['department_name']
         return f'{company}/{department}/{self.name}'
 ```
+
+使用收集器可以非常简单的跨层收集数据。

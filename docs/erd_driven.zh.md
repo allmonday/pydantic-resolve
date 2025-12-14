@@ -165,6 +165,59 @@ erDiagram
 
 使用虚线来表示他们之间 “可以” 发生的关联。
 
+从 Pydantic resolve v2 开始， 这样的 ERD 可以被更加显式的申明出来，对于 User -> Post 只有一只关系的时候可以使用 Relationship：
+
+```python
+from pydantic_resolve import Relationship, base_entity, config_global_resolver
+
+class User(BaseModel):
+    id: int
+    name: str
+
+class Post(BaseModel):
+    __pydantic_resolve_relationships__ = [
+        Relationship(field='id', target_kls=list[User], loader=PostLoader)
+    ]
+    id: int
+    user_id: int
+    title: str
+
+config_global_resolver(BaseEntity.get_diagram())
+```
+
+如果 User -> Post 之间有多种可能的路径， 则可以使用 MultipleRelationship 来定义：
+
+```python
+from pydantic_resolve import MultipleRelationship, Link, base_entity, config_global_resolver
+
+BaseEntity = base_entity()
+
+class User(BaseModel):
+    id: int
+    name: str
+
+class Post(BaseModel, BaseEntity):
+    __pydantic_resolve_relationships__ = [
+        MultipleRelationship(
+            field='id', 
+            target_kls=list[User],
+            links=[
+                Link(biz='default', loader=PostLoader),
+                Link(biz='another', loader=AnotherLoader)
+            ]
+        )
+    ]
+    id: int
+    user_id: int
+    title: str
+
+config_global_resolver(BaseEntity.get_diagram())
+```
+
+如果是 FastAPI 用户， 这样的 ERD 还可以在 FastAPI Voyager 中被可视化出来。
+
+
+
 ### 建立关联
 
 现在我们假设有个业务需求， 要给 User 和 Post 建立关联。
@@ -190,11 +243,19 @@ class UserWithPostsForSpecificBusiness(User):
 
 这样 `UserWithPostsForSpecificBusiness` 就是面向特定业务需求所建立的 User 和 Post 关联固定组合体。
 
-顺带一提， 就如 "数据加载器" 中所提到的， DataLoader 是允许提供额外参数的。
+如果定义了 `ErDiagram` 的话， 这个代码可以直接简化掉显式调用 dataloder 的过程。
+
+```python
+from pydantic_resolve import LoadBy
+
+class UserWithPostsForSpecificBusiness(User):
+    posts: Annotated[List[Post], LoadBy('id')] = []
+```
+
 
 ### 可维护代码的诀窍： 使业务 ERD 和代码中的结构定义维持一致
 
-现在我们得到了一个业务需求 ERD 结构高度一致的代码， 并且这段代码是专供的。
+现在我们得到了一个业务需求 ERD 结构高度一致的代码， 并且这段代码是业务专用的。
 
 也即是说， ERD 定义了一系列 Entity 和所有可能的 Relationship， 而关系的真正建立是取决于实际业务需求的。
 
@@ -226,6 +287,10 @@ class UserWithPostsForSpecificBusinessA(User):
 最终， 我们实现了目标， 让代码侧的结构与产品设计侧的 ERD 结构保持高度的一致， 这使得后续的变更和调整变得更容易。
 
 ### 更多案例
+
+我们可以继续对 Post 进行继承和扩展， 让它扩展出 comments 和 likes 两个字段。
+
+在这种场景下， 每个 dataloader 都只会执行一次查询。
 
 ```mermaid
 ---
