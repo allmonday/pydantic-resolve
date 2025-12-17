@@ -26,7 +26,24 @@ class C(BaseModel):
 
 
 @pytest.mark.asyncio
-async def test_raise_exception():
+async def test_expose_as():
     a = A(name='a_name')
     a = await Resolver().resolve(a)
     assert a.b.c.a_name == 'a_name'
+
+
+class AA(BaseModel):
+    __pydantic_resolve_expose__ = {
+        'name': 'A_name'
+    }
+    name: Annotated[str, ExposeAs('A_name')] = ''
+    b: Optional[B] = None
+    def resolve_b(self):
+        return dict(name='b')
+
+
+@pytest.mark.asyncio
+async def test_expose_as_attr_error():
+    a = AA(name='a_name')
+    with pytest.raises(AttributeError):
+        await Resolver().resolve(a)

@@ -259,6 +259,18 @@ class Comment(BaseModel):
         return f'[{blog_title}] - {self.content}'
 ```
 
+**从 v2.3.0 开始， 可以使用 `ExposeAs` 来简化 expose 申明**, 注意两种形式不允许共存。
+
+```python
+from pydantic_resolve import ExposeAs
+
+class Blog(BaseModel):
+    # __pydantic_resolve_expose__ = {'title': 'blog_title' }
+    id: int
+    title: Annotated[str, ExposeAs('blog_title')]
+```
+
+
 ### parent
 
 可以获得自己的直接父节点， 在 tree 结构中特别有用。
@@ -357,6 +369,22 @@ class CounterCollector(ICollector):
 post 方法中可以收集 resolve 或者其他对象字段的子孙数据
 
 post_default_handler 可以额外收集 post 方法返回值的子孙数据
+
+**从 v2.3.0 开始， 可以使用 `SendTo` 来简化 `__pydantic_resolve_collect__` 定义**, 注意两种形式不允许共存。
+
+```python
+from pydantic_resolve import ExposeAs, SendTo
+
+class Blog(BaseModel):
+    # __pydantic_resolve_expose__ = {'title': 'blog_title' }
+    # __pydantic_resolve_collect__ = {'comments': 'blog_comments' }
+    id: int
+    title: Annotated[str, ExposeAs('blog_title')]
+
+    comments: Annotated[list[Comment], SendTo('blog_comments')] = []
+    def resolve_comments(self, loader=LoaderDepend(blog_to_comments_loader)):
+        return loader.load(self.id)
+```
 
 ### dataloader
 

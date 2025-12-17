@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Type, Any, Callable, Optional
+from typing import Iterator, Tuple, Type, Any, Callable, Optional
 from pydantic import BaseModel, model_validator, Field
 import warnings
 
@@ -180,8 +180,10 @@ def base_entity() -> Type:
                 return
 
             entities.append(cls)
-            # Check for inline relationships
-            inline_rels = getattr(cls, const.ER_DIAGRAM_INLINE_RELATIONSHIPS, None)
+            # Check for inline relationships, __relationships__ or __pydantic_resolve_relationships__
+            # __pydantic_resolve_relationships__ has higher priority
+            inline_rels = getattr(cls, const.ER_DIAGRAM_INLINE_RELATIONSHIPS, None) or \
+                          getattr(cls, const.ER_DIAGRAM_INLINE_RELATIONSHIPS_SHORT, None)
             if inline_rels:
                 inline_configs.append((cls, inline_rels))
 
@@ -244,7 +246,7 @@ class ErLoaderPreGenerator:
         For each pydantic field carrying LoadBy, create a resolve method that uses the
         corresponding relationship's loader via LoaderDepend.
         """
-        auto_loader_fields = list(class_util.get_pydantic_field_items_with_load_by(kls))
+        auto_loader_fields = list(_get_pydantic_field_items_with_load_by(kls))
 
         if not auto_loader_fields:
             return 
@@ -316,3 +318,34 @@ class ErLoaderPreGenerator:
                 setattr(kls, method_name, create_resolve_method_with_load_many(loader_info.field, relationship))
             else:
                 setattr(kls, method_name, create_resolve_method(loader_info.field, relationship))
+
+
+def _get_pydantic_field_items_with_load_by(kls) -> Iterator[Tuple[str, LoaderInfo, Type]]:
+    """
+    find fields which have LoadBy metadata.
+
+    example:
+
+    class Base(BaseModel):
+        id: int
+        name: str
+        b_id: int
+
+    class B(BaseModel):
+        id: int
+        name: str
+
+    class A(Base):
+        b: Annotated[Optional[B], LoadBy('b_id')] = None
+        extra: str = ''
+
+    return ('b', LoadBy('b_id'))
+    """
+    items = kls.model_fields.items()
+
+    for name, v in items:
+        metadata = v.metadata
+        for meta in metadata:
+            if isinstance(meta, LoaderInfo):
+                yield name, meta, v.annotation
+

@@ -1,19 +1,18 @@
 import copy
 import inspect
-from typing import List, Type, Dict, Optional, Tuple
+from typing import List, Type, Dict, Optional, Tuple, TypedDict
 from inspect import isfunction, isclass
 from collections import defaultdict
 from aiodataloader import DataLoader
 from pydantic import BaseModel
 import pydantic_resolve.constant as const
 import pydantic_resolve.utils.class_util as class_util
-from pydantic_resolve.utils.collector import ICollector
+from pydantic_resolve.utils.collector import ICollector, pre_generate_collector_config
 from pydantic_resolve.utils.depend import Depends
 from pydantic_resolve.utils.er_diagram import ErLoaderPreGenerator
 import pydantic_resolve.utils.params as params_util
 from pydantic_resolve.exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingCollector
-
-from typing import TypedDict
+from pydantic_resolve.utils.expose import pre_generate_expose_config
 
 class DataLoaderType(TypedDict):
     param: str
@@ -442,6 +441,9 @@ class Analytic:
 
         if self.er_pre_generator: 
             self.er_pre_generator.prepare(kls)
+        
+        pre_generate_expose_config(kls)
+        pre_generate_collector_config(kls)
 
         # - prepare fields, with resolve_, post_ reserved
         all_fields, object_fields, object_field_pairs = self._get_all_fields_and_object_fields(kls)

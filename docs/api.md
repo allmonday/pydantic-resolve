@@ -259,6 +259,17 @@ class Comment(BaseModel):
 		return f'[{blog_title}] - {self.content}'
 ```
 
+**Starting from v2.3.0, `ExposeAs` can replace `__pydantic_resolve_expose__`**, they are exclusive
+
+```python
+from pydantic_resolve import ExposeAs
+
+class Blog(BaseModel):
+    # __pydantic_resolve_expose__ = {'title': 'blog_title' }
+    id: int
+    title: Annotated[str, ExposeAs('blog_title')]
+```
+
 ### parent
 
 You can access the direct parent node. This is especially useful for tree-like structures.
@@ -358,6 +369,22 @@ class CounterCollector(ICollector):
 
 - In `post`, you can collect descendant data from resolved fields or other object fields.
 - In `post_default_handler`, you can additionally collect descendant data from values returned by `post` methods.
+
+** starting from v2.3.0, `SendTo` can replace __pydantic_resolve_collect__`**, they are exclusive.
+
+```python
+from pydantic_resolve import ExposeAs, SendTo
+
+class Blog(BaseModel):
+    # __pydantic_resolve_expose__ = {'title': 'blog_title' }
+    # __pydantic_resolve_collect__ = {'comments': 'blog_comments' }
+    id: int
+    title: Annotated[str, ExposeAs('blog_title')]
+
+    comments: Annotated[list[Comment], SendTo('blog_comments')] = []
+    def resolve_comments(self, loader=LoaderDepend(blog_to_comments_loader)):
+        return loader.load(self.id)
+```
 
 ### dataloader
 

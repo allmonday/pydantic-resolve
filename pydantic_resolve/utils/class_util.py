@@ -1,9 +1,8 @@
 import functools
-from typing import Type, List, Tuple, Iterator, get_origin, get_args
+from typing import Type, List, Tuple, get_origin, get_args
 import pydantic_resolve.constant as const
 import pydantic_resolve.utils.class_util as class_util
 from pydantic_resolve.analysis import is_acceptable_kls
-from pydantic_resolve.utils.er_diagram import LoaderInfo
 from pydantic_resolve.utils.types import get_type, get_core_types
 from pydantic import BaseModel
 
@@ -58,36 +57,6 @@ def get_pydantic_field_items(kls):
 
 def get_pydantic_field_keys(kls) -> str:
     return kls.model_fields.keys()
-
-
-def get_pydantic_field_items_with_load_by(kls) -> Iterator[Tuple[str, LoaderInfo, Type]]:
-    """
-    find fields which have LoadBy metadata.
-
-    example:
-
-    class Base(BaseModel):
-        id: int
-        name: str
-        b_id: int
-    
-    class B(BaseModel):
-        id: int
-        name: str
-
-    class A(Base):
-        b: Annotated[Optional[B], LoadBy('b_id')] = None
-        extra: str = ''
-    
-    return ('b', LoadBy('b_id'))
-    """
-    items = kls.model_fields.items()
-
-    for name, v in items:
-        metadata = v.metadata
-        for meta in metadata:
-            if isinstance(meta, LoaderInfo):
-                yield name, meta, v.annotation 
 
 
 def get_pydantic_field_values(kls):

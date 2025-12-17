@@ -43,10 +43,6 @@ class A(BaseModel):
         return collector.values() == collector2.values()
 
 class B(BaseModel):
-    # __pydantic_resolve_collect__ = {
-    #     'name': 'b_name',
-    #     'items': 'b_items'
-    # }
     name: Annotated[str, SendTo('b_name')] = ''
     items: Annotated[List[str], SendTo('b_items')] = ['x', 'y']
 
@@ -59,9 +55,6 @@ class B(BaseModel):
         return loader.load(self.name)
 
 class C(BaseModel):
-    # __pydantic_resolve_collect__ = {
-    #     'details': 'c_details'
-    # }
     detail: str
 
     details: Annotated[List[str], SendTo('c_details')] = []
@@ -82,3 +75,76 @@ async def test_collector_1():
                               ['b2-2-detail-1', 'b2-2-detail-2']]
 
     assert a.details_compare is True
+
+
+class X(BaseModel):
+    items: list[Y]
+    sum: int = 0
+    def post_sum(self, collector=Collector('collector')):
+        s = 0
+        for a, b in collector.values():
+            s += (a + b)
+        return s
+
+
+class Y(BaseModel):
+    a: Annotated[int, SendTo('collector')]
+    b: Annotated[int, SendTo('collector')]
+
+@pytest.mark.asyncio
+async def test_collector_2():
+    x = X(items=[Y(a=1, b=2), Y(a=3, b=4)])
+    x = await Resolver().resolve(x)
+    assert x.sum == 10
+
+
+class U(BaseModel):
+    items: list[V]
+    sum: int = 0
+    def post_sum(self, collector=Collector('collector1')):
+        s = 0
+        for a, b in collector.values():
+            s += (a + b)
+        return s
+
+    sum2: int = 0
+    def post_sum2(self, collector=Collector('collector2')):
+        s = 0
+        for a, b in collector.values():
+            s += (a + b)
+        return s
+
+
+class V(BaseModel):
+    a: Annotated[int, SendTo(('collector1', 'collector2'))]
+    b: Annotated[int, SendTo(('collector1', 'collector2'))]
+
+@pytest.mark.asyncio
+async def test_collector_3():
+    x = U(items=[V(a=1, b=2), V(a=3, b=4)])
+    x = await Resolver().resolve(x)
+    assert x.sum == 10
+    assert x.sum2 == 10
+
+
+class E(BaseModel):
+    items: list[F]
+    sum: int = 0
+    def post_sum(self, collector=Collector('collector1')):
+        s = 0
+        for a, b in collector.values():
+            s += (a + b)
+        return s
+
+class F(BaseModel):
+    __pydantic_resolve_collect__ = {
+        ('a', 'b'): 'collector1'
+    }
+    a: Annotated[int, SendTo('collector1')]
+    b: Annotated[int, SendTo('collector1')]
+
+@pytest.mark.asyncio
+async def test_collector_error():
+    e = E(items=[F(a=1, b=2), F(a=3, b=4)])
+    with pytest.raises(AttributeError):
+        await Resolver().resolve(e) 

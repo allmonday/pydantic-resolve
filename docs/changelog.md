@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.3
+
+### v2.3.0
+
+- feat: 
+    - add `SendTo` and `ExposeAs` to simplify / replace `__pydantic_resolve_collect__` and `__pydantic_resolve_expose__`, read: test_52 and test_53 for more details
+    - add `__relationships__` short name for `__pydantic_resolve_relationships__`
+- fix: clean print
+
 ## v2.2
 
 ### v2.2.4 (2025.12.8)
