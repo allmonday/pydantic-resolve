@@ -170,7 +170,6 @@ class SubsetMeta(type):
             field_definitions.update(parent_fields)
             field_definitions.update(extra_fields)
 
-            print(create_model_kwargs)
             subset_class = create_model(
                 name,
                 **field_definitions,
