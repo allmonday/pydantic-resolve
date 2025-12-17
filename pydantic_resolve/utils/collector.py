@@ -1,5 +1,13 @@
 import abc
-from typing import Any, List, Union
+from dataclasses import dataclass
+from typing import Any, List, Union, Tuple
+
+@dataclass
+class SendToInfo:
+    alias: str | Tuple[str]
+
+def SendTo(alias: str| Tuple[str]) -> SendToInfo:
+    return SendToInfo(alias=alias)
 
 class ICollector(metaclass=abc.ABCMeta):
     @abc.abstractmethod

@@ -1,4 +1,4 @@
-from .utils.collector import Collector, ICollector
+from .utils.collector import Collector, ICollector, SendTo
 from .utils.class_util import ensure_subset
 from .utils.dataloader import build_list, build_object, copy_dataloader_kls
 from .utils.conversion import mapper
@@ -15,6 +15,7 @@ from .utils.openapi import (
     model_config)
 from .utils.er_diagram import Relationship, MultipleRelationship, Link, Entity, ErDiagram, LoadBy, base_entity
 from .utils.resolver_configurator import config_resolver, config_global_resolver
+from .utils.expose import ExposeAs
 
 
 __all__ = [
@@ -23,6 +24,8 @@ __all__ = [
     'Loader',  # short 
     'Collector',
     'ICollector',
+    'ExposeAs',
+    'SendTo',
 
     'ResolverTargetAttrNotFound',
     'LoaderFieldNotProvidedError',

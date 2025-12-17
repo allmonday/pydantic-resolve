@@ -1,4 +1,8 @@
-# for test
+# this component is stil in development
+# the goal is to insert meta info into all pydantic models
+# so that client component can access those info
+# but for nested list, these may wasteful to insert meta info for each item
+
 from pydantic import BaseModel, Field
 from pydantic._internal._model_construction import ModelMetaclass
 
