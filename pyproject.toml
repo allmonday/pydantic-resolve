@@ -1,13 +1,17 @@
-[tool.poetry]
+[project]
 name = "pydantic-resolve"
 version = "2.3.1"
 description = "pydantic-resolve turns pydantic from a static data container into a powerful composable component."
-authors = ["tangkikodo <allmonday@126.com>"]
 readme = "README.md"
-repository = "https://github.com/allmonday/pydantic_resolve"
-keywords = ["pydantic", "fastapi"]
-license = "MIT"
-packages = [{include = "pydantic_resolve"}]
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "tangkikodo", email = "allmonday@126.com" },
+]
+keywords = ["pydantic", "dataloader", "resolver"]
+dependencies = [
+    "aiodataloader >= 0.4.0,<0.5.0"
+]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -24,29 +28,32 @@ classifiers = [
     "Framework :: Pydantic",
 ]
 
-[tool.poetry.dependencies]
-python = "^3.9"
-aiodataloader = "^0.4.0"
+[project.urls]
+Repository = "https://github.com/allmonday/pydantic_resolve"
 
-[tool.poetry.group.dev.dependencies]
-tox = "^4.4.6"
-pytest = "^7.2.2"
-pytest-cov = "^4.0.0"
-coverage = "^7.2.1"
-aiosqlite = "^0.18.0"
-pydantic = "^2.12.0"
-sqlalchemy = {extras = ["asyncio"], version = "^2.0.7"}
-pytest-asyncio = "^0.21.0"
-fastapi = "^0.101.0"
-uvicorn = "^0.22.0"
-mkdocs-material = "9.*"
-mkdocs-static-i18n = {version = "1.2.0", extras = ["material"]}
-psutil = "^7.1.0"
-ruff = "^0.14.5"
+
+[project.optional-dependencies]
+dev = [
+    "tox>=4.4.6,<5.0.0",
+    "pytest>=7.2.2,<8.0.0",
+    "pytest-cov>=4.0.0,<5.0.0",
+    "coverage>=7.2.1,<8.0.0",
+    "aiosqlite>=0.18.0,<0.19.0",
+    "pydantic>=2.12.0,<3.0.0",
+    "sqlalchemy[asyncio]>=2.0.7,<3.0.0",
+    "pytest-asyncio>=0.21.0,<0.22.0",
+    "mkdocs-material>=9,<10",
+    "mkdocs-static-i18n[material]==1.2.0",
+    "psutil>=7.1.0,<8.0.0",
+    "ruff>=0.14.5,<0.15.0",
+]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pydantic_resolve"]
 
 [tool.pytest.ini_options]
 filterwarnings = [
