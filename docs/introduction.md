@@ -1,4 +1,5 @@
-Pydantic Resolve is a data composition tool built on top of Pydantic. It lets you assemble complex nested data with minimal cost, without extra glue code.
+Pydantic Resolve is a Pydantic based approach to construct complex data declaratively and progressively, without writing any imperative glue code. 
+
 
 Its best use case is building the view-model data needed by a UI. You can reuse most of your existing code (such as dataloaders), use it as a practical alternative to GraphQL, and get better performance and maintainability.
 
