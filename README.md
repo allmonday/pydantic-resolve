@@ -424,6 +424,15 @@ Post hooks also enable bidirectional data flow: they can read from ancestor node
 - [Resolver Pattern: A Better Alternative to GraphQL in BFF (api-integration).](https://github.com/allmonday/resolver-vs-graphql/blob/master/README-en.md)
 
 
+## Development
+
+```shell
+uv venv
+source .venv/bin/activate
+uv pip install -e ".[dev]"
+
+uv run pytest tests/
+```
 
 ## Testing and Coverage
 

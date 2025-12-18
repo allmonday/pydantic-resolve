@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - master
+    # Only trigger deploy when documentation or mkdocs config changes
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
 
 permissions:
   contents: write
