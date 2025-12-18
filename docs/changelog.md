@@ -2,6 +2,10 @@
 
 ## v2.3
 
+### v2.3.1
+- feat:
+    - add `__subset__` short name for `__pydantic_resolve_subset__`
+
 ### v2.3.0
 
 - feat: 

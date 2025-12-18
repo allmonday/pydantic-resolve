@@ -69,7 +69,7 @@ def _extract_extra_fields_from_namespace(namespace: Dict[str, Any], disallow: Se
     extras: Dict[str, Tuple[Any, Any]] = {}
 
     for fname, anno in annotations.items():
-        if fname == const.ENSURE_SUBSET_DEFINITION:
+        if fname in (const.ENSURE_SUBSET_DEFINITION, const.ENSURE_SUBSET_DEFINITION_SHORT):
             continue
         if fname in disallow:
             raise ValueError(f'additional field "{fname}" duplicates subset field')
@@ -133,7 +133,8 @@ def create_subset(parent: Type[BaseModel], fields: List[str], name: str = "Subse
 
 class SubsetMeta(type):
     def __new__(cls, name, bases, namespace, **kwargs):
-        subset_info = namespace.get(const.ENSURE_SUBSET_DEFINITION)
+        subset_info = namespace.get(const.ENSURE_SUBSET_DEFINITION) or namespace.get(const.ENSURE_SUBSET_DEFINITION_SHORT)
+
         if subset_info:
             parent_kls, picked_field = subset_info
 
@@ -158,6 +159,7 @@ class SubsetMeta(type):
 
             for nk, nv in namespace.items():
                 if nk.startswith('__pydantic_resolve') and nk != const.ENSURE_SUBSET_DEFINITION:
+
                     attributes_to_attach[nk] = nv
                     continue
 

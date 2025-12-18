@@ -9,6 +9,7 @@ COLLECTOR_CONFIGURATION = '__pydantic_resolve_collect__'
 
 ENSURE_SUBSET_REFERENCE = '__pydantic_resolve_ensure_subset_reference__'
 ENSURE_SUBSET_DEFINITION = '__pydantic_resolve_subset__'
+ENSURE_SUBSET_DEFINITION_SHORT = '__subset__'
 
 ER_DIAGRAM = '__pydantic_resolve_er_diagram__'
 ER_DIAGRAM_PRE_GENERATOR = '__pydantic_resolve_er_diagram_pre_gen__'

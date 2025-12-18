@@ -33,29 +33,59 @@ Starting from pydantic-resolve v1.11.0, both pydantic v1 and v2 are supported.
 
 Starting from pydantic-resolve v2.0.0, it only supports pydantic v2, pydantic v1 and dataclass are dropped, anything else are backward compatible.
 
-## Hello world
+## Construct data progressively
 
-Getting teams along with sprints and memebers on-demand, using dataloader to batch load related data which eliminate N+1 query.
+### Day 1
+
+I want to return list of team with fields of id and name only:
+
+```python
+from pdyantic_resolve import DefineSubset
+import app.team.schema as team_schema
+
+class Team(DefineSubset)
+    __subset__ = (team_schema.Team, ('id', 'name'))
+
+@route.get('/teams', response_model=List[Team])
+async def get_teams(session: AsyncSession = Depends(db.get_session)):
+    teams = await tmq.get_teams(session)
+    teams = [Team.model_validate(t) for t in teams]
+    return teams
+```
+
+### Day 2
+
+I want to have sprints and members for each team additionally.
 
 ```python
 from pydantic_resolve import Loader, Resolver
+import app.team.schema as team_schema
+import app.sprint.schema as sprint_schema
+import app.sprint.loader as sprint_loader
+import app.user.schema as user_schema
+import app.user.loader as user_loader
 
-class Sample1TeamDetail(tms.Team):
-    sprints: list[Sample1SprintDetail] = []
-    def resolve_sprints(self, loader=Loader(spl.team_to_sprint_loader)):
+class Team(DefineSubset)
+    __subset__ = (team_schema.Team, ('id', 'name'))
+
+    sprints: list[sprint_schema.Sprint] = []
+    def resolve_sprints(self, loader=Loader(sprint_loader.team_to_sprint_loader)):
         return loader.load(self.id)
     
-    members: list[us.User] = []
-    def resolve_members(self, loader=Loader(ul.team_to_user_loader)):
+    members: list[user_schema.User] = []
+    def resolve_members(self, loader=Loader(user_loader.team_to_user_loader)):
         return loader.load(self.id)
 
-@route.get('/teams-with-detail', response_model=List[Sample1TeamDetail])
-async def get_teams_with_detail(session: AsyncSession = Depends(db.get_session)):
+@route.get('/teams', response_model=List[Team])
+async def get_teams(session: AsyncSession = Depends(db.get_session)):
     teams = await tmq.get_teams(session)
-    teams = [Sample1TeamDetail.model_validate(t) for t in teams]
+    teams = [Team.model_validate(t) for t in teams]
+
     teams = await Resolver().resolve(teams)
+
     return teams
 ```
+
 
 ## ER diagram
 

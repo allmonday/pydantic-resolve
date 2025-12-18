@@ -321,7 +321,7 @@ class TestSubsetMeta:
             email: str
         
         class MySubset(DefineSubset):
-            __pydantic_resolve_subset__ = (Parent, ('id', 'name'))
+            __subset__ = (Parent, ('id', 'name'))
             new_field: str
         
         # Test that MySubset is a proper subset
