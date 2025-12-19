@@ -33,7 +33,7 @@ Starting from pydantic-resolve v1.11.0, both pydantic v1 and v2 are supported.
 
 Starting from pydantic-resolve v2.0.0, it only supports pydantic v2, pydantic v1 and dataclass are dropped, anything else are backward compatible.
 
-## Construct data progressively
+## Construct data progressively with resolve
 
 ### Day 1
 
@@ -86,8 +86,7 @@ async def get_teams(session: AsyncSession = Depends(db.get_session)):
     return teams
 ```
 
-
-## ER diagram
+## Day 3
 
 pydantic-resolve provided a powerful feature to define application level ER diagram, it's based on Entity and Relationships.
 
@@ -136,27 +135,28 @@ diagram = ErDiagram(
 
 Then the code above can be simplified as, The required dataloader will be automatically inferred.
 
-```python
-# old
-class Sample1TeamDetail(tms.Team):
-    sprints: list[Sample1SprintDetail] = []
-    def resolve_sprints(self, loader=Loader(spl.team_to_sprint_loader)):
-        return loader.load(self.id)
-    
-    members: list[us.User] = []
-    def resolve_members(self, loader=Loader(ul.team_to_user_loader)):
-        return loader.load(self.id)
 
-# new
-class Sample1TeamDetail(tms.Team):
+```python
+class Team(DefineSubset)
+    __subset__ = (team_schema.Team, ('id', 'name'))
+
     sprints: Annotated[list[Sample1SprintDetail], LoadBy('id')] = []
     members: Annotated[list[us.User], LoadBy('id')] = []
+
+@route.get('/teams', response_model=List[Team])
+async def get_teams(session: AsyncSession = Depends(db.get_session)):
+    teams = await tmq.get_teams(session)
+    teams = [Team.model_validate(t) for t in teams]
+
+    teams = await Resolver().resolve(teams)
+
+    return teams
 ```
 
 It also support `SqlAlchemy ORM Base` style: https://github.com/allmonday/pydantic-resolve/blob/master/tests/er_diagram/test_er_diagram_inline.py
 
 
-## Use 3 steps to construct complex data
+## Construct complex data with resolve and post
 
 Let's take Agile's model for example, it includes Story, Task and User, here is a [live demo](https://www.newsyeah.fun/voyager/) and [source code](https://github.com/allmonday/composition-oriented-development-pattern/tree/master/src/services)
 
