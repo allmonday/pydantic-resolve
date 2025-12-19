@@ -86,7 +86,7 @@ async def get_teams(session: AsyncSession = Depends(db.get_session)):
     return teams
 ```
 
-## Day 3
+### Day 3
 
 pydantic-resolve provided a powerful feature to define application level ER diagram, it's based on Entity and Relationships.
 
