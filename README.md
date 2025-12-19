@@ -92,7 +92,7 @@ pydantic-resolve provided a powerful feature to define application level ER diag
 
 Inside Relationship we can describe many things like load, load_many, multiple relationship or primitive loader.
 
-Once after we have it defined [source code](https://github.com/allmonday/composition-oriented-development-pattern/blob/master/src/services/er_diagram.py): 
+We can defined it by `ErDiagram`:
 
 ```python
 diagram = ErDiagram(
@@ -127,7 +127,7 @@ diagram = ErDiagram(
 )
 ```
 
-Another way is to define it inside classes, similar to SQLAlchemy's `declarative_base`:
+Or define it inside classes, similar to SQLAlchemy's `declarative_base`:
 
 ```python
 from pydantic_resolve import base_entity, Relationship
@@ -146,7 +146,7 @@ class Story(BaseModel, BaseEntity):
 diagram = BaseEntity.get_diagram()
 ```
 
-> We can view it inside fastapi-voyager
+> view it inside fastapi-voyager
 <img width="1267" height="549" alt="image" src="https://github.com/user-attachments/assets/f28e59f0-a96d-4c63-9ebc-037fe9ec23a8" />
 
 
