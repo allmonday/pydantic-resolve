@@ -133,7 +133,7 @@ diagram = ErDiagram(
 <img width="1267" height="549" alt="image" src="https://github.com/user-attachments/assets/f28e59f0-a96d-4c63-9ebc-037fe9ec23a8" />
 
 
-Then the code above can be simplified as, The required dataloader will be automatically inferred.
+Then the code above can be simplified, the required dataloader will be automatically inferred.
 
 
 ```python
