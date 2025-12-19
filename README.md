@@ -92,8 +92,6 @@ pydantic-resolve provided a powerful feature to define application level ER diag
 
 Inside Relationship we can describe many things like load, load_many, multiple relationship or primitive loader.
 
-Those cases are listed inside test file: https://github.com/allmonday/pydantic-resolve/blob/master/tests/er_diagram/test_er_diagram_inline.py#L85
-
 Once after we have it defined [source code](https://github.com/allmonday/composition-oriented-development-pattern/blob/master/src/services/er_diagram.py): 
 
 ```python
@@ -129,6 +127,25 @@ diagram = ErDiagram(
 )
 ```
 
+Another way is to define it inside classes, similar to SQLAlchemy's `declarative_base`:
+
+```python
+from pydantic_resolve import base_entity, Relationship
+from task.schema import Task
+
+BaseEntity = base_entity()
+
+class Story(BaseModel, BaseEntity):
+	__pydantic_resolve_relationships__ = [
+		Relationship(field='id', target_kls=list[Task], loader=task_loader.story_to_task_loader)
+	]
+	id: int
+	name: str
+
+
+diagram = BaseEntity.get_diagram()
+```
+
 > We can view it inside fastapi-voyager
 <img width="1267" height="549" alt="image" src="https://github.com/user-attachments/assets/f28e59f0-a96d-4c63-9ebc-037fe9ec23a8" />
 
@@ -152,8 +169,6 @@ async def get_teams(session: AsyncSession = Depends(db.get_session)):
 
     return teams
 ```
-
-It also support `SqlAlchemy ORM Base` style: https://github.com/allmonday/pydantic-resolve/blob/master/tests/er_diagram/test_er_diagram_inline.py
 
 
 ## Construct complex data with resolve and post
