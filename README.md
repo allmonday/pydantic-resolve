@@ -92,68 +92,39 @@ pydantic-resolve provided a powerful feature to define application level ER diag
 
 Inside Relationship we can describe many things like load, load_many, multiple relationship or primitive loader.
 
-We can defined it by `ErDiagram`:
 
 ```python
-diagram = ErDiagram(
-    configs=[
-        Entity(
-            kls=Team,
-            relationships=[
-                Relationship( field='id', target_kls=list[Sprint], loader=sprint_loader.team_to_sprint_loader),
-                Relationship( field='id', target_kls=list[User], loader=user_loader.team_to_user_loader)
-            ]
-        ),
-        Entity(
-            kls=Sprint,
-            relationships=[
-                Relationship( field='id', target_kls=list[Story], loader=story_loader.sprint_to_story_loader)
-            ]
-        ),
-        Entity(
-            kls=Story,
-            relationships=[
-                Relationship( field='id', target_kls=list[Task], loader=task_loader.story_to_task_loader),
-                Relationship( field='owner_id', target_kls=User, loader=user_loader.user_batch_loader)
-            ]
-        ),
-        Entity(
-            kls=Task,
-            relationships=[
-                Relationship( field='owner_id', target_kls=User, loader=user_loader.user_batch_loader)
-            ]
-        )
+from pydantic import BaseModel, ConfigDict
+from pydantic_resolve import Relationship
+import src.services.sprint.schema as sprint_schema
+import src.services.sprint.loader as sprint_loader
+import src.services.user.schema as user_schema
+import src.services.user.loader as user_loader
+from src.services.er_diagram import BaseEntity
+
+class Team(BaseModel, BaseEntity):
+    __pydantic_resolve_relationships__ = [
+        Relationship( field='id', target_kls=list[sprint_schema.Sprint], loader=sprint_loader.team_to_sprint_loader),
+        Relationship( field='id', target_kls=list[user_schema.User], loader=user_loader.team_to_user_loader)
     ]
-)
+    
+    id: int
+    name: str
+    
+    model_config = ConfigDict(from_attributes=True)
 ```
-
-Or define it inside classes, similar to SQLAlchemy's `declarative_base`:
-
-```python
-from pydantic_resolve import base_entity, Relationship
-from task.schema import Task
-
-BaseEntity = base_entity()
-
-class Story(BaseModel, BaseEntity):
-	__pydantic_resolve_relationships__ = [
-		Relationship(field='id', target_kls=list[Task], loader=task_loader.story_to_task_loader)
-	]
-	id: int
-	name: str
-
-
-diagram = BaseEntity.get_diagram()
-```
-
-> view it inside fastapi-voyager
-<img width="1267" height="549" alt="image" src="https://github.com/user-attachments/assets/f28e59f0-a96d-4c63-9ebc-037fe9ec23a8" />
-
 
 Then the code above can be simplified, the required dataloader will be automatically inferred.
 
-
 ```python
+from src.services.er_diagram import BaseEntity
+from pydantic_resolve import config_global_resolver
+
+# register the diagram
+diagram = BaseEntity.get_diagram()
+config_global_resolver(diagram)
+
+
 class Team(DefineSubset)
     __subset__ = (team_schema.Team, ('id', 'name'))
 
