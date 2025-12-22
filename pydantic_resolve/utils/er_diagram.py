@@ -110,6 +110,13 @@ class ErDiagram(BaseModel):
     description: Optional[str] = None
 
 
+class BaseEntity:
+    entities: list[Entity]
+    @staticmethod
+    def get_diagram() -> ErDiagram:
+        raise NotImplementedError
+
+
 @dataclass
 class LoaderInfo:
     field: str
@@ -121,7 +128,7 @@ def LoadBy(key: str, biz: Optional[str] = None, origin_kls: Optional[Type] = Non
     return LoaderInfo(field=key, biz=biz, origin_kls=origin_kls)
 
 
-def base_entity() -> Type:
+def base_entity() -> Type[BaseEntity]:
     """
     Creates a base class similar to SQLAlchemy's declarative_base().
     All classes inheriting from the returned Base class will be collected in Base.entities.
@@ -139,7 +146,7 @@ def base_entity() -> Type:
     import sys
     from types import GenericAlias
 
-    entities: list[Type] = []
+    entities: list[Entity] = []
     inline_configs: list[tuple[Type, Any]] = []
 
     def _resolve_ref(ref: Any, module_name: str) -> Any:
@@ -172,7 +179,7 @@ def base_entity() -> Type:
             resolved_configs.append(Entity(kls=kls, relationships=resolved_rels))
         return ErDiagram(configs=resolved_configs)
 
-    class Base:
+    class Base(BaseEntity):
         def __init_subclass__(cls, **kwargs):
             super().__init_subclass__(**kwargs)
             # only register direct subclasses of Base, ignore inherited descendants

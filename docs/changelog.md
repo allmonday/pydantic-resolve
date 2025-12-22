@@ -2,6 +2,12 @@
 
 ## v2.3
 
+### v2.3.2
+- optimization:
+    - provide proper type annotation for `base_entity` method
+- refactor:
+    - clean up unused files
+
 ### v2.3.1
 - feat:
     - add `__subset__` short name for `__pydantic_resolve_subset__`
