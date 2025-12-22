@@ -92,6 +92,10 @@ pydantic-resolve provided a powerful feature to define application level ER diag
 
 Inside Relationship we can describe many things like load, load_many, multiple relationship or primitive loader.
 
+```python
+from pydantic_resolve import base_entity
+BaseEntity = base_entity()
+```
 
 ```python
 from pydantic import BaseModel, ConfigDict
@@ -100,6 +104,7 @@ import src.services.sprint.schema as sprint_schema
 import src.services.sprint.loader as sprint_loader
 import src.services.user.schema as user_schema
 import src.services.user.loader as user_loader
+
 from src.services.er_diagram import BaseEntity
 
 class Team(BaseModel, BaseEntity):
@@ -128,7 +133,31 @@ config_global_resolver(diagram)
 class Team(DefineSubset)
     __subset__ = (team_schema.Team, ('id', 'name'))
 
-    sprints: Annotated[list[Sample1SprintDetail], LoadBy('id')] = []
+    sprints: Annotated[list[sprint_schema.Sprint], LoadBy('id')] = []
+    members: Annotated[list[user_schema.User], LoadBy('id')] = []
+
+@route.get('/teams', response_model=List[Team])
+async def get_teams(session: AsyncSession = Depends(db.get_session)):
+    teams = await tmq.get_teams(session)
+    teams = [Team.model_validate(t) for t in teams]
+
+    teams = await Resolver().resolve(teams)
+
+    return teams
+```
+
+### Day 4
+
+For sprints I just want to return fields of id and name.
+
+```python
+class Sprint(DefineSubset):
+    __subset__ = (sprint_schema.Sprint, ('id', 'name'))
+
+class Team(DefineSubset)
+    __subset__ = (team_schema.Team, ('id', 'name'))
+
+    sprints: Annotated[list[Sprint], LoadBy('id')] = []
     members: Annotated[list[us.User], LoadBy('id')] = []
 
 @route.get('/teams', response_model=List[Team])
@@ -140,6 +169,7 @@ async def get_teams(session: AsyncSession = Depends(db.get_session)):
 
     return teams
 ```
+
 
 
 ## Construct complex data with resolve and post
