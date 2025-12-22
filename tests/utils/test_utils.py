@@ -1,6 +1,4 @@
 import asyncio
-from typing import List
-from pydantic_resolve.utils import experiment
 from pydantic import ConfigDict, BaseModel
 import pytest
 
@@ -53,29 +51,6 @@ def test_build_list():
     output = pydantic_resolve.utils.dataloader.build_list(users, ids, lambda x: x.id)
     assert list(output) == [[b], [c], [a], []]
 
-@pytest.mark.asyncio
-async def test_replace_method():
-    class A():
-        def __init__(self, name: str):
-            self.name = name
-
-        async def say(self, arr: List[str]):
-            return f'{self.name}, {len(arr)}'
-
-    a = A('kikodo')
-    r1 = await a.say(['1'])
-    assert r1 == 'kikodo, 1'
-
-    async def kls_method(self, *args):
-        v = await A.say(self, *args)
-        return f'hello, {v}'
-
-    AA = experiment.replace_method(A, 'AA', 'say', kls_method)
-    k = AA('kimi')
-    r2 = await k.say(['1', '2', '3'])
-
-    assert r2 == 'hello, kimi, 3'
-    assert AA.__name__ == 'AA'
 
 
 def test_super_logic():
