@@ -23,5 +23,5 @@ class C(BaseModel):
 
 
 def test_raise_exception():
-    with pytest.raises(AttributeError):
+    with pytest.raises(ValueError):
         Analytic().scan(A)

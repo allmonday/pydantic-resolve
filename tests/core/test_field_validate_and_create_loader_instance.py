@@ -3,8 +3,9 @@ import pytest
 from typing import Optional, List
 from pydantic import BaseModel
 from aiodataloader import DataLoader
-from pydantic_resolve.analysis import Analytic, validate_and_create_loader_instance
+from pydantic_resolve.analysis import Analytic
 from pydantic_resolve import LoaderDepend, LoaderFieldNotProvidedError
+from pydantic_resolve.loader_manager import validate_and_create_loader_instance
 
 async def loader_fn(keys):
     return keys

@@ -1,17 +1,15 @@
 import copy
 import inspect
 from typing import List, Type, Dict, Optional, Tuple, TypedDict
-from inspect import isfunction, isclass
+from inspect import isfunction
 from collections import defaultdict
-from aiodataloader import DataLoader
 from pydantic import BaseModel
 import pydantic_resolve.constant as const
 import pydantic_resolve.utils.class_util as class_util
 from pydantic_resolve.utils.collector import ICollector, pre_generate_collector_config
 from pydantic_resolve.utils.depend import Depends
 from pydantic_resolve.utils.er_diagram import ErLoaderPreGenerator
-import pydantic_resolve.utils.params as params_util
-from pydantic_resolve.exceptions import ResolverTargetAttrNotFound, LoaderFieldNotProvidedError, MissingCollector
+from pydantic_resolve.exceptions import ResolverTargetAttrNotFound, MissingCollector
 from pydantic_resolve.utils.expose import pre_generate_expose_config
 
 class DataLoaderType(TypedDict):
@@ -189,143 +187,17 @@ def _scan_post_default_handler(method) -> PostDefaultHandlerType:
     return result
 
 
-class LoaderManager:
-    """Refactor loader instance validation/creation into a class.
-
-    Public API:
-      - validate_and_create_loader_instance(self, loader_params, global_loader_param, loader_instances, metadata)
-    """
-
-    def __init__(self) -> None:
-        pass
-
-    # fetch all loaders
-    def _get_all_loaders_from_meta(self, metadata: MappedMetaType):
-        for _, kls_info in metadata.items():
-            for _, resolve_info in kls_info['resolve_params'].items():
-                for loader in resolve_info['dataloaders']:
-                    yield loader
-
-            for _, post_info in kls_info['post_params'].items():
-                for loader in post_info['dataloaders']:
-                    yield loader
-
-    def _create_instance(self, loader, loader_params, global_loader_param, loader_instances):
-        """
-        1. is class?
-            - validate params
-        2. is func
-        """
-        loader_kls, path = loader['kls'], loader['path']
-        if isclass(loader_kls):
-            loader_instance = loader_kls()
-            param_config = params_util.merge_dicts(
-                global_loader_param,
-                loader_params.get(loader_kls, {}))
-
-            for field, has_default in class_util.get_fields_default_value_not_provided(loader_kls):
-                try:
-                    if has_default and field not in param_config:
-                        continue
-
-                    value = param_config[field]
-                    setattr(loader_instance, field, value)
-                except KeyError:
-                    raise LoaderFieldNotProvidedError(f'{path}.{field} not found in Resolver()')
-            return loader_instance
-        else:
-            return DataLoader(batch_load_fn=loader_kls)  # type:ignore
-
-    def _get_all_fields(self, kls: Type):
-        if class_util.safe_issubclass(kls, BaseModel):
-            return list(class_util.get_pydantic_field_keys(kls))
-        else:
-            raise AttributeError('invalid type: should be pydantic object')  # noqa
-
-    def _generate_meta(self, types: List[List[Type]]):
-        _fields = set()
-        meta: LoaderQueryMeta = {
-            'fields': [],
-            'request_types': []
-        }
-
-        for tt in types:
-            for t in tt:
-                fields = self._get_all_fields(t)
-                meta['request_types'].append(dict(name=t, fields=fields))
-                _fields.update(fields)
-        meta['fields'] = list(_fields)
-        return meta
-
-    def validate_and_create_loader_instance(
-        self,
-        loader_params,
-        global_loader_param,
-        loader_instances,
-        metadata: MappedMetaType
-    ):
-        """
-        return loader_instance_cache
-
-        validate: whether loader params are missing
-        create:
-            - func
-            - loader class
-                - no param
-                - has param
-        """
-        cache = {}
-        request_info = {}
-
-        # create instance
-        for loader in self._get_all_loaders_from_meta(metadata):
-            loader_kls, path = loader['kls'], loader['path']
-
-            if path in cache:
-                continue
-
-            if loader_instances.get(loader_kls):  # if instance already exists
-                cache[path] = loader_instances.get(loader_kls)
-                continue
-
-            cache[path] = self._create_instance(loader, loader_params, global_loader_param, loader_instances)
-
-        # prepare query meta
-        for loader in self._get_all_loaders_from_meta(metadata):
-            kls, path = loader['request_type'], loader['path']
-
-            if kls is None:
-                continue
-
-            if path in request_info and kls not in request_info[path]:
-                request_info[path].append(kls)
-            else:
-                request_info[path] = [kls]
-
-        # combine together
-        for path, instance in cache.items():
-            if request_info.get(path) is None:
-                continue
-            instance._query_meta = self._generate_meta(request_info[path])
-
-        return cache
-
-
-def validate_and_create_loader_instance(
-        loader_params,
-        global_loader_param,
-        loader_instances,
-        metadata: MappedMetaType):
-
-    return LoaderManager().validate_and_create_loader_instance(
-        loader_params=loader_params,
-        global_loader_param=global_loader_param,
-        loader_instances=loader_instances,
-        metadata=metadata,
-    )
-
-
 class Analytic:
+    """
+    Analyze pydantic models to extract metadata for resolution.
+    
+    This class traverses the pydantic model tree to collect:
+    - resolve methods
+    - post methods
+    - expose configurations
+    - collector configurations
+    - object fields that need traversal
+    """
     def __init__(self, er_pre_generator: Optional[ErLoaderPreGenerator]=None) -> None:
         self.expose_set = set()
         self.collect_set = set()
@@ -340,7 +212,7 @@ class Analytic:
             all_fields = set(class_util.get_pydantic_field_keys(kls))
             object_fields = list(class_util.get_pydantic_fields(kls))  # dive and recursively analysis
         else:
-            raise AttributeError('invalid type: should be pydantic object')  # noqa
+            raise TypeError('invalid type: should be pydantic object')  # noqa
         return all_fields, object_fields, {k: v for k, v in object_fields}
 
     def _has_post_default_handler(self, kls: Type) -> bool:
@@ -372,11 +244,11 @@ class Analytic:
                 raise ResolverTargetAttrNotFound(f"attribute {post_field} not found")
 
     def _validate_expose(self, expose_dict, kls_name: str):
-        if type(expose_dict) is not dict:
-            raise AttributeError(f'{const.EXPOSE_TO_DESCENDANT} is not dict')
+        if not isinstance(expose_dict, dict):
+            raise TypeError(f'{const.EXPOSE_TO_DESCENDANT} is not dict')
         for _, v in expose_dict.items():
             if v in self.expose_set:
-                raise AttributeError(f'Expose alias name conflicts, please check: {kls_name}')
+                raise ValueError(f'Expose alias name conflicts, please check: {kls_name}')
             self.expose_set.add(v)
 
     def _add_collector_info(self, post_params):
@@ -423,6 +295,9 @@ class Analytic:
         return result
 
     def _populate_ancestors(self, parents):
+        """
+        mark should traverse to plan a minimal traversal path
+        """
         for field, kls_name in parents:
             # normally, array size is small
             if field in self.metadata[kls_name]['raw_object_fields'] and \

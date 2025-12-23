@@ -9,6 +9,7 @@ from types import MappingProxyType
 
 from pydantic_resolve import analysis
 from pydantic_resolve.exceptions import MissingAnnotationError
+import pydantic_resolve.loader_manager
 import pydantic_resolve.utils.conversion as conversion_util
 import pydantic_resolve.utils.class_util as class_util
 import pydantic_resolve.constant as const
@@ -400,7 +401,7 @@ class Resolver:
             METADATA_CACHE[root_class] = metadata
             self.metadata = metadata
 
-        self.loader_instance_cache = analysis.validate_and_create_loader_instance(
+        self.loader_instance_cache = pydantic_resolve.loader_manager.validate_and_create_loader_instance(
             self.loader_params,
             self.global_loader_param,
             self.loader_instances,

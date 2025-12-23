@@ -35,7 +35,7 @@ async def test_case_0():
 
 
     foo = Foo(nums=[1,2,3])
-    with pytest.raises(AttributeError) as e:
+    with pytest.raises(ValueError) as e:
         await Resolver().resolve(foo)
     assert 'alias name conflicts, please check' in str(e.value)
 
@@ -69,7 +69,7 @@ async def test_case_1():
 
 
     foo = Foo(nums=[1,2,3])
-    with pytest.raises(AttributeError) as e:
+    with pytest.raises(TypeError) as e:
         await Resolver().resolve(foo)
     assert 'is not dict' in str(e.value)
 
