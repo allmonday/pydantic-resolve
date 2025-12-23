@@ -252,11 +252,19 @@ class Analytic:
             self.expose_set.add(v)
 
     def _add_collector_info(self, post_params):
+        """
+        add collector alias during _walker (breadth first traversal)
+        so that it should ensure the definition of collector is always before usage
+        which means collector should always be defined before ancestor nodes actually send data.
+        """
         for _, param in post_params.items():
             for collector in param['collectors']:
                 self.collect_set.add(collector['alias'])
 
     def _add_collector_info_for_default_handler(self, post_default_params):
+        """
+        same like _add_collector_info
+        """
         if post_default_params is not None:
             for collector in post_default_params['collectors']:
                 self.collect_set.add(collector['alias'])
@@ -314,13 +322,16 @@ class Analytic:
                 self._populate_ancestors(ancestors)
             return
 
+        # based on ER diagram, generate resolve + dataloader by field's metadata settings
         if self.er_pre_generator: 
             self.er_pre_generator.prepare(kls)
         
+        # generate expose and collector config based on field's metadata settings
+        # __pydantic_resolve_expose__ and __pydantic_resolve_collect__
         pre_generate_expose_config(kls)
         pre_generate_collector_config(kls)
 
-        # - prepare fields, with resolve_, post_ reserved
+        # prepare fields, with resolve_, post_ reserved
         all_fields, object_fields, object_field_pairs = self._get_all_fields_and_object_fields(kls)
         resolve_fields, post_fields, fields_with_resolver = self._get_resolve_and_post_fields(kls)
         self._validate_resolve_and_post_fields(resolve_fields, post_fields, all_fields)
@@ -351,7 +362,7 @@ class Analytic:
         }
         post_default_handler_params = _scan_post_default_handler(getattr(kls, const.POST_DEFAULT_HANDLER)) if self._has_post_default_handler(kls) else None
 
-        # check context
+        # check context config
         resolve_context = any([p['context'] for p in resolve_params.values()])
         post_context = any([p['context'] for p in post_params.values()])
         post_default_context = post_default_handler_params['context'] if post_default_handler_params else False
@@ -378,12 +389,12 @@ class Analytic:
         }
         self.metadata[kls_name] = info
 
-        # object fields
+        # visit fields (pydantic class) without resolve method
         for field, shelled_types in (obj for obj in object_fields if obj[0] in object_fields_without_resolver):
             for shelled_type in shelled_types:
                 self._walker(shelled_type, ancestors + [(field, kls_name)])
 
-        # resolve fields
+        # visit fields with resolve method
         for field, shelled_types in (obj for obj in object_fields if obj[0] in fields_with_resolver):
             for shelled_type in shelled_types:
                 self._walker(shelled_type, ancestors + [(field, kls_name)])
