@@ -110,9 +110,8 @@ class ErDiagram(BaseModel):
     description: Optional[str] = None
 
 
-class BaseEntity:
+class BaseEntity:  # just type (TODO: optimize)
     entities: list[Entity]
-    @staticmethod
     def get_diagram() -> ErDiagram:
         raise NotImplementedError
 
@@ -179,7 +178,7 @@ def base_entity() -> Type[BaseEntity]:
             resolved_configs.append(Entity(kls=kls, relationships=resolved_rels))
         return ErDiagram(configs=resolved_configs)
 
-    class Base(BaseEntity):
+    class Base:
         def __init_subclass__(cls, **kwargs):
             super().__init_subclass__(**kwargs)
             # only register direct subclasses of Base, ignore inherited descendants
