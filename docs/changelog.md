@@ -2,6 +2,15 @@
 
 ## v2.3
 
+### v2.3.4
+
+WIP, not released yet:
+- refactor:
+    - move loader_manager into seperate module
+    - (todo) better subset configuration
+- doc:
+    - add more comments 
+
 ### v2.3.3
 
 hotfix:
