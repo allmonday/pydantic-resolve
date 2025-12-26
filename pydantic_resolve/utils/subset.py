@@ -1,4 +1,4 @@
-from typing import Type, Dict, Any, List, Tuple, Set
+from typing import Type, Dict, Any, List, Tuple, Set, Literal
 from pydantic import BaseModel, create_model, model_validator
 import copy
 import pydantic_resolve.constant as const
@@ -10,7 +10,7 @@ class SubsetConfig(BaseModel):
     kls: Type[BaseModel]  # parent class
 
     # fields and omit_fields are exclusive
-    fields: List[str] | None = None
+    fields: List[str] | Literal["all"] | None = None
     omit_fields: List[str] | None = None
 
     # set Field(exclude=True) for these fields
@@ -154,7 +154,10 @@ class SubsetMeta(type):
             parent_kls = subset_info.kls
 
             if subset_info.fields is not None:
-                subset_fields = subset_info.fields
+                if subset_info.fields == "all":  # special value to include all fields
+                    subset_fields = list(parent_kls.model_fields.keys())
+                else:
+                    subset_fields = subset_info.fields
             else:
                 all_fields = list(parent_kls.model_fields.keys())
                 omit_set = set(subset_info.omit_fields)

@@ -496,3 +496,37 @@ class TestCreateSubsetConfig:
         # Check serialization
         assert sub.model_dump() == {'id': 1, 'name': 'test'} 
 
+
+    def test_case_5(self):
+        class Parent(BaseModel):
+            id: int
+            name: str
+            email: str
+            age: int
+            active: bool
+        
+        class Sub(DefineSubset):
+            __subset__ = SubsetConfig(
+                kls=Parent,
+                fields="all"
+            )
+        
+        assert Sub.model_fields.keys() == Parent.model_fields.keys()
+        
+
+    def test_case_6(self):
+        class Parent(BaseModel):
+            id: int
+            name: str
+            email: str
+            age: int
+            active: bool
+        
+        class Sub(DefineSubset):
+            __subset__ = SubsetConfig(
+                kls=Parent,
+                omit_fields=[]  # same as fields="all"
+            )
+        
+        assert Sub.model_fields.keys() == Parent.model_fields.keys()
+        

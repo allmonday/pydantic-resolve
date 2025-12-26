@@ -2,7 +2,13 @@
 
 ## v2.4
 
-### v2.4.0
+### v2.4.1 (2025-12-26)
+
+- feat:
+    - SubsetConfig's fields now support "all" to select all fields
+
+
+### v2.4.0 (2025-12-26)
 
 ```python
 class NewSub(DefineSubset):
