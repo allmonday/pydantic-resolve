@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from pydantic_resolve.utils.subset import create_subset, DefineSubset
 from pydantic_resolve import Resolver, Collector
 import pydantic_resolve.constant as const
+from pydantic_resolve.utils.subset import SubsetConfig
 
 
 class TestCreateSubset:
@@ -403,3 +404,95 @@ class TestSubsetResolve:
         assert instance.total == 3
         assert instance.hello == 'hello world'
         
+
+class TestCreateSubsetConfig:
+    
+    def test_case_1(self):
+        class Parent(BaseModel):
+            id: int
+            name: str
+            email: str
+            age: int
+            active: bool
+        
+        class Sub(DefineSubset):
+            __subset__ = SubsetConfig(
+                kls=Parent,
+                fields=['id', 'name'],
+            )
+        
+        sub = Sub(id=1, name='test')
+        assert sub.id == 1
+        assert sub.name == 'test'
+        
+        
+    def test_case_2(self):
+        class Parent(BaseModel):
+            id: int
+            name: str
+            email: str
+            age: int
+            active: bool
+        
+        class Sub(DefineSubset):
+            __subset__ = SubsetConfig(
+                kls=Parent,
+                omit_fields=['email'],
+            )
+        
+        sub = Sub(id=1, name='test', age=30, active=True)
+        assert sub.id == 1
+        assert sub.name == 'test'
+        
+    def test_case_3(self):
+        class Parent(BaseModel):
+            id: int
+            name: str
+            email: str
+            age: int
+            active: bool
+        
+        class Sub(DefineSubset):
+            __subset__ = SubsetConfig(
+                kls=Parent,
+                fields=['id', 'name', 'age'],
+                expose_as=[('name', 'custom_name')],
+                send_to=[
+                    ('age', 'age_collector'),
+                    ('age', ('a', 'b')) 
+                ],
+            )
+        
+        sub = Sub(id=1, name='test', age=30, active=True)
+        assert sub.id == 1
+        assert sub.name == 'test'
+
+        assert Sub.model_fields['name'].metadata[0].alias == 'custom_name'
+
+    def test_case_4(self):
+        class Parent(BaseModel):
+            id: int
+            name: str
+            email: str
+            age: int
+            active: bool
+        
+        class Sub(DefineSubset):
+            __subset__ = SubsetConfig(
+                kls=Parent,
+                fields=['id', 'name', 'age'],
+                excluded_fields=['age']
+            )
+        
+        sub = Sub(id=1, name='test', age=30)
+        assert sub.id == 1
+        assert sub.name == 'test'
+        assert sub.age == 30
+        
+        # Check if exclude=True is set
+        assert Sub.model_fields['age'].exclude is True
+        assert Sub.model_fields['name'].exclude is None
+        
+        # Check serialization
+        assert sub.model_dump() == {'id': 1, 'name': 'test'} 
+
