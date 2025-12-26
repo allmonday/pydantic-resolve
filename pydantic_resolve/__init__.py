@@ -10,7 +10,7 @@ from .exceptions import (
     MissingCollector)
 from .resolver import Resolver
 from .utils.depend import LoaderDepend, Loader
-from .utils.subset import DefineSubset
+from .utils.subset import DefineSubset, SubsetConfig
 from .utils.openapi import (
     model_config)
 from .utils.er_diagram import Relationship, MultipleRelationship, Link, Entity, ErDiagram, LoadBy, base_entity
@@ -40,6 +40,7 @@ __all__ = [
     'model_config',
     'copy_dataloader_kls',
     'DefineSubset',
+    'SubsetConfig',
 
     'Entity',
     'Relationship',

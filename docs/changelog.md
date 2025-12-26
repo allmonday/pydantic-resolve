@@ -1,15 +1,31 @@
 # Changelog
 
-## v2.3
+## v2.4
 
-### v2.3.4
+### v2.4.0
 
-WIP, not released yet:
+```python
+class NewSub(DefineSubset):
+    __subset__ = SubsetConfig(
+        kls=Parent,
+        fields=['id', 'name', 'age'],
+        exclude_fields=['name'],  # Field(exclude=True)
+        expose_as=[('name', 'custom_name')],
+        send_to=[
+            ('age', 'age_collector'),
+            ('age', ('a', 'b')) 
+        ],
+    )
+```
+        
+- feat:
+    - better subset configuration
 - refactor:
     - move loader_manager into seperate module
-    - (todo) better subset configuration
 - doc:
     - add more comments 
+
+## v2.3
 
 ### v2.3.3
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from pydantic import BaseModel
 from typing import List, Annotated
-from pydantic_resolve import Resolver, Collector, LoaderDepend, SendTo
+from pydantic_resolve import Resolver, Collector, LoaderDepend, SendTo, DefineSubset, SubsetConfig
 import pytest
 
 
@@ -136,15 +136,19 @@ class E(BaseModel):
             s += (a + b)
         return s
 
-class F(BaseModel):
-    __pydantic_resolve_collect__ = {
-        ('a', 'b'): 'collector1'
-    }
-    a: Annotated[int, SendTo('collector1')]
-    b: Annotated[int, SendTo('collector1')]
+class FBase(BaseModel):
+    a: int
+    b: int
+
+class F(DefineSubset):
+    __subset__ = SubsetConfig(
+        kls=FBase,
+        fields=['a', 'b'],
+        send_to=[('a', 'collector1'), ('b', 'collector1')]
+    )
 
 @pytest.mark.asyncio
-async def test_collector_error():
+async def test_collector_with_subclass():
     e = E(items=[F(a=1, b=2), F(a=3, b=4)])
-    with pytest.raises(AttributeError):
-        await Resolver().resolve(e) 
+    e = await Resolver().resolve(e) 
+    assert e.sum == 10

@@ -2,7 +2,7 @@ from __future__ import annotations
 import pytest
 from typing import Optional, Annotated
 from pydantic import BaseModel
-from pydantic_resolve import Resolver, ExposeAs
+from pydantic_resolve import Resolver, ExposeAs, DefineSubset, SubsetConfig
 
 class A(BaseModel):
 
@@ -47,3 +47,27 @@ async def test_expose_as_attr_error():
     a = AA(name='a_name')
     with pytest.raises(AttributeError):
         await Resolver().resolve(a)
+
+
+class Base(BaseModel):
+    id: int
+    name: str
+    age: int
+
+class AAA(DefineSubset):
+    __subset__ = SubsetConfig(
+        kls=Base,
+        fields=['id', 'name'],
+        expose_as=[('name', 'A_name')]
+    )
+
+    b: Optional[B] = None
+    def resolve_b(self):
+        return dict(name='b')
+
+
+@pytest.mark.asyncio
+async def test_expose_as_from_subset():
+    a = AAA(id=1, name='a_name')
+    a = await Resolver().resolve(a)
+    assert a.b.c.a_name == 'a_name'
