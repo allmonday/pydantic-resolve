@@ -4,51 +4,48 @@ from dataclasses import dataclass
 import pydantic_resolve.constant as const
 
 
-def _extract_field_definitions_for_create_model(parent: Type[BaseModel], field_names: List[str]) -> Dict[str, Tuple]:
-    """Extract field definitions in format suitable for create_model (Pydantic v2)."""
+@dataclass
+class SubsetConfig: 
+    # fields and exclude_fields are exclusive
+    fields: List[str]
+    exclude_fields: List[str]
+
+    expose_as: List[Tuple[str, str]]
+    send_to: List[Tuple[str, Tuple[str, ...] | str]]
+
+
+def _extract_field_infos(kls: Type[BaseModel], field_names: List[str]) -> Dict[str, Any]:
     field_definitions = {}
     
-    for fname in field_names:
-        fld = parent.model_fields.get(fname)
-        if not fld:
-            raise AttributeError(f'field "{fname}" not existed in {parent.__name__}')
+    for field_name in field_names:
+        field = kls.model_fields.get(field_name)
+        if not field:
+            raise AttributeError(f'field "{field_name}" not existed in {kls.__name__}')
         
-        # For create_model, we need (type, default_value) tuple
-        if fld.is_required():
-            field_definitions[fname] = (fld.annotation, ...)
-        else:
-            # For non-required fields, just use the default
-            field_definitions[fname] = (fld.annotation, fld.default)
+        field_definitions[field_name] = (field.annotation, field)
     
     return field_definitions
 
 
-def _get_parent_config(parent: Type[BaseModel]) -> Any:
-    """Get parent's configuration (Pydantic v2)."""
-    return getattr(parent, 'model_config', None)
+def _get_kls_config(kls: Type[BaseModel]) -> Any:
+    return getattr(kls, 'model_config', None)
 
 
-def _get_parent_validators(parent: Type[BaseModel], field_names: List[str]) -> Dict[str, Any]:
-    """Get parent's validators relevant to the subset fields (Pydantic v2)."""
+def _get_kls_validators(kls: Type[BaseModel], field_names: List[str]) -> Dict[str, Any]:
+
     validators = {}
-    
-    # In v2, field validators are stored in __pydantic_decorators__
-    decorators = getattr(parent, '__pydantic_decorators__', None)
+    decorators = getattr(kls, '__pydantic_decorators__', None)
+
     if decorators and hasattr(decorators, 'field_validators'):
         for validator_name, decorator_info in decorators.field_validators.items():
-            # Check if this validator applies to any of our fields
-            validator_fields = decorator_info.info.fields
-            if any(field in field_names for field in validator_fields):
-                # Copy the validator method
-                validators[validator_name] = getattr(parent, validator_name)
+            # example: @field_validator('email', 'name') -> decorator_info.info.fields = ['email', 'name']
+            if any(field in field_names for field in decorator_info.info.fields):
+                validators[validator_name] = getattr(kls, validator_name)
     
     return validators
 
 
 def _apply_validators(model_class: Type[BaseModel], validators: Dict[str, Any]) -> None:
-    """Apply validators to Pydantic v2 model after creation."""
-    # In v2, validators are handled differently and need to be copied manually
-    # This is a simplified approach - the proper way would be to use pydantic's internal mechanisms
     for name, validator in validators.items():
         setattr(model_class, name, validator)
 
@@ -80,21 +77,18 @@ def _extract_extra_fields_from_namespace(namespace: Dict[str, Any], disallow: Se
     return extras
 
 
-def _normalize_unique_fields(fields: Any) -> List[str]:
-    """Coerce incoming fields into a unique, ordered list of strings.
-
-    Only accepts list or tuple. Other types raise TypeError. All elements must be strings.
-    """
+def _validate_subset_fields(fields: Any):
     if not isinstance(fields, (list, tuple)):
         raise TypeError('fields must be a list or tuple of field names')
-    seq: List[Any] = list(fields)
 
-    for f in seq:
+    hit = set()
+    for f in fields:
         if not isinstance(f, str):
             raise TypeError('each field name must be a string')
-
-    # Preserve order while removing duplicates
-    return list(dict.fromkeys(seq))
+        else:
+            if f in hit:
+                raise ValueError(f'duplicate field name "{f}" in subset fields')
+            hit.add(f)
 
 
 def create_subset(parent: Type[BaseModel], fields: List[str], name: str = "SubsetModel") -> Type[BaseModel]:
@@ -112,23 +106,20 @@ def create_subset(parent: Type[BaseModel], fields: List[str], name: str = "Subse
     if not issubclass(parent, BaseModel):
         raise TypeError('parent must be a pydantic BaseModel')
     
-    unique_fields = _normalize_unique_fields(fields)
-    field_definitions = _extract_field_definitions_for_create_model(parent, unique_fields)
-    validators = _get_parent_validators(parent, unique_fields)
-
+    _validate_subset_fields(fields)
+    field_infos = _extract_field_infos(parent, fields)
+    validators = _get_kls_validators(parent, fields)
     create_model_kwargs = {}
-    config = _get_parent_config(parent)
+
+    config = _get_kls_config(parent)
     if config:
         create_model_kwargs['__config__'] = config
     
-    subset_class = create_model(
-        name,
-        **field_definitions,
-        **create_model_kwargs
-    )
+    subset_class = create_model(name, **field_infos, **create_model_kwargs)
 
     _apply_validators(subset_class, validators)
     setattr(subset_class, const.ENSURE_SUBSET_REFERENCE, parent)
+
     return subset_class
 
 
@@ -137,40 +128,42 @@ class SubsetMeta(type):
         subset_info = namespace.get(const.ENSURE_SUBSET_DEFINITION) or namespace.get(const.ENSURE_SUBSET_DEFINITION_SHORT)
 
         if subset_info:
-            parent_kls, picked_field = subset_info
+            parent_kls, subset_fields = subset_info
 
-            unique_fields = _normalize_unique_fields(picked_field)
-            parent_fields = _extract_field_definitions_for_create_model(parent_kls, unique_fields)
+            _validate_subset_fields(subset_fields)
+            field_infos = _extract_field_infos(parent_kls, subset_fields)
 
             # Then extract extra fields defined in class body
-            extra_fields = _extract_extra_fields_from_namespace(namespace, set(unique_fields))
+            extra_fields = _extract_extra_fields_from_namespace(namespace, set(subset_fields))
 
             # Parent validators and config should still apply to subset fields
             create_model_kwargs: Dict[str, Any] = {}
             methods_to_attach: Dict[str, Any] = {}
             attributes_to_attach: Dict[str, Any] = {}
 
-            validators = _get_parent_validators(parent_kls, unique_fields)
-            config = _get_parent_config(parent_kls)
+            validators = _get_kls_validators(parent_kls, subset_fields)
+            config = _get_kls_config(parent_kls)
             if config:
                 create_model_kwargs['__config__'] = config
 
             # Use the caller's module for better reprs and pickling
             create_model_kwargs['__module__'] = namespace.get('__module__', __name__)
 
-            for nk, nv in namespace.items():
-                if nk.startswith('__pydantic_resolve') and nk != const.ENSURE_SUBSET_DEFINITION:
-
-                    attributes_to_attach[nk] = nv
+            for ns_key, ns_value in namespace.items():
+                # definition like __pydatnic_resolve_expose__ or __pydantic_resolve_collect__ will be kept, just in case.
+                # except __pydantic_resolve_subset__  ( __subset__ will also be ignored)
+                if ns_key.startswith('__pydantic_resolve') and ns_key != const.ENSURE_SUBSET_DEFINITION:
+                    attributes_to_attach[ns_key] = ns_value
                     continue
 
-                if callable(nv) and (nk.startswith(const.RESOLVE_PREFIX) or nk.startswith(const.POST_PREFIX)):
-                    methods_to_attach[nk] = nv
+                if callable(ns_value) and (ns_key.startswith(const.RESOLVE_PREFIX) or ns_key.startswith(const.POST_PREFIX)):
+                    methods_to_attach[ns_key] = ns_value
 
 
             # Merge field definitions: keep subset order first, then extras
             field_definitions: Dict[str, Tuple[Any, Any]] = {}
-            field_definitions.update(parent_fields)
+
+            field_definitions.update(field_infos)
             field_definitions.update(extra_fields)
 
             subset_class = create_model(
@@ -197,13 +190,3 @@ class SubsetMeta(type):
 
 class DefineSubset(metaclass=SubsetMeta):
     pass
-
-
-@dataclass
-class SubsetConfig: 
-    # fields and exclude_fields are exclusive
-    fields: List[str]
-    exclude_fields: List[str]
-
-    expose_as: List[Tuple[str, str]]
-    send_to: List[Tuple[str, Tuple[str, ...] | str]]

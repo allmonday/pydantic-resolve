@@ -1,7 +1,7 @@
 """Tests for create_subset function in subset.py"""
 
 import pytest
-from typing import Optional
+from typing import Optional, Annotated
 from pydantic import BaseModel, Field
 from pydantic_resolve.utils.subset import create_subset, DefineSubset
 from pydantic_resolve import Resolver, Collector
@@ -15,19 +15,24 @@ class TestCreateSubset:
         """Test basic subset creation with required fields."""
         class Parent(BaseModel):
             id: int
-            name: str
+            name: Annotated[str, 'tangkikodo']
             age: int
             email: str
+            items: list[str]
         
-        Subset = create_subset(Parent, ['id', 'name'], 'TestSubset')
+        Subset = create_subset(Parent, ['id', 'name', 'items'], 'TestSubset')
         
         # Test that we can create an instance
-        instance = Subset(id=1, name='test')
+        instance = Subset(id=1, name='test', items=['a', 'b', 'c'])
         assert instance.id == 1
         assert instance.name == 'test'
+        assert instance.items == ['a', 'b', 'c']
         
         # Test that excluded fields are not present in the model
         field_names = list(Subset.model_fields.keys())
+
+        assert len(Subset.model_fields.get('name').metadata) == 1
+        assert Subset.model_fields.get('name').metadata[0] == 'tangkikodo'
         
         assert 'id' in field_names
         assert 'name' in field_names
@@ -35,7 +40,7 @@ class TestCreateSubset:
         assert 'email' not in field_names
 
         # Test that extra fields are ignored (Pydantic default behavior)
-        instance_with_extra = Subset(id=2, name='test2', age=25)  # age is ignored
+        instance_with_extra = Subset(id=2, name='test2', age=25, items=['x', 'y', 'z'])  # age is ignored
         assert instance_with_extra.id == 2
         assert instance_with_extra.name == 'test2'
         assert not hasattr(instance_with_extra, 'age')
@@ -95,7 +100,7 @@ class TestCreateSubset:
             name: str
             email: str
             
-            @field_validator('name')
+            @field_validator('name', 'email')
             @classmethod
             def validate_name(cls, v):
                 if len(v) < 2:
@@ -122,17 +127,15 @@ class TestCreateSubset:
     
 
     def test_duplicate_fields_handling(self):
-        """Test that duplicate fields in the fields list are handled correctly."""
+        """Test that duplicate fields in the fields list should raise ValueError"""
         class Parent(BaseModel):
             id: int
             name: str
             age: int
         
-        Subset = create_subset(Parent, ['id', 'name', 'id', 'name'], 'DuplicateSubset')
+        with pytest.raises(ValueError):
+            create_subset(Parent, ['id', 'name', 'id', 'name'], 'DuplicateSubset')
         
-        instance = Subset(id=1, name='test')
-        assert instance.id == 1
-        assert instance.name == 'test'
     
     def test_field_order_preservation(self):
         """Test that field order is preserved in subset."""
