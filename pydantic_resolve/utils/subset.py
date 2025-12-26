@@ -1,5 +1,6 @@
 from typing import Type, Dict, Any, List, Tuple, Set
 from pydantic import BaseModel, create_model
+from dataclasses import dataclass
 import pydantic_resolve.constant as const
 
 
@@ -196,3 +197,13 @@ class SubsetMeta(type):
 
 class DefineSubset(metaclass=SubsetMeta):
     pass
+
+
+@dataclass
+class SubsetConfig: 
+    # fields and exclude_fields are exclusive
+    fields: List[str]
+    exclude_fields: List[str]
+
+    expose_as: List[Tuple[str, str]]
+    send_to: List[Tuple[str, Tuple[str, ...] | str]]
