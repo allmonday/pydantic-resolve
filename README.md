@@ -88,9 +88,9 @@ class Team(DefineSubset)
 @route.get('/teams', response_model=List[Team])
 async def get_teams(session: AsyncSession = Depends(db.get_session)):
     teams = await tmq.get_teams(session)
-    teams = [Team.model_validate(t) for t in teams]
 
-    teams = await Resolver().resolve(teams)
+    teams = [Team.model_validate(t) for t in teams] # <---
+    teams = await Resolver().resolve(teams)         # <---
 
     return teams
 ```
@@ -255,7 +255,7 @@ In other words, `post_*` is a hook provided during traversal, and you can use it
 
 Let's explain using the three cases above.
 
-#### #1: A node exposes its fields to all descendants
+#### 1: A node exposes its fields to all descendants
 
 > Task names need a prefix from their parent Story name
 
@@ -307,7 +307,7 @@ class Story3(DefineSubset):
 or use `ExposeAs` for normal scenarios
 
 ```python
-from pydantic_resolve import SubsetConfig
+from pydantic_resolve import ExposeAs
 
 class Story3(BaseModel):
     id: int
@@ -323,7 +323,7 @@ class Story3(BaseModel):
 
 > Note that fields processed by resolve/post cannot use `expose as` because the data is not yet ready.
 
-#### #2: Compute extra fields from resolved data
+#### 2: Compute extra fields from resolved data
 
 > How to compute the total estimate of all tasks in each story?
 
@@ -346,7 +346,7 @@ class Story2(DefineSubset):
 		return sum(task.estimate for task in self.tasks)
 ```
 
-#### #3: An ancestor collects data from descendants
+#### 3: An ancestor collects data from descendants
 
 > A story needs to collect all developers involved across its tasks
 
@@ -363,9 +363,14 @@ In descendant nodes, `__pydantic_resolve_collect__ = {'user': 'related_users'}` 
 `__pydantic_resolve_collect__` supports many forms:
 
 ```
-__pydantic_resolve_collect__ = {'user': 'related_users'}: send user to related_users
-__pydantic_resolve_collect__ = {('id', 'user'): 'related_users'}: send user, id to related users
-__pydantic_resolve_collect__ = {('id', 'user'): ('related_users', 'all_users')}: send user, id to related_users and all_users
+# send user to related_users
+__pydantic_resolve_collect__ = {'user': 'related_users'}
+
+# send user, id to related users
+__pydantic_resolve_collect__ = {('id', 'user'): 'related_users'}
+
+#  send user, id to related_users and all_users
+__pydantic_resolve_collect__ = {('id', 'user'): ('related_users', 'all_users')}
 ```
 
 The default `Collector` provided by Pydantic Resolve collects values into a list. You can also implement `ICollector` to build custom collectors for your own subset needs.
@@ -391,7 +396,7 @@ class Story1(DefineSubset):
 		return collector.values()
 ```
 
-Here is another clear option, use `SendTo`
+Here is another option, use `SendTo`
 
 ```python
 from pydantic_resolve import SendTo
