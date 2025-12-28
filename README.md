@@ -116,7 +116,7 @@ from pydantic_resolve import base_entity, Relationship
 BaseEntity = base_entity()
 
 class Sprint(BaseModel, BaseEntity):
-    __pydantic_resolve_relationships__ = [
+    __relationships__ = [
         Relationship( field='id', target_kls=list['Story'], loader=story_loader.sprint_to_story_loader)
     ]
 
@@ -128,7 +128,7 @@ class Sprint(BaseModel, BaseEntity):
     model_config = ConfigDict(from_attributes=True)
 
 class Story(BaseModel, BaseEntity):
-    __pydantic_resolve_relationships__ = [
+    __relationships__ = [
         Relationship( field='id', target_kls=list['Task'], loader=task_loader.story_to_task_loader),
         Relationship( field='owner_id', target_kls='User', loader=user_loader.user_batch_loader)
     ]
