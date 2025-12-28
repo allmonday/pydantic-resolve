@@ -325,6 +325,11 @@ class Story3(BaseModel):
 
 > Note that fields processed by resolve/post cannot use `expose as` because the data is not yet ready.
 
+In fastapi voyager, it will mark those `expose as` if we toggle on `pydantic resolve meta` and all descendents can access the value.
+
+<img width="1397" height="749" alt="image" src="https://github.com/user-attachments/assets/94778eb4-9453-42e2-bf90-2e31300dc7b8" />
+
+
 #### 2: Compute extra fields from resolved data
 
 > How to compute the total estimate of all tasks in each story?
@@ -406,6 +411,9 @@ from pydantic_resolve import SendTo
 class Task1(BaseTask):
 	user: Annotated[Optional[BaseUser], LoadBy('owner_id'), SendTo('related_users')] = None
 ```
+
+<img width="2820" height="1328" alt="image" src="https://github.com/user-attachments/assets/abb9b351-2bcc-4e04-9b5d-30ae2b018850" />
+
 
 ### 4. Execute
 
