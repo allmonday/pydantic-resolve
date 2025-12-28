@@ -37,6 +37,8 @@ Starting from pydantic-resolve v2.0.0, it only supports pydantic v2, pydantic v1
 
 ## Basic Usage
 
+In this part, we will introduce some fundamental features that allow us to freely combine data just like a GraphQL query.
+
 ### Pick fields from source class
 
 `DefineSubset` can pick wanted fields and generate a new pydantic class.
@@ -98,9 +100,9 @@ async def get_teams(session: AsyncSession = Depends(db.get_session)):
 
 ## Advanced Usage
 
-Here, we will introduce the advanced features of pydantic resolve, which can help address various issues during the data construction process.
+Here, we will introduce the advanced features of pydantic resolve, which can help resolve various issues during the data construction process（which are very difficult in scope of GraphQL).
 
-We will introduce how to use ErDiagram, post method, and two cross-layer node transmission functions.
+They are ErDiagram, `post_{field}` methods, ExposeAs and SendTo.
 
 Here is the [live demo](https://www.newsyeah.fun/voyager/?tag=demo) and [source code](https://github.com/allmonday/composition-oriented-development-pattern/tree/master/src/services)
 
