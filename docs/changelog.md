@@ -2,8 +2,12 @@
 
 ## v2.4
 
+### v2.4.3 (2026-1-3)
 
-### v2.4.2 (2026-1-3)
+- fix:
+    - fix dict_keys in generating openapi.json
+
+### v2.4.2 (2026-1-3) - yanked
 - fix:
     - model_config should convert all fields into required status (for serialization)
 - enhancement:
