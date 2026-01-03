@@ -1,31 +1,6 @@
 from typing import Any, Dict
-from inspect import isfunction
 from pydantic import BaseModel
-import pydantic_resolve.constant as const
-from pydantic_resolve.utils.class_util import safe_issubclass, is_pydantic_field_required_field, get_pydantic_field_items
-
-
-def _get_required_fields(kls: BaseModel):
-    required_fields = []
-
-    items = get_pydantic_field_items(kls)
-
-    for fname, field in items:
-        if is_pydantic_field_required_field(field):
-            required_fields.append(fname)
-
-
-    # 2. get resolve_ and post_ target fields
-    for f in dir(kls):
-        if f.startswith(const.RESOLVE_PREFIX):
-            if isfunction(getattr(kls, f)):
-                required_fields.append(f.replace(const.RESOLVE_PREFIX, ''))
-
-        if f.startswith(const.POST_PREFIX):
-            if isfunction(getattr(kls, f)):
-                required_fields.append(f.replace(const.POST_PREFIX, ''))
-
-    return required_fields
+from pydantic_resolve.utils.class_util import safe_issubclass
 
 
 def model_config(default_required: bool=True):
@@ -62,7 +37,7 @@ def model_config(default_required: bool=True):
                     # config schema required (fields with default values will not be listed in required field)
                     # and the generated typescript models will define it as optional, and is troublesome in use
                     if default_required:
-                        fnames = _get_required_fields(model)
+                        fnames = kls.model_fields.keys()
                         if excluded_fields:
                             fnames = [n for n in fnames if n not in excluded_fields]
                         schema['required'] = fnames

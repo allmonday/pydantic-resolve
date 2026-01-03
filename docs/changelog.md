@@ -2,6 +2,13 @@
 
 ## v2.4
 
+
+### v2.4.2 (2026-1-3)
+- fix:
+    - model_config should convert all fields into required status (for serialization)
+- enhancement:
+    - friendly error message in er diagram module
+
 ### v2.4.1 (2025-12-26)
 
 - feat:

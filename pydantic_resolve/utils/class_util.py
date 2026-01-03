@@ -59,14 +59,6 @@ def get_pydantic_field_keys(kls) -> str:
     return kls.model_fields.keys()
 
 
-def get_pydantic_field_values(kls):
-    return kls.model_fields.values()
-
-
-def is_pydantic_field_required_field(field):
-    return field.is_required()
-
-
 def get_pydantic_fields(kls):
     items = class_util.get_pydantic_field_items(kls)
 

@@ -227,3 +227,19 @@ async def test_resolver_factory_with_permitive_annotation():
     # assert d.foos_in_str_x == ["foo1", "foo2"]
 
 
+class BizCase6(DefineSubset):
+    __pydantic_resolve_subset__ = (Biz, ['id', 'user_id'])
+
+    user: Annotated[Optional[User], LoadBy('user_id_0')] = None
+
+@pytest.mark.asyncio
+async def test_resolver_factory_of_er_relationship_not_found():
+    MyResolver = config_resolver('MyResolver', er_diagram=diagram)
+    d = BizCase6(id=1, user_id=1)
+    expected = (
+        'Relationship from "<class \'tests.er_diagram.test_er_diagram.Biz\'>" to '
+        '"typing.Optional[tests.er_diagram.test_er_diagram.User]" using "user_id_0", biz: "None", not found'
+    )
+    with pytest.raises(AttributeError) as excinfo:
+        await MyResolver().resolve(d)
+    assert str(excinfo.value) == expected

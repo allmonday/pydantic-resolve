@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from pydantic_resolve import Resolver
 from pydantic.json_schema import GenerateJsonSchema as GenerateJsonSchema
 import pytest
+from typing import Annotated
 
 @pytest.mark.asyncio
 async def test_schema_config():
@@ -30,7 +31,7 @@ async def test_schema_config():
 
 
 @pytest.mark.asyncio
-async def test_schema_config_required():
+async def test_schema_config_required_false():
     @model_config(default_required=False)
     class Y(BaseModel):
         id: int = 0
@@ -48,10 +49,26 @@ async def test_schema_config_required():
 
 
 @pytest.mark.asyncio
+async def test_schema_config_required_true():
+    @model_config(default_required=True)
+    class Y(BaseModel):
+        id: Annotated[int, 'hello'] = 0
+
+        name: str
+
+        password: str = ''
+        def resolve_password(self):
+            return 'confidential'
+
+    schema = Y.model_json_schema()
+    assert set(schema['required']) == {'name', 'id', 'password'}
+
+
+@pytest.mark.asyncio
 async def test_raw_schema_in_serialization():
     """
     in pydantic v2 and fastapi, it will generate json schema in mode: serialization
-    so that you can remove model_config decorator.
+    it will ignore fields with exclude=True, but model_config still helps to set required fields
     """
     class Y(BaseModel):
         name: str

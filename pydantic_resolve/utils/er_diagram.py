@@ -208,7 +208,7 @@ class ErLoaderPreGenerator:
         for kls, cfg in self.er_configs_map.items():
             if class_util.is_compatible_type(target, kls):
                 return cfg
-        raise AttributeError(f'No ErConfig found for {target.__name__}')
+        raise AttributeError(f'No ErConfig found for {target}')
 
     def _identify_relationship(self, config: Entity, loader_info: LoaderInfo, target_kls: Type) -> Relationship:
         """
@@ -238,12 +238,12 @@ class ErLoaderPreGenerator:
                                     # and leave validation to pydantic
                                     return link
                                 else:
-                                    raise TypeError( f'Target_kls {target_kls.__name__} is not compatible with origin_kls {loader_info.origin_kls.__name__} in Link for biz {link.biz}')
+                                    raise TypeError( f'Target_kls {target_kls} is not compatible with origin_kls {loader_info.origin_kls} in Link for biz {link.biz}')
                         elif class_util.is_compatible_type(target_kls, rel.target_kls):
                             return link
 
         raise AttributeError(
-            f'Relationship for "{target_kls.__name__}" using "{loader_info.field}", biz: "{loader_info.biz}", not found'
+            f'Relationship from "{config.kls}" to "{target_kls}" using "{loader_info.field}", biz: "{loader_info.biz}", not found'
         )
 
     def prepare(self, kls: Type):
@@ -266,7 +266,7 @@ class ErLoaderPreGenerator:
             method_name = f'{const.RESOLVE_PREFIX}{field_name}'
             if hasattr(kls, method_name):
                 warnings.warn(
-                    f'{method_name} already exists in {kls.__name__}, skipping auto-generation.'
+                    f'{method_name} already exists in {kls}, skipping auto-generation.'
                 )
                 continue
 
@@ -278,7 +278,7 @@ class ErLoaderPreGenerator:
 
             if relationship.loader is None:
                 # loader is optional in Relationship, but required for auto-generation
-                raise AttributeError(f'Loader not provided in relationship for field "{loader_info.field}" in class "{kls.__name__}"')
+                raise AttributeError(f'Loader not provided in relationship for field "{loader_info.field}" in class "{kls}"')
 
             def create_resolve_method(key: str, rel: Relationship):  # closure per field
                 def resolve_method(self, loader=LoaderDepend(rel.loader)):
