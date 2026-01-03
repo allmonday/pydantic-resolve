@@ -4,7 +4,7 @@ import pytest
 from typing import Optional, Annotated
 from pydantic import BaseModel, Field
 from pydantic_resolve.utils.subset import create_subset, DefineSubset
-from pydantic_resolve import Resolver, Collector
+from pydantic_resolve import Resolver, Collector, ExposeAs
 import pydantic_resolve.constant as const
 from pydantic_resolve.utils.subset import SubsetConfig
 
@@ -530,3 +530,42 @@ class TestCreateSubsetConfig:
         
         assert Sub.model_fields.keys() == Parent.model_fields.keys()
         
+
+@pytest.mark.asyncio
+async def test_subset_with_expose():
+    class Parent(BaseModel):
+        id: int
+        name: str
+        email: str
+        age: int
+        active: bool
+    
+    class SubItem(BaseModel):
+        field: str = ''
+        def post_field(self, ancestor_context):
+            return ancestor_context['custom_field']
+        
+        name: str = ''
+        def post_name(self, ancestor_context):
+            return ancestor_context['custom_name']
+
+    class Sub(DefineSubset):
+        __subset__ = SubsetConfig(
+            kls=Parent,
+            fields=['id', 'name', 'email', 'age', 'active'],
+            expose_as=[
+                ('id', 'custom_id'), 
+                ('name', 'custom_name')]
+        )
+        field: Annotated[str, ExposeAs('custom_field')] = ''
+        items: list[SubItem] = [SubItem()]
+    
+    
+    sub = Sub(id=1, name='test', email='xxx.com', age=30, active=True, field='value')
+    sub = await Resolver().resolve(sub)
+    assert sub.id == 1
+    assert sub.items[0].field == 'value'
+    assert sub.items[0].name == 'test'
+
+    
+    
