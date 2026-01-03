@@ -430,22 +430,7 @@ data = await Resolver().resolve(stories)
 
 ## How it works
 
-The process is similar to breadth-first traversal, with additional hooks after the traversal of descendant nodes is completed.
-
-Compared with GraphQL, both traverse descendant nodes recursively and support resolver functions and DataLoaders. The key difference is post-processing: from the post-processing perspective, resolved data is always ready for further transformation, regardless of whether it came from resolvers or initial input.
-
-![](./docs/images/lifecycle.jpeg)
-
-pydantic class can be initialized by deep nested data (which means descendant are provided in advance), then just need to run the post process.
-
-![](./docs/images/preload.png)
-
-Within post hooks, developers can read descendant data, adjust existing fields, compute derived fields.
-
-Post hooks also enable bidirectional data flow: they can read from ancestor nodes and push values up to ancestors, which is useful for adapting data to varied business requirements.
-
-![](./docs/images/communication.jpeg)
-
+https://allmonday.github.io/pydantic-resolve/introduction/#how-it-works
 
 ## Documentation
 
