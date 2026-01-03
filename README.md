@@ -343,7 +343,7 @@ class Task2(BaseTask):
 	user: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
 
 class Story2(DefineSubset):
-	__pydantic_resolve_subset__ = (BaseStory, ('id', 'name', 'owner_id'))
+	__subset__ = (BaseStory, ('id', 'name', 'owner_id'))
 
 	tasks: Annotated[list[Task2], LoadBy('id')] = []
 	assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
@@ -393,7 +393,7 @@ class Task1(BaseTask):
 	user: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
 
 class Story1(DefineSubset):
-	__pydantic_resolve_subset__ = (BaseStory, ('id', 'name', 'owner_id'))
+	__subset__ = (BaseStory, ('id', 'name', 'owner_id'))
 
 	tasks: Annotated[list[Task1], LoadBy('id')] = []
 	assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
