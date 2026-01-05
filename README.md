@@ -730,15 +730,169 @@ async def get_sprints(session: AsyncSession = Depends(get_session)):
 
 Each scenario is independent and reusable, can be combined as needed.
 
-## 👁️ Visualizing Dependencies
+## 👁️ Visualizing Dependencies with fastapi-voyager
 
-Install [fastapi-voyager](https://github.com/allmonday/fastapi-voyager) to visualize Pydantic model dependencies:
+**pydantic-resolve** works best with [fastapi-voyager](https://github.com/allmonday/fastapi-voyager) - a powerful visualization tool that makes complex data relationships easy to understand.
+
+### 🔍 Why fastapi-voyager?
+
+pydantic-resolve's declarative approach hides execution details, which can make it hard to understand **what's happening under the hood**. fastapi-voyager solves this by:
+
+- 🎨 **Color-coded operations**: See `resolve`, `post`, `expose`, and `collect` at a glance
+- 🔗 **Interactive exploration**: Click nodes to highlight upstream/downstream dependencies
+- 📊 **ERD visualization**: View entity relationships defined in your data models
+- 📍 **Source code navigation**: Double-click any node to jump to its definition
+- 🔍 **Quick search**: Find models and trace their relationships instantly
+
+### 📦 Installation
 
 ```bash
 pip install fastapi-voyager
 ```
 
-After configuration, visit `/voyager` path to see the dependency graph.
+### ⚙️ Basic Setup
+
+```python
+from fastapi import FastAPI
+from fastapi_voyager import create_voyager
+
+app = FastAPI()
+
+# Mount voyager to visualize your API
+app.mount('/voyager', create_voyager(
+    app,
+    enable_pydantic_resolve_meta=True  # Show pydantic-resolve metadata
+))
+```
+
+Visit `http://localhost:8000/voyager` to see the interactive visualization!
+
+### 🎨 Understanding the Visualization
+
+When you enable `enable_pydantic_resolve_meta=True`, fastapi-voyager uses color-coded markers to show pydantic-resolve operations:
+
+#### Field Markers
+
+- 🟢 **● resolve** - Field data is loaded via `resolve_{field}` method or `LoadBy`
+- 🔵 **● post** - Field is computed via `post_{field}` method after all resolves complete
+- 🟣 **● expose as** - Field is exposed to descendant nodes via `ExposeAs`
+- 🔴 **● send to** - Field data is sent to parent collectors via `SendTo`
+- ⚫ **● collectors** - Field collects data from child nodes via `Collector`
+
+#### Example
+
+```python
+class TaskResponse(BaseModel):
+    id: int
+    name: str
+    owner_id: int
+
+    # 🟢 resolve: loaded via DataLoader
+    owner: Annotated[Optional[UserResponse], LoadBy('owner_id')] = None
+
+    # 🔴 send to: owner data sent to parent's collector
+    owner: Annotated[Optional[UserResponse], LoadBy('owner_id'), SendTo('related_users')] = None
+
+class StoryResponse(BaseModel):
+    id: int
+
+    # 🟣 expose as: name exposed to descendants
+    name: Annotated[str, ExposeAs('story_name')]
+
+    # 🟢 resolve: tasks loaded via DataLoader
+    tasks: Annotated[List[TaskResponse], LoadBy('id')] = []
+
+    # 🔵 post: computed from tasks
+    total_estimate: int = 0
+    def post_total_estimate(self):
+        return sum(t.estimate for t in self.tasks)
+
+    # ⚫ collectors: collects from child nodes
+    related_users: List[UserResponse] = []
+    def post_related_users(self, collector=Collector(alias='related_users')):
+        return collector.values()
+```
+
+**In fastapi-voyager**, you'll see:
+- `owner` field marked with 🟢 resolve and 🔴 send to
+- `name` field marked with 🟣 expose as: story_name
+- `tasks` field marked with 🟢 resolve
+- `total_estimate` field marked with 🔵 post
+- `related_users` field marked with ⚫ collectors: related_users
+
+### 📊 Visualizing Entity Relationships (ERD)
+
+If you're using ERD to define entity relationships, fastapi-voyager can visualize them:
+
+```python
+from pydantic_resolve import base_entity, Relationship, config_global_resolver
+
+# Define entities with relationships
+BaseEntity = base_entity()
+
+class TaskEntity(BaseModel, BaseEntity):
+    __relationships__ = [
+        Relationship(field='owner_id', target_kls=UserEntity, loader=user_batch_loader)
+    ]
+    id: int
+    name: str
+    owner_id: int
+
+class StoryEntity(BaseModel, BaseEntity):
+    __relationships__ = [
+        Relationship(field='id', target_kls=list[TaskEntity], loader=story_to_tasks_loader)
+    ]
+    id: int
+    name: str
+
+# Register ERD
+diagram = BaseEntity.get_diagram()
+config_global_resolver(diagram)
+
+# Visualize it in voyager
+app.mount('/voyager', create_voyager(
+    app,
+    er_diagram=diagram,  # Show entity relationships
+    enable_pydantic_resolve_meta=True
+))
+```
+
+### 🎯 Interactive Features
+
+#### Click to Highlight
+Click any model or route to see:
+- 📤 **Upstream**: What this model depends on
+- 📥 **Downstream**: What depends on this model
+
+#### Double-Click to View Code
+Double-click any node to:
+- View the source code (if configured)
+- Open the file in VSCode (by default)
+
+#### Quick Search
+- Press `Shift + Click` on a node to search for it
+- Use the search box to find models by name
+- See related models highlighted automatically
+
+### 💡 Pro Tips
+
+1. **Start Simple**: Begin with `enable_pydantic_resolve_meta=False` to see the basic structure
+2. **Enable Metadata**: Turn on `enable_pydantic_resolve_meta=True` to see data flow
+3. **Use ERD View**: Toggle ERD view to understand entity-level relationships
+4. **Trace Data Flow**: Click a node and follow the colored links to understand data dependencies
+
+### 🌐 Live Demo
+
+Check out the [live demo](https://www.newsyeah.fun/voyager/?tag=sample_1) to see fastapi-voyager in action!
+
+### 📚 Learn More
+
+- [fastapi-voyager Documentation](https://github.com/allmonday/fastapi-voyager)
+- [Example Project](https://github.com/allmonday/composition-oriented-development-pattern)
+
+---
+
+**💡 Key Insight**: fastapi-voyager turns pydantic-resolve's "hidden magic" into **visible, understandable data flows**, making it much easier to debug, optimize, and explain your code to others!
 
 ## 🤔 Why Not GraphQL?
 

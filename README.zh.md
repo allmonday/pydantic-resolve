@@ -727,15 +727,169 @@ async def get_sprints(session: AsyncSession = Depends(get_session)):
 每个场景都是独立的、可复用的，可以根据实际需求组合使用。
 
 
-## 可视化依赖关系
+## 👁️ 使用 fastapi-voyager 可视化依赖关系
 
-安装 [fastapi-voyager](https://github.com/allmonday/fastapi-voyager) 可以可视化 Pydantic 模型的依赖关系：
+**pydantic-resolve** 与 [fastapi-voyager](https://github.com/allmonday/fastapi-voyager) 配合使用效果最佳 - 这是一个强大的可视化工具，让复杂的数据关系变得一目了然。
+
+### 🔍 为什么需要 fastapi-voyager？
+
+pydantic-resolve 的声明式方式隐藏了执行细节，这可能让人难以理解**底层发生了什么**。fastapi-voyager 通过以下方式解决这个问题：
+
+- 🎨 **颜色编码操作**：一眼看出 `resolve`、`post`、`expose` 和 `collect`
+- 🔗 **交互式探索**：点击节点高亮显示上游/下游依赖
+- 📊 **ERD 可视化**：查看数据模型中定义的实体关系
+- 📍 **源代码导航**：双击任意节点跳转到定义
+- 🔍 **快速搜索**：即时查找模型并追踪其关系
+
+### 📦 安装
 
 ```bash
 pip install fastapi-voyager
 ```
 
-配置后即可访问 `/voyager` 路径看到依赖关系图。
+### ⚙️ 基础配置
+
+```python
+from fastapi import FastAPI
+from fastapi_voyager import create_voyager
+
+app = FastAPI()
+
+# 挂载 voyager 来可视化你的 API
+app.mount('/voyager', create_voyager(
+    app,
+    enable_pydantic_resolve_meta=True  # 显示 pydantic-resolve 元数据
+))
+```
+
+访问 `http://localhost:8000/voyager` 查看交互式可视化！
+
+### 🎨 理解可视化
+
+启用 `enable_pydantic_resolve_meta=True` 后，fastapi-voyager 使用颜色标记来显示 pydantic-resolve 操作：
+
+#### 字段标记
+
+- 🟢 **● resolve** - 字段数据通过 `resolve_{field}` 方法或 `LoadBy` 加载
+- 🔵 **● post** - 字段在所有 resolve 完成后通过 `post_{field}` 方法计算
+- 🟣 **● expose as** - 字段通过 `ExposeAs` 暴露给后代节点
+- 🔴 **● send to** - 字段数据通过 `SendTo` 发送到父节点的收集器
+- ⚫ **● collectors** - 字段通过 `Collector` 从子节点收集数据
+
+#### 示例
+
+```python
+class TaskResponse(BaseModel):
+    id: int
+    name: str
+    owner_id: int
+
+    # 🟢 resolve: 通过 DataLoader 加载
+    owner: Annotated[Optional[UserResponse], LoadBy('owner_id')] = None
+
+    # 🔴 send to: owner 数据发送到父节点的收集器
+    owner: Annotated[Optional[UserResponse], LoadBy('owner_id'), SendTo('related_users')] = None
+
+class StoryResponse(BaseModel):
+    id: int
+
+    # 🟣 expose as: name 暴露给后代节点
+    name: Annotated[str, ExposeAs('story_name')]
+
+    # 🟢 resolve: tasks 通过 DataLoader 加载
+    tasks: Annotated[List[TaskResponse], LoadBy('id')] = []
+
+    # 🔵 post: 从 tasks 计算
+    total_estimate: int = 0
+    def post_total_estimate(self):
+        return sum(t.estimate for t in self.tasks)
+
+    # ⚫ collectors: 从子节点收集
+    related_users: List[UserResponse] = []
+    def post_related_users(self, collector=Collector(alias='related_users')):
+        return collector.values()
+```
+
+**在 fastapi-voyager 中**，你会看到：
+- `owner` 字段标记为 🟢 resolve 和 🔴 send to
+- `name` 字段标记为 🟣 expose as: story_name
+- `tasks` 字段标记为 🟢 resolve
+- `total_estimate` 字段标记为 🔵 post
+- `related_users` 字段标记为 ⚫ collectors: related_users
+
+### 📊 可视化实体关系图（ERD）
+
+如果你使用 ERD 定义实体关系，fastapi-voyager 可以可视化它们：
+
+```python
+from pydantic_resolve import base_entity, Relationship, config_global_resolver
+
+# 定义带关系的实体
+BaseEntity = base_entity()
+
+class TaskEntity(BaseModel, BaseEntity):
+    __relationships__ = [
+        Relationship(field='owner_id', target_kls=UserEntity, loader=user_batch_loader)
+    ]
+    id: int
+    name: str
+    owner_id: int
+
+class StoryEntity(BaseModel, BaseEntity):
+    __relationships__ = [
+        Relationship(field='id', target_kls=list[TaskEntity], loader=story_to_tasks_loader)
+    ]
+    id: int
+    name: str
+
+# 注册 ERD
+diagram = BaseEntity.get_diagram()
+config_global_resolver(diagram)
+
+# 在 voyager 中可视化
+app.mount('/voyager', create_voyager(
+    app,
+    er_diagram=diagram,  # 显示实体关系
+    enable_pydantic_resolve_meta=True
+))
+```
+
+### 🎯 交互功能
+
+#### 点击高亮
+点击任意模型或路由，查看：
+- 📤 **上游**：这个模型依赖什么
+- 📥 **下游**：什么依赖这个模型
+
+#### 双击查看代码
+双击任意节点：
+- 查看源代码(需配置)
+- 在 VSCode 中打开文件(默认)
+
+#### 快速搜索
+- 在节点上按 `Shift + Click` 进行搜索
+- 使用搜索框按名称查找模型
+- 自动高亮显示相关模型
+
+### 💡 专业提示
+
+1. **从简单开始**：先用 `enable_pydantic_resolve_meta=False` 查看基本结构
+2. **启用元数据**：打开 `enable_pydantic_resolve_meta=True` 查看数据流
+3. **使用 ERD 视图**：切换 ERD 视图理解实体级关系
+4. **追踪数据流**：点击节点并跟随彩色链接理解数据依赖
+
+### 🌐 在线演示
+
+查看[在线演示](https://www.newsyeah.fun/voyager/?tag=sample_1)体验 fastapi-voyager 的实际效果！
+
+### 📚 更多资源
+
+- [fastapi-voyager 文档](https://github.com/allmonday/fastapi-voyager)
+- [示例项目](https://github.com/allmonday/composition-oriented-development-pattern)
+
+---
+
+**💡 核心优势**：fastapi-voyager 将 pydantic-resolve 的"隐藏魔法"变成**可见的、可理解的数据流**，让调试、优化和代码解释变得更加容易！
 
 ## 为什么不用 GraphQL？
 
