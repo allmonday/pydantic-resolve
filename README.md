@@ -1,4 +1,5 @@
-# Pydantic Resolve
+# Pydantic Resolve 
+
 
 > 🔧 Transform Pydantic from a static data container into a powerful composable component
 
@@ -6,6 +7,8 @@
 [![PyPI Downloads](https://static.pepy.tech/badge/pydantic-resolve/month)](https://pepy.tech/projects/pydantic-resolve)
 ![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
+
+[中文版](./README.zh.md)
 
 ## 💡 What is this?
 
@@ -75,6 +78,11 @@ class TeamResponse(BaseModel):
     sprints: list[SprintResponse] = []
     def resolve_sprints(self, loader=Loader(team_to_sprints_loader)):
         return loader.load(self.id)
+
+    # Calculate statistics automatically after sprints are loaded
+    total_tasks: int = 0
+    def post_total_tasks(self):
+        return sum(len(sprint.tasks) for sprint in self.sprints)
 
 # Usage
 teams = await query_teams_from_db(session)

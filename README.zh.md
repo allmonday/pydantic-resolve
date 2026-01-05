@@ -76,6 +76,10 @@ class TeamResponse(BaseModel):
     def resolve_sprints(self, loader=Loader(team_to_sprints_loader)):
         return loader.load(self.id)
 
+    total_tasks: int = 0
+    def post_total_tasks(self):
+        return sum(len(sprint.tasks) for sprint in self.sprints)
+
 # 使用
 teams = await query_teams_from_db(session)
 result = await Resolver().resolve(teams)
