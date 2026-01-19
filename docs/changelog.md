@@ -2,6 +2,11 @@
 
 ## v2.4
 
+### v2.4.4 (2026-1-19)
+
+- fix:
+    - fix `is_compatible_type` to properly handle PEP 604 union types (`User | None`) by using identity check instead of string representation
+
 ### v2.4.3 (2026-1-3)
 
 - fix:

@@ -141,6 +141,7 @@ async def test_resolver_factory_warning():
 class BizCase1(Biz):
     user: Annotated[Optional[User], LoadBy('user_id')] = None
     user_2: Annotated[Optional[User], LoadBy('user_id_str')] = None
+    user_3: Annotated[User | None, LoadBy('user_id_str')] = None
     foos: Annotated[List[Foo], LoadBy('id', biz='foo_item')] = []
     foos_in_str: Annotated[List[str], LoadBy('id', biz='foo_name', origin_kls=list[Foo])] = []
     bars: Annotated[List[Bar], LoadBy('id', biz='normal')] = []
@@ -157,6 +158,7 @@ async def test_resolver_factory_with_er_configs_inherit():
 
     assert d[0].user.name == "a"
     assert d[0].user_2.name == "a"
+    assert d[0].user_3.name == "a"
     assert d[0].bars == [Bar(id=1, name="bar1", biz_id=1), Bar(id=2, name="bar2", biz_id=1)]
     assert d[0].special_bars == [Bar(id=1, name="special-bar1", biz_id=1), Bar(id=2, name="special-bar2", biz_id=1)]
     assert d[0].users_a == [User(id=1, name="a")]
@@ -165,6 +167,7 @@ async def test_resolver_factory_with_er_configs_inherit():
 
     assert d[1].user.name == "b"
     assert d[1].user_2.name == "b"
+    assert d[1].user_3.name == "b"
     assert d[1].foos == [Foo(id=3, name="foo3", biz_id=2)]
     assert d[1].users_a == []
     assert d[1].users_b == []

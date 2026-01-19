@@ -1,5 +1,6 @@
 import functools
-from typing import Type, List, Tuple, get_origin, get_args
+import types
+from typing import Type, List, Tuple, get_origin, get_args, Union
 import pydantic_resolve.constant as const
 import pydantic_resolve.utils.class_util as class_util
 from pydantic_resolve.analysis import is_acceptable_kls
@@ -139,7 +140,8 @@ def is_compatible_type(src_type, target_type) -> bool:
         if origin is None:
             return tp
         # typing.Union and PEP604 (types.UnionType) both have origin of Union/UnionType
-        if str(origin) in {"typing.Union", "types.UnionType"}:
+        # check identity instead of string representation for reliability
+        if origin is Union or origin is types.UnionType:
             args = [a for a in get_args(tp) if a is not type(None)]
             if len(args) == 1:
                 return args[0]
@@ -148,7 +150,7 @@ def is_compatible_type(src_type, target_type) -> bool:
     # Helper: detect any non-optional union
     def is_union(tp):
         origin = get_origin(tp)
-        return str(origin) in {"typing.Union", "types.UnionType"}
+        return origin is Union or origin is types.UnionType
 
     # Helper: subset ancestry check via ENSURE_SUBSET_REFERENCE chain
     def is_subset_of(src, tgt) -> bool:
