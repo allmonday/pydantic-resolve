@@ -12,7 +12,7 @@
 
 ## What is this?
 
-**pydantic-resolve** is a Pydantic-based data construction tool that enables you to assemble complex data structures **declaratively** without writing boilerplate imperative glue code.
+**pydantic-resolve** is a Pydantic-based data construction tool that enables you to assemble complex data structures **declaratively** without writing boring imperative glue code.
 
 ### What problem does it solve?
 
