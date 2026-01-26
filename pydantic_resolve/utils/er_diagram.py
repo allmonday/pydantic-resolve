@@ -228,7 +228,7 @@ class ErLoaderPreGenerator:
                     if link.biz == loader_info.biz:
                         if link.field_name:
                             if loader_info.origin_kls is None:
-                                raise ValueError( f'origin_kls must be provided in LoaderInfo when field_name is set in Link')
+                                raise ValueError( 'origin_kls must be provided in LoaderInfo when field_name is set in Link')
                             else:
                                 if class_util.is_compatible_type(loader_info.origin_kls, rel.target_kls):
                                     # TODO: validate types, currently just bypass
