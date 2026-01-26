@@ -19,7 +19,7 @@ class BaseLinkProps(BaseModel):
     load_many: bool = False
 
     # in case of fk itself is not list, for example: str
-    # and need to seperate manually,
+    # and need to separate manually,
     # call load_many_fn to handle it.
     load_many_fn: Optional[Callable[[Any], Any]] = None  
 

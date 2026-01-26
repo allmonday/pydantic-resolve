@@ -162,8 +162,8 @@ class TestCreateSubset:
         class Parent(BaseModel):
             id: int
             name: str
-        
-        with pytest.raises(AttributeError, match='field "nonexistent" not existed'):
+
+        with pytest.raises(AttributeError, match='field "nonexistent" does not exist'):
             create_subset(Parent, ['id', 'nonexistent'], 'ErrorSubset')
     
     def test_non_basemodel_parent_error(self):

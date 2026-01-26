@@ -35,7 +35,7 @@ def _extract_field_infos(kls: Type[BaseModel], field_names: List[str]) -> Dict[s
     for field_name in field_names:
         field = kls.model_fields.get(field_name)
         if not field:
-            raise AttributeError(f'field "{field_name}" not existed in {kls.__name__}')
+            raise AttributeError(f'field "{field_name}" does not exist in {kls.__name__}')
         
         field_definitions[field_name] = (field.annotation, field)
     

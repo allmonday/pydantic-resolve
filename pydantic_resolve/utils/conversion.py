@@ -8,16 +8,16 @@ import pydantic_resolve.constant as const
 from pydantic_resolve.utils.class_util import safe_issubclass
 
 class TypeAdapterManager:
-    apapters = {}
+    adapters = {}
     
     @classmethod
     def get(cls, type):
-        adapter = cls.apapters.get(type)
+        adapter = cls.adapters.get(type)
         if adapter:
             return adapter
         else:
             new_adapter = TypeAdapter(type)
-            cls.apapters[type] = new_adapter
+            cls.adapters[type] = new_adapter
             return new_adapter
 
 
@@ -62,7 +62,7 @@ def try_parse_data_to_target_field_type(
 
 
 def _get_mapping_rule(target, source) -> Optional[Callable]:
-    # do noting
+    # do nothing
     if isinstance(source, target):
         return None
 
@@ -86,7 +86,7 @@ def _get_mapping_rule(target, source) -> Optional[Callable]:
         else:
             raise AttributeError(f"{type(source)} -> {target.__name__}: pydantic can't handle non-dict data")
 
-    raise NotImplementedError(f"{type(source)} -> {target.__name__}: faild to get auto mapping rule and execut mapping, use your own rule instead.")
+    raise NotImplementedError(f"{type(source)} -> {target.__name__}: failed to get auto mapping rule and execute mapping, use your own rule instead.")
 
 
 def _apply_rule(rule: Optional[Callable], target, source: Any, is_list: bool):

@@ -31,7 +31,7 @@ def build_object(items: Sequence[T], keys: List[V], get_pk: Callable[[T], V]) ->
 
 def copy_dataloader_kls(name, loader_kls):
     """
-    quickly copy from an existed DataLoader class
+    quickly copy from an existing DataLoader class
     usage:
     SeniorMemberLoader = copy_dataloader('SeniorMemberLoader', ul.UserByLevelLoader)
     JuniorMemberLoader = copy_dataloader('JuniorMemberLoader', ul.UserByLevelLoader)

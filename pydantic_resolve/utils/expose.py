@@ -12,7 +12,7 @@ def ExposeAs(alias: str) -> ExposeInfo:
 
 def pre_generate_expose_config(kls):
     """
-    iterrate kls fields, check and collect field who's annotated metadata for ExposeAs exists
+    iterate kls fields, check and collect field who's annotated metadata for ExposeAs exists
     if kls's const.EXPOSE_CONFIGURATION exists and the fields is not empty, raise exception
 
     generate the configuration such as 

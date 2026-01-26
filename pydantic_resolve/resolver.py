@@ -92,7 +92,7 @@ class Resolver:
         # 
         # in pydantc v1, parse_obj_as can parse B from A, but in v2, it will raise exception
         # however, with typeAdapter.validate_python(data, from_attribute=True), it can work
-        # the cost is performance (abount 10% overhead), so it is disabled by default
+        # the cost is performance (about 10% overhead), so it is disabled by default
         self.enable_from_attribute_in_type_adapter = enable_from_attribute_in_type_adapter \
             or os.getenv("PYDANTIC_RESOLVE_ENABLE_FROM_ATTRIBUTE", "false").lower() == "true"
 
@@ -159,7 +159,7 @@ class Resolver:
                 try:
                     val = getattr(node, field)
                 except AttributeError:
-                    raise AttributeError(f'{field} does not existed')
+                    raise AttributeError(f'{field} does not exist')
 
                 token = self.ancestor_vars[alias].set(val)
                 token_pairs.append((alias, token))

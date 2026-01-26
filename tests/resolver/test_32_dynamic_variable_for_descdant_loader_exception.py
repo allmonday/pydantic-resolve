@@ -105,4 +105,4 @@ async def test_case_2():
     foo = Foo(nums=[1,2,3])
     with pytest.raises(AttributeError) as e:
         await Resolver().resolve(foo)
-    assert 'does not existed' in str(e.value)
+    assert 'does not exist' in str(e.value)

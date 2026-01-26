@@ -14,7 +14,7 @@ def model_config(default_required: bool=True):
 
     update:
 
-    in fastapi + pydantic v2, this function will be handled internal automatically with mode: serilization
+    in fastapi + pydantic v2, this function will be handled internal automatically with mode: serialization
     you can remove the model_config_v2
 
     reference: fastapi/_compat.py::get_definitions

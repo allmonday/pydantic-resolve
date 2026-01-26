@@ -42,7 +42,7 @@ def ensure_subset(base):
                     if field.is_required():
                         base_field = base.model_fields.get(k)
                         if not base_field:
-                            raise AttributeError(f'{k} not existed in {base.__name__}.')
+                            raise AttributeError(f'{k} does not exist in {base.__name__}.')
                         if base_field and base_field.annotation != field.annotation:
                             raise AttributeError(f'type of {k} not consistent with {base.__name__}')
                 return kls

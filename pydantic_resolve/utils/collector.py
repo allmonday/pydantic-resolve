@@ -13,7 +13,7 @@ def SendTo(name: str| Tuple[str]) -> SendToInfo:
 
 def pre_generate_collector_config(kls):
     """
-    iterrate kls fields, check and collect field who's annotated metadata for SendTo exists
+    iterate kls fields, check and collect field who's annotated metadata for SendTo exists
     if kls's const.COLLECTOR_CONFIGURATION exists and the fields is not empty, raise exception
     group those field name based on collector_name, if single, leave it as str, else make it tuple
     then generate the configuration such as 
