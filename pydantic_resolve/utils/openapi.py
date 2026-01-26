@@ -37,7 +37,7 @@ def model_config(default_required: bool=True):
                     # config schema required (fields with default values will not be listed in required field)
                     # and the generated typescript models will define it as optional, and is troublesome in use
                     if default_required:
-                        fnames = list(kls.model_fields.keys())
+                        fnames = list(model.model_fields.keys())
                         if excluded_fields:
                             fnames = [n for n in fnames if n not in excluded_fields]
                         schema['required'] = fnames

@@ -78,3 +78,29 @@ async def test_raw_schema_in_serialization():
     schema = Y.model_json_schema(mode='serialization')
     assert list((schema['properties']).keys()) == ['name', 'id']
     assert set(schema['required']) == {'name'}
+
+
+@pytest.mark.asyncio
+async def test_schema_config_inheritance_issue():
+    """
+    Test that demonstrates kls.model_fields misses child class fields.
+    This test will fail if the code uses kls.model_fields instead of model.model_fields
+    """
+    @model_config()
+    class Base(BaseModel):
+        id: int = 0
+        name: str
+
+    # Child class inherits and adds new fields
+    class Child(Base):
+        age: int = 0
+        email: str = ''
+
+    schema = Child.model_json_schema()
+
+    # Using model.model_fields (current implementation) correctly includes all fields
+    # If using kls.model_fields, it would miss 'age' and 'email'
+    assert set(schema['required']) == {'name', 'id', 'age', 'email'}
+
+    # Verify properties also include all fields
+    assert set(schema['properties'].keys()) == {'name', 'id', 'age', 'email'}

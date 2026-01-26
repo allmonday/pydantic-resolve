@@ -2,6 +2,11 @@
 
 ## v2.4
 
+### v2.4.5 (2026-1-26)
+
+- fix:
+    - ensure `model_config` correctly handles inheritance by using `model.model_fields` instead of `kls.model_fields` to capture all fields from child classes
+
 ### v2.4.4 (2026-1-19)
 
 - fix:
