@@ -18,6 +18,16 @@ import pydantic_resolve.utils.profile as profile_util
 METADATA_CACHE = {}
 T = TypeVar("T")
 
+
+def _safe_reset_contextvar(contextvar: contextvars.ContextVar, token):
+    """Safely reset a contextvar, ignoring errors if token is from a different context."""
+    try:
+        contextvar.reset(token)
+    except (ValueError, LookupError):
+        # Token was created in a different context or already reset
+        pass
+
+
 class Resolver:
     # define class attribute using constant to avoid hardcoded name
     locals()[const.ER_DIAGRAM] = None
@@ -101,6 +111,15 @@ class Resolver:
             if not isinstance(loader, cls):
                 raise AttributeError(f'{loader.__name__} is not instance of {cls.__name__}')
         return True
+
+    def _get_loader_instance(self, cache_key: str):
+        try:
+            return self.loader_instance_cache[cache_key]
+        except KeyError as exc:
+            raise AttributeError(
+                f'Loader instance not found for "{cache_key}". '
+                'Check Resolver loader_params/global_loader_param or loader_instances.'
+            ) from exc
     
     def _prepare_collectors(self, node: object, kls: Type):
         alias_map = analysis.generate_alias_map_with_cloned_collector(kls, self.metadata)
@@ -119,7 +138,7 @@ class Resolver:
                     updated_pair = {**current_pair, **sign_collector_kv}
                     token = self.collector_contextvars[alias_name].set(updated_pair)
                     token_pairs.append((alias_name, token))
-            return lambda : [self.collector_contextvars[alias_name].reset(token) for alias_name, token in token_pairs]
+            return lambda : [_safe_reset_contextvar(self.collector_contextvars[alias_name], token) for alias_name, token in token_pairs]
             
         return lambda : None
 
@@ -127,7 +146,7 @@ class Resolver:
         if not self.parent_contextvars.get('parent'):
             self.parent_contextvars['parent'] = contextvars.ContextVar('parent')
         token = self.parent_contextvars['parent'].set(node)
-        return lambda : self.parent_contextvars['parent'].reset(token)
+        return lambda : _safe_reset_contextvar(self.parent_contextvars['parent'], token)
 
     def _prepare_expose_fields(self, node: object):
         expose_dict: Optional[dict] = getattr(node, const.EXPOSE_TO_DESCENDANT, None)
@@ -144,7 +163,7 @@ class Resolver:
 
                 token = self.ancestor_vars[alias].set(val)
                 token_pairs.append((alias, token))
-            return lambda : [self.ancestor_vars[alias].reset(token) for alias, token in token_pairs]
+            return lambda : [_safe_reset_contextvar(self.ancestor_vars[alias], token) for alias, token in token_pairs]
 
         return lambda : None
 
@@ -169,7 +188,7 @@ class Resolver:
         
         for loader in resolve_param['dataloaders']:
             cache_key = loader['path']
-            loader_instance = self.loader_instance_cache[cache_key]
+            loader_instance = self._get_loader_instance(cache_key)
             params[loader['param']] = loader_instance
 
         return method(**params)
@@ -194,7 +213,7 @@ class Resolver:
         
         for loader in post_param['dataloaders']:
             cache_key = loader['path']
-            loader_instance = self.loader_instance_cache[cache_key]
+            loader_instance = self._get_loader_instance(cache_key)
             params[loader['param']] = loader_instance
 
         alias_map = self.object_level_collect_alias_map_store.get(id(node), {})
@@ -325,6 +344,9 @@ class Resolver:
         reset2 = self._prepare_expose_fields(node)
         reset3 = self._prepare_parent(parent)
 
+        token = None
+        tid = None
+        new_ancestors = None
 
         if self.debug:
             ancestors = self.ancestor_list.get()
@@ -332,52 +354,53 @@ class Resolver:
             token = self.ancestor_list.set(new_ancestors)
             tid = self.performance.get_timer(new_ancestors).start()
 
+        try:
+            resolve_tasks = []
+            post_tasks = []
 
-        resolve_tasks = []
-        post_tasks = []
+            # resolve process
+            resolve_fields, object_fields = analysis.get_resolve_fields_and_object_fields_from_object(node, kls, self.metadata)
+            for field, resolve_trim_field, method in resolve_fields:
+                resolve_tasks.append(self._execute_resolve_method_field(
+                    node=node, 
+                    kls=kls, 
+                    field=field, 
+                    trim_field=resolve_trim_field, 
+                    method=method))
 
-        # resolve process
-        resolve_fields, object_fields = analysis.get_resolve_fields_and_object_fields_from_object(node, kls, self.metadata)
-        for field, resolve_trim_field, method in resolve_fields:
-            resolve_tasks.append(self._execute_resolve_method_field(
-                node=node, 
-                kls=kls, 
-                field=field, 
-                trim_field=resolve_trim_field, 
-                method=method))
+            for field, attr_object in object_fields:
+                resolve_tasks.append(self._traverse(attr_object, node))
 
-        for field, attr_object in object_fields:
-            resolve_tasks.append(self._traverse(attr_object, node))
+            await asyncio.gather(*resolve_tasks)
 
-        await asyncio.gather(*resolve_tasks)
+            # post process
+            for post_field, post_trim_field, method in analysis.get_post_methods(node, kls, self.metadata):
+                post_tasks.append(self._execute_post_method_field(
+                    node=node, 
+                    kls=kls, 
+                    kls_path=kls_path, 
+                    field=post_field, 
+                    trim_field=post_trim_field,
+                    method=method))
 
-        # post process
-        for post_field, post_trim_field, method in analysis.get_post_methods(node, kls, self.metadata):
-            post_tasks.append(self._execute_post_method_field(
-                node=node, 
-                kls=kls, 
-                kls_path=kls_path, 
-                field=post_field, 
-                trim_field=post_trim_field,
-                method=method))
+            await asyncio.gather(*post_tasks)
 
-        await asyncio.gather(*post_tasks)
+            default_post_method = getattr(node, const.POST_DEFAULT_HANDLER, None)
+            if default_post_method:
+                val = self._execute_post_default_handler(node, kls, kls_path, default_post_method)
+                while iscoroutine(val) or asyncio.isfuture(val):
+                    val = await val
 
-        default_post_method = getattr(node, const.POST_DEFAULT_HANDLER, None)
-        if default_post_method:
-            self._execute_post_default_handler(node, kls, kls_path, default_post_method)
-
-        self._add_values_into_collectors(node, kls)
-
-        if self.debug:
-            self.performance.get_timer(new_ancestors).end(tid) # type: ignore
-        
-        # reset all contextvars
-        reset1()
-        reset2()
-        reset3()
-        if self.debug: 
-            self.ancestor_list.reset(token)
+            self._add_values_into_collectors(node, kls)
+        finally:
+            if self.debug and tid is not None and new_ancestors is not None:
+                self.performance.get_timer(new_ancestors).end(tid)  # type: ignore
+            # reset all contextvars
+            reset1()
+            reset2()
+            reset3()
+            if self.debug and token is not None:
+                _safe_reset_contextvar(self.ancestor_list, token)
 
         return node
 
