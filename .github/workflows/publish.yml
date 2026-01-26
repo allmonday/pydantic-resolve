@@ -35,6 +35,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           body: See [CHANGELOG](https://github.com/allmonday/pydantic-resolve/blob/master/docs/changelog.md) for details.
+          generate_release_notes: true
           files: |
             dist/*.tar.gz
             dist/*.whl
