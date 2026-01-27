@@ -735,6 +735,10 @@ Each scenario is independent and reusable, can be combined as needed.
 **pydantic-resolve** works best with [fastapi-voyager](https://github.com/allmonday/fastapi-voyager) - a powerful visualization tool that makes complex data relationships easy to understand.
 
 ### Why fastapi-voyager?
+<img width="1564" height="770" alt="image" src="https://github.com/user-attachments/assets/12d9e664-8ae0-4f8f-a99a-c533245e75cb" />
+
+<img width="1463" height="521" alt="image" src="https://github.com/user-attachments/assets/739c7ae7-3fbf-4a92-afca-39ab61fe87f5" />
+
 
 pydantic-resolve's declarative approach hides execution details, which can make it hard to understand **what's happening under the hood**. fastapi-voyager solves this by:
 
