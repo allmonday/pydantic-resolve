@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Iterator, Tuple, Type, Any, Callable, Optional
 from pydantic import BaseModel, model_validator, Field
 import warnings
+import importlib
 
 import pydantic_resolve.constant as const
 from pydantic_resolve.utils import class_util, types
@@ -149,8 +150,30 @@ def base_entity() -> Type[BaseEntity]:
     inline_configs: list[tuple[Type, Any]] = []
 
     def _resolve_ref(ref: Any, module_name: str) -> Any:
-        """Resolve forward refs expressed as strings or list['Cls'] generics within the declaring module."""
+        """Resolve forward refs expressed as strings or list['Cls'] generics.
+
+        Supports:
+        - Simple class names: 'User' (looked up in module_name)
+        - Module path syntax: 'path.to.module:ClassName' (lazy import from any module)
+        - List generics: list['Foo'] or list['path.to.module:Foo']
+        """
         if isinstance(ref, str):
+            # Check for module path syntax (e.g., 'path.to.module:ClassName')
+            if ':' in ref:
+                module_path, class_name = ref.rsplit(':', 1)
+                try:
+                    mod = importlib.import_module(module_path)
+                    if hasattr(mod, class_name):
+                        return getattr(mod, class_name)
+                    raise AttributeError(
+                        f"Class '{class_name}' not found in module '{module_path}'"
+                    )
+                except ImportError as e:
+                    raise ImportError(
+                        f"Failed to import module '{module_path}' for reference '{ref}': {e}"
+                    )
+
+            # Fall back to original behavior - look up in the declaring module
             mod = sys.modules.get(module_name)
             if mod and hasattr(mod, ref):
                 return getattr(mod, ref)
