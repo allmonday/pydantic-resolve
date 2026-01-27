@@ -11,3 +11,4 @@ docs/_build
 cov
 .DS_Store
 .benchmarks
+CLAUDE.md

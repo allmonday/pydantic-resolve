@@ -1,6 +1,6 @@
 [project]
 name = "pydantic-resolve"
-version = "2.4.5"
+version = "2.4.6"
 description = "pydantic-resolve turns pydantic from a static data container into a powerful composable component."
 readme = "README.md"
 requires-python = ">=3.10"
