@@ -1,4 +1,3 @@
-import pytest
 
 """
 Test circular import solutions using module path syntax.
