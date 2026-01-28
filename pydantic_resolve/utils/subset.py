@@ -78,8 +78,8 @@ def _extract_extra_fields_from_namespace(namespace: dict[str, Any], disallow: se
     Raises:
         ValueError: If an extra field duplicates a subset field name.
     """
-    annotations: Dict[str, Any] = namespace.get('__annotations__', {}) or {}
-    extras: Dict[str, Tuple[Any, Any]] = {}
+    annotations: dict[str, Any] = namespace.get('__annotations__', {}) or {}
+    extras: dict[str, tuple[Any, Any]] = {}
 
     for fname, anno in annotations.items():
         if fname in (const.ENSURE_SUBSET_DEFINITION, const.ENSURE_SUBSET_DEFINITION_SHORT):
@@ -197,9 +197,9 @@ class SubsetMeta(type):
         extra_fields = _extract_extra_fields_from_namespace(namespace, set(subset_fields))
 
         # Parent validators and config should still apply to subset fields
-        create_model_kwargs: Dict[str, Any] = {}
-        attributes_to_attach: Dict[str, Any] = {}
-        methods_to_attach: Dict[str, Any] = {}
+        create_model_kwargs: dict[str, Any] = {}
+        attributes_to_attach: dict[str, Any] = {}
+        methods_to_attach: dict[str, Any] = {}
 
         validators = _get_kls_validators(parent_kls, subset_fields)
         config = _get_kls_config(parent_kls)

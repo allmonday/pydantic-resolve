@@ -147,7 +147,7 @@ def base_entity() -> type[BaseEntity]:
     from types import GenericAlias
 
     entities: list[Entity] = []
-    inline_configs: list[tuple[Type, Any]] = []
+    inline_configs: list[tuple[type, Any]] = []
 
     def _resolve_ref(ref: Any, module_name: str) -> Any:
         """Resolve forward refs expressed as strings or list['Cls'] generics.

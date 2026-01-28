@@ -12,7 +12,7 @@ class UserEntity(BaseModel, BaseEntity):
     __relationships__ = [
         # Direct class reference causes circular import
         Relationship(field='id', 
-                     target_kls=list['tests.er_diagram.circular.entities.post:PostEntity'],
+                     target_kls=list['tests.er_diagram.circular.entities.post:PostEntity'], # noqa: F722
                      loader=None),
     ]
 

@@ -1,4 +1,4 @@
-
+from typing import get_origin
 """
 Test circular import solutions using module path syntax.
 
@@ -65,7 +65,7 @@ def test_module_path_syntax_with_list():
 
     # Verify it's a list type with correct target
     assert rel.target_kls == list[PostEntity]
-    assert rel.target_kls.__origin__ == list
+    assert get_origin(rel.target_kls) is list
     assert rel.target_kls.__args__[0] == PostEntity
 
 
