@@ -6,6 +6,9 @@ from typing import Any, Callable
 from pydantic import BaseModel, ValidationError, TypeAdapter
 import pydantic_resolve.constant as const
 from pydantic_resolve.utils.class_util import safe_issubclass
+from pydantic_resolve.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 class TypeAdapterManager:
     adapters = {}
@@ -54,7 +57,7 @@ def try_parse_data_to_target_field_type(
             result = adapter.validate_python(data, from_attributes=_enable_from_attribute)
             return result
         except ValidationError as e:
-            print(f'Warning: type mismatch, pls check the return type for "{field_name}", expected: {field_type}')
+            logger.warning(f'Type mismatch for field "{field_name}", expected: {field_type}')
             raise e
 
     else:
