@@ -1,5 +1,4 @@
 from inspect import isclass
-from typing import List, Type
 
 import pydantic_resolve.utils.class_util as class_util
 import pydantic_resolve.utils.params as params_util
@@ -58,13 +57,13 @@ class LoaderManager:
         else:
             return DataLoader(batch_load_fn=loader_kls)  # type:ignore
 
-    def _get_all_fields(self, kls: Type):
+    def _get_all_fields(self, kls: type):
         if class_util.safe_issubclass(kls, BaseModel):
             return list(class_util.get_pydantic_field_keys(kls))
         else:
             raise AttributeError('invalid type: should be pydantic object')  # noqa
 
-    def _generate_meta(self, types: List[List[Type]]):
+    def _generate_meta(self, types: list[list[type]]):
         _fields = set()
         meta: LoaderQueryMeta = {
             'fields': [],

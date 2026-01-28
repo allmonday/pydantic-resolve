@@ -1,4 +1,4 @@
-from typing import Type, Dict, Any, List, Tuple, Set, Literal
+from typing import Any, Literal
 from pydantic import BaseModel, create_model, model_validator
 import copy
 import pydantic_resolve.constant as const
@@ -6,18 +6,18 @@ from pydantic_resolve.utils.expose import ExposeAs
 from pydantic_resolve.utils.collector import SendTo
 
 
-class SubsetConfig(BaseModel): 
-    kls: Type[BaseModel]  # parent class
+class SubsetConfig(BaseModel):
+    kls: type[BaseModel]  # parent class
 
     # fields and omit_fields are exclusive
-    fields: List[str] | Literal["all"] | None = None
-    omit_fields: List[str] | None = None
+    fields: list[str] | Literal["all"] | None = None
+    omit_fields: list[str] | None = None
 
     # set Field(exclude=True) for these fields
-    excluded_fields: List[str] | None = None
+    excluded_fields: list[str] | None = None
 
-    expose_as: List[Tuple[str, str]] | None = None
-    send_to: List[Tuple[str, Tuple[str, ...] | str]] | None = None
+    expose_as: list[tuple[str, str]] | None = None
+    send_to: list[tuple[str, tuple[str, ...] | str]] | None = None
 
     @model_validator(mode='after')
     def validate_fields(self):
@@ -29,7 +29,7 @@ class SubsetConfig(BaseModel):
         return self
 
 
-def _extract_field_infos(kls: Type[BaseModel], field_names: List[str]) -> Dict[str, Any]:
+def _extract_field_infos(kls: type[BaseModel], field_names: list[str]) -> dict[str, Any]:
     field_definitions = {}
     
     for field_name in field_names:
@@ -42,11 +42,11 @@ def _extract_field_infos(kls: Type[BaseModel], field_names: List[str]) -> Dict[s
     return field_definitions
 
 
-def _get_kls_config(kls: Type[BaseModel]) -> Any:
+def _get_kls_config(kls: type[BaseModel]) -> Any:
     return getattr(kls, 'model_config', None)
 
 
-def _get_kls_validators(kls: Type[BaseModel], field_names: List[str]) -> Dict[str, Any]:
+def _get_kls_validators(kls: type[BaseModel], field_names: list[str]) -> dict[str, Any]:
 
     validators = {}
     decorators = getattr(kls, '__pydantic_decorators__', None)
@@ -60,12 +60,12 @@ def _get_kls_validators(kls: Type[BaseModel], field_names: List[str]) -> Dict[st
     return validators
 
 
-def _apply_validators(model_class: Type[BaseModel], validators: Dict[str, Any]) -> None:
+def _apply_validators(model_class: type[BaseModel], validators: dict[str, Any]) -> None:
     for name, validator in validators.items():
         setattr(model_class, name, validator)
 
 
-def _extract_extra_fields_from_namespace(namespace: Dict[str, Any], disallow: Set[str]) -> Dict[str, Tuple[Any, Any]]:
+def _extract_extra_fields_from_namespace(namespace: dict[str, Any], disallow: set[str]) -> dict[str, tuple[Any, Any]]:
     """Extract extra field definitions declared on the subset class body.
 
     Only annotated attributes are considered as Pydantic fields. The result is a
@@ -106,7 +106,7 @@ def _validate_subset_fields(fields: Any):
             hit.add(f)
 
 
-def create_subset(parent: Type[BaseModel], fields: List[str], name: str = "SubsetModel") -> Type[BaseModel]:
+def create_subset(parent: type[BaseModel], fields: list[str], name: str = "SubsetModel") -> type[BaseModel]:
     """
     Create a subset model from a parent BaseModel using Pydantic's create_model.
     

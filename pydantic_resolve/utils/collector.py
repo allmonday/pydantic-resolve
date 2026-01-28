@@ -1,13 +1,13 @@
 import abc
 from dataclasses import dataclass
-from typing import Any, List, Union, Tuple, Iterator, Type
+from typing import Any, Iterator
 import pydantic_resolve.constant as const
 
 @dataclass
 class SendToInfo:
-    collector_name: str | Tuple[str]
+    collector_name: str | tuple[str]
 
-def SendTo(name: str| Tuple[str]) -> SendToInfo:
+def SendTo(name: str| tuple[str]) -> SendToInfo:
     return SendToInfo(collector_name=name)
 
 
@@ -40,7 +40,7 @@ def pre_generate_collector_config(kls):
 
     setattr(kls, const.COLLECTOR_CONFIGURATION, collect_dict)
 
-def _get_pydantic_field_items_with_send_to(kls) -> Iterator[Tuple[str, SendToInfo, Type]]:
+def _get_pydantic_field_items_with_send_to(kls) -> Iterator[tuple[str, SendToInfo, type]]:
     items = kls.model_fields.items()
 
     for name, v in items:
@@ -69,7 +69,7 @@ class Collector(ICollector):
         self.flat = flat
         self.val = []
 
-    def add(self, val: Union[Any, List[Any]]) -> None:
+    def add(self, val: Any | list[Any]) -> None:
         if self.flat:
             if isinstance(val, list):
                 self.val.extend(val)
@@ -78,5 +78,5 @@ class Collector(ICollector):
         else:
             self.val.append(val)
 
-    def values(self) -> List[Any]:
+    def values(self) -> list[Any]:
         return self.val

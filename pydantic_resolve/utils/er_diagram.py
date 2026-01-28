@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Iterator, Tuple, Type, Any, Callable, Optional
+from typing import Iterator, Any, Callable
 from pydantic import BaseModel, model_validator, Field
 import warnings
 import importlib
@@ -11,10 +11,10 @@ from pydantic_resolve.utils.depend import LoaderDepend
 
 class BaseLinkProps(BaseModel):
     # field_fn will not work if load_many is True, use load_many_fn instead
-    field_fn: Optional[Callable] = None  
+    field_fn: Callable | None = None
 
-    field_none_default: Optional[Any] = None
-    field_none_default_factory: Optional[Callable[[], Any]] = None
+    field_none_default: Any | None = None
+    field_none_default_factory: Callable[[], Any] | None = None
 
     # load_many
     load_many: bool = False
@@ -22,15 +22,15 @@ class BaseLinkProps(BaseModel):
     # in case of fk itself is not list, for example: str
     # and need to separate manually,
     # call load_many_fn to handle it.
-    load_many_fn: Optional[Callable[[Any], Any]] = None  
+    load_many_fn: Callable[[Any], Any] | None = None
 
-    loader: Optional[Callable] = None
+    loader: Callable | None = None
 
 class Link(BaseLinkProps):
     biz: str
 
     # specific a loader which only return one field of target model
-    field_name: Optional[str] = None  
+    field_name: str | None = None  
     
 class MultipleRelationship(BaseModel):
     field: str  # fk name
@@ -67,7 +67,7 @@ class Relationship(BaseLinkProps):
         return self
 
 class Entity(BaseModel):
-    kls: Type[BaseModel]
+    kls: type[BaseModel]
     relationships: list[Relationship | MultipleRelationship]
 
     @model_validator(mode="after")
@@ -108,7 +108,7 @@ class ErDiagram(BaseModel):
             seen.add(kls)
         return self
 
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class BaseEntity:  # just type (TODO: optimize)
@@ -120,15 +120,15 @@ class BaseEntity:  # just type (TODO: optimize)
 @dataclass
 class LoaderInfo:
     field: str
-    biz: Optional[str] = None
-    origin_kls: Optional[Type] = None
+    biz: str | None = None
+    origin_kls: type | None = None
 
 
-def LoadBy(key: str, biz: Optional[str] = None, origin_kls: Optional[Type] = None) -> LoaderInfo:
+def LoadBy(key: str, biz: str | None = None, origin_kls: type | None = None) -> LoaderInfo:
     return LoaderInfo(field=key, biz=biz, origin_kls=origin_kls)
 
 
-def base_entity() -> Type[BaseEntity]:
+def base_entity() -> type[BaseEntity]:
     """
     Creates a base class similar to SQLAlchemy's declarative_base().
     All classes inheriting from the returned Base class will be collected in Base.entities.
@@ -223,17 +223,17 @@ def base_entity() -> Type[BaseEntity]:
 
 
 class ErLoaderPreGenerator:
-    def __init__(self, er_diagram: Optional[ErDiagram]) -> None:
+    def __init__(self, er_diagram: ErDiagram | None) -> None:
         self.er_configs_map = {config.kls: config for config in er_diagram.configs} if er_diagram else None
 
-    def _identify_entity(self, target: Type) -> Entity:
+    def _identify_entity(self, target: type) -> Entity:
         """Locate the matching ErConfig for a target class via compatibility check."""
         for kls, cfg in self.er_configs_map.items():
             if class_util.is_compatible_type(target, kls):
                 return cfg
         raise AttributeError(f'No ErConfig found for {target}')
 
-    def _identify_relationship(self, config: Entity, loader_info: LoaderInfo, target_kls: Type) -> Relationship:
+    def _identify_relationship(self, config: Entity, loader_info: LoaderInfo, target_kls: type) -> Relationship:
         """
             Find the relationship matching (field=loadby, biz, target_kls).
 
@@ -269,7 +269,7 @@ class ErLoaderPreGenerator:
             f'Relationship from "{config.kls}" to "{target_kls}" using "{loader_info.field}", biz: "{loader_info.biz}", not found'
         )
 
-    def prepare(self, kls: Type):
+    def prepare(self, kls: type):
         """Auto-generate resolve_XXX methods for fields annotated with LoadBy metadata.
 
         For each pydantic field carrying LoadBy, create a resolve method that uses the
@@ -349,7 +349,7 @@ class ErLoaderPreGenerator:
                 setattr(kls, method_name, create_resolve_method(loader_info.field, relationship))
 
 
-def _get_pydantic_field_items_with_load_by(kls) -> Iterator[Tuple[str, LoaderInfo, Type]]:
+def _get_pydantic_field_items_with_load_by(kls) -> Iterator[tuple[str, LoaderInfo, type]]:
     """
     find fields which have LoadBy metadata.
 

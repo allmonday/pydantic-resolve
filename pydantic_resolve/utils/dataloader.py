@@ -1,15 +1,15 @@
 from collections import defaultdict
-from typing import Callable, DefaultDict, Iterator, List, Mapping, Optional, Sequence, TypeVar
+from typing import Callable, DefaultDict, Iterator, Mapping, Sequence, TypeVar
 from aiodataloader import DataLoader
 
 T = TypeVar("T")
 V = TypeVar("V")
 
-def build_list(items: Sequence[T], keys: List[V], get_pk: Callable[[T], V]) -> Iterator[List[T]]:
+def build_list(items: Sequence[T], keys: list[V], get_pk: Callable[[T], V]) -> Iterator[list[T]]:
     """
     helper function to build return list data required by aiodataloader
     """
-    dct: DefaultDict[V, List[T]] = defaultdict(list)
+    dct: DefaultDict[V, list[T]] = defaultdict(list)
     for item in items:
         _key = get_pk(item)
         dct[_key].append(item)
@@ -17,7 +17,7 @@ def build_list(items: Sequence[T], keys: List[V], get_pk: Callable[[T], V]) -> I
     return results
 
 
-def build_object(items: Sequence[T], keys: List[V], get_pk: Callable[[T], V]) -> Iterator[Optional[T]]:
+def build_object(items: Sequence[T], keys: list[V], get_pk: Callable[[T], V]) -> Iterator[T | None]:
     """
     helper function to build return object data required by aiodataloader
     """

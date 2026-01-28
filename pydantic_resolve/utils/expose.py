@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Iterator, Tuple, Type
+from typing import Iterator
 import pydantic_resolve.constant as const
 
 @dataclass
@@ -31,7 +31,7 @@ def pre_generate_expose_config(kls):
     expose_dict = {name: meta.alias for name, meta in fields}
     setattr(kls, const.EXPOSE_TO_DESCENDANT, expose_dict)
 
-def _get_pydantic_field_items_with_expose_as(kls) -> Iterator[Tuple[str, ExposeInfo, Type]]:
+def _get_pydantic_field_items_with_expose_as(kls) -> Iterator[tuple[str, ExposeInfo, type]]:
     items = kls.model_fields.items()
 
     for name, v in items:

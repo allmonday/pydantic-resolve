@@ -1,6 +1,6 @@
 import copy
 import inspect
-from typing import List, Type, Dict, Optional, Tuple, TypedDict
+from typing import TypedDict
 from inspect import isfunction
 from collections import defaultdict
 from pydantic import BaseModel
@@ -14,9 +14,9 @@ from pydantic_resolve.utils.expose import pre_generate_expose_config
 
 class DataLoaderType(TypedDict):
     param: str
-    kls: Type
+    kls: type
     path: str
-    request_type: List[Type]
+    request_type: list[type]
 
 class CollectorType(TypedDict):
     field: str 
@@ -29,54 +29,54 @@ class ResolveMethodType(TypedDict):
     context: bool
     parent: bool
     ancestor_context: bool
-    dataloaders: List[DataLoaderType]
+    dataloaders: list[DataLoaderType]
 
 class PostMethodType(TypedDict):
     trim_field: str
     context: bool
     parent: bool
     ancestor_context: bool
-    dataloaders: List[DataLoaderType]
-    collectors: List[CollectorType] 
+    dataloaders: list[DataLoaderType]
+    collectors: list[CollectorType] 
 
 class PostDefaultHandlerType(TypedDict):
     context: bool
     parent: bool
     ancestor_context: bool
-    collectors: List[CollectorType]
+    collectors: list[CollectorType]
 
 class KlsMetaType(TypedDict):
-    resolve: List[str]
-    post: List[str]
-    resolve_params: Dict[str, ResolveMethodType]
-    post_params: Dict[str, PostMethodType]
-    post_default_handler_params: Optional[PostDefaultHandlerType]
-    raw_object_fields: List[str] # store the original field names
-    object_fields: List[str]
+    resolve: list[str]
+    post: list[str]
+    resolve_params: dict[str, ResolveMethodType]
+    post_params: dict[str, PostMethodType]
+    post_default_handler_params: PostDefaultHandlerType | None
+    raw_object_fields: list[str] # store the original field names
+    object_fields: list[str]
     expose_dict: dict
     collect_dict: dict
-    kls: Type
+    kls: type
     has_context: bool
     should_traverse: bool
 
 class LoaderQueryMetaRequestType(TypedDict):
-    name: Type
-    fields: List[str]
+    name: type
+    fields: list[str]
 
 class LoaderQueryMeta(TypedDict):
-    required_types: List
-    fields: List[str]
+    required_types: list
+    fields: list[str]
 
-MetaType = Dict[str, KlsMetaType]
+MetaType = dict[str, KlsMetaType]
 
 class MappedMetaMemberType(KlsMetaType):
     kls_path: str
-    alias_map_proto: Dict[str, Dict[Tuple[str, str, str], object]]
+    alias_map_proto: dict[str, dict[tuple[str, str, str], object]]
 
-MappedMetaType = Dict[Type, MappedMetaMemberType]
+MappedMetaType = dict[type, MappedMetaMemberType]
 
 
-def _scan_resolve_method(method, field: str, request_types: List[Type]) -> ResolveMethodType:
+def _scan_resolve_method(method, field: str, request_types: list[type]) -> ResolveMethodType:
     result: ResolveMethodType = {
         'trim_field': field.replace(const.RESOLVE_PREFIX, ''),
         'context': False,
@@ -112,7 +112,7 @@ def _scan_resolve_method(method, field: str, request_types: List[Type]) -> Resol
     return result
 
 
-def _scan_post_method(method, field: str, request_types: List[Type]) -> PostMethodType:
+def _scan_post_method(method, field: str, request_types: list[type]) -> PostMethodType:
     result: PostMethodType = {
         'trim_field': field.replace(const.POST_PREFIX, ''),
         'context': False,
@@ -198,7 +198,7 @@ class Analytic:
     - collector configurations
     - object fields that need traversal
     """
-    def __init__(self, er_pre_generator: Optional[ErLoaderPreGenerator]=None) -> None:
+    def __init__(self, er_pre_generator: ErLoaderPreGenerator | None=None) -> None:
         self.expose_set = set()
         self.collect_set = set()
         self.metadata: MetaType = {}
@@ -207,7 +207,7 @@ class Analytic:
     def _get_request_type_for_loader(self, object_field_pairs, field_name: str):
         return object_field_pairs.get(field_name)
 
-    def _get_all_fields_and_object_fields(self, kls: Type):
+    def _get_all_fields_and_object_fields(self, kls: type):
         if class_util.safe_issubclass(kls, BaseModel):
             all_fields = set(class_util.get_pydantic_field_keys(kls))
             object_fields = list(class_util.get_pydantic_fields(kls))  # dive and recursively analysis
@@ -215,12 +215,12 @@ class Analytic:
             raise TypeError('invalid type: should be pydantic object')  # noqa
         return all_fields, object_fields, {k: v for k, v in object_fields}
 
-    def _has_post_default_handler(self, kls: Type) -> bool:
+    def _has_post_default_handler(self, kls: type) -> bool:
         fields = dir(kls)
         fields = [f for f in fields if f == const.POST_DEFAULT_HANDLER and isfunction(getattr(kls, f))]
         return len(fields) > 0
 
-    def _get_resolve_and_post_fields(self, kls: Type):
+    def _get_resolve_and_post_fields(self, kls: type):
         fields = dir(kls)
 
         resolve_fields = [f for f in fields if f.startswith(const.RESOLVE_PREFIX) and isfunction(getattr(kls, f))]
@@ -243,7 +243,7 @@ class Analytic:
             if post_field not in all_fields:
                 raise ResolverTargetAttrNotFound(f"attribute {post_field} not found")
 
-    def _validate_expose(self, expose_dict, kls_name: str):
+    def _validate_expose(self, expose_dict: dict, kls_name: str):
         if not isinstance(expose_dict, dict):
             raise TypeError(f'{const.EXPOSE_TO_DESCENDANT} is not dict')
         for _, v in expose_dict.items():
@@ -269,7 +269,7 @@ class Analytic:
             for collector in post_default_params['collectors']:
                 self.collect_set.add(collector['alias'])
 
-    def _validate_collector(self, collect_dict, kls_name: str):
+    def _validate_collector(self, collect_dict: dict, kls_name: str):
         """
         validate if the collector is declared in ancestor nodes.
 
@@ -302,7 +302,7 @@ class Analytic:
         )
         return result
 
-    def _populate_ancestors(self, parents):
+    def _populate_ancestors(self, parents: list) -> None:
         """
         mark should traverse to plan a minimal traversal path
         """
@@ -313,7 +313,7 @@ class Analytic:
                 self.metadata[kls_name]['object_fields'].append(field)
             self.metadata[kls_name]['should_traverse'] = True
 
-    def _walker(self, kls: Type, ancestors: List[Tuple[str, str]]):
+    def _walker(self, kls: type, ancestors: list[tuple[str, str]]) -> None:
         kls_name = class_util.get_kls_full_name(kls)
         hit = self.metadata.get(kls_name)
         if hit:
@@ -406,7 +406,7 @@ class Analytic:
 
         info['should_traverse'] = should_traverse
 
-    def scan(self, root_class: Type) -> MetaType:
+    def scan(self, root_class: type) -> MetaType:
         """Public method to perform metadata scan and return the metadata map."""
         # reset state for each scan
         self.expose_set = set()
@@ -424,7 +424,7 @@ class Analytic:
         return self.metadata
 
 
-def convert_metadata_key_as_kls(metadata: MetaType) -> MappedMetaType:
+def convert_metadata_key_as_kls(metadata: MetaType) -> MappedMetaType:  # type: ignore[valid-type]
     """ use kls as map key for performance """
     kls_metadata = {}
     for k, v in metadata.items():
@@ -440,13 +440,13 @@ def convert_metadata_key_as_kls(metadata: MetaType) -> MappedMetaType:
     return kls_metadata
 
 
-def _calc_alias_map_from_collectors(kls_meta: MappedMetaMemberType):
+def _calc_alias_map_from_collectors(kls_meta: MappedMetaMemberType) -> dict:
     post_params = kls_meta['post_params']
     kls_path = kls_meta['kls_path']
 
     alias_map = defaultdict(dict)
 
-    def add_collector(collector: CollectorType):
+    def add_collector(collector: CollectorType) -> None:
         """
         class A(BaseModel):
             def post_name(collector=Collector('name')):
@@ -475,7 +475,7 @@ def _calc_alias_map_from_collectors(kls_meta: MappedMetaMemberType):
     return alias_map
 
 
-def is_acceptable_kls(kls: Type) -> bool:
+def is_acceptable_kls(kls: type) -> bool:
     return class_util.safe_issubclass(kls, BaseModel)
 
 
@@ -483,7 +483,7 @@ def is_acceptable_instance(target: object):
     return isinstance(target, BaseModel)
 
 
-def get_resolve_fields_and_object_fields_from_object(node: object, kls: Type, mapped_metadata: MappedMetaType):
+def get_resolve_fields_and_object_fields_from_object(node: object, kls: type, mapped_metadata: MappedMetaType):
     """
     resolve_fields: a field with resolve_field method
     object_fields: a field without resolve_field method but is an object (should traversal)
@@ -506,7 +506,7 @@ def get_resolve_fields_and_object_fields_from_object(node: object, kls: Type, ma
     return resolve_fields, object_fields
 
 
-def get_post_methods(node: object, kls: Type, mapped_metadata: MappedMetaType):
+def get_post_methods(node: object, kls: type, mapped_metadata: MappedMetaType):
     kls_meta = mapped_metadata.get(kls)
 
     if kls_meta is None:
@@ -518,33 +518,33 @@ def get_post_methods(node: object, kls: Type, mapped_metadata: MappedMetaType):
         yield post_field, trim_field, attr
 
 
-def get_resolve_method_param(kls: Type, resolve_field: str, mapped_metadata: MappedMetaType):
+def get_resolve_method_param(kls: type, resolve_field: str, mapped_metadata: MappedMetaType):
     kls_meta = mapped_metadata.get(kls, {})
     return kls_meta['resolve_params'][resolve_field]
 
 
-def get_post_method_params(kls, post_field, mapped_metadata: MappedMetaType):
+def get_post_method_params(kls: type, post_field: str, mapped_metadata: MappedMetaType):
     kls_meta = mapped_metadata.get(kls, {})
     return kls_meta['post_params'][post_field]
 
 
-def get_post_default_handler_params(kls, mapped_metadata: MappedMetaType):
+def get_post_default_handler_params(kls: type, mapped_metadata: MappedMetaType):
     kls_meta = mapped_metadata.get(kls, {})
     return kls_meta['post_default_handler_params']
 
 
-def get_collector_sign(kls_path: str, collector: CollectorType):
+def get_collector_sign(kls_path: str, collector: CollectorType) -> tuple:
     return (kls_path, collector['field'], collector['param'])
 
 
-def generate_alias_map_with_cloned_collector(kls: Type, mapped_metadata: MappedMetaType):
+def generate_alias_map_with_cloned_collector(kls: type, mapped_metadata: MappedMetaType):
     kls_meta = mapped_metadata.get(kls, {})
     return { alias: {
         sign: copy.deepcopy(collector) for sign, collector in v.items()
     } for alias, v in kls_meta['alias_map_proto'].items()}
 
 
-def get_collector_candidates(kls, metadata: MappedMetaType):
+def get_collector_candidates(kls: type, metadata: MappedMetaType):
     kls_meta = metadata.get(kls, {})
     collect_dict = kls_meta['collect_dict']
 

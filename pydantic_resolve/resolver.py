@@ -3,7 +3,7 @@ import asyncio
 import warnings
 import contextvars
 from inspect import iscoroutine
-from typing import TypeVar, Dict, Type, Callable, Any, Optional
+from typing import TypeVar, Callable, Any
 from aiodataloader import DataLoader
 from types import MappingProxyType
 
@@ -35,16 +35,16 @@ class Resolver:
 
     def __init__(
             self,
-            loader_filters: Optional[Dict[Any, Dict[str, Any]]] = None,  # deprecated
-            loader_params: Optional[Dict[Any, Dict[str, Any]]] = None,
-            global_loader_filter: Optional[Dict[str, Any]] = None,  # deprecated
-            global_loader_param: Optional[Dict[str, Any]] = None,
-            loader_instances: Optional[Dict[Any, Any]] = None,
+            loader_filters: dict[Any, dict[str, Any]] | None = None,  # deprecated
+            loader_params: dict[Any, dict[str, Any]] | None = None,
+            global_loader_filter: dict[str, Any] | None = None,  # deprecated
+            global_loader_param: dict[str, Any] | None = None,
+            loader_instances: dict[Any, Any] | None = None,
             ensure_type=False,
-            context: Optional[Dict[str, Any]] = None,
+            context: dict[str, Any] | None = None,
             debug=False,
             enable_from_attribute_in_type_adapter=False,
-            annotation: Optional[Type[T]]=None
+            annotation: type[T] | None=None
             ):
         
         self.debug = debug or os.getenv("PYDANTIC_RESOLVE_DEBUG", "false").lower() == "true"
@@ -99,12 +99,12 @@ class Resolver:
         self.ensure_type = ensure_type
         self.context = MappingProxyType(context) if context else None
         self.metadata = {}
-        self.object_level_collect_alias_map_store: Dict[int, Dict] = {}
+        self.object_level_collect_alias_map_store: dict[int, dict] = {}
 
         # if user provide annotation, it will skip the deduction from input value
         self.annotation = annotation
 
-    def _validate_loader_instance(self, loader_instances: Dict[Any, Any]):
+    def _validate_loader_instance(self, loader_instances: dict[Any, Any]):
         for cls, loader in loader_instances.items():
             if not issubclass(cls, DataLoader):
                 raise AttributeError(f'{cls.__name__} must be subclass of DataLoader')
@@ -121,7 +121,7 @@ class Resolver:
                 'Check Resolver loader_params/global_loader_param or loader_instances.'
             ) from exc
     
-    def _prepare_collectors(self, node: object, kls: Type):
+    def _prepare_collectors(self, node: object, kls: type):
         alias_map = analysis.generate_alias_map_with_cloned_collector(kls, self.metadata)
         if alias_map:
             # store for later post methods
@@ -149,7 +149,7 @@ class Resolver:
         return lambda : _safe_reset_contextvar(self.parent_contextvars['parent'], token)
 
     def _prepare_expose_fields(self, node: object):
-        expose_dict: Optional[dict] = getattr(node, const.EXPOSE_TO_DESCENDANT, None)
+        expose_dict: dict | None = getattr(node, const.EXPOSE_TO_DESCENDANT, None)
         if expose_dict:
             token_pairs = []
             for field, alias in expose_dict.items():  # eg: {'name': 'bar_name'}
@@ -172,7 +172,7 @@ class Resolver:
 
     def _execute_resolve_method(
             self,
-            kls: Type,
+            kls: type,
             field: str,
             method: Callable):
 
@@ -196,7 +196,7 @@ class Resolver:
     def _execute_post_method(
             self,
             node: object,
-            kls: Type,
+            kls: type,
             kls_path: str,
             field: str,
             method: Callable):
@@ -228,7 +228,7 @@ class Resolver:
     def _execute_post_default_handler(
             self,
             node: object,
-            kls: Type,
+            kls: type,
             kls_path: str,
             method: Callable):
 
@@ -254,7 +254,7 @@ class Resolver:
 
         return method(**params)
 
-    def _add_values_into_collectors(self, node: object, kls: Type):
+    def _add_values_into_collectors(self, node: object, kls: type):
         for field, alias in analysis.get_collector_candidates(kls, self.metadata):
             alias_list = alias if isinstance(alias, (tuple, list)) else (alias,)
 
@@ -267,9 +267,9 @@ class Resolver:
                     instance.add(val)
 
     async def _execute_resolve_method_field(
-            self, 
-            node: object, 
-            kls: Type,
+            self,
+            node: object,
+            kls: type,
             field: str,
             trim_field: str,
             method: Callable):
@@ -293,9 +293,9 @@ class Resolver:
         setattr(node, trim_field, val)
 
     async def _execute_post_method_field(
-         self,   
+         self,
          node: object,
-         kls: Type,
+         kls: type,
          kls_path: str,
          field: str,
          trim_field: str,

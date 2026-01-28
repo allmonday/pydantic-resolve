@@ -2,7 +2,7 @@ import asyncio
 import functools
 import types
 from inspect import iscoroutine
-from typing import Any, Callable, Optional, Type, Union
+from typing import Any, Callable
 from pydantic import BaseModel, ValidationError, TypeAdapter
 import pydantic_resolve.constant as const
 from pydantic_resolve.utils.class_util import safe_issubclass
@@ -61,7 +61,7 @@ def try_parse_data_to_target_field_type(
         return data  #noqa
 
 
-def _get_mapping_rule(target, source) -> Optional[Callable]:
+def _get_mapping_rule(target, source) -> Callable | None:
     # do nothing
     if isinstance(source, target):
         return None
@@ -89,7 +89,7 @@ def _get_mapping_rule(target, source) -> Optional[Callable]:
     raise NotImplementedError(f"{type(source)} -> {target.__name__}: failed to get auto mapping rule and execute mapping, use your own rule instead.")
 
 
-def _apply_rule(rule: Optional[Callable], target, source: Any, is_list: bool):
+def _apply_rule(rule: Callable | None, target, source: Any, is_list: bool):
     if not rule:  # no change
         return source
 
@@ -99,7 +99,7 @@ def _apply_rule(rule: Optional[Callable], target, source: Any, is_list: bool):
         return rule(target, source)
 
 
-def mapper(func_or_class: Union[Callable, Type]):
+def mapper(func_or_class: Callable | type):
     """
     execute post-transform function after the value is reolved
     func_or_class:

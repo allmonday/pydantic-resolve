@@ -1,6 +1,6 @@
 import functools
 import types
-from typing import Type, List, Tuple, get_origin, get_args, Union
+from typing import get_origin, get_args, Union
 import pydantic_resolve.constant as const
 import pydantic_resolve.utils.class_util as class_util
 from pydantic_resolve.analysis import is_acceptable_kls
@@ -105,7 +105,7 @@ def get_kls_full_name(kls):
     return f'{kls.__module__}.{kls.__qualname__}'
 
 
-def get_fields_default_value_not_provided(cls: Type) -> List[Tuple[str, bool]]:  # field name, has default value
+def get_fields_default_value_not_provided(cls: type) -> list[tuple[str, bool]]:  # field name, has default value
     """
     return class field which do not have a default value.
 
