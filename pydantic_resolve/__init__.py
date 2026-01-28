@@ -1,3 +1,7 @@
+# Setup logging first (before any imports that might log)
+from .utils.logger import setup_library_logger
+setup_library_logger()
+
 from .utils.collector import Collector, ICollector, SendTo
 from .utils.class_util import ensure_subset
 from .utils.dataloader import build_list, build_object, copy_dataloader_kls

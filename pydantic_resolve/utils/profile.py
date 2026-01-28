@@ -1,10 +1,10 @@
+import logging
 import time
 import math
 from typing import List
 from uuid import uuid1
-from pydantic_resolve.utils.logger import get_logger
 
-profile_logger = get_logger(__name__)
+profile_logger = logging.getLogger(__name__)
 
 class Profile():
     def __init__(self):
