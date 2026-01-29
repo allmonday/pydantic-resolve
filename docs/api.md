@@ -184,26 +184,478 @@ Specify the root type when resolving. When the input data is a list of `Union` t
 
 ## ErDiagram
 
-ErDiagram is a new feature in v2. You can declare application-level ERDs to model your business domain more precisely.
+ErDiagram allows you to declare application-level entity relationships at the domain model level, then automatically generate resolve methods based on these relationships.
 
-Related classes:
+### Core Classes
 
-- `Relationship`: when two Entities have only one relationship; defines the field, target type, and default dataloader
-- `MultipleRelationship`: when two Entities can have multiple relationships; you need to define an extra `Link` to describe the semantics and dataloader
-- `Entity`: entity metadata; not required if you use `BaseEntity`
-- `Link`: defines business semantics and the dataloader
+#### Relationship
 
-Related methods:
+Defines a single relationship between two entities.
 
-- `base_entity`: a metaclass factory. After inheriting from it, you can declare `relationships` inside the class. It collects all relationship info, accessible via `BaseEntity.get_diagram()`.
-- `config_resolver`: if you have multiple ERDs, generate a new `Resolver` class
-- `config_global_resolver`: inject the ERD into the default `Resolver` class
+```python
+from pydantic_resolve import Relationship
 
-Usage:
+class User(BaseModel):
+    id: int
+    name: str
 
-- `LoadBy`: add `LoadBy` via `Annotated` to automatically find the required relationship and dataloader
+class Comment(BaseModel):
+    id: int
+    user_id: int
 
-For now, check `tests/er_diagram/test_er_diagram.py` for usage examples.
+    # Define relationship: load User via user_id
+    __relationships__ = [
+        Relationship(field='user_id', target_kls=User, loader=user_loader)
+    ]
+```
+
+**Parameters:**
+
+- `field` (str): The foreign key field name
+- `target_kls` (type): The target Pydantic model class
+- `loader` (Callable): DataLoader function to fetch the target entity
+- `field_fn` (Callable | None): Optional function to transform the FK value before passing to loader
+- `field_none_default` (Any | None): Default value to return if FK is None
+- `field_none_default_factory` (Callable | None): Factory function to create default value if FK is None
+- `load_many` (bool): Whether to use `load_many` instead of `load` (for to-many relationships)
+- `load_many_fn` (Callable | None): Optional function to manually split FK values for load_many
+
+#### MultipleRelationship
+
+Defines multiple relationships between two entities under the same field.
+
+```python
+from pydantic_resolve import MultipleRelationship, Link
+
+class Comment(BaseModel):
+    id: int
+    user_id: int
+    moderator_id: int
+
+    # Define two relationships via user_id: author and moderator
+    __relationships__ = [
+        MultipleRelationship(
+            field='user_id',
+            target_kls=User,
+            links=[
+                Link(biz='author', loader=user_loader),
+                Link(biz='moderator', loader=moderator_loader)
+            ]
+        )
+    ]
+```
+
+**Parameters:**
+
+- `field` (str): The foreign key field name
+- `target_kls` (type): The target Pydantic model class
+- `links` (list[Link]): List of Link objects defining different relationships
+
+#### Link
+
+Defines a single link in a MultipleRelationship.
+
+**Parameters:**
+
+- `biz` (str): Business identifier to distinguish multiple relationships
+- `loader` (Callable): DataLoader function
+- `field_fn` (Callable | None): Optional function to transform FK value
+- `field_none_default` (Any | None): Default value if FK is None
+- `field_none_default_factory` (Callable | None): Factory for default value
+- `load_many` (bool): Whether to use load_many
+- `load_many_fn` (Callable | None): Manual split function for load_many
+- `field_name` (str | None): Specifies that the loader returns a field value from the target class, not the full object. Must be used with `LoadBy(origin_kls=...)` to indicate the original object type.
+
+Example: If `field_name="name"`, the loader returns `list[str]` (name field values) instead of `list[Foo]` (full objects). This is useful when you only need specific field values and want to avoid loading full objects.
+
+#### Entity
+
+Defines entity metadata including its relationships.
+
+```python
+from pydantic_resolve import Entity
+
+Entity(
+    kls=Comment,
+    relationships=[
+        Relationship(field='user_id', target_kls=User, loader=user_loader)
+    ]
+)
+```
+
+**Parameters:**
+
+- `kls` (type[BaseModel]): The Pydantic model class
+- `relationships` (list[Relationship | MultipleRelationship]): List of relationships
+
+#### ErDiagram
+
+Container for all entity relationship definitions.
+
+```python
+from pydantic_resolve import ErDiagram
+
+ErDiagram(
+    configs=[
+        Entity(kls=Comment, relationships=[...]),
+        Entity(kls=User, relationships=[...])
+    ],
+    description="My application ERD"
+)
+```
+
+**Parameters:**
+
+- `configs` (list[Entity]): List of entity definitions
+- `description` (str | None): Optional description of the diagram
+
+#### Usage
+
+To use an `ErDiagram` with the Resolver, you need to register it using either `config_resolver()` or `config_global_resolver()`:
+
+- `config_resolver(diagram)`: Creates a new custom Resolver class with the ERD
+- `config_global_resolver(diagram)`: Injects the ERD into the default Resolver class globally
+
+See the [Helper Functions](#helper-functions) section below for detailed usage examples.
+
+### Helper Functions
+
+#### base_entity()
+
+Creates a base class that automatically collects all entity relationships from its subclasses.
+
+**Note:** `BaseEntity` provides an alternative ERD declaration approach compared to explicitly creating `ErDiagram` objects. This method is more tightly integrated with your entity classes, making it easier to manage relationships directly within the class definitions.
+
+```python
+from pydantic_resolve import base_entity, Relationship
+
+BaseEntity = base_entity()
+
+class User(BaseModel, BaseEntity):
+    id: int
+    name: str
+
+    __relationships__ = [
+        Relationship(field='org_id', target_kls=Organization, loader=org_loader)
+    ]
+
+class Comment(BaseModel, BaseEntity):
+    id: int
+    user_id: int
+
+    __relationships__ = [
+        Relationship(field='user_id', target_kls=User, loader=user_loader)
+    ]
+
+# Get the ER diagram
+diagram = BaseEntity.get_diagram()
+```
+
+**Handling Circular Imports**
+
+Because entities reference each other through `target_kls`, you may encounter circular import issues. There are two solutions:
+
+1. **Use string references** (for same-module references):
+   ```python
+   class Comment(BaseModel, BaseEntity):
+       id: int
+       user_id: int
+
+       __relationships__ = [
+           # String 'User' will be resolved automatically
+           Relationship(field='user_id', target_kls='User', loader=user_loader)
+       ]
+   ```
+
+2. **Use module path syntax** (for cross-module references):
+   ```python
+   # In app/models/comment.py
+
+   class Comment(BaseModel, BaseEntity):
+       id: int
+       user_id: int
+
+       __relationships__ = [
+           # Reference User from another module
+           Relationship(
+               field='user_id',
+               target_kls='app.models.user:User',  # module.path:ClassName
+               loader=user_loader
+           )
+       ]
+   ```
+
+The `_resolve_ref` function supports:
+
+- Simple class names: `'User'` (looked up in the current module)
+- Module path syntax: `'app.models.user:User'` (lazy import from any module)
+- List generics: `list['User']` or `list['app.models.user:User']`
+
+#### LoadBy
+
+1. Annotation to automatically resolve fields based on ERD relationships.
+
+```python
+from pydantic_resolve import LoadBy, base_entity, config_global_resolver
+
+# 1. Define entities with BaseEntity
+BaseEntity = base_entity()
+
+class User(BaseModel, BaseEntity):
+    id: int
+    name: str
+    __relationships__ = [
+        Relationship(field='org_id', target_kls=Organization, loader=org_loader)
+    ]
+```
+
+2. Register ERD globally
+
+```python
+config_global_resolver(BaseEntity.get_diagram())
+```
+
+3. Use LoadBy in response models
+
+```python
+class UserResponse(BaseModel):
+    id: int
+    name: str
+
+    # Automatically resolves via ERD relationship
+    organization: Annotated[Optional[Organization], LoadBy('org_id')] = None
+```
+
+**Parameters:**
+
+- `key` (str): The foreign key field name
+- `biz` (str | None): Business identifier for MultipleRelationship
+- `origin_kls` (type | None): Must be provided when the Link's `field_name` is set. Indicates the original object type before field extraction.
+
+**Note:** `LoadBy` works with `config_global_resolver()` to inject the ERD into the default Resolver.
+
+#### Using field_name with origin_kls
+
+When a loader returns field values instead of full objects, use `field_name` in Link and `origin_kls` in LoadBy:
+
+```python
+from typing import Annotated
+
+# DataLoader that returns list[str] (name values) instead of list[Foo] (full objects)
+class FooNameLoader(DataLoader):
+    async def batch_load_fn(self, keys):
+        # Returns: [["foo1", "foo2"], ["foo3"]]
+        return [[vv['name'] for vv in v] for v in load_foo_names(keys)]
+
+class Biz(BaseModel, BaseEntity):
+    __relationships__ = [
+        MultipleRelationship(
+            field='id',
+            target_kls=list[Foo],  # Original type is list[Foo]
+            links=[
+                Link(biz='foo_name', field_name="name", loader=FooNameLoader)  # But loader returns list[str] (name field)
+            ]
+        )
+    ]
+
+class BizResponse(BaseModel):
+    # origin_kls tells the system the relationship is originally list[Foo]
+    # even though the loader actually returns list[str]
+    foo_names: Annotated[List[str], LoadBy('id', biz='foo_name', origin_kls=list[Foo])] = []
+```
+
+This allows the system to:
+- Correctly validate types (`list[str]` is compatible with `list[Foo].name`)
+- Generate proper API documentation
+- Provide type hints for fastapi-voyager
+
+#### config_resolver()
+
+Creates a new Resolver class with specific ERD configuration.
+
+```python
+from pydantic_resolve import config_resolver, ErDiagram, Entity
+
+diagram = ErDiagram(configs=[...])
+CustomResolver = config_resolver(diagram)
+
+result = await CustomResolver().resolve(data)
+```
+
+#### config_global_resolver()
+
+Injects an ERD into the default Resolver class globally.
+
+```python
+from pydantic_resolve import config_global_resolver, base_entity
+
+BaseEntity = base_entity()
+# ... define entities ...
+
+config_global_resolver(BaseEntity.get_diagram())
+
+# Now default Resolver will use the ERD
+result = await Resolver().resolve(data)
+```
+
+### Handling None FK Values
+
+When a foreign key is None, you can specify what to return:
+
+```python
+Relationship(
+    field='user_id',
+    target_kls=User,
+    loader=user_loader,
+    field_none_default=None,  # or
+    field_none_default_factory=lambda: AnonymousUser()
+)
+```
+
+When using `load_many`:
+
+```python
+Relationship(
+    field='tag_ids',
+    target_kls=Tag,
+    loader=tag_loader,
+    load_many=True,
+    load_many_fn=lambda ids: ids.split(',') if ids else []  # Handle comma-separated values
+)
+```
+
+### Multiple Relationships
+
+When one field can mean different things, use `MultipleRelationship`:
+
+```python
+class Comment(BaseModel, BaseEntity):
+    id: int
+    user_id: int  # Can be author OR moderator
+
+    __relationships__ = [
+        MultipleRelationship(
+            field='user_id',
+            target_kls=User,
+            links=[
+                Link(biz='author', loader=user_loader),
+                Link(biz='moderator', loader=moderator_loader)
+            ]
+        )
+    ]
+
+class CommentResponse(BaseModel):
+    id: int
+
+    # Specify which relationship to use via the 'biz' parameter
+    author: Annotated[Optional[User], LoadBy('user_id', biz='author')] = None
+    moderator: Annotated[Optional[User], LoadBy('user_id', biz='moderator')] = None
+```
+
+
+## DefineSubset & SubsetConfig
+
+`DefineSubset` allows you to create a subset of fields from an existing Pydantic model, inheriting types and validators.
+
+### Basic Usage
+
+```python
+from pydantic_resolve import DefineSubset
+
+class FullUser(BaseModel):
+    id: int
+    name: str
+    email: str
+    password_hash: str
+    created_at: datetime
+    updated_at: datetime
+
+class UserSummary(DefineSubset):
+    __subset__ = (FullUser, ('id', 'name', 'email'))
+```
+
+### Using SubsetConfig
+
+For more control, use `SubsetConfig`:
+
+```python
+from pydantic_resolve import DefineSubset, SubsetConfig
+from pydantic_resolve import ExposeAs, SendTo
+
+class UserProfile(DefineSubset):
+    __subset__ = SubsetConfig(
+        kls=FullUser,
+        fields=['id', 'name', 'email'],
+        expose_as=[('name', 'user_name')],  # Expose to descendants
+        send_to=[('id', 'user_id_collector')],  # Send to parent's collector
+        excluded_fields=['email']  # Mark as excluded from serialization
+    )
+```
+
+**SubsetConfig Parameters:**
+
+- `kls` (type[BaseModel]): The parent class to subset from
+- `fields` (list[str] | "all" | None): Fields to include (mutually exclusive with omit_fields)
+- `omit_fields` (list[str] | None): Fields to exclude (mutually exclusive with fields)
+- `expose_fields` (list[str] | None): Fields to expose to descendants via ExposeAs
+- `excluded_fields` (list[str] | None): Fields to mark as excluded (Field(exclude=True))
+
+
+## ExposeAs & SendTo
+
+Starting from v2.3.0, you can use annotations instead of class attributes for expose and collect.
+
+### ExposeAs
+
+Expose field data to descendant nodes.
+
+```python
+from pydantic_resolve import ExposeAs
+
+# Before (class attribute)
+class Blog(BaseModel):
+    __pydantic_resolve_expose__ = {'title': 'blog_title' }
+    title: str
+
+# After (annotation)
+class Blog(BaseModel):
+    title: Annotated[str, ExposeAs('blog_title')]
+```
+
+### SendTo
+
+Send field data to parent node's collector.
+
+```python
+from pydantic_resolve import SendTo
+
+# Before (class attribute)
+class Blog(BaseModel):
+    __pydantic_resolve_collect__ = {'comments': 'blog_comments' }
+    comments: list[Comment]
+
+# After (annotation)
+class Blog(BaseModel):
+    comments: Annotated[list[Comment], SendTo('blog_comments')]
+```
+
+### Combining Both
+
+You can combine multiple annotations:
+
+```python
+from pydantic_resolve import ExposeAs, SendTo, LoadBy
+
+class Comment(BaseModel):
+    owner: Annotated[
+        Optional[User],
+        LoadBy('user_id'),      # Auto-resolve via ERD
+        SendTo('related_users') # Send to parent's collector
+    ] = None
+
+class Blog(BaseModel):
+    name: Annotated[str, ExposeAs('blog_name')]  # Expose to descendants
+```
 
 
 ## Method Parameter Reference
@@ -543,3 +995,4 @@ NewLoader = copy_dataloader_kls('NewLoader', OriginLoader)
 - `LoaderFieldNotProvidedError`: required Loader parameters are not provided in `resolve`
 - `GlobalLoaderFieldOverlappedError`: duplicated params between `global_loader_params` and `loader_params`
 - `MissingCollector`: the collector cannot be found; not defined on ancestor nodes
+- `MissingAnnotationError`: type annotation is missing when using `LoadBy` or other annotations that require type information
