@@ -303,21 +303,22 @@ class ErLoaderPreGenerator:
                 # loader is optional in Relationship, but required for auto-generation
                 raise AttributeError(f'Loader not provided in relationship for field "{loader_info.field}" in class "{kls}"')
 
+            def _handle_fk_none(rel: Relationship):
+                """Common logic for handling None foreign key values."""
+                fields_set = getattr(rel, 'model_fields_set', set())
+                if 'field_none_default' in fields_set:
+                    return rel.field_none_default  # may be None intentionally
+                if rel.field_none_default_factory is not None:
+                    return rel.field_none_default_factory()
+                return None
+
             def create_resolve_method(key: str, rel: Relationship):  # closure per field
                 def resolve_method(self, loader=LoaderDepend(rel.loader)):
                     fk = getattr(self, key)
                     if fk is None:
-                        fields_set = getattr(rel, 'model_fields_set', set())
-                        if 'field_none_default' in fields_set:
-                            return rel.field_none_default  # may be None intentionally
-
-                        if rel.field_none_default_factory is not None:
-                            return rel.field_none_default_factory()
-                        return None
-
+                        return _handle_fk_none(rel)
                     if rel.field_fn is not None:
                         fk = rel.field_fn(fk)
-
                     return loader.load(fk)
                 resolve_method.__name__ = method_name
                 resolve_method.__qualname__ = f'{kls.__name__}.{method_name}'
@@ -327,18 +328,10 @@ class ErLoaderPreGenerator:
                 def resolve_method(self, loader=LoaderDepend(rel.loader)):
                     fk = getattr(self, key)
                     if fk is None:
-                        fields_set = getattr(rel, 'model_fields_set', set())
-                        if 'field_none_default' in fields_set:
-                            return rel.field_none_default  # may be None intentionally
-
-                        if rel.field_none_default_factory is not None:
-                            return rel.field_none_default_factory()
-                        return None
-
+                        return _handle_fk_none(rel)
                     if rel.load_many_fn is not None:
                         fk = rel.load_many_fn(fk)
                     return loader.load_many(fk)
-
                 resolve_method.__name__ = method_name
                 resolve_method.__qualname__ = f'{kls.__name__}.{method_name}'
                 return resolve_method
