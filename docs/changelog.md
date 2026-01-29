@@ -2,13 +2,20 @@
 
 ## v2.4
 
+### v2.4.7 tbd
+
+- refactor:
+    - use modern type annotation
+    - logger
+   
+
 ### v2.4.6 (2026-1-28)
 
 - feat:
     - `_resolve_ref` now supports module path syntax `'module.path:ClassName'` for lazy import, solving circular import issues in ER diagrams
     - Use `target_kls='path.to.module:ClassName'` or `list['path.to.module:ClassName']` to reference classes across modules without direct imports
 - chore:
-  - add pytest-benchmark
+    - add pytest-benchmark
 
 
 ### v2.4.5 (2026-1-26)
