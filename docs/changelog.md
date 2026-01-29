@@ -2,11 +2,13 @@
 
 ## v2.4
 
-### v2.4.7 tbd
+### v2.4.7 (2026-1-29)
 
 - refactor:
     - use modern type annotation
     - logger
+    - analysis.py for better readibility
+    - improve doc, add more details about ErDiagram
    
 
 ### v2.4.6 (2026-1-28)
