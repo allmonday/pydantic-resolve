@@ -315,10 +315,10 @@ class Analytic:
 
     def _walker(self, kls: type, ancestors: list[tuple[str, str]]) -> None:
         kls_name = class_util.get_kls_full_name(kls)
-        hit = self.metadata.get(kls_name)
-        if hit:
+        cached_metadata = self.metadata.get(kls_name)
+        if cached_metadata:
             # if populated by previous node, or self has_config
-            if hit['should_traverse'] or self._has_config(hit):
+            if cached_metadata['should_traverse'] or self._has_config(cached_metadata):
                 self._populate_ancestors(ancestors)
             return
 
