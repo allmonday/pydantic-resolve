@@ -153,7 +153,7 @@ Another key feature of Pydantic Resolve is defining data subsets via `DefineSubs
 from pydantic_resolve import DefineSubset
 
 class MyStory(DefineSubset):
-	__pydantic_resolve_subset__ = (Story, ('id'))
+	__subset__ = (Story, ('id'))
 
 	tasks: Annotated[list[Task], LoadBy('id')] = []
 
@@ -310,7 +310,7 @@ The `DefineSubset` metaclass can quickly create subset types by listing the fiel
 ```python
 class Story1(DefineSubset):
 	# define the base class and fields wanted
-	__pydantic_resolve_subset__ = (BaseStory, ('id', 'name', 'owner_id'))
+	__subset__ = (BaseStory, ('id', 'name', 'owner_id'))
 
 	tasks: Annotated[list[Task1], LoadBy('id')] = []
 	assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
@@ -359,7 +359,7 @@ class Task3(BaseTask):
 		return f'{ancestor_context["story_name"]} - {self.name}'
 
 class Story3(DefineSubset):
-	__pydantic_resolve_subset__ = (BaseStory, ('id', 'name', 'owner_id'))
+	__subset__ = (BaseStory, ('id', 'name', 'owner_id'))
 	__pydantic_resolve_expose__ = {'name': 'story_name'}
 
 	tasks: Annotated[list[Task3], LoadBy('id')] = []
@@ -380,7 +380,7 @@ class Task2(BaseTask):
 	user: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
 
 class Story2(DefineSubset):
-	__pydantic_resolve_subset__ = (BaseStory, ('id', 'name', 'owner_id'))
+	__subset__ = (BaseStory, ('id', 'name', 'owner_id'))
 
 	tasks: Annotated[list[Task2], LoadBy('id')] = []
 	assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
@@ -425,7 +425,7 @@ class Task1(BaseTask):
 	user: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
 
 class Story1(DefineSubset):
-	__pydantic_resolve_subset__ = (BaseStory, ('id', 'name', 'owner_id'))
+	__subset__ = (BaseStory, ('id', 'name', 'owner_id'))
 
 	tasks: Annotated[list[Task1], LoadBy('id')] = []
 	assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None

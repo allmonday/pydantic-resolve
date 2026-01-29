@@ -184,26 +184,472 @@ v2 中可以通过 `typeAdapter.validate_python(data, from_attribute=True)` 进�
 
 ## ErDiagram
 
-ErDiagram 是 v2 中新增的功能， 可以申明应用层的 ERD， 用更精准的方式来建模业务模型
+ErDiagram 允许你在领域模型层申明应用层的实体关系， 然后基于这些关系自动生成 resolve 方法。
 
-相关类：
+### 核心类
 
-- Relationship: Entity 之间只有一种关系的情况， 定义字段， 指向类型和默认的 dataloader
-- MultipleRelationship： Entity 之间存在多种关系的情况， 需要额外定义 Link， 在 Link 中定义业务含义和 dataloader
-- Entity： 实体信息， 使用 BaseEntity 的情况下不必使用
-- Link： 定义业务含义和 dataloder
+#### Relationship
 
-相关方法：
+定义两个实体之间的单一关系。
 
-- base_entity：创建元类的方法， 继承元类之后可以在类内部申明 relationships， 它会收集所有的 relationship 信息， 通过 BaseEntity.get_diagram() 获取
-- config_resolver： 如果存在多套 ERD，可以生成一个新的 Resolver 类
-- config_global_resolver： 直接将 ERD 注入到默认的 Resolver 类中
+```python
+from pydantic_resolve import Relationship
 
-使用：
+class User(BaseModel):
+    id: int
+    name: str
 
-- LoadBy: 通过 Annotated 添加 LoadBy 可以自动寻找到所需的 relationship 和 dataloader
+class Comment(BaseModel):
+    id: int
+    user_id: int
 
-目前可以通过查看 tests/er_diagram/test_er_diagram.py 中的测试来了解使用方法。
+    # 定义关系：通过 user_id 加载 User
+    __relationships__ = [
+        Relationship(field='user_id', target_kls=User, loader=user_loader)
+    ]
+```
+
+**参数：**
+
+- `field` (str): 外键字段名
+- `target_kls` (type): 目标 Pydantic 模型类
+- `loader` (Callable): DataLoader 函数，用于获取目标实体
+- `field_fn` (Callable | None): 可选函数，在传递给 loader 之前转换 FK 值
+- `field_none_default` (Any | None): 当 FK 为 None 时返回的默认值
+- `field_none_default_factory` (Callable | None): 当 FK 为 None 时创建默认值的工厂函数
+- `load_many` (bool): 是否使用 `load_many` 而不是 `load`（用于 to-many 关系）
+- `load_many_fn` (Callable | None): 手动分割 FK 值的函数，用于 load_many
+
+#### MultipleRelationship
+
+定义同一字段上的多个关系。
+
+```python
+from pydantic_resolve import MultipleRelationship, Link
+
+class Comment(BaseModel):
+    id: int
+    user_id: int
+    moderator_id: int
+
+    # 通过 user_id 定义两个关系：author 和 moderator
+    __relationships__ = [
+        MultipleRelationship(
+            field='user_id',
+            target_kls=User,
+            links=[
+                Link(biz='author', loader=user_loader),
+                Link(biz='moderator', loader=moderator_loader)
+            ]
+        )
+    ]
+```
+
+**参数：**
+
+- `field` (str): 外键字段名
+- `target_kls` (type): 目标 Pydantic 模型类
+- `links` (list[Link]): Link 对象列表，定义不同的关系
+
+#### Link
+
+定义 MultipleRelationship 中的单个链接。
+
+**参数：**
+
+- `biz` (str): 业务标识符，用于区分多个关系
+- `loader` (Callable): DataLoader 函数
+- `field_fn` (Callable | None): 可选函数，用于转换 FK 值
+- `field_none_default` (Any | None): FK 为 None 时的默认值
+- `field_none_default_factory` (Callable | None): 默认值的工厂函数
+- `load_many` (bool): 是否使用 load_many
+- `load_many_fn` (Callable | None): 手动分割函数
+- `field_name` (str | None): 指定 loader 返回的是目标类的某个字段值，而不是完整对象。必须与 `LoadBy(origin_kls=...)` 配合使用，表示字段提取前的原始对象类型。
+
+示例：如果 `field_name="name"`，loader 返回 `list[str]`（name 字段值）而不是 `list[Foo]`（完整对象）。这在你只需要特定字段值并希望避免加载完整对象时很有用。
+
+#### Entity
+
+定义实体元数据，包括其关系。
+
+```python
+from pydantic_resolve import Entity
+
+Entity(
+    kls=Comment,
+    relationships=[
+        Relationship(field='user_id', target_kls=User, loader=user_loader)
+    ]
+)
+```
+
+**参数：**
+
+- `kls` (type[BaseModel]): Pydantic 模型类
+- `relationships` (list[Relationship | MultipleRelationship]): 关系列表
+
+#### ErDiagram
+
+所有实体关系定义的容器。
+
+```python
+from pydantic_resolve import ErDiagram
+
+ErDiagram(
+    configs=[
+        Entity(kls=Comment, relationships=[...]),
+        Entity(kls=User, relationships=[...])
+    ],
+    description="我的应用 ERD"
+)
+```
+
+**参数：**
+
+- `configs` (list[Entity]): 实体定义列表
+- `description` (str | None): 可选的图表描述
+
+**使用方法：**
+
+要使用 `ErDiagram` 与 Resolver 配合，你需要使用 `config_resolver()` 或 `config_global_resolver()` 注册它：
+
+- `config_resolver(diagram)`: 创建一个带有 ERD 的新自定义 Resolver 类
+- `config_global_resolver(diagram)`: 将 ERD 注入到默认 Resolver 类中
+
+详见下面的 [辅助函数](#辅助函数) 部分查看详细使用示例。
+
+### 辅助函数
+
+#### base_entity()
+
+创建一个基类，自动从其子类收集所有实体关系。
+
+**注意：** `BaseEntity` 提供了另一种 ERD 申明方式，与显式创建 `ErDiagram` 对象不同。这种方式与实体类的集成更紧密，使得直接在类定义中管理关系变得更加容易。
+
+```python
+from pydantic_resolve import base_entity, Relationship
+
+BaseEntity = base_entity()
+
+class User(BaseModel, BaseEntity):
+    id: int
+    name: str
+
+    __relationships__ = [
+        Relationship(field='org_id', target_kls=Organization, loader=org_loader)
+    ]
+
+class Comment(BaseModel, BaseEntity):
+    id: int
+    user_id: int
+
+    __relationships__ = [
+        Relationship(field='user_id', target_kls=User, loader=user_loader)
+    ]
+
+# 获取 ER 图
+diagram = BaseEntity.get_diagram()
+```
+
+**处理循环引用**
+
+因为实体通过 `target_kls` 相互引用，你可能会遇到循环引用问题。有两种解决方案：
+
+1. **使用字符串引用**（用于同模块引用）：
+   ```python
+   class Comment(BaseModel, BaseEntity):
+       id: int
+       user_id: int
+
+       __relationships__ = [
+           # 字符串 'User' 会被自动解析
+           Relationship(field='user_id', target_kls='User', loader=user_loader)
+       ]
+   ```
+
+2. **使用模块路径语法**（用于跨模块引用）：
+   ```python
+   # 在 app/models/comment.py 中
+
+   class Comment(BaseModel, BaseEntity):
+       id: int
+       user_id: int
+
+       __relationships__ = [
+           # 引用另一个模块中的 User
+           Relationship(
+               field='user_id',
+               target_kls='app.models.user:User',  # 模块路径:类名
+               loader=user_loader
+           )
+       ]
+   ```
+
+`_resolve_ref` 函数支持：
+
+- 简单类名：`'User'`（在当前模块中查找）
+- 模块路径语法：`'app.models.user:User'`（从任何模块懒加载）
+- 列表泛型：`list['User']` 或 `list['app.models.user:User']`
+
+#### LoadBy
+
+基于 ERD 关系自动解析字段的注解。
+
+```python
+from pydantic_resolve import LoadBy, base_entity, config_global_resolver
+
+# 1. 使用 BaseEntity 定义实体
+BaseEntity = base_entity()
+
+class User(BaseModel, BaseEntity):
+    id: int
+    name: str
+    __relationships__ = [
+        Relationship(field='org_id', target_kls=Organization, loader=org_loader)
+    ]
+
+# 2. 全局注册 ERD
+config_global_resolver(BaseEntity.get_diagram())
+
+# 3. 在响应模型中使用 LoadBy
+class UserResponse(BaseModel):
+    id: int
+    name: str
+
+    # 通过 ERD 关系自动解析
+    organization: Annotated[Optional[Organization], LoadBy('org_id')] = None
+```
+
+**参数：**
+
+- `key` (str): 外键字段名
+- `biz` (str | None): MultipleRelationship 的业务标识符
+- `origin_kls` (type | None): 当 Link 的 `field_name` 被设置时必须提供。表示字段提取前的原始对象类型。
+
+**注意：** `LoadBy` 需要与 `config_global_resolver()` 配合，将 ERD 注入到默认 Resolver。
+
+**高级：使用 field_name 与 origin_kls**
+
+当 loader 返回字段值而不是完整对象时，在 Link 中使用 `field_name`，在 LoadBy 中使用 `origin_kls`：
+
+```python
+from typing import Annotated
+
+# DataLoader 返回 list[str]（name 值）而不是 list[Foo]（完整对象）
+class FooNameLoader(DataLoader):
+    async def batch_load_fn(self, keys):
+        # 返回: [["foo1", "foo2"], ["foo3"]]
+        return [[vv['name'] for vv in v] for v in load_foo_names(keys)]
+
+class Biz(BaseModel, BaseEntity):
+    __relationships__ = [
+        MultipleRelationship(
+            field='id',
+            target_kls=list[Foo],  # 原始类型是 list[Foo]
+            links=[
+                Link(biz='foo_name', field_name="name", loader=FooNameLoader)  # 但 loader 返回 list[str]（name 字段）
+            ]
+        )
+    ]
+
+class BizResponse(BaseModel):
+    # origin_kls 告诉系统这个关系原本是 list[Foo]
+    # 即使 loader 实际返回的是 list[str]
+    foo_names: Annotated[List[str], LoadBy('id', biz='foo_name', origin_kls=list[Foo])] = []
+```
+
+这样系统可以：
+- 正确验证类型（`list[str]` 与 `list[Foo].name` 兼容）
+- 生成正确的 API 文档
+- 为 fastapi-voyager 提供类型提示
+
+#### config_resolver()
+
+创建带有特定 ERD 配置的新 Resolver 类。
+
+```python
+from pydantic_resolve import config_resolver, ErDiagram, Entity
+
+diagram = ErDiagram(configs=[...])
+CustomResolver = config_resolver(diagram)
+
+result = await CustomResolver().resolve(data)
+```
+
+#### config_global_resolver()
+
+将 ERD 全局注入到默认 Resolver 类中。
+
+```python
+from pydantic_resolve import config_global_resolver, base_entity
+
+BaseEntity = base_entity()
+# ... 定义实体 ...
+
+config_global_resolver(BaseEntity.get_diagram())
+
+# 现在默认 Resolver 会使用这个 ERD
+result = await Resolver().resolve(data)
+```
+
+### 高级：处理 None FK 值
+
+当外键为 None 时，你可以指定返回什么：
+
+```python
+Relationship(
+    field='user_id',
+    target_kls=User,
+    loader=user_loader,
+    field_none_default=None,  # 或
+    field_none_default_factory=lambda: AnonymousUser()
+)
+```
+
+使用 `load_many` 时：
+
+```python
+Relationship(
+    field='tag_ids',
+    target_kls=Tag,
+    loader=tag_loader,
+    load_many=True,
+    load_many_fn=lambda ids: ids.split(',') if ids else []  # 处理逗号分隔的值
+)
+```
+
+### 高级：多重关系
+
+当一个字段可以表示不同的事物时，使用 `MultipleRelationship`：
+
+```python
+class Comment(BaseModel, BaseEntity):
+    id: int
+    user_id: int  # 可以是 author 或 moderator
+
+    __relationships__ = [
+        MultipleRelationship(
+            field='user_id',
+            target_kls=User,
+            links=[
+                Link(biz='author', loader=user_loader),
+                Link(biz='moderator', loader=moderator_loader)
+            ]
+        )
+    ]
+
+class CommentResponse(BaseModel):
+    id: int
+
+    # 通过 'biz' 参数指定使用哪个关系
+    author: Annotated[Optional[User], LoadBy('user_id', biz='author')] = None
+    moderator: Annotated[Optional[User], LoadBy('user_id', biz='moderator')] = None
+```
+
+
+## DefineSubset & SubsetConfig
+
+`DefineSubset` 允许你从现有 Pydantic 模型创建字段子集，继承类型和验证器。
+
+### 基础用法
+
+```python
+from pydantic_resolve import DefineSubset
+
+class FullUser(BaseModel):
+    id: int
+    name: str
+    email: str
+    password_hash: str
+    created_at: datetime
+    updated_at: datetime
+
+class UserSummary(DefineSubset):
+    __subset__ = (FullUser, ('id', 'name', 'email'))
+```
+
+### 使用 SubsetConfig
+
+如需更多控制，使用 `SubsetConfig`：
+
+```python
+from pydantic_resolve import DefineSubset, SubsetConfig
+from pydantic_resolve import ExposeAs, SendTo
+
+class UserProfile(DefineSubset):
+    __subset__ = SubsetConfig(
+        kls=FullUser,
+        fields=['id', 'name', 'email'],
+        expose_as=[('name', 'user_name')],  # 暴露给后代节点
+        send_to=[('id', 'user_id_collector')],  # 发送到父节点的收集器
+        excluded_fields=['email']  # 标记为从序列化中排除
+    )
+```
+
+**SubsetConfig 参数：**
+
+- `kls` (type[BaseModel]): 要从中提取子集的父类
+- `fields` (list[str] | "all" | None): 要包含的字段（与 omit_fields 互斥）
+- `omit_fields` (list[str] | None): 要排除的字段（与 fields 互斥）
+- `expose_fields` (list[str] | None): 通过 ExposeAs 暴露给后代节点的字段
+- `excluded_fields` (list[str] | None): 标记为排除的字段（Field(exclude=True)）
+
+
+## ExposeAs & SendTo
+
+从 v2.3.0 开始，你可以使用注解而不是类属性来进行 expose 和 collect 操作。
+
+### ExposeAs
+
+将字段数据暴露给后代节点。
+
+```python
+from pydantic_resolve import ExposeAs
+
+# 之前（类属性）
+class Blog(BaseModel):
+    __pydantic_resolve_expose__ = {'title': 'blog_title' }
+    title: str
+
+# 之后（注解）
+class Blog(BaseModel):
+    title: Annotated[str, ExposeAs('blog_title')]
+```
+
+### SendTo
+
+将字段数据发送到父节点的收集器。
+
+```python
+from pydantic_resolve import SendTo
+
+# 之前（类属性）
+class Blog(BaseModel):
+    __pydantic_resolve_collect__ = {'comments': 'blog_comments' }
+    comments: list[Comment]
+
+# 之后（注解）
+class Blog(BaseModel):
+    comments: Annotated[list[Comment], SendTo('blog_comments')]
+```
+
+### 组合使用
+
+你可以组合多个注解：
+
+```python
+from pydantic_resolve import ExposeAs, SendTo, LoadBy
+
+class Comment(BaseModel):
+    owner: Annotated[
+        Optional[User],
+        LoadBy('user_id'),      # 通过 ERD 自动解析
+        SendTo('related_users') # 发送到父节点的收集器
+    ] = None
+
+class Blog(BaseModel):
+    name: Annotated[str, ExposeAs('blog_name')]  # 暴露给后代节点
+```
 
 
 ## 方法参数说明
