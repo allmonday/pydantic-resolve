@@ -18,28 +18,74 @@
 
 Consider this scenario: you need to provide API data to frontend clients from multiple data sources (databases, RPC services, etc.) that requires composition, transformation, and computation. How would you typically approach this?
 
+First, let's define the response schemas:
+
 ```python
-# Traditional approach: imperative data assembly
+from pydantic import BaseModel
+from typing import Optional, List
+
+class UserResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+
+class TaskResponse(BaseModel):
+    id: int
+    name: str
+    owner_id: int
+    owner: Optional[UserResponse] = None
+
+class SprintResponse(BaseModel):
+    id: int
+    name: str
+    tasks: List[TaskResponse] = []
+
+class TeamResponse(BaseModel):
+    id: int
+    name: str
+    sprints: List[SprintResponse] = []
+    total_tasks: int = 0
+```
+
+Now, let's see how to populate these schemas with data:
+
+```python
+# Traditional approach: imperative data assembly with Pydantic schemas
 async def get_teams_with_detail(session):
-    # 1. Fetch team list
-    teams = await session.execute(select(Team))
-    teams = teams.scalars().all()
+    # 1. Fetch team list from database
+    teams_data = await session.execute(select(Team))
+    teams_data = teams_data.scalars().all()
 
-    # 2. Fetch sprint list for each team
-    for team in teams:
-        team.sprints = await get_sprints_by_team(session, team.id)
+    # 2. Build response objects and fetch related data imperatively
+    teams = []
+    for team_data in teams_data:
+        team = TeamResponse(**team_data.__dict__)
 
-        # 3. Fetch task list for each sprint
-        for sprint in team.sprints:
-            sprint.tasks = await get_tasks_by_sprint(session, sprint.id)
+        # Fetch sprints for this team
+        sprints_data = await get_sprints_by_team(session, team.id)
+        team.sprints = []
 
-            # 4. Fetch owner information for each task
-            for task in sprint.tasks:
-                task.owner = await get_user_by_id(session, task.owner_id)
+        for sprint_data in sprints_data:
+            sprint = SprintResponse(**sprint_data.__dict__)
 
-    # 5. Calculate some statistics
-    for team in teams:
+            # Fetch tasks for this sprint
+            tasks_data = await get_tasks_by_sprint(session, sprint.id)
+            sprint.tasks = []
+
+            for task_data in tasks_data:
+                task = TaskResponse(**task_data.__dict__)
+
+                # Fetch owner for this task
+                owner_data = await get_user_by_id(session, task.owner_id)
+                task.owner = UserResponse(**owner_data.__dict__)
+
+                sprint.tasks.append(task)
+
+            team.sprints.append(sprint)
+
+        # Calculate statistics
         team.total_tasks = sum(len(sprint.tasks) for sprint in team.sprints)
+        teams.append(team)
 
     return teams
 ```

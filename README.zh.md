@@ -15,28 +15,74 @@
 
 想象一下这样的场景：你需要为前端提供 API 数据，这些数据来自多个数据源（数据库、RPC 服务等），并且需要组合、转换、计算。通常你会怎么做？
 
+首先，让我们定义响应的 Schema：
+
 ```python
-# 传统方式：命令式数据组装
+from pydantic import BaseModel
+from typing import Optional, List
+
+class UserResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+
+class TaskResponse(BaseModel):
+    id: int
+    name: str
+    owner_id: int
+    owner: Optional[UserResponse] = None
+
+class SprintResponse(BaseModel):
+    id: int
+    name: str
+    tasks: List[TaskResponse] = []
+
+class TeamResponse(BaseModel):
+    id: int
+    name: str
+    sprints: List[SprintResponse] = []
+    total_tasks: int = 0
+```
+
+接下来，让我们看看如何填充这些 Schema 的数据：
+
+```python
+# 传统方式：使用 Pydantic schema 进行命令式数据组装
 async def get_teams_with_detail(session):
-    # 1. 获取团队列表
-    teams = await session.execute(select(Team))
-    teams = teams.scalars().all()
+    # 1. 从数据库获取团队列表
+    teams_data = await session.execute(select(Team))
+    teams_data = teams_data.scalars().all()
 
-    # 2. 为每个团队获取 Sprint 列表
-    for team in teams:
-        team.sprints = await get_sprints_by_team(session, team.id)
+    # 2. 构建 Pydantic 响应对象并用命令式方式获取关联数据
+    teams = []
+    for team_data in teams_data:
+        team = TeamResponse(**team_data.__dict__)
 
-        # 3. 为每个 Sprint 获取任务列表
-        for sprint in team.sprints:
-            sprint.tasks = await get_tasks_by_sprint(session, sprint.id)
+        # 获取该团队的 Sprints
+        sprints_data = await get_sprints_by_team(session, team.id)
+        team.sprints = []
 
-            # 4. 为每个任务获取负责人信息
-            for task in sprint.tasks:
-                task.owner = await get_user_by_id(session, task.owner_id)
+        for sprint_data in sprints_data:
+            sprint = SprintResponse(**sprint_data.__dict__)
 
-    # 5. 计算一些统计数据
-    for team in teams:
+            # 获取该 Sprint 的 Tasks
+            tasks_data = await get_tasks_by_sprint(session, sprint.id)
+            sprint.tasks = []
+
+            for task_data in tasks_data:
+                task = TaskResponse(**task_data.__dict__)
+
+                # 获取该任务的负责人
+                owner_data = await get_user_by_id(session, task.owner_id)
+                task.owner = UserResponse(**owner_data.__dict__)
+
+                sprint.tasks.append(task)
+
+            team.sprints.append(sprint)
+
+        # 计算统计数据
         team.total_tasks = sum(len(sprint.tasks) for sprint in team.sprints)
+        teams.append(team)
 
     return teams
 ```
