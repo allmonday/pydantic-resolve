@@ -8,7 +8,7 @@ FastAPI 已经成为 Python Web 开发的首选框架之一，其与 Pydantic �
 
 这种"ORM 先行、Pydantic 跟随"的模式已经如此普遍，以至于许多开发者从未质疑过它的合理性。官方的 full-stack 模板采用这种方式，获得数千颗星的社区最佳实践仓库也推荐这种方式，大量的教程和文章都在传授这种方式。但这并不意味着它是正确的。
 
-当我们深入分析这种模式的实际应用时，一些深层的问题开始浮现。Pydantic schema 被动地复制 ORM 模型的字段定义，导致类型定义在两个地方重复；数据库设计的任何变更都会直接影响到 API 契约；业务概念被数据库结构深度渗透，难以表达领域模型的真实语义；当需要从多个数据源（数据库、RPC、缓存等）组合数据时，代码变得异常复杂且难以维护。
+当我们深入分析这种模式的实际应用时，一些深层的问题开始浮现。Pydantic schema 被动地复制 ORM 模型的字段定义，导致类型定义在两个地方重复；数据库设计的任何变更都会直接影响到 API 契约 (可以理解为具体的用例）；业务概念被数据库结构深度渗透，难以表达领域模型的真实语义；当需要从多个数据源（数据库、RPC、缓存等）组合数据时，代码变得异常复杂且难以维护。
 
 这些问题的根源在于我们混淆了两个不同层次的抽象：数据库模型（ORM）和领域模型（Entity）。ORM 模型应该只是数据持久化的实现细节，而不应该成为整个架构的中心。Pydantic schema 也不应该成为 ORM 的影子，而应该成为表达业务概念和 API 契约的独立抽象层。
 
@@ -150,24 +150,83 @@ SQLAlchemy 提供了 `relationship` 功能，可以在查询时自动加载关�
 ## 三、Entity-First 架构
 
 ### 3.1 核心理念
-```
-┌─────────────────────────────────────┐
-│   API Layer (Response)              │  ← API 契约，对外暴露
-│   - 从 Entity 选择字段               │
-│   - 定义 API 特有的计算字段          │
-├─────────────────────────────────────┤
-│   Domain Layer (Entity)             │  ← 业务概念，关系定义
-│   - 定义业务实体                     │
-│   - 定义实体关系（ERD）              │
-│   - 独立于具体实现                   │
-├─────────────────────────────────────┤
-│   Data Layer (Repository)           │  ← 数据获取，封装持久化细节
-│   - ORM / RPC / Cache / HTTP API    │
-│   - 通过 Repository 统一接口         │
-└─────────────────────────────────────┘
+
+Entity-First 架构的核心思想是：**通过 Pydantic 定义好业务实体（Entity）和关系 (Relationship) 之后，可以仅仅通过选择 Entity 的子集和扩展字段的方式，就能将所需的用例数据结构描述出来**， 重点是和 ORM-first 相比，对 用例层屏蔽掉掉所有的查询细节。
+
+用一段代码来说明的话， 就是 Entity 定义完成之后， 在他们的基础之后， 通过取子集 + 组合的方式， 申明任意多种的用例结构， **并通过某种方式将所描述的数据结构查询出来。**
+
+```python
+# 1. 定义业务实体（应用层，不依赖数据库）
+class UserEntity(BaseModel):
+    id: int
+    name: str
+    email: str
+
+class TaskEntity(BaseModel):
+    id: int
+    name: str
+    owner_id: int  # 外键，指向负责人
+    created_at: datetime
+
 ```
 
-**Repository 模式**是数据层的核心抽象。它封装了所有的持久化细节——无论是使用 ORM 查询数据库、调用 RPC 服务、读取缓存，还是访问外部 API——统一暴露为简单的方法接口（如 `get_by_id`、`get_by_ids`、`find_all`）。领域层（Entity）通过 Repository 获取数据，而不需要关心数据具体来自哪里或如何加载。
+```python
+# 2. 定义 API 响应（选择子集 + 扩展字段）， 类似 GraphQL pick 字段）
+class UserSummary(DefineSubset):
+    __subset__ = (UserEntity, ('id', 'name'))
+
+class TaskResponse(DefineSubset):
+    __subset__ = (UserEntity, ('id', 'name', 'owner_id'))
+    owner: Optional[UserSummary]  # 扩展字段，关联数据
+
+
+tasks = await get_tasks()
+tasks = [TaskResponse.model_validate(t) for t in t]
+tasks = await Resolver().resolve(tasks)  # 获取所有数据
+```
+
+用关系图来表示的话， 分为三大部份， 中间是核心的业务模型（和关系）的描述， 上层是基于业务模型构建出来的具体一个个的用例， 下层是对数据查询的封装。
+
+```mermaid
+graph TD
+    subgraph DATA["数据查询细节"]
+        D1["封装持久化细节<br/>ORM / RPC / Cache / HTTP API"]
+        D2["统一的数据加载接口 (Loader)"]
+        D3["批量加载、缓存、错误处理"]
+        D4["示例: user_loader, task_to_owner_loader"]
+    end
+
+    subgraph DOMAIN["业务模型和关系"]
+        subgraph ENTITY["Entity (业务实体)"]
+            E1["定义业务概念和字段"]
+            E2["独立于数据库和框架"]
+            E3["示例: UserEntity, TaskEntity, TeamEntity"]
+        end
+
+        subgraph ERD["ERD (实体关系图)"]
+            R1["声明实体间的关系"]
+            R2["定义关联数据的加载方式"]
+            R3["示例: Task.owner -> UserEntity"]
+        end
+    end
+
+    subgraph API["API契约（用例的组合）"]
+        A1["从 Entity 选择字段"]
+        A2["定义 API 特有的计算字段"]
+        A3["声明如何使用关联数据"]
+        A4["示例: TaskResponse, UserSummary"]
+    end
+
+    API -->|依赖| DOMAIN
+    DOMAIN -->|依赖| DATA
+
+    style DATA fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    style DOMAIN fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    style API fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style ENTITY fill:#ffffff,stroke:#4a148c,stroke-width:1px
+    style ERD fill:#ffffff,stroke:#4a148c,stroke-width:1px
+```
+
 
 ### 3.2 优势与挑战
 
