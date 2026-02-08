@@ -497,12 +497,18 @@ result = await Resolver().resolve(sprints)
 ### 4.1 重构前（ORM-First）
 ```python
 # models/task.py（ORM）
+from sqlalchemy.orm import relationship
+
 class TaskORM(Base):
     __tablename__ = 'tasks'
     id = Column(Integer, primary_key=True)
     name = Column(String(100))
     owner_id = Column(Integer, ForeignKey('users.id'))
     project_id = Column(Integer, ForeignKey('projects.id'))
+
+    # 定义 relationship 用于加载关联数据
+    owner = relationship("UserORM", back_populates="tasks")
+    project = relationship("ProjectORM", back_populates="tasks")
 
 # schemas/task.py（从 ORM 复制）
 class TaskBase(BaseModel):
@@ -519,17 +525,21 @@ class TaskResponse(TaskBase):
     owner: Optional['UserResponse']
     project: Optional['ProjectResponse']
 
-    def resolve_owner(self, loader=Loader(user_loader)):
-        return loader.load(self.owner_id)
-
-    def resolve_project(self, loader=Loader(project_loader)):
-        return loader.load(self.project_id)
-
 # routes/task.py
+from sqlalchemy.orm import selectinload
+
 @router.get("/tasks", response_model=List[TaskResponse])
 async def get_tasks(session: AsyncSession = Depends(get_session)):
-    tasks = await session.execute(select(TaskORM))
-    return [TaskResponse.model_validate(t) for t in tasks.scalars()]
+    # 必须指定加载策略，否则会产生 N+1 查询
+    result = await session.execute(
+        select(TaskORM)
+        .options(
+            selectinload(TaskORM.owner),      # 预加载 owner
+            selectinload(TaskORM.project)     # 预加载 project
+        )
+    )
+    tasks = result.scalars().all()
+    return [TaskResponse.model_validate(t) for t in tasks]
 ```
 
 ### 4.2 重构后（Entity-First）
@@ -552,12 +562,25 @@ class TaskResponse(DefineSubset):
     owner: Annotated[Optional[UserResponse], LoadBy('owner_id')] = None
     project: Annotated[Optional[ProjectSummary], LoadBy('project_id')] = None
 
-# routes/task.py（保持不变）
+# routes/task.py
 @router.get("/tasks", response_model=List[TaskResponse])
 async def get_tasks():
-    tasks = await query_tasks_from_db()
+    tasks_orm = await query_tasks_from_db()
+    # 1. 将 ORM 对象转换为 Response 对象
+    tasks = [TaskResponse.model_validate(t) for t in tasks_orm]
+    # 2. Resolver 自动解析关联数据
     return await Resolver().resolve(tasks)
 ```
+
+**关键优势：组装流程完全屏蔽数据库细节，降低心智负担**
+
+对比 4.1，Entity-First 方式在整个数据组装过程中**完全不需要感知数据库**：
+
+- ❌ 不需要导入 `selectinload`、`relationship` 等 SQLAlchemy 模块
+- ❌ 不需要思考加载策略（会不会 N+1？用 selectinload 还是 joinedload？）
+- ❌ 不需要手动写循环组装代码
+
+只需要声明业务语义："这个任务需要一个 owner" → `LoadBy('owner_id')`。数据库层面的批量查询、映射构建、性能优化全部由 `Resolver` 自动处理。
 
 ### 4.3 对比分析
 
@@ -569,6 +592,7 @@ async def get_tasks():
 | 字段子集 | 手动复制粘贴 | DefineSubset 自动生成 |
 | 跨数据源 | 难以统一 | Loader 统一接口 |
 | 测试友好性 | 依赖 DB | 可以 mock Loader |
+| 实现细节暴露 | 路由层暴露 DB 字段（外键 ID）和加载策略（selectinload） | 路由层只声明业务语义，屏蔽 DB 细节 |
 
 ## 五、如何迁移到 Entity-First 架构
 
@@ -644,25 +668,20 @@ class TaskResponse(DefineSubset):
 ## 七、总结
 
 ### 7.1 核心观点
-1. **Pydantic schema 不应该是 ORM 的影子**
-2. **建立独立的业务实体层**
-3. **通过 Loader 解耦数据源**
-4. **从 Entity 派生 API Response**
+
+本文的核心观点是：Pydantic schema 不应该是 ORM 的影子，而应该建立在独立的业务实体层之上。这意味着我们需要建立独立的业务实体层来纯粹的领域概念，通过 Loader 机制将数据源与业务逻辑解耦，最终从 Entity 派生出 API Response。这种架构转变不仅是代码组织方式的调整，更是对系统本质的重新思考——让业务概念成为架构的核心，而不是被数据库结构所束缚。
 
 ### 7.2 架构原则
-- **分层清晰**：API → Domain → Data
-- **单向依赖**：上层依赖下层，下层不依赖上层
-- **独立演进**：各层可以独立修改而不影响其他层
-- **类型安全**：通过 Entity 统一类型定义
+
+Entity-First 架构遵循四个核心原则：首先是分层清晰，系统分为 API 层（对外契约）、Domain 层（业务实体）、Data 层（数据访问）；其次是单向依赖，上层依赖下层，但下层不依赖上层，保证了各层的独立性；第三是独立演进，各层可以独立修改而不影响其他层，数据库结构的优化不会波及业务逻辑和 API 契约；最后是类型安全，通过 Entity 统一类型定义，确保整个系统的类型一致性。
 
 ### 7.3 pydantic-resolve 的角色
-- 提供了 Entity-First 架构的工具支持
-- 通过 ERD 管理实体关系
-- 通过 DataLoader 优化数据获取
-- 通过 DefineSubset 复用类型定义
+
+pydantic-resolve 为 Entity-First 架构提供了完整的工具支持。它通过 ERD（实体关系图）统一管理实体关系，通过 DataLoader 模式自动优化数据获取、避免 N+1 查询，通过 DefineSubset 机制实现类型定义的复用和组合。更重要的是，它提供了自动的数据组装执行层，让开发者只需声明"需要什么数据"，而不必关心"如何获取和组装数据"，显著降低了开发的心智负担。
 
 ### 7.4 呼吁
-希望 FastAPI 社区能够重新思考 Pydantic 的使用方式，从 "ORM-First" 转向 "Entity-First"，建立更清晰的分层架构。
+
+希望 FastAPI 社区能够重新思考 Pydantic 的使用方式，从广泛使用的 "ORM-First" 转向更加清晰的 "Entity-First" 架构。这不仅是技术选型的调整，更是架构理念的升级——让系统建立在稳定的业务概念之上，而不是易变的数据库结构。长期来看，这种架构能够显著提升系统的可维护性、可演进性和团队协作效率。
 
 ## 八、其他
 
@@ -695,21 +714,3 @@ SQLModel 是一个实用的工具，它在 ORM-First 的框架内优化了开发
 **适合使用 SQLModel 的场景**：简单的 CRUD 项目，单一数据源，API 契约可以跟随数据库结构变化的小型项目。在这些场景下，SQLModel 能够减少样板代码，提高开发效率。
 
 **不适合使用 SQLModel 的场景**：复杂业务逻辑，需要稳定 API 契约的长期项目，多数据源集成的系统，需要清晰分层架构的团队协作项目。在这些场景下，Entity-First 架构（配合 pydantic-resolve）提供的独立业务实体层、统一的类型系统、灵活的数据加载机制，才是可持续发展的正确选择。
-
----
-
-## 附录
-
-### A. 完整示例项目
-- 链接到 GitHub 仓库
-- 展示完整的 Entity-First 项目结构
-
-### B. 相关阅读
-- Domain-Driven Design
-- Clean Architecture
-- GraphQL DataLoader 模式
-
-### C. 工具推荐
-- pydantic-resolve
-- fastapi-voyager（可视化）
-- SQLAlchemy（作为数据层之一）
