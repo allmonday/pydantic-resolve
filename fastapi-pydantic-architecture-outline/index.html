@@ -1,0 +1,2429 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="a business model friendly data orchestration tool, simple way to implement the core concept of clean architecture.">
+      
+      
+        <meta name="author" content="tangkikodo">
+      
+      
+        <link rel="canonical" href="https://allmonday.github.io/pydantic-resolve/fastapi-pydantic-architecture-outline/">
+      
+      
+      
+      
+        
+          <link rel="alternate" href="./" hreflang="en">
+        
+          <link rel="alternate" href="../zh/fastapi-pydantic-architecture-outline/" hreflang="zh">
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+    
+    
+      
+        <title>FastAPI 中 Pydantic 的正确使用方式：Entity-First 架构 - Pydantic-resolve</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+  
+  
+
+<script id="__analytics">function __md_analytics(){function e(){dataLayer.push(arguments)}window.dataLayer=window.dataLayer||[],e("js",new Date),e("config","G-9P2E638G4H"),document.addEventListener("DOMContentLoaded",(function(){document.forms.search&&document.forms.search.query.addEventListener("blur",(function(){this.value&&e("event","search",{search_term:this.value})}));document$.subscribe((function(){var t=document.forms.feedback;if(void 0!==t)for(var a of t.querySelectorAll("[type=submit]"))a.addEventListener("click",(function(a){a.preventDefault();var n=document.location.pathname,d=this.getAttribute("data-md-value");e("event","feedback",{page:n,data:d}),t.firstElementChild.disabled=!0;var r=t.querySelector(".md-feedback__note [data-md-value='"+d+"']");r&&(r.hidden=!1)})),t.hidden=!1})),location$.subscribe((function(t){e("config","G-9P2E638G4H",{page_path:t.pathname})}))}));var t=document.createElement("script");t.async=!0,t.src="https://www.googletagmanager.com/gtag/js?id=G-9P2E638G4H",document.getElementById("__analytics").insertAdjacentElement("afterEnd",t)}</script>
+  
+    <script>"undefined"!=typeof __md_analytics&&__md_analytics()</script>
+  
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#fastapi-pydantic-entity-first" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Pydantic-resolve" class="md-header__button md-logo" aria-label="Pydantic-resolve" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Pydantic-resolve
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              FastAPI 中 Pydantic 的正确使用方式：Entity-First 架构
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+      <div class="md-header__option">
+  <div class="md-select">
+    
+    <button class="md-header__button md-icon" aria-label="Select language">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m12.87 15.07-2.54-2.51.03-.03A17.5 17.5 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2zm-2.62 7 1.62-4.33L19.12 17z"/></svg>
+    </button>
+    <div class="md-select__inner">
+      <ul class="md-select__list">
+        
+          <li class="md-select__item">
+            <a href="./" hreflang="en" class="md-select__link">
+              English
+            </a>
+          </li>
+        
+          <li class="md-select__item">
+            <a href="../zh/fastapi-pydantic-architecture-outline/" hreflang="zh" class="md-select__link">
+              中文
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</div>
+    
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/allmonday/pydantic-resolve" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    allmonday/pydantic-resolve
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../introduction/" class="md-tabs__link">
+          
+  
+  
+  Quick Start
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../dataloader/" class="md-tabs__link">
+          
+  
+  
+  Features
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../api/" class="md-tabs__link">
+          
+  
+  
+  API
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../why/" class="md-tabs__link">
+          
+  
+  
+  Others
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Pydantic-resolve" class="md-nav__button md-logo" aria-label="Pydantic-resolve" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Pydantic-resolve
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/allmonday/pydantic-resolve" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    allmonday/pydantic-resolve
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_1" id="__nav_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Quick Start
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../introduction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Introduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dataloader/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dataloader
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../erd_driven/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERD Driven Pattern
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../inherit_reuse/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inherit and reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../expose_and_collect/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Expose and collect
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../connect_to_ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Connect to UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Change log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Others
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Others
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../why/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why create it
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        一、引言：被忽视的架构问题
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="一、引言：被忽视的架构问题">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1 现状观察
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2 核心论点
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#orm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        二、"ORM 先行"的架构问题
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="二、&#34;ORM 先行&#34;的架构问题">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 典型的项目结构
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 核心问题分析
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2.2 核心问题分析">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1schema-orm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        问题 1：Schema 被动跟随 ORM
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        问题 2：业务概念被数据库结构渗透
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        问题 3：无法使用关系映射时的数据组装困境
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        问题 4：多数据源难以统一处理
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        问题 5：Schema 难以复用和组合
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#entity-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        三、Entity-First 架构
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="三、Entity-First 架构">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 核心理念
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 优势与挑战
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3.2 优势与挑战">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#entity-first_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Entity-First 的核心优势
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        核心挑战：数据关联与业务组合的鸿沟
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 实现方式
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3.3 实现方式">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-entity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1: 定义业务实体（Entity）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-loader" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: 定义数据加载器（Loader）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-entity-api-response" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: 从 Entity 定义 API Response
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4: 获取主数据， 自动加载所有子数据
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 架构优势
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3.3 架构优势">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        优势 1：清晰的分层
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        优势 2：独立演进
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        优势 3：统一的类型系统
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        优势 4：天然支持多数据源
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        优势 5：自动数据组装，告别冗长代码
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        四、实战案例：重构现有项目
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="四、实战案例：重构现有项目">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-orm-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 重构前（ORM-First）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-entity-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 重构后（Entity-First）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 对比分析
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#entity-first_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        五、如何迁移到 Entity-First 架构
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="五、如何迁移到 Entity-First 架构">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 迁移步骤
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5.1 迁移步骤">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-entity_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1: 提取 Entity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-erd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: 定义 ERD
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-response" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: 重构 Response
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4: 逐步替换
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 注意事项
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#faq" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        六、常见问题（FAQ）
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="六、常见问题（FAQ）">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#q1-entity-orm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q1: Entity 不就是 ORM 的复制吗？
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q2: 这不会增加代码量吗？
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q3: 小项目也需要这样吗？
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q4-postputpatch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q4: 如何处理写操作（POST/PUT/PATCH）？
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        七、总结
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="七、总结">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#71" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.1 核心观点
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#72" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.2 架构原则
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#73-pydantic-resolve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.3 pydantic-resolve 的角色
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#74" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.4 呼吁
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        八、其他
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="八、其他">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#81-sqlmodel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.1 SQLModel 能解决多少问题？
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8.1 SQLModel 能解决多少问题？">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sqlmodel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLModel 能解决的问题
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlmodel_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLModel 无法解决的核心问题
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sqlmodel_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQLModel 的定位
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#82-entity-first-clean-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.2 Entity-First 与 Clean Architecture 的关系
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8.2 Entity-First 与 Clean Architecture 的关系">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        层次对应关系
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        核心概念映射
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        架构优势
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        总结
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="fastapi-pydantic-entity-first">FastAPI 中 Pydantic 的正确使用方式：Entity-First 架构</h1>
+<h2 id="_1">一、引言：被忽视的架构问题</h2>
+<h3 id="11">1.1 现状观察</h3>
+<p>FastAPI 已经成为 Python Web 开发的首选框架之一，其与 Pydantic 的深度集成让数据验证变得前所未有的简单。然而，在浏览大量的 FastAPI 项目、官方模板、社区教程和最佳实践指南后，我们发现了一个惊人的相似性：几乎所有的项目都遵循着相同的模式——先定义 SQLAlchemy ORM 模型，然后基于这些模型创建 Pydantic schema。</p>
+<p>这种"ORM 先行、Pydantic 跟随"的模式已经如此普遍，以至于许多开发者从未质疑过它的合理性。官方的 full-stack 模板采用这种方式，获得数千颗星的社区最佳实践仓库也推荐这种方式，大量的教程和文章都在传授这种方式。但这并不意味着它是正确的。</p>
+<p>当我们深入分析这种模式的实际应用时，一些深层的问题开始浮现。Pydantic schema 被动地复制 ORM 模型的字段定义，导致类型定义在两个地方重复；数据库设计的任何变更都会直接影响到 API 契约 (可以理解为具体的用例）；业务概念被数据库结构深度渗透，难以表达领域模型的真实语义；当需要从多个数据源（数据库、RPC、缓存等）组合数据时，代码变得异常复杂且难以维护。</p>
+<p>这些问题的根源在于我们混淆了两个不同层次的抽象：数据库模型（ORM）和领域模型（Entity）。ORM 模型应该只是数据持久化的实现细节，而不应该成为整个架构的中心。Pydantic schema 也不应该成为 ORM 的影子，而应该成为表达业务概念和 API 契约的独立抽象层。</p>
+<h3 id="12">1.2 核心论点</h3>
+<p>本文的核心论点很简单：Pydantic schema 不应该是 ORM 的影子，而应该建立在独立的业务实体层之上。这不仅仅是一个代码组织的问题，而是一个关乎架构清晰度、可维护性和长期演进的系统性问题。</p>
+<p><strong>领域模型是架构的核心</strong>。业务实体（Entity）应该表达纯粹的领域概念，比如"用户"、"任务"、"项目"，而不是数据库表。这些实体定义了业务对象的结构和它们之间的关系，独立于任何技术实现。当我们谈论业务时，我们说的是"这个任务属于哪个用户"、"这个项目包含哪些任务"，而不是"tasks 表有 user_id 外键"。领域模型的存在让我们能够用业务语言来思考和设计系统，而不是被技术实现细节束缚。</p>
+<p><strong>具体用例驱动 API 设计</strong>。每个 API 端点都是为特定的业务场景服务的，比如"用户列表页面需要用户的 id 和 name"、"任务详情页面需要任务的完整信息和负责人的详细信息"。这些用例决定了 API 应该返回什么数据，而不是数据库有什么字段。Pydantic schema 应该根据具体用例来定义，从领域模型中选择需要的字段，添加用例特有的计算字段和验证逻辑。这才是"响应模型"（Response Model）的真正含义。</p>
+<p><strong>数据层只是实现细节</strong>。无论数据存储在 PostgreSQL、MySQL、MongoDB 这样的数据库中，还是从 Redis、Memcached 这样的缓存中读取，亦或是通过 gRPC、REST API 从外部服务获取，这些都不应该影响领域模型和 API 契约的定义。数据层负责高效、可靠地获取数据，但它只是一个可替换的实现细节。数据库结构可能会改变，外部服务可能会迁移，缓存策略可能会调整，但只要数据层能够提供领域模型需要的数据，这些变化就不应该波及到业务逻辑和 API 契约。</p>
+<p>这种分层架构的核心价值在于<strong>稳定性和可演进性</strong>。领域模型作为稳定的内核，独立于具体实现而存在。API 契约根据用例设计，为前端提供稳定的接口。数据层作为可替换的外壳，可以根据性能需求、技术栈升级、业务变化而灵活调整。当这三个层次清晰分离时，系统就具备了持续演进的能力——我们可以在不影响业务逻辑的前提下优化数据访问策略，可以在不破坏 API 契约的前提下重构数据模型，可以在不改变领域模型的前提下调整 API 设计。</p>
+<p>这不仅是理论上的优雅，也是实践中的必要。当项目规模增长、业务复杂度提升、团队协作需求增加时，清晰的分层架构会成为项目能否持续演进的关键因素。一个被数据库结构深度渗透的系统，每一次数据库变更都会牵一发而动全身；而一个建立在稳定领域模型基础上的系统，则可以更从容地应对变化。</p>
+<h2 id="orm">二、"ORM 先行"的架构问题</h2>
+<h3 id="21">2.1 典型的项目结构</h3>
+<p>在大多数 FastAPI 项目中，你会看到相似的组织方式：</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>project/
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── models/
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>│   ├── user.py          # ORM 模型（数据库表结构）
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>│   ├── task.py
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>│   └── ...
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>├── schemas/
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>│   ├── user.py          # Pydantic schema（从 ORM 复制字段）
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>│   ├── task.py
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>│   └── ...
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>├── routes/
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>│   └── ...
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>└── services/
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    └── ...
+</code></pre></div>
+<p>这种结构看起来很合理——数据模型和 API 契约分开存放——但问题在于，Pydantic schema 往往只是对数据库模型的被动复制，字段名称、类型、甚至注释都几乎一模一样。更深层的问题在于，整个项目分层存在缺失：从数据库模型到 Pydantic schema，没有任何独立的业务概念层存在。</p>
+<h3 id="22">2.2 核心问题分析</h3>
+<h4 id="1schema-orm">问题 1：Schema 被动跟随 ORM</h4>
+<p>当一个项目的 Pydantic schema 只是数据库模型的影子时，就会出现一系列深层问题。最明显的是类型定义的重复：同样的字段名、同样的类型约束，在两个不同的地方定义并维护。这种重复违反了软件开发中的 DRY（Don't Repeat Yourself）原则，但更严重的是它暴露了架构本质上的混乱——API 契约不应该受限于数据库的物理设计。</p>
+<p>试想一个实际场景：数据库中存储用户密码哈希是为了认证需求，这个字段是数据库实现细节，API 响应中完全不应该包含它。开发者为了避免暴露这个字段，不得不额外定义一个不包含 <code>password_hash</code> 的 Pydantic schema。</p>
+<p>这种做法带来了两个问题：</p>
+<p><strong>第一，繁琐的重复定义</strong>：你需要维护两个几乎相同的类——一个包含所有字段的 ORM 模型，一个手动排除敏感字段的 Pydantic schema。当用户有 20 个字段时，你需要重复定义这 20 个字段，只为了排除其中 1 个。</p>
+<p>如果开发者尝试抽取公共类来减少重复，又会面临新的困扰：抽取标准很模糊。比如，应该把哪些字段放入公共的 <code>UserBase</code>？哪些字段是所有场景都需要的？哪些字段是特定场景才需要的？当不同 API 端点对字段的需求差异较大时（有的需要 <code>email</code>，有的需要 <code>phone</code>，有的两者都不需要），公共类的定义会变得难以决策，维护成本反而更高。</p>
+<p><strong>第二，修改时的维护负担</strong>：当数据库新增字段（比如添加 <code>phone</code>）或修改字段类型（比如将 <code>name</code> 从 <code>String(50)</code> 改为 <code>String(100)</code>）时，你需要同时修改 ORM 模型和 Pydantic schema，很容易遗漏或产生不一致。更糟糕的是，当你有多个不同的响应场景（用户摘要、用户详情、用户头像信息）时，每个场景都需要手动复制和维护字段子集。</p>
+<p>这违反了一个基本原则：API 应该是稳定的对外契约，而数据库实现是可以优化的内部细节。ORM-First 架构让这两者强耦合，任何数据库变更都会直接波及 API 契约。</p>
+<h4 id="2">问题 2：业务概念被数据库结构渗透</h4>
+<p>当数据库结构成为整个架构的中心时，业务概念也会被数据库的设计细节所束缚。一个典型的例子是任务管理系统中"负责人"和"报告人"的概念。</p>
+<p><strong>业务视角</strong>：从业务角度看，这是两个清晰的角色——任务有一个负责人，也有一个报告人。这是业务领域中的自然概念。</p>
+<p><strong>数据库设计决策</strong>：在数据库设计中，这可能通过多种方式实现：两个外键字段（<code>owner_id</code> 和 <code>reporter_id</code>）、单个 <code>user_id</code> 加上 <code>role</code> 字段、或者多对多关系表。这些是纯粹的技术决策，取决于性能需求、数据量、查询模式等因素。</p>
+<p>当 API 直接暴露数据库结构时，业务概念就被技术细节取代了，这违反了软件工程中的<strong>最少知道原则（Law of Demeter）</strong>：一个层级的封装应该让上层使用者知道的越少越好。前端作为 API 的使用者，只需要知道业务概念（"任务有负责人"），而不应该知道数据是如何存储的（"用两个字段存储"）。</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># 数据库设计 1：使用两个外键</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">TaskORM</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s1">&#39;tasks&#39;</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="nb">id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">title</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">100</span><span class="p">))</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">owner_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;users.id&#39;</span><span class="p">))</span>      <span class="c1"># 负责人</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">reporter_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;users.id&#39;</span><span class="p">))</span>   <span class="c1"># 报告人</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1"># API Schema 被动复制 DB 结构</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="k">class</span><span class="w"> </span><span class="nc">TaskResponse</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>    <span class="n">owner_id</span><span class="p">:</span> <span class="nb">int</span>          <span class="c1"># 前端必须知晓这是什么</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="n">reporter_id</span><span class="p">:</span> <span class="nb">int</span>       <span class="c1"># 前端必须知晓这是什么</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>    <span class="n">owner</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="s1">&#39;UserResponse&#39;</span><span class="p">]</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>    <span class="n">reporter</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="s1">&#39;UserResponse&#39;</span><span class="p">]</span>
+</code></pre></div>
+<p>现在的问题是：前端开发者需要理解 <code>owner_id</code> 和 <code>reporter_id</code> 的区别，需要知道为什么有两个字段。这些是数据库设计细节，与业务概念无关。如果后续数据库团队决定重构表结构（比如为了性能将两个字段合并为一个字段），API 也要跟着改，前端代码也需要相应调整。</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># 数据库设计 2：重构为单个字段 + role</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">TaskORM</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s1">&#39;tasks&#39;</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="nb">id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">title</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">100</span><span class="p">))</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">user_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;users.id&#39;</span><span class="p">))</span>   <span class="c1"># 合并字段</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">role</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">20</span><span class="p">))</span>  <span class="c1"># &#39;owner&#39; 或 &#39;reporter&#39;</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="c1"># API Schema 必须跟着改变</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="k">class</span><span class="w"> </span><span class="nc">TaskResponse</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>    <span class="n">user_id</span><span class="p">:</span> <span class="nb">int</span>           <span class="c1"># 现在改成了 user_id</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>    <span class="n">role</span><span class="p">:</span> <span class="nb">str</span>              <span class="c1"># 新增了 role 字段</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>    <span class="c1"># 前端代码必须全部修改！</span>
+</code></pre></div>
+<p>这种变化与业务无关——业务上仍然有"负责人"和"报告人"两个角色——但纯粹的技术决策（数据库重构）却影响了系统的各个层次，包括前端应用。这正是业务概念被数据库结构渗透的直接后果。</p>
+<p>真正的业务概念——"这个任务属于谁"、"谁负责跟进这个任务"——被淹没在了外键关系和表结构的技术细节中。我们无法用业务语言来思考和设计 API，而必须时刻考虑数据库是如何存储这些数据的。这种概念的混淆使得代码难以理解和维护，新加入的团队成员需要先理解数据库设计才能理解业务逻辑。</p>
+<h4 id="3">问题 3：无法使用关系映射时的数据组装困境</h4>
+<p>SQLAlchemy 提供了 <code>relationship</code> 功能，可以在查询时自动加载关联数据，看起来很方便。但在实际项目中，这个功能并非万能。跨数据库查询时它无能为力，复杂的 JOIN 条件下它难以使用，需要优化性能的只读查询或报表查询往往也不适合用它。一旦脱离了 <code>relationship</code> 的便利，开发者就必须手动编写冗长的数据组装代码。</p>
+<p>这个过程通常包含多个重复的步骤：先查询主数据（比如文章列表），然后收集所有的关联 ID（比如所有文章的作者 ID），接着批量查询关联数据（比如根据 ID 列表查询用户），再手动构建 ID 到对象的映射字典，最后循环遍历主数据，手动查找对应的关联对象并组装成最终的响应结构。这个过程代码量大、容易出错，而且每次需要类似的关联查询时都要重复编写。</p>
+<p>更危险的是，手动编写这些代码很容易产生性能问题。如果开发者忘记批量查询，而是在循环中逐个查询关联数据，就会立即陷入经典的 N+1 查询陷阱——原本一次批量查询就能解决的问题，变成了 N 次独立查询。当数据量增大时，性能问题会迅速暴露。而使用 <code>relationship</code> 虽然能避免这个问题，但它又回到了之前提到的困境：不是所有场景都适合用它。</p>
+<p>这种数据组装逻辑散落在项目的各个地方，每个需要关联数据的 API 端点都可能有一段类似的代码。这不仅违反了单一职责原则，也使得代码难以复用和测试。当需要优化数据加载策略时（比如添加缓存、调整查询顺序），需要在多处修改，容易遗漏或产生不一致。</p>
+<h4 id="4">问题 4：多数据源难以统一处理</h4>
+<p>现代应用的复杂性在于数据往往不只来自一个地方。用户信息可能在 PostgreSQL 数据库中，订单数据可能在 MongoDB 中，库存状态可能需要调用外部 RPC 服务获取，推荐列表可能从 Redis 缓存中读取。当这些数据需要组合成一个统一的 API 响应时，传统的方式就显露出明显的不足。</p>
+<p>每个数据源都有自己的数据格式和访问方式。数据库返回 ORM 对象，RPC 服务返回字典或自定义对象，缓存返回序列化的字符串或字节流。为了将它们统一到 Pydantic schema 中，开发者需要编写各种转换函数，处理字段映射、类型转换、数据提取等细节。这些转换逻辑分散在各个地方，难以集中管理和优化。</p>
+<p>更糟糕的是，当某个数据源需要迁移或升级时（比如将用户服务从数据库迁移到独立的微服务），所有涉及该数据源的转换代码都需要修改。由于这些转换逻辑与业务逻辑混杂在一起，修改的影响范围难以评估，测试成本也很高。缺少统一的抽象层使得系统难以应对数据源的变化，每次变化都可能牵一发而动全身。</p>
+<h4 id="5schema">问题 5：Schema 难以复用和组合</h4>
+<p>在实际项目中，同一个实体往往需要在不同的场景下以不同的形式出现。用户列表页面可能只需要显示用户的 ID 和姓名，用户详情页面需要显示完整信息包括邮箱、手机号、注册时间等，任务列表中嵌入的用户信息可能只需要 ID 和头像 URL。如果为每个场景都单独定义一个 Pydantic schema，就会出现大量的重复定义，字段类型的修改需要同步多处。</p>
+<p>传统做法中，开发者要么复制粘贴代码（违反 DRY 原则），要么尝试用继承来组合（但 Pydantic 的继承机制并不直观，容易产生混淆）。更深层的问题是，这些 schema 之间缺少明确的"属于同一个实体"的关系——从代码上看，<code>UserSummary</code>、<code>UserDetail</code>、<code>UserIdOnly</code> 是三个独立的类，无法直观地看出它们都是对"用户"这个业务实体的不同视图。</p>
+<p>这种缺乏统一性的schema定义，使得代码难以维护。当实体的字段类型需要修改时（比如将用户 ID 从整数改为 UUID），需要搜索所有相关的 schema 定义并逐一修改，很容易遗漏。也没有类型系统能保证这些 schema 的一致性——编译器不会告诉你 <code>UserSummary</code> 和 <code>UserDetail</code> 中的 <code>id</code> 字段类型不同。</p>
+<h2 id="entity-first">三、Entity-First 架构</h2>
+<h3 id="31">3.1 核心理念</h3>
+<p>Entity-First 架构的核心思想是：<strong>通过 Pydantic 定义好业务实体（Entity）和关系 (Relationship) 之后，可以仅仅通过选择 Entity 的子集和扩展字段的方式，就能将所需的用例数据结构描述出来</strong>， 重点是和 ORM-first 相比，对 用例层屏蔽掉所有的查询细节。</p>
+<p>用一段代码来说明的话， 就是 Entity 定义完成之后， 在他们的基础之上， 通过取子集 + 组合的方式， 声明任意多种的用例结构， <strong>并通过某种方式将所描述的数据结构查询出来。</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># 1. 定义业务实体（应用层，不依赖数据库）</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">UserEntity</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">email</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="k">class</span><span class="w"> </span><span class="nc">TaskEntity</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="n">owner_id</span><span class="p">:</span> <span class="nb">int</span>  <span class="c1"># 外键，指向负责人</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="n">created_at</span><span class="p">:</span> <span class="n">datetime</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># 2. 定义 API 响应（选择子集 + 扩展字段）， 类似 GraphQL pick 字段）</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">UserSummary</span><span class="p">(</span><span class="n">DefineSubset</span><span class="p">):</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">__subset__</span> <span class="o">=</span> <span class="p">(</span><span class="n">UserEntity</span><span class="p">,</span> <span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">,</span> <span class="s1">&#39;name&#39;</span><span class="p">))</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="k">class</span><span class="w"> </span><span class="nc">TaskResponse</span><span class="p">(</span><span class="n">DefineSubset</span><span class="p">):</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">__subset__</span> <span class="o">=</span> <span class="p">(</span><span class="n">UserEntity</span><span class="p">,</span> <span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">,</span> <span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;owner_id&#39;</span><span class="p">))</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="n">owner</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">UserSummary</span><span class="p">]</span>  <span class="c1"># 扩展字段，关联数据</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="n">tasks</span> <span class="o">=</span> <span class="k">await</span> <span class="n">get_tasks</span><span class="p">()</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="n">tasks</span> <span class="o">=</span> <span class="p">[</span><span class="n">TaskResponse</span><span class="o">.</span><span class="n">model_validate</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tasks</span><span class="p">]</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="n">tasks</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Resolver</span><span class="p">()</span><span class="o">.</span><span class="n">resolve</span><span class="p">(</span><span class="n">tasks</span><span class="p">)</span>  <span class="c1"># 获取所有数据</span>
+</code></pre></div>
+<p>用关系图来表示的话， 分为三大部份， 中间是核心的业务模型（和关系）的描述， 上层是基于业务模型构建出来的具体一个个的用例， 下层是对数据查询的封装。</p>
+<pre class="mermaid"><code>graph TD
+    subgraph DATA["数据查询细节"]
+        D1["封装持久化细节&lt;br/&gt;ORM / RPC / Cache / HTTP API"]
+        D2["统一的数据加载接口 (Loader)"]
+        D3["批量加载、缓存、错误处理"]
+        D4["示例: user_loader, task_to_owner_loader"]
+    end
+
+    subgraph DOMAIN["业务模型和关系"]
+        subgraph ENTITY["Entity (业务实体)"]
+            E1["定义业务概念和字段"]
+            E2["独立于数据库和框架"]
+            E3["示例: UserEntity, TaskEntity, TeamEntity"]
+        end
+
+        subgraph ERD["ERD (实体关系图)"]
+            R1["声明实体间的关系"]
+            R2["定义关联数据的加载方式"]
+            R3["示例: Task.owner -&gt; UserEntity"]
+        end
+    end
+
+    subgraph API["API契约（用例的组合）"]
+        A1["从 Entity 选择字段"]
+        A2["定义 API 特有的计算字段"]
+        A3["声明如何使用关联数据"]
+        A4["示例: TaskResponse, UserSummary"]
+    end
+
+    API --&gt;|依赖| DOMAIN
+    DOMAIN --&gt;|依赖| DATA
+
+    style DATA fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    style DOMAIN fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    style API fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style ENTITY fill:#ffffff,stroke:#4a148c,stroke-width:1px
+    style ERD fill:#ffffff,stroke:#4a148c,stroke-width:1px</code></pre>
+<h3 id="32">3.2 优势与挑战</h3>
+<h4 id="entity-first_1">Entity-First 的核心优势</h4>
+<p><strong>稳定性和可演进性</strong>是 Entity-First 架构最显著的优势。通过建立独立的业务实体层，系统获得了一个稳定的内核。当数据库结构需要优化时（比如拆分大表、调整索引、迁移到新数据库），只需要修改数据层的 Repository 实现，领域模型和 API 契约完全不受影响。当业务需求变化导致 API 契约需要调整时，只需要修改 Response 定义，数据层和领域模型保持不变。当业务逻辑演进需要新的实体关系时，只需要更新 ERD 定义，已有的数据访问逻辑可以保持稳定。这种三层分离使得系统具备了真正的持续演进能力。</p>
+<p><strong>业务语义清晰</strong>是另一个重要优势。在 Entity-First 架构中，我们用业务语言来定义系统，而不是数据库术语。<code>TaskEntity</code> 拥有 <code>owner</code> 和 <code>reporter</code> 这样的业务关系，而不是暴露 <code>owner_id</code> 和 <code>reporter_id</code> 这样的数据库外键。前端开发者不需要理解数据库设计，只需要理解业务概念。新加入的团队成员可以通过阅读 Entity 定义快速理解业务模型，而不需要先研究复杂的表结构和外键关系。</p>
+<p><strong>多数据源的统一抽象</strong>让复杂系统的开发变得简单。用户信息可能来自 PostgreSQL，订单数据可能来自 MongoDB，推荐列表可能从 Redis 缓存读取，库存状态可能通过 RPC 调用获取。在 Entity-First 架构中，这些差异都被数据访问层屏蔽了。Entity 只需要声明"我需要什么数据"，而不需要关心"数据从哪里来"。当某个数据源需要迁移或升级时（比如将用户服务从数据库迁移到微服务），只需要修改对应的 Repository，Entity 和 Response 完全不需要改动。</p>
+<h4 id="_2">核心挑战：数据关联与业务组合的鸿沟</h4>
+<p><strong>问题 1：Repository 的职责边界模糊</strong></p>
+<p>Entity-First 架构引入了独立的业务实体层和 Repository 模式，这确实解决了很多问题。但在实际开发中，一个根本性的问题很快浮现：Repository 应该负责什么？</p>
+<p>最直观的理解是，Repository 负责数据访问——<code>get_by_id</code>、<code>find_all</code>、<code>batch_get</code> 这样的方法。当 API 需要返回一个包含关联数据的响应时，比如"任务列表需要包含负责人信息"，问题就出现了：这个组装逻辑应该放在哪里？</p>
+<p><strong>选项 1：放在 Repository 中</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">TaskRepository</span><span class="p">:</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_tasks_with_owners</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>        <span class="c1"># Repository 负责加载关联数据</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>        <span class="n">tasks</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_tasks</span><span class="p">()</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>        <span class="n">user_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">t</span><span class="o">.</span><span class="n">owner_id</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tasks</span><span class="p">]</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>        <span class="n">users</span> <span class="o">=</span> <span class="k">await</span> <span class="n">user_repo</span><span class="o">.</span><span class="n">get_by_ids</span><span class="p">(</span><span class="n">user_ids</span><span class="p">)</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>        <span class="c1"># 手动组装...</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>        <span class="k">return</span> <span class="n">tasks_with_owners</span>
+</code></pre></div>
+问题：Repository 变得臃肿，职责混杂。每个不同的用例都需要一个特定的方法——<code>get_tasks_with_owners</code>、<code>get_tasks_with_projects</code>、<code>get_tasks_with_owners_and_projects</code>……Repository 成了用例的堆砌场。</p>
+<p><strong>选项 2：放在 Service 层中</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">TaskService</span><span class="p">:</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_task_list_with_users</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>        <span class="c1"># Service 负责组装数据</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>        <span class="n">tasks</span> <span class="o">=</span> <span class="k">await</span> <span class="n">task_repo</span><span class="o">.</span><span class="n">get_tasks</span><span class="p">()</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>        <span class="n">users</span> <span class="o">=</span> <span class="k">await</span> <span class="n">user_repo</span><span class="o">.</span><span class="n">get_by_ids</span><span class="p">([</span><span class="n">t</span><span class="o">.</span><span class="n">owner_id</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tasks</span><span class="p">])</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>        <span class="c1"># 手动组装...</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>        <span class="k">return</span> <span class="n">assembled_tasks</span>
+</code></pre></div>
+问题：Service 层充斥着数据组装代码。这些代码重复、易错、难以维护，而且与业务逻辑混杂在一起。</p>
+<p><strong>选项 3：在路由/控制器层组装</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/tasks&quot;</span><span class="p">)</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_tasks</span><span class="p">(</span><span class="n">task_service</span><span class="o">=</span><span class="n">Depends</span><span class="p">(</span><span class="n">get_task_service</span><span class="p">),</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>                   <span class="n">user_service</span><span class="o">=</span><span class="n">Depends</span><span class="p">(</span><span class="n">get_user_service</span><span class="p">)):</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="c1"># 路由层负责组装数据</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="n">tasks</span> <span class="o">=</span> <span class="k">await</span> <span class="n">task_service</span><span class="o">.</span><span class="n">get_tasks</span><span class="p">()</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="c1"># ❌ 手动收集 ID、批量查询、构建映射、组装结果</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="n">user_ids</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">([</span><span class="n">t</span><span class="o">.</span><span class="n">owner_id</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tasks</span><span class="p">]))</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    <span class="n">users</span> <span class="o">=</span> <span class="k">await</span> <span class="n">user_service</span><span class="o">.</span><span class="n">get_users_by_ids</span><span class="p">(</span><span class="n">user_ids</span><span class="p">)</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>    <span class="n">user_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">u</span><span class="o">.</span><span class="n">id</span><span class="p">:</span> <span class="n">u</span> <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">users</span><span class="p">}</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>    <span class="n">result</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>    <span class="k">for</span> <span class="n">task</span> <span class="ow">in</span> <span class="n">tasks</span><span class="p">:</span>
+<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>        <span class="n">task_dict</span> <span class="o">=</span> <span class="n">task</span><span class="o">.</span><span class="n">model_dump</span><span class="p">()</span>
+<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>        <span class="n">task_dict</span><span class="p">[</span><span class="s1">&#39;owner&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">user_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">owner_id</span><span class="p">)</span>
+<a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>        <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">TaskResponse</span><span class="p">(</span><span class="o">**</span><span class="n">task_dict</span><span class="p">))</span>
+<a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>
+<a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>    <span class="k">return</span> <span class="n">result</span>
+</code></pre></div>
+问题：数据组装逻辑散落在各个路由中，重复代码多，容易产生 N+1 查询，难以维护和测试。</p>
+<p>无论选择哪种方式，核心问题都存在：<strong>数据组装逻辑没有合适的地方安放</strong>。Repository 应该只负责数据访问，Service 应该只负责业务逻辑，Response 应该只负责数据结构定义。但在 Entity-First 架构中，当需要从多个 Repository 获取数据并组合成响应时，这个逻辑应该放在哪里？传统的三层架构没有给出明确的答案。</p>
+<hr />
+<p><strong>总结：Entity-First 架构的缺失拼图</strong></p>
+<p>Entity-First 架构提供了一个清晰的理论框架——独立的业务实体层、Repository 模式、从 Entity 派生 Response。但在实际落地时，它缺少一个关键的执行层来处理<strong>数据组装逻辑</strong>：当需要从多个 Repository 获取数据并组合成响应时，这个逻辑应该放在哪里？</p>
+<p>这个问题不解决，Entity-First 架构在实践中就会遇到两难选择：
+- 让 Repository 承担数据组装职责 → Repository 变得臃肿，成为用例的堆砌场
+- 让 Service 承担数据组装职责 → Service 层充斥着重复、易错的数据组装代码
+- 让 Response 承担数据组装职责 → 每个 Response 都要自己实现，批量加载、N+1 查询、错误处理等问题都需要手动解决</p>
+<p>这正是 pydantic-resolve 试图解决的问题——它提供了 Entity-First 架构中缺失的数据组装执行层。</p>
+<h3 id="33">3.3 实现方式</h3>
+<p><strong>GraphQL 的启发</strong></p>
+<p>pydantic-resolve 的设计深受 GraphQL 启发。GraphQL 的核心优势在于：声明式的数据获取（客户端声明需要哪些字段）、自动的依赖解析（服务器自动解析字段间的依赖关系）、DataLoader 模式（自动批量加载避免 N+1 查询）。pydantic-resolve 将这些思想引入到 REST API 中——通过 <code>resolve_*</code> 方法声明数据依赖，通过 Resolver 自动分析和执行解析逻辑，通过 DataLoader 批量加载优化性能。不同的是，pydantic-resolve 保持了 REST API 的简单性和契约稳定性，避免了 GraphQL 引入的复杂度和学习成本。</p>
+<h4 id="step-1-entity">Step 1: 定义业务实体（Entity）</h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_resolve</span><span class="w"> </span><span class="kn">import</span> <span class="n">base_entity</span><span class="p">,</span> <span class="n">Relationship</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># 1. 创建 Entity 基类</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="n">BaseEntity</span> <span class="o">=</span> <span class="n">base_entity</span><span class="p">()</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># 2. 定义业务实体（不依赖 ORM）</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="k">class</span><span class="w"> </span><span class="nc">UserEntity</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;用户实体：表达业务概念&quot;&quot;&quot;</span>
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>    <span class="n">email</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>
+<a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="k">class</span><span class="w"> </span><span class="nc">TaskEntity</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">,</span> <span class="n">BaseEntity</span><span class="p">):</span>
+<a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;任务实体：定义业务关系&quot;&quot;&quot;</span>
+<a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>    <span class="n">__relationships__</span> <span class="o">=</span> <span class="p">[</span>
+<a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>        <span class="n">Relationship</span><span class="p">(</span>
+<a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>            <span class="n">field</span><span class="o">=</span><span class="s1">&#39;owner_id&#39;</span><span class="p">,</span>
+<a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>            <span class="n">target_kls</span><span class="o">=</span><span class="n">UserEntity</span><span class="p">,</span>
+<a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>            <span class="n">loader</span><span class="o">=</span><span class="n">user_loader</span>  <span class="c1"># 不关心从哪加载</span>
+<a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>        <span class="p">)</span>
+<a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a>    <span class="p">]</span>
+<a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a>    <span class="n">owner_id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a>    <span class="n">estimate</span><span class="p">:</span> <span class="nb">int</span>
+</code></pre></div>
+<p><strong>关键点</strong>：
+- Entity 是业务概念，不绑定具体实现
+- 关系通过 loader 连接，而不是 DB 外键
+- 可以表达跨数据源的关系</p>
+<h4 id="step-2-loader">Step 2: 定义数据加载器（Loader）</h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Loader 可以连接任意数据源</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">user_loader</span><span class="p">(</span><span class="n">user_ids</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]):</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="c1"># 从 ORM 加载</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>    <span class="n">users</span> <span class="o">=</span> <span class="k">await</span> <span class="n">UserORM</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">UserORM</span><span class="o">.</span><span class="n">id</span><span class="o">.</span><span class="n">in_</span><span class="p">(</span><span class="n">user_ids</span><span class="p">))</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>    <span class="k">return</span> <span class="n">build_list</span><span class="p">(</span><span class="n">users</span><span class="p">,</span> <span class="n">user_ids</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">u</span><span class="p">:</span> <span class="n">u</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># 或者从 RPC 加载</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">user_loader_from_rpc</span><span class="p">(</span><span class="n">user_ids</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]):</span>
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>    <span class="n">users</span> <span class="o">=</span> <span class="k">await</span> <span class="n">user_rpc</span><span class="o">.</span><span class="n">batch_get_users</span><span class="p">(</span><span class="n">user_ids</span><span class="p">)</span>
+<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>    <span class="k">return</span> <span class="n">build_list</span><span class="p">(</span><span class="n">users</span><span class="p">,</span> <span class="n">user_ids</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">u</span><span class="p">:</span> <span class="n">u</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">])</span>
+<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>
+<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="c1"># 或者从 Redis 加载</span>
+<a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">user_loader_from_cache</span><span class="p">(</span><span class="n">user_ids</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]):</span>
+<a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>    <span class="n">users</span> <span class="o">=</span> <span class="k">await</span> <span class="n">redis</span><span class="o">.</span><span class="n">mget</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;user:</span><span class="si">{</span><span class="n">uid</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">uid</span> <span class="ow">in</span> <span class="n">user_ids</span><span class="p">)</span>
+<a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>    <span class="k">return</span> <span class="n">build_list</span><span class="p">(</span><span class="n">users</span><span class="p">,</span> <span class="n">user_ids</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">u</span><span class="p">:</span> <span class="n">u</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">])</span>
+</code></pre></div>
+<p><strong>关键点</strong>：
+- Loader 屏蔽数据源差异
+- Entity 不关心数据从哪来
+- 可以轻松切换或组合数据源</p>
+<h4 id="step-3-entity-api-response">Step 3: 从 Entity 定义 API Response</h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_resolve</span><span class="w"> </span><span class="kn">import</span> <span class="n">DefineSubset</span><span class="p">,</span> <span class="n">LoadBy</span><span class="p">,</span> <span class="n">SubsetConfig</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="c1"># 场景 1：用户摘要</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">UserSummary</span><span class="p">(</span><span class="n">DefineSubset</span><span class="p">):</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>    <span class="n">__subset__</span> <span class="o">=</span> <span class="p">(</span><span class="n">UserEntity</span><span class="p">,</span> <span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">,</span> <span class="s1">&#39;name&#39;</span><span class="p">))</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="c1"># 场景 2：任务列表（包含负责人）</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="k">class</span><span class="w"> </span><span class="nc">TaskResponse</span><span class="p">(</span><span class="n">DefineSubset</span><span class="p">):</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>    <span class="n">__subset__</span> <span class="o">=</span> <span class="p">(</span><span class="n">TaskEntity</span><span class="p">,</span> <span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">,</span> <span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;estimate&#39;</span><span class="p">))</span>
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>
+<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>    <span class="c1"># 自动解析 owner，无需写 resolve 方法</span>
+<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>    <span class="n">owner</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="n">UserSummary</span><span class="p">],</span> <span class="n">LoadBy</span><span class="p">(</span><span class="s1">&#39;owner_id&#39;</span><span class="p">)]</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>
+<a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="c1"># 场景 3：任务详情（包含更多字段）</span>
+<a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="k">class</span><span class="w"> </span><span class="nc">TaskDetailResponse</span><span class="p">(</span><span class="n">DefineSubset</span><span class="p">):</span>
+<a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a>    <span class="n">__subset__</span> <span class="o">=</span> <span class="p">(</span><span class="n">TaskEntity</span><span class="p">,</span> <span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">,</span> <span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;estimate&#39;</span><span class="p">,</span> <span class="s1">&#39;created_at&#39;</span><span class="p">))</span>
+<a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a>
+<a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a>    <span class="n">owner</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="n">UserDetail</span><span class="p">],</span> <span class="n">LoadBy</span><span class="p">(</span><span class="s1">&#39;owner_id&#39;</span><span class="p">)]</span> <span class="o">=</span> <span class="kc">None</span>
+</code></pre></div>
+<h3 id="step-4">Step 4: 获取主数据， 自动加载所有子数据</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">er_diagram</span> <span class="o">=</span> <span class="n">BaseEntity</span><span class="o">.</span><span class="n">get_diagram</span><span class="p">()</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">config_global_resolver</span><span class="p">(</span><span class="n">er_diagram</span><span class="p">)</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="n">tasks</span> <span class="o">=</span> <span class="k">await</span> <span class="n">get_tasks</span><span class="p">()</span>   <span class="c1"># 可复用的主数据查询</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="n">tasks</span> <span class="o">=</span> <span class="p">[</span><span class="n">TaskDetailResponse</span><span class="o">.</span><span class="n">model_validate</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tasks</span><span class="p">]</span>  <span class="c1"># 不同的 Response 生成不同的结果</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="n">tasks</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Resolver</span><span class="p">()</span><span class="o">.</span><span class="n">resolve</span><span class="p">(</span><span class="n">tasks</span><span class="p">)</span>
+</code></pre></div>
+<p><strong>关键点</strong>：
+- Response 从 Entity 派生，类型安全
+- 自动继承 Entity 的关系定义
+- 可以复用和组合不同的字段子集
+- Entity 变更时，Response 自动同步</p>
+<h3 id="33_1">3.3 架构优势</h3>
+<h4 id="1">优势 1：清晰的分层</h4>
+<ul>
+<li><strong>Entity</strong> → 领域层，表达业务概念</li>
+<li><strong>Response</strong> → API 层，定义对外契约</li>
+<li><strong>Loader</strong> → 数据层，处理实现细节</li>
+</ul>
+<h4 id="2_1">优势 2：独立演进</h4>
+<ul>
+<li>DB 结构改变 → 只需修改 Loader</li>
+<li>API 契约改变 → 只需修改 Response</li>
+<li>业务逻辑改变 → 修改 Entity 和关系</li>
+</ul>
+<h4 id="3_1">优势 3：统一的类型系统</h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Entity 作为&quot;单一真相来源&quot;</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># 所有 Response 都从它派生，确保类型一致</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">UserSummary</span><span class="p">(</span><span class="n">DefineSubset</span><span class="p">):</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>    <span class="n">__subset__</span> <span class="o">=</span> <span class="p">(</span><span class="n">UserEntity</span><span class="p">,</span> <span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">,</span> <span class="s1">&#39;name&#39;</span><span class="p">))</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="k">class</span><span class="w"> </span><span class="nc">UserDetail</span><span class="p">(</span><span class="n">DefineSubset</span><span class="p">):</span>
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>    <span class="n">__subset__</span> <span class="o">=</span> <span class="p">(</span><span class="n">UserEntity</span><span class="p">,</span> <span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">,</span> <span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;email&#39;</span><span class="p">))</span>
+<a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>
+<a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="c1"># 类型安全：id 字段在所有 Response 中都是 int</span>
+</code></pre></div>
+<h4 id="4_1">优势 4：天然支持多数据源</h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># 可以轻松组合不同数据源的关系</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">TaskEntity</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">,</span> <span class="n">BaseEntity</span><span class="p">):</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>    <span class="n">__relationships__</span> <span class="o">=</span> <span class="p">[</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>        <span class="n">Relationship</span><span class="p">(</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>            <span class="n">field</span><span class="o">=</span><span class="s1">&#39;owner_id&#39;</span><span class="p">,</span>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>            <span class="n">target_kls</span><span class="o">=</span><span class="n">UserEntity</span><span class="p">,</span>
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>            <span class="n">loader</span><span class="o">=</span><span class="n">user_from_db_loader</span>  <span class="c1"># 从 DB 加载</span>
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>        <span class="p">),</span>
+<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>        <span class="n">Relationship</span><span class="p">(</span>
+<a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>            <span class="n">field</span><span class="o">=</span><span class="s1">&#39;project_id&#39;</span><span class="p">,</span>
+<a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>            <span class="n">target_kls</span><span class="o">=</span><span class="n">ProjectEntity</span><span class="p">,</span>
+<a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>            <span class="n">loader</span><span class="o">=</span><span class="n">project_from_rpc_loader</span>  <span class="c1"># 从 RPC 加载</span>
+<a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a>        <span class="p">),</span>
+<a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>        <span class="n">Relationship</span><span class="p">(</span>
+<a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a>            <span class="n">field</span><span class="o">=</span><span class="s1">&#39;status_id&#39;</span><span class="p">,</span>
+<a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a>            <span class="n">target_kls</span><span class="o">=</span><span class="n">StatusEntity</span><span class="p">,</span>
+<a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a>            <span class="n">loader</span><span class="o">=</span><span class="n">status_from_cache_loader</span>  <span class="c1"># 从缓存加载</span>
+<a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a>        <span class="p">),</span>
+<a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a>    <span class="p">]</span>
+</code></pre></div>
+<h4 id="5">优势 5：自动数据组装，告别冗长代码</h4>
+<p><strong>对比：传统方式 vs pydantic-resolve</strong></p>
+<p><strong>传统方式</strong>（5个步骤，~30行代码）：
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_posts_with_users</span><span class="p">(</span><span class="n">session</span><span class="p">:</span> <span class="n">AsyncSession</span><span class="p">):</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>    <span class="c1"># 1. 查询 posts</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>    <span class="n">posts_result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">session</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">select</span><span class="p">(</span><span class="n">Post</span><span class="p">))</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>    <span class="n">posts</span> <span class="o">=</span> <span class="n">posts_result</span><span class="o">.</span><span class="n">scalars</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>    <span class="c1"># 2. 收集所有 user_id</span>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>    <span class="n">user_ids</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">([</span><span class="n">post</span><span class="o">.</span><span class="n">user_id</span> <span class="k">for</span> <span class="n">post</span> <span class="ow">in</span> <span class="n">posts</span><span class="p">]))</span>
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>    <span class="c1"># 3. 批量查询 users</span>
+<a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>    <span class="n">users_result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">session</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+<a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a>        <span class="n">select</span><span class="p">(</span><span class="n">User</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span><span class="o">.</span><span class="n">in_</span><span class="p">(</span><span class="n">user_ids</span><span class="p">))</span>
+<a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a>    <span class="p">)</span>
+<a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a>    <span class="n">users</span> <span class="o">=</span> <span class="n">users_result</span><span class="o">.</span><span class="n">scalars</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+<a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a>
+<a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a>    <span class="c1"># 4. 构建 user_id -&gt; user 的映射</span>
+<a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a>    <span class="n">user_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">user</span><span class="o">.</span><span class="n">id</span><span class="p">:</span> <span class="n">user</span> <span class="k">for</span> <span class="n">user</span> <span class="ow">in</span> <span class="n">users</span><span class="p">}</span>
+<a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a>
+<a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a>    <span class="c1"># 5. 手动组装 response</span>
+<a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a>    <span class="n">result</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a>    <span class="k">for</span> <span class="n">post</span> <span class="ow">in</span> <span class="n">posts</span><span class="p">:</span>
+<a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a>        <span class="n">post_data</span> <span class="o">=</span> <span class="n">PostResponse</span><span class="p">(</span>
+<a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a>            <span class="nb">id</span><span class="o">=</span><span class="n">post</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+<a id="__codelineno-14-23" name="__codelineno-14-23" href="#__codelineno-14-23"></a>            <span class="n">title</span><span class="o">=</span><span class="n">post</span><span class="o">.</span><span class="n">title</span><span class="p">,</span>
+<a id="__codelineno-14-24" name="__codelineno-14-24" href="#__codelineno-14-24"></a>            <span class="n">user_id</span><span class="o">=</span><span class="n">post</span><span class="o">.</span><span class="n">user_id</span>
+<a id="__codelineno-14-25" name="__codelineno-14-25" href="#__codelineno-14-25"></a>        <span class="p">)</span>
+<a id="__codelineno-14-26" name="__codelineno-14-26" href="#__codelineno-14-26"></a>        <span class="k">if</span> <span class="n">post</span><span class="o">.</span><span class="n">user_id</span> <span class="ow">in</span> <span class="n">user_map</span><span class="p">:</span>
+<a id="__codelineno-14-27" name="__codelineno-14-27" href="#__codelineno-14-27"></a>            <span class="n">user</span> <span class="o">=</span> <span class="n">user_map</span><span class="p">[</span><span class="n">post</span><span class="o">.</span><span class="n">user_id</span><span class="p">]</span>
+<a id="__codelineno-14-28" name="__codelineno-14-28" href="#__codelineno-14-28"></a>            <span class="n">post_data</span><span class="o">.</span><span class="n">user</span> <span class="o">=</span> <span class="n">UserResponse</span><span class="p">(</span>
+<a id="__codelineno-14-29" name="__codelineno-14-29" href="#__codelineno-14-29"></a>                <span class="nb">id</span><span class="o">=</span><span class="n">user</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+<a id="__codelineno-14-30" name="__codelineno-14-30" href="#__codelineno-14-30"></a>                <span class="n">name</span><span class="o">=</span><span class="n">user</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-14-31" name="__codelineno-14-31" href="#__codelineno-14-31"></a>                <span class="n">email</span><span class="o">=</span><span class="n">user</span><span class="o">.</span><span class="n">email</span>
+<a id="__codelineno-14-32" name="__codelineno-14-32" href="#__codelineno-14-32"></a>            <span class="p">)</span>
+<a id="__codelineno-14-33" name="__codelineno-14-33" href="#__codelineno-14-33"></a>        <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">post_data</span><span class="p">)</span>
+<a id="__codelineno-14-34" name="__codelineno-14-34" href="#__codelineno-14-34"></a>
+<a id="__codelineno-14-35" name="__codelineno-14-35" href="#__codelineno-14-35"></a>    <span class="k">return</span> <span class="n">result</span>
+</code></pre></div></p>
+<p><strong>pydantic-resolve 方式</strong>（声明式，~10行代码）：
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># 1. 定义 Loader</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">user_batch_loader</span><span class="p">(</span><span class="n">user_ids</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]):</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>    <span class="k">async</span> <span class="k">with</span> <span class="n">get_db_session</span><span class="p">()</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>        <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">session</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>            <span class="n">select</span><span class="p">(</span><span class="n">User</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span><span class="o">.</span><span class="n">in_</span><span class="p">(</span><span class="n">user_ids</span><span class="p">))</span>
+<a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>        <span class="p">)</span>
+<a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>        <span class="n">users</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">scalars</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+<a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a>        <span class="k">return</span> <span class="n">build_list</span><span class="p">(</span><span class="n">users</span><span class="p">,</span> <span class="n">user_ids</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">u</span><span class="p">:</span> <span class="n">u</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+<a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>
+<a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="c1"># 2. 定义 Response（声明如何获取关联数据, 注意此处没有使用 LoadBy 而是手动设定了 dataloader 的调用）</span>
+<a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="k">class</span><span class="w"> </span><span class="nc">PostResponse</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a>    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a>    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a>    <span class="n">user_id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a>    <span class="n">user</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="n">UserResponse</span><span class="p">],</span> <span class="n">LoadBy</span><span class="p">(</span><span class="s1">&#39;user_id&#39;</span><span class="p">)]</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a>
+<a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a>
+<a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a><span class="c1"># 3. 使用 Resolver 自动组装</span>
+<a id="__codelineno-15-19" name="__codelineno-15-19" href="#__codelineno-15-19"></a><span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/posts&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">List</span><span class="p">[</span><span class="n">PostResponse</span><span class="p">])</span>
+<a id="__codelineno-15-20" name="__codelineno-15-20" href="#__codelineno-15-20"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_posts</span><span class="p">():</span>
+<a id="__codelineno-15-21" name="__codelineno-15-21" href="#__codelineno-15-21"></a>    <span class="n">posts</span> <span class="o">=</span> <span class="k">await</span> <span class="n">query_posts_from_db</span><span class="p">()</span>
+<a id="__codelineno-15-22" name="__codelineno-15-22" href="#__codelineno-15-22"></a>    <span class="k">return</span> <span class="k">await</span> <span class="n">Resolver</span><span class="p">()</span><span class="o">.</span><span class="n">resolve</span><span class="p">(</span><span class="n">posts</span><span class="p">)</span>
+</code></pre></div></p>
+<p><strong>对比结果</strong>：
+| 维度 | 传统方式 | pydantic-resolve |
+|------|----------|------------------|
+| 代码行数 | ~30 行 | ~10 行 |
+| 是否手动批量 | ✗ 需要手动实现 | ✓ 自动批量 |
+| 是否容易出错 | ✗ 手动构建映射 | ✓ 框架保证 |
+| 是否可复用 | ✗ 每处重复写 | ✓ Loader 可复用 |
+| N+1 风险 | ✗ 容易忘记批量 | ✓ 自动避免 |
+| 职责分离 | ✗ 数据组装散落各处 | ✓ 清晰分层 |</p>
+<p><strong>关键差异</strong>：
+- <strong>传统方式</strong>：命令式，关注"怎么做"（如何查询、如何映射、如何组装）
+- <strong>pydantic-resolve</strong>：声明式，关注"要什么"（需要哪些关联数据）</p>
+<p><strong>更复杂的场景</strong>：</p>
+<p>当有多层嵌套时，传统方式的代码复杂度会指数增长：</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># 传统方式：获取 Sprints → Stories → Tasks → Owners（4层嵌套）</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_sprints_with_full_detail</span><span class="p">(</span><span class="n">session</span><span class="p">):</span>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>    <span class="c1"># 需要 4 层循环，每个循环都要：</span>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>    <span class="c1"># 1. 查询当前层数据</span>
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>    <span class="c1"># 2. 收集下一层的 ID</span>
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>    <span class="c1"># 3. 批量查询下一层数据</span>
+<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>    <span class="c1"># 4. 构建映射</span>
+<a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>    <span class="c1"># 5. 手动组装</span>
+<a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>    <span class="c1"># 代码会超过 100 行，难以维护</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># pydantic-resolve：同样的需求</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">SprintResponse</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>    <span class="n">stories</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">StoryResponse</span><span class="p">],</span> <span class="n">LoadBy</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)]</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>
+<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="k">class</span><span class="w"> </span><span class="nc">StoryResponse</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a>
+<a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a>    <span class="n">tasks</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">TaskResponse</span><span class="p">],</span> <span class="n">LoadBy</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)]</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a>
+<a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a><span class="k">class</span><span class="w"> </span><span class="nc">TaskResponse</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a>    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-17-16" name="__codelineno-17-16" href="#__codelineno-17-16"></a>    <span class="n">owner_id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-17-17" name="__codelineno-17-17" href="#__codelineno-17-17"></a>
+<a id="__codelineno-17-18" name="__codelineno-17-18" href="#__codelineno-17-18"></a>    <span class="n">owner</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="n">UserResponse</span><span class="p">],</span> <span class="n">LoadBy</span><span class="p">(</span><span class="s1">&#39;owner_id&#39;</span><span class="p">)]</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-17-19" name="__codelineno-17-19" href="#__codelineno-17-19"></a>
+<a id="__codelineno-17-20" name="__codelineno-17-20" href="#__codelineno-17-20"></a><span class="c1"># 使用</span>
+<a id="__codelineno-17-21" name="__codelineno-17-21" href="#__codelineno-17-21"></a><span class="n">sprints</span> <span class="o">=</span> <span class="k">await</span> <span class="n">query_sprints_from_db</span><span class="p">()</span>
+<a id="__codelineno-17-22" name="__codelineno-17-22" href="#__codelineno-17-22"></a><span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">Resolver</span><span class="p">()</span><span class="o">.</span><span class="n">resolve</span><span class="p">(</span><span class="n">sprints</span><span class="p">)</span>
+</code></pre></div>
+<p><strong>代码量对比</strong>：
+- 传统方式：100+ 行，难以维护
+- pydantic-resolve：30 行，清晰易读</p>
+<h2 id="_3">四、实战案例：重构现有项目</h2>
+<h3 id="41-orm-first">4.1 重构前（ORM-First）</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># models/task.py（ORM）</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">relationship</span>
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">TaskORM</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
+<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s1">&#39;tasks&#39;</span>
+<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>    <span class="nb">id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a>    <span class="n">name</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">100</span><span class="p">))</span>
+<a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a>    <span class="n">owner_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;users.id&#39;</span><span class="p">))</span>
+<a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a>    <span class="n">project_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;projects.id&#39;</span><span class="p">))</span>
+<a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a>
+<a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a>    <span class="c1"># 定义 relationship 用于加载关联数据</span>
+<a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a>    <span class="n">owner</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s2">&quot;UserORM&quot;</span><span class="p">,</span> <span class="n">back_populates</span><span class="o">=</span><span class="s2">&quot;tasks&quot;</span><span class="p">)</span>
+<a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a>    <span class="n">project</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s2">&quot;ProjectORM&quot;</span><span class="p">,</span> <span class="n">back_populates</span><span class="o">=</span><span class="s2">&quot;tasks&quot;</span><span class="p">)</span>
+<a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a>
+<a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a><span class="c1"># schemas/task.py（从 ORM 复制）</span>
+<a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a><span class="k">class</span><span class="w"> </span><span class="nc">TaskBase</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-18-18" name="__codelineno-18-18" href="#__codelineno-18-18"></a>
+<a id="__codelineno-18-19" name="__codelineno-18-19" href="#__codelineno-18-19"></a><span class="k">class</span><span class="w"> </span><span class="nc">TaskCreate</span><span class="p">(</span><span class="n">TaskBase</span><span class="p">):</span>
+<a id="__codelineno-18-20" name="__codelineno-18-20" href="#__codelineno-18-20"></a>    <span class="n">owner_id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-18-21" name="__codelineno-18-21" href="#__codelineno-18-21"></a>    <span class="n">project_id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-18-22" name="__codelineno-18-22" href="#__codelineno-18-22"></a>
+<a id="__codelineno-18-23" name="__codelineno-18-23" href="#__codelineno-18-23"></a><span class="k">class</span><span class="w"> </span><span class="nc">TaskResponse</span><span class="p">(</span><span class="n">TaskBase</span><span class="p">):</span>
+<a id="__codelineno-18-24" name="__codelineno-18-24" href="#__codelineno-18-24"></a>    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-18-25" name="__codelineno-18-25" href="#__codelineno-18-25"></a>    <span class="n">owner_id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-18-26" name="__codelineno-18-26" href="#__codelineno-18-26"></a>    <span class="n">project_id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-18-27" name="__codelineno-18-27" href="#__codelineno-18-27"></a>    <span class="n">owner</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="s1">&#39;UserResponse&#39;</span><span class="p">]</span>
+<a id="__codelineno-18-28" name="__codelineno-18-28" href="#__codelineno-18-28"></a>    <span class="n">project</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="s1">&#39;ProjectResponse&#39;</span><span class="p">]</span>
+<a id="__codelineno-18-29" name="__codelineno-18-29" href="#__codelineno-18-29"></a>
+<a id="__codelineno-18-30" name="__codelineno-18-30" href="#__codelineno-18-30"></a><span class="c1"># routes/task.py</span>
+<a id="__codelineno-18-31" name="__codelineno-18-31" href="#__codelineno-18-31"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">selectinload</span>
+<a id="__codelineno-18-32" name="__codelineno-18-32" href="#__codelineno-18-32"></a>
+<a id="__codelineno-18-33" name="__codelineno-18-33" href="#__codelineno-18-33"></a><span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/tasks&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">List</span><span class="p">[</span><span class="n">TaskResponse</span><span class="p">])</span>
+<a id="__codelineno-18-34" name="__codelineno-18-34" href="#__codelineno-18-34"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_tasks</span><span class="p">(</span><span class="n">session</span><span class="p">:</span> <span class="n">AsyncSession</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session</span><span class="p">)):</span>
+<a id="__codelineno-18-35" name="__codelineno-18-35" href="#__codelineno-18-35"></a>    <span class="c1"># 必须指定加载策略，否则会产生 N+1 查询</span>
+<a id="__codelineno-18-36" name="__codelineno-18-36" href="#__codelineno-18-36"></a>    <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">session</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+<a id="__codelineno-18-37" name="__codelineno-18-37" href="#__codelineno-18-37"></a>        <span class="n">select</span><span class="p">(</span><span class="n">TaskORM</span><span class="p">)</span>
+<a id="__codelineno-18-38" name="__codelineno-18-38" href="#__codelineno-18-38"></a>        <span class="o">.</span><span class="n">options</span><span class="p">(</span>
+<a id="__codelineno-18-39" name="__codelineno-18-39" href="#__codelineno-18-39"></a>            <span class="n">selectinload</span><span class="p">(</span><span class="n">TaskORM</span><span class="o">.</span><span class="n">owner</span><span class="p">),</span>      <span class="c1"># 预加载 owner</span>
+<a id="__codelineno-18-40" name="__codelineno-18-40" href="#__codelineno-18-40"></a>            <span class="n">selectinload</span><span class="p">(</span><span class="n">TaskORM</span><span class="o">.</span><span class="n">project</span><span class="p">)</span>     <span class="c1"># 预加载 project</span>
+<a id="__codelineno-18-41" name="__codelineno-18-41" href="#__codelineno-18-41"></a>        <span class="p">)</span>
+<a id="__codelineno-18-42" name="__codelineno-18-42" href="#__codelineno-18-42"></a>    <span class="p">)</span>
+<a id="__codelineno-18-43" name="__codelineno-18-43" href="#__codelineno-18-43"></a>    <span class="n">tasks</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">scalars</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+<a id="__codelineno-18-44" name="__codelineno-18-44" href="#__codelineno-18-44"></a>    <span class="k">return</span> <span class="p">[</span><span class="n">TaskResponse</span><span class="o">.</span><span class="n">model_validate</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tasks</span><span class="p">]</span>
+</code></pre></div>
+<h3 id="42-entity-first">4.2 重构后（Entity-First）</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># entities/task.py（业务实体）</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">TaskEntity</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">,</span> <span class="n">BaseEntity</span><span class="p">):</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>    <span class="n">__relationships__</span> <span class="o">=</span> <span class="p">[</span>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>        <span class="n">Relationship</span><span class="p">(</span><span class="n">field</span><span class="o">=</span><span class="s1">&#39;owner_id&#39;</span><span class="p">,</span> <span class="n">target_kls</span><span class="o">=</span><span class="n">UserEntity</span><span class="p">,</span> <span class="n">loader</span><span class="o">=</span><span class="n">user_loader</span><span class="p">),</span>
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>        <span class="n">Relationship</span><span class="p">(</span><span class="n">field</span><span class="o">=</span><span class="s1">&#39;project_id&#39;</span><span class="p">,</span> <span class="n">target_kls</span><span class="o">=</span><span class="n">ProjectEntity</span><span class="p">,</span> <span class="n">loader</span><span class="o">=</span><span class="n">project_loader</span><span class="p">),</span>
+<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>    <span class="p">]</span>
+<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a>    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a>    <span class="n">owner_id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a>    <span class="n">project_id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a>
+<a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a><span class="n">er_diagram</span> <span class="o">=</span> <span class="n">BaseEntity</span><span class="o">.</span><span class="n">get_diagram</span><span class="p">()</span>
+<a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a>
+<a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a><span class="n">config_global_resolver</span><span class="p">(</span><span class="n">er_diagram</span><span class="p">)</span>
+<a id="__codelineno-19-15" name="__codelineno-19-15" href="#__codelineno-19-15"></a>
+<a id="__codelineno-19-16" name="__codelineno-19-16" href="#__codelineno-19-16"></a><span class="c1"># responses/task.py（API 契约）</span>
+<a id="__codelineno-19-17" name="__codelineno-19-17" href="#__codelineno-19-17"></a><span class="k">class</span><span class="w"> </span><span class="nc">TaskResponse</span><span class="p">(</span><span class="n">DefineSubset</span><span class="p">):</span>
+<a id="__codelineno-19-18" name="__codelineno-19-18" href="#__codelineno-19-18"></a>    <span class="n">__subset__</span> <span class="o">=</span> <span class="p">(</span><span class="n">TaskEntity</span><span class="p">,</span> <span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">,</span> <span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;owner_id&#39;</span><span class="p">,</span> <span class="s1">&#39;project_id&#39;</span><span class="p">))</span>
+<a id="__codelineno-19-19" name="__codelineno-19-19" href="#__codelineno-19-19"></a>
+<a id="__codelineno-19-20" name="__codelineno-19-20" href="#__codelineno-19-20"></a>    <span class="n">owner</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="n">UserResponse</span><span class="p">],</span> <span class="n">LoadBy</span><span class="p">(</span><span class="s1">&#39;owner_id&#39;</span><span class="p">)]</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-19-21" name="__codelineno-19-21" href="#__codelineno-19-21"></a>    <span class="n">project</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="n">ProjectSummary</span><span class="p">],</span> <span class="n">LoadBy</span><span class="p">(</span><span class="s1">&#39;project_id&#39;</span><span class="p">)]</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-19-22" name="__codelineno-19-22" href="#__codelineno-19-22"></a>
+<a id="__codelineno-19-23" name="__codelineno-19-23" href="#__codelineno-19-23"></a><span class="c1"># routes/task.py</span>
+<a id="__codelineno-19-24" name="__codelineno-19-24" href="#__codelineno-19-24"></a><span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/tasks&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">List</span><span class="p">[</span><span class="n">TaskResponse</span><span class="p">])</span>
+<a id="__codelineno-19-25" name="__codelineno-19-25" href="#__codelineno-19-25"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_tasks</span><span class="p">():</span>
+<a id="__codelineno-19-26" name="__codelineno-19-26" href="#__codelineno-19-26"></a>    <span class="n">tasks_orm</span> <span class="o">=</span> <span class="k">await</span> <span class="n">query_tasks_from_db</span><span class="p">()</span>
+<a id="__codelineno-19-27" name="__codelineno-19-27" href="#__codelineno-19-27"></a>    <span class="c1"># 1. 将 ORM 对象转换为 Response 对象</span>
+<a id="__codelineno-19-28" name="__codelineno-19-28" href="#__codelineno-19-28"></a>    <span class="n">tasks</span> <span class="o">=</span> <span class="p">[</span><span class="n">TaskResponse</span><span class="o">.</span><span class="n">model_validate</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tasks_orm</span><span class="p">]</span>
+<a id="__codelineno-19-29" name="__codelineno-19-29" href="#__codelineno-19-29"></a>    <span class="c1"># 2. Resolver 自动解析关联数据</span>
+<a id="__codelineno-19-30" name="__codelineno-19-30" href="#__codelineno-19-30"></a>    <span class="k">return</span> <span class="k">await</span> <span class="n">Resolver</span><span class="p">()</span><span class="o">.</span><span class="n">resolve</span><span class="p">(</span><span class="n">tasks</span><span class="p">)</span>
+</code></pre></div>
+<p><strong>关键优势：组装流程完全屏蔽数据库细节，降低心智负担</strong></p>
+<p>对比 4.1，Entity-First 方式在整个数据组装过程中<strong>完全不需要感知数据库</strong>：</p>
+<ul>
+<li>❌ 不需要导入 <code>selectinload</code>、<code>relationship</code> 等 SQLAlchemy 模块</li>
+<li>❌ 不需要思考加载策略（会不会 N+1？用 selectinload 还是 joinedload？）</li>
+<li>❌ 不需要手动写循环组装代码</li>
+</ul>
+<p>只需要声明业务语义："这个任务需要一个 owner" → <code>LoadBy('owner_id')</code>。数据库层面的批量查询、映射构建、性能优化全部由 <code>Resolver</code> 自动处理。</p>
+<h3 id="43">4.3 对比分析</h3>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>ORM-First</th>
+<th>Entity-First</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>类型定义分散</td>
+<td>ORM 和 Schema 重复定义</td>
+<td>Entity 作为单一来源</td>
+</tr>
+<tr>
+<td>关系定义</td>
+<td>每个 Response 重复写 resolve</td>
+<td>ERD 统一定义，自动复用</td>
+</tr>
+<tr>
+<td>数据源切换</td>
+<td>需要修改多处</td>
+<td>只需修改 Loader</td>
+</tr>
+<tr>
+<td>字段子集</td>
+<td>手动复制粘贴</td>
+<td>DefineSubset 自动生成</td>
+</tr>
+<tr>
+<td>跨数据源</td>
+<td>难以统一</td>
+<td>Loader 统一接口</td>
+</tr>
+<tr>
+<td>测试友好性</td>
+<td>依赖 DB</td>
+<td>可以 mock Loader</td>
+</tr>
+<tr>
+<td>实现细节暴露</td>
+<td>路由层暴露 DB 字段（外键 ID）和加载策略（selectinload）</td>
+<td>路由层只声明业务语义，屏蔽 DB 细节</td>
+</tr>
+</tbody>
+</table>
+<h2 id="entity-first_2">五、如何迁移到 Entity-First 架构</h2>
+<h3 id="51">5.1 迁移步骤</h3>
+<h4 id="step-1-entity_1">Step 1: 提取 Entity</h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># 从现有的 ORM 模型中提取业务概念</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">UserEntity</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>    <span class="c1"># 只保留业务字段，去掉 DB 特定字段</span>
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>    <span class="n">email</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a>    <span class="c1"># 移除：password_hash, created_at, updated_at</span>
+</code></pre></div>
+<h4 id="step-2-erd">Step 2: 定义 ERD</h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># 集中定义实体关系</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">TaskEntity</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">,</span> <span class="n">BaseEntity</span><span class="p">):</span>
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>    <span class="n">__relationships__</span> <span class="o">=</span> <span class="p">[</span>
+<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>        <span class="n">Relationship</span><span class="p">(</span><span class="n">field</span><span class="o">=</span><span class="s1">&#39;owner_id&#39;</span><span class="p">,</span> <span class="n">target_kls</span><span class="o">=</span><span class="n">UserEntity</span><span class="p">,</span> <span class="n">loader</span><span class="o">=</span><span class="n">user_loader</span><span class="p">),</span>
+<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>    <span class="p">]</span>
+</code></pre></div>
+<h4 id="step-3-response">Step 3: 重构 Response</h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># 从 Entity 派生，而不是从 ORM</span>
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">TaskResponse</span><span class="p">(</span><span class="n">DefineSubset</span><span class="p">):</span>
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>    <span class="n">__subset__</span> <span class="o">=</span> <span class="p">(</span><span class="n">TaskEntity</span><span class="p">,</span> <span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">,</span> <span class="s1">&#39;name&#39;</span><span class="p">))</span>
+<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>    <span class="n">owner</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="n">UserSummary</span><span class="p">],</span> <span class="n">LoadBy</span><span class="p">(</span><span class="s1">&#39;owner_id&#39;</span><span class="p">)]</span> <span class="o">=</span> <span class="kc">None</span>
+</code></pre></div>
+<h4 id="step-4_1">Step 4: 逐步替换</h4>
+<ul>
+<li>保留现有 ORM</li>
+<li>新功能使用 Entity-First</li>
+<li>旧接口逐步重构</li>
+</ul>
+<h3 id="52">5.2 注意事项</h3>
+<ul>
+<li>不要一次性重构所有代码</li>
+<li>可以 ORM 和 Entity 并存</li>
+<li>优先在新功能中使用 Entity-First</li>
+<li>旧代码可以在维护时逐步迁移</li>
+</ul>
+<h2 id="faq">六、常见问题（FAQ）</h2>
+<h3 id="q1-entity-orm">Q1: Entity 不就是 ORM 的复制吗？</h3>
+<p><strong>A</strong>: 不是，Entity 和 ORM 有本质区别：
+- Entity 是业务概念，ORM 是 DB 映射
+- Entity 可以表达 DB 无法表达的关系（跨数据源）
+- Entity 可以包含计算字段，ORM 通常不包含
+- Entity 是稳定的核心，ORM 是可替换的实现</p>
+<h3 id="q2">Q2: 这不会增加代码量吗？</h3>
+<p><strong>A</strong>: 初期可能会增加，但长期收益更大：
+- 消除了 ORM 和 Schema 的重复代码
+- DefineSubset 自动生成 Response，减少手动维护
+- Loader 可以复用，减少数据获取的重复逻辑</p>
+<h3 id="q3">Q3: 小项目也需要这样吗？</h3>
+<p><strong>A</strong>: 取决于项目复杂度：
+- 简单 CRUD 项目：ORM-First 足够
+- 有复杂业务逻辑：建议 Entity-First
+- 多数据源：强烈建议 Entity-First
+- 团队协作：Entity-First 更易维护</p>
+<h3 id="q4-postputpatch">Q4: 如何处理写操作（POST/PUT/PATCH）？</h3>
+<p><strong>A</strong>: 写操作和读操作不同：
+- 写操作：仍然可以使用 ORM 或 Pydantic schema 作为 DTO
+- 读操作：使用 Entity-First 获得架构优势
+- 或者：定义专门的 CreateDTO/UpdateDTO，从 Entity 派生</p>
+<h2 id="_4">七、总结</h2>
+<h3 id="71">7.1 核心观点</h3>
+<p>本文的核心观点是：Pydantic schema 不应该是 ORM 的影子，而应该建立在独立的业务实体层之上。这意味着我们需要建立独立的业务实体层来纯粹的领域概念，通过 Loader 机制将数据源与业务逻辑解耦，最终从 Entity 派生出 API Response。这种架构转变不仅是代码组织方式的调整，更是对系统本质的重新思考——让业务概念成为架构的核心，而不是被数据库结构所束缚。</p>
+<h3 id="72">7.2 架构原则</h3>
+<p>Entity-First 架构遵循四个核心原则：首先是分层清晰，系统分为 API 层（对外契约）、Domain 层（业务实体）、Data 层（数据访问）；其次是单向依赖，上层依赖下层，但下层不依赖上层，保证了各层的独立性；第三是独立演进，各层可以独立修改而不影响其他层，数据库结构的优化不会波及业务逻辑和 API 契约；最后是类型安全，通过 Entity 统一类型定义，确保整个系统的类型一致性。</p>
+<h3 id="73-pydantic-resolve">7.3 pydantic-resolve 的角色</h3>
+<p>pydantic-resolve 为 Entity-First 架构提供了完整的工具支持。它通过 ERD（实体关系图）统一管理实体关系，通过 DataLoader 模式自动优化数据获取、避免 N+1 查询，通过 DefineSubset 机制实现类型定义的复用和组合。更重要的是，它提供了自动的数据组装执行层，让开发者只需声明"需要什么数据"，而不必关心"如何获取和组装数据"，显著降低了开发的心智负担。</p>
+<h3 id="74">7.4 呼吁</h3>
+<p>希望 FastAPI 社区能够重新思考 Pydantic 的使用方式，从广泛使用的 "ORM-First" 转向更加清晰的 "Entity-First" 架构。这不仅是技术选型的调整，更是架构理念的升级——让系统建立在稳定的业务概念之上，而不是易变的数据库结构。长期来看，这种架构能够显著提升系统的可维护性、可演进性和团队协作效率。</p>
+<h2 id="_5">八、其他</h2>
+<h3 id="81-sqlmodel">8.1 SQLModel 能解决多少问题？</h3>
+<p>SQLModel 是一个试图统一 SQLAlchemy 和 Pydantic 的库，它让一个类同时作为数据库模型和 Pydantic schema 使用。这是一个实用的工具，但它是否能解决本文讨论的架构问题？让我们客观分析。</p>
+<h4 id="sqlmodel">SQLModel 能解决的问题</h4>
+<p><strong>类型定义重复</strong>：SQLModel 确实解决了最明显的问题——不需要在 ORM 模型和 Pydantic schema 中重复定义相同的字段。一个 <code>class User(SQLModel, table=True)</code> 定义既可以用作数据库表结构，也可以用作数据验证和序列化。修改字段时只需要改一个地方，避免了不一致的风险。</p>
+<p><strong>字段同步问题</strong>：由于只有单一定义源，字段名称、类型、默认值等自然会保持一致，不会出现 ORM 和 Schema 字段不匹配的情况。</p>
+<h4 id="sqlmodel_1">SQLModel 无法解决的核心问题</h4>
+<p><strong>Schema 被动跟随 ORM 的本质未变</strong>：SQLModel 的核心设计理念仍然是"ORM 先行"。它让 Pydantic schema 成为数据库模型的别名，而不是建立独立的业务实体层。数据库设计仍然直接决定 API 契约的结构，业务概念仍然被数据库表结构束缚。</p>
+<p><strong>缺少独立的业务抽象层</strong>：当使用 SQLModel 时，<code>class User</code> 表达的是"users 表"，而不是"用户这个业务概念"。如果数据库设计将 <code>owner_id</code> 和 <code>reporter_id</code> 合并为单个字段，API 契约也必须跟着改变。SQLModel 没有提供一个层次来表达稳定的业务概念，与可变的技术实现分离开来。</p>
+<p><strong>多数据源统一处理能力缺失</strong>：SQLModel 只能处理 SQLAlchemy 连接的数据源。当项目需要从数据库、RPC 服务、Redis 缓存、外部 API 等多个数据源组合数据时，SQLModel 无能为力。它没有提供统一的抽象层来处理不同格式的数据源。</p>
+<p><strong>数据组装困境依然存在</strong>：对于不使用 SQLAlchemy <code>relationship</code> 的场景，SQLModel 并没有提供更好的解决方案。开发者仍然需要手动编写查询、批量加载、构建映射、组装数据的代码，面临的 N+1 查询风险和代码重复问题完全相同。</p>
+<p><strong>Schema 复用和组合机制缺失</strong>：实际项目中，同一个实体往往需要不同的视图（比如用户列表只需要 ID 和姓名，用户详情需要完整信息）。SQLModel 没有提供从模型派生字段子集的机制，开发者要么复制定义，要么手动选择字段，又回到了类型重复和维护困难的老问题。</p>
+<h4 id="sqlmodel_2">SQLModel 的定位</h4>
+<p>SQLModel 是一个实用的工具，它在 ORM-First 的框架内优化了开发体验，但它没有解决架构层面的根本问题。更准确地说，SQLModel 是"更优的 ORM-First 方案"，而不是 Entity-First 方案。</p>
+<p><strong>适合使用 SQLModel 的场景</strong>：简单的 CRUD 项目，单一数据源，API 契约可以跟随数据库结构变化的小型项目。在这些场景下，SQLModel 能够减少样板代码，提高开发效率。</p>
+<p><strong>不适合使用 SQLModel 的场景</strong>：复杂业务逻辑，需要稳定 API 契约的长期项目，多数据源集成的系统，需要清晰分层架构的团队协作项目。在这些场景下，Entity-First 架构（配合 pydantic-resolve）提供的独立业务实体层、统一的类型系统、灵活的数据加载机制，才是可持续发展的正确选择。</p>
+<hr />
+<h3 id="82-entity-first-clean-architecture">8.2 Entity-First 与 Clean Architecture 的关系</h3>
+<p>Entity-First 架构与 Clean Architecture（整洁架构）有着天然的契合度。我们可以将 Entity-First 的三个核心层次映射到 Clean Architecture 的经典分层中，从而更清晰地理解其架构优势。</p>
+<h4 id="_6">层次对应关系</h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>Clean Architecture          Entity-First Architecture
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>┌─────────────────┐        ┌──────────────────────────┐
+<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>│  Frameworks &amp;   │        │   API Layer (Response)    │ ← 对外接口
+<a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>│  Interfaces     │        │   - FastAPI 路由           │
+<a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a>├─────────────────┤        ├──────────────────────────┤
+<a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a>│  Application    │ ←──→   │   Resolver (执行层)       │ ← 用例编排
+<a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a>│  Business Rules │        │   - 数据组装逻辑          │
+<a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a>├─────────────────┤        ├──────────────────────────┤
+<a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a>│  Enterprise     │ ←──→   │   Domain Layer (Entity)   │ ← 业务规则
+<a id="__codelineno-23-10" name="__codelineno-23-10" href="#__codelineno-23-10"></a>│  Business Rules │        │   - 业务实体定义          │
+<a id="__codelineno-23-11" name="__codelineno-23-11" href="#__codelineno-23-11"></a>│  (Entities)     │        │   - ERD 关系声明          │
+<a id="__codelineno-23-12" name="__codelineno-23-12" href="#__codelineno-23-12"></a>├─────────────────┤        ├──────────────────────────┤
+<a id="__codelineno-23-13" name="__codelineno-23-13" href="#__codelineno-23-13"></a>│  DB, Web, GUI   │        │   Data Layer (Loader)     │ ← 数据访问
+<a id="__codelineno-23-14" name="__codelineno-23-14" href="#__codelineno-23-14"></a>│  (Adapters)     │        │   - Repository 实现       │
+<a id="__codelineno-23-15" name="__codelineno-23-15" href="#__codelineno-23-15"></a>└─────────────────┘        └──────────────────────────┘
+</code></pre></div>
+<h4 id="_7">核心概念映射</h4>
+<p><strong>1. Entity（领域实体）- 完全对应</strong></p>
+<p>Clean Architecture 中的 Entity 层包含企业级业务规则，是系统中最稳定、最高层级的部分。Entity-First 中的 Entity 扮演完全相同的角色：表达纯粹的业务概念（如 User、Task、Project），独立于任何框架、数据库或 UI 技术。</p>
+<p>两者都强调：业务概念应该成为架构的核心，而不是被技术实现细节所束缚。</p>
+<p><strong>2. Use Case（应用业务规则）与 Resolver - 自动化编排</strong></p>
+<p>Clean Architecture 中的 Use Case 包含应用特定的业务规则，负责编排 Entity 的交互以完成特定用例。在"获取任务列表"这个用例中，Use Case 需要协调 Task、User、Project 的数据加载。</p>
+<p>Entity-First 中的 <code>Resolver</code> 扮演相同的角色，但有一个关键差异：它将数据组装的通用模式自动化了。Clean Architecture 中需要为每个用例手写编排逻辑（查询主数据、收集 ID、批量加载、组装结果），而 Entity-First 通过声明式的 <code>LoadBy</code> 注解和自动依赖分析，让 <code>Resolver</code> 自动完成这些工作。</p>
+<p>这种自动化减少了重复代码，降低了出错风险，同时保持了 Clean Architecture 的核心理念：用例编排是独立于具体实现的。</p>
+<p><strong>3. Adapter（接口适配器）与 Loader - 统一抽象</strong></p>
+<p>Clean Architecture 中的 Adapter 负责将外部世界的数据格式转换为内部可用的 Entity。无论数据来自 PostgreSQL、RPC 服务、Redis 缓存还是外部 API，Adapter 都将其统一转换为领域实体。</p>
+<p>Entity-First 中的 <code>Loader</code> 扮演完全相同的角色。每个 Loader 就是一个适配器，它屏蔽了数据源的实现细节，只暴露"根据 ID 列表返回实体列表"的统一接口。这种抽象使得数据源的迁移、替换或组合变得异常简单——只需要修改 Loader 的实现，而不影响上层的业务逻辑。</p>
+<h4 id="_8">架构优势</h4>
+<p><strong>1. 依赖方向正确（依赖倒置原则）</strong></p>
+<p>Clean Architecture 的核心原则是"依赖方向指向内层"，Entity-First 完全符合这一原则：</p>
+<ul>
+<li><strong>Entity 不依赖任何框架或数据库</strong> - 它是最内层的稳定核心</li>
+<li><strong>API 层依赖 Entity</strong> - 但 Entity 完全不知道 API 的存在</li>
+<li><strong>Loader/Adapter 实现可以随意替换</strong> - 上层代码完全不受影响</li>
+</ul>
+<p>这种依赖倒置保证了系统的可演进性：当数据库结构改变、外部服务迁移、缓存策略调整时，只需要修改对应的数据访问层，业务逻辑和 API 契约保持稳定。</p>
+<p><strong>2. 业务逻辑与技术实现分离</strong></p>
+<p>Entity-First 架构清晰地分离了三个层次：</p>
+<ul>
+<li><strong>Entity 表达"是什么"</strong> - 用户有哪些属性、任务有负责人、这些是业务概念</li>
+<li><strong>Loader 解决"怎么做"</strong> - 数据从哪里获取、如何批量查询、如何避免 N+1</li>
+<li><strong>Response 定义"暴露什么"</strong> - API 返回哪些字段、如何组合、如何为特定用例定制</li>
+</ul>
+<p>这种分离让开发者能够用业务语言思考问题，而不是时刻被技术细节打断。当业务需求变更时，修改往往局限在某一层，不会牵一发而动全身。</p>
+<p><strong>3. 可测试性</strong></p>
+<p>Clean Architecture 强调可测试性，因为业务逻辑与外部依赖完全解耦。Entity-First 继承了这一优势：</p>
+<p>由于 Loader 是统一的数据访问接口，测试时可以轻松 Mock Loader，提供预定义的测试数据。测试用例专注于验证业务逻辑（如任务与负责人的关系是否正确），而不需要启动数据库、准备测试数据、管理事务状态。这使得单元测试运行快速、稳定、易于维护。</p>
+<p><strong>4. 演进能力</strong></p>
+<p>Clean Architecture 的终极目标是让系统具备长期演进的能力。Entity-First 在这方面表现突出：</p>
+<table>
+<thead>
+<tr>
+<th>演进场景</th>
+<th>Clean Architecture 应对</th>
+<th>Entity-First 实现</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>数据库迁移</td>
+<td>只需修改 Adapter</td>
+<td>只需修改 Loader</td>
+</tr>
+<tr>
+<td>API 升级</td>
+<td>只需修改 Interface/Presenter</td>
+<td>只需修改 Response</td>
+</tr>
+<tr>
+<td>业务扩展</td>
+<td>扩展 Entity 和 Use Case</td>
+<td>扩展 Entity 和 ERD</td>
+</tr>
+<tr>
+<td>多数据源集成</td>
+<td>添加新的 Adapter</td>
+<td>添加新的 Loader</td>
+</tr>
+</tbody>
+</table>
+<p>这种架构让系统在业务增长、技术升级、团队扩张时，依然保持清晰、可控、可理解。长期来看，这是比短期开发效率更重要的投资回报。</p>
+<h4 id="_9">总结</h4>
+<p>Entity-First 架构是 Clean Architecture 在 FastAPI + Pydantic 生态中的自然实现。它不是凭空创造的新概念，而是将 Clean Architecture 的经典原则与现代 Python 技术栈相结合，提供了一套可落地的实践方案：</p>
+<ul>
+<li><strong>Entity 层</strong>对应 Enterprise Business Rules，表达稳定的业务概念</li>
+<li><strong>Resolver 层</strong>对应 Use Cases，自动化的数据组装编排</li>
+<li><strong>Loader 层</strong>对应 Adapters，隔离外部数据源的实现细节</li>
+</ul>
+<p>采用 Entity-First 架构，意味着你的项目从一开始就建立在经过验证的架构原则之上，这为系统的长期演进奠定了坚实基础。</p>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.tabs.sticky", "content.links.target_blank"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
