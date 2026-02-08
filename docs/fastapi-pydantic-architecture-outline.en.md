@@ -6,7 +6,7 @@
 
 FastAPI has become one of the preferred frameworks for Python web development, and its deep integration with Pydantic has made data validation simpler than ever. However, after browsing through numerous FastAPI projects, official templates, community tutorials, and best practice guides, we discovered a striking similarity: almost all projects follow the same pattern—first define SQLAlchemy ORM models, then create Pydantic schemas based on these models.
 
-This "ORM-first, Pydantic-follows" pattern has become so ubiquitous that many developers have never questioned its validity. The official full-stack template adopts this approach, community best practice repositories with thousands of stars recommend it, and numerous tutorials and articles teach it. But this doesn't mean it's correct.
+This "ORM-first, Pydantic-follows" pattern has become so ubiquitous that many developers have never questioned its validity. The official full-stack template adopts this approach, community best practice repositories with thousands of stars recommend it, and numerous tutorials and articles teach it. But this doesn't mean it's the most suitable one.
 
 When we deeply analyze the practical application of this pattern, some deep-seated issues begin to surface. Pydantic schemas passively copy field definitions from ORM models, resulting in type definitions being duplicated in two places; any change to the database design directly affects API contracts (understood as specific use cases); business concepts are deeply permeated by database structure, making it difficult to express the true semantics of domain models; when data needs to be combined from multiple data sources (databases, RPC, caches, etc.), the code becomes exceptionally complex and hard to maintain.
 
