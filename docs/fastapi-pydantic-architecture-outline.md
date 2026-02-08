@@ -151,9 +151,9 @@ SQLAlchemy 提供了 `relationship` 功能，可以在查询时自动加载关�
 
 ### 3.1 核心理念
 
-Entity-First 架构的核心思想是：**通过 Pydantic 定义好业务实体（Entity）和关系 (Relationship) 之后，可以仅仅通过选择 Entity 的子集和扩展字段的方式，就能将所需的用例数据结构描述出来**， 重点是和 ORM-first 相比，对 用例层屏蔽掉掉所有的查询细节。
+Entity-First 架构的核心思想是：**通过 Pydantic 定义好业务实体（Entity）和关系 (Relationship) 之后，可以仅仅通过选择 Entity 的子集和扩展字段的方式，就能将所需的用例数据结构描述出来**， 重点是和 ORM-first 相比，对 用例层屏蔽掉所有的查询细节。
 
-用一段代码来说明的话， 就是 Entity 定义完成之后， 在他们的基础之后， 通过取子集 + 组合的方式， 申明任意多种的用例结构， **并通过某种方式将所描述的数据结构查询出来。**
+用一段代码来说明的话， 就是 Entity 定义完成之后， 在他们的基础之上， 通过取子集 + 组合的方式， 声明任意多种的用例结构， **并通过某种方式将所描述的数据结构查询出来。**
 
 ```python
 # 1. 定义业务实体（应用层，不依赖数据库）
@@ -181,7 +181,7 @@ class TaskResponse(DefineSubset):
 
 
 tasks = await get_tasks()
-tasks = [TaskResponse.model_validate(t) for t in t]
+tasks = [TaskResponse.model_validate(t) for t in tasks]
 tasks = await Resolver().resolve(tasks)  # 获取所有数据
 ```
 
@@ -396,6 +396,18 @@ class TaskDetailResponse(DefineSubset):
     owner: Annotated[Optional[UserDetail], LoadBy('owner_id')] = None
 ```
 
+### Step 4: 获取主数据， 自动加载所有子数据
+
+```python
+er_diagram = BaseEntity.get_diagram()
+
+config_global_resolver(er_diagram)
+
+tasks = await get_tasks()   # 可复用的主数据查询
+tasks = [TaskDetailResponse.model_validate(t) for t in tasks]  # 不同的 Response 生成不同的结果
+tasks = await Resolver().resolve(tasks)
+```
+
 **关键点**：
 - Response 从 Entity 派生，类型安全
 - 自动继承 Entity 的关系定义
@@ -505,15 +517,13 @@ async def user_batch_loader(user_ids: list[int]):
         users = result.scalars().all()
         return build_list(users, user_ids, lambda u: u.id)
 
-# 2. 定义 Response（声明如何获取关联数据）
+# 2. 定义 Response（声明如何获取关联数据, 注意此处没有使用 LoadBy 而是手动设定了 dataloader 的调用）
 class PostResponse(BaseModel):
     id: int
     title: str
     user_id: int
+    user: Annotated[Optional[UserResponse], LoadBy('user_id')] = None
 
-    user: Optional[UserResponse] = None
-    def resolve_user(self, loader=Loader(user_batch_loader)):
-        return loader.load(self.user_id)
 
 # 3. 使用 Resolver 自动组装
 @router.get("/posts", response_model=List[PostResponse])
@@ -557,27 +567,20 @@ async def get_sprints_with_full_detail(session):
 class SprintResponse(BaseModel):
     id: int
     name: str
-
-    stories: List[StoryResponse] = []
-    def resolve_stories(self, loader=Loader(stprint_to_stories_loader)):
-        return loader.load(self.id)
+    stories: Annotated[List[StoryResponse], LoadBy('id')] = []
 
 class StoryResponse(BaseModel):
     id: int
     name: str
 
-    tasks: List[TaskResponse] = []
-    def resolve_tasks(self, loader=Loader(story_to_tasks_loader)):
-        return loader.load(self.id)
+    tasks: Annotated[List[TaskResponse], LoadBy('id')] = []
 
 class TaskResponse(BaseModel):
     id: int
     name: str
     owner_id: int
 
-    owner: Optional[UserResponse] = None
-    def resolve_owner(self, loader=Loader(user_loader)):
-        return loader.load(self.owner_id)
+    owner: Annotated[Optional[UserResponse], LoadBy('owner_id')] = None
 
 # 使用
 sprints = await query_sprints_from_db()
@@ -650,6 +653,10 @@ class TaskEntity(BaseModel, BaseEntity):
     name: str
     owner_id: int
     project_id: int
+
+er_diagram = BaseEntity.get_diagram()
+
+config_global_resolver(er_diagram)
 
 # responses/task.py（API 契约）
 class TaskResponse(DefineSubset):
