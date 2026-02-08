@@ -1,14 +1,14 @@
-# Entity-First Architecture: The Missing Piece in FastAPI Development
+# The Proper Use of Pydantic in FastAPI: Entity-First Architecture
 
-## 1. Introduction: The Overlooked Architectural Problem
+## I. Introduction: The Overlooked Architectural Problem
 
 ### 1.1 Current State Observations
 
 FastAPI has become one of the preferred frameworks for Python web development, and its deep integration with Pydantic has made data validation simpler than ever. However, after browsing through numerous FastAPI projects, official templates, community tutorials, and best practice guides, we discovered a striking similarity: almost all projects follow the same pattern—first define SQLAlchemy ORM models, then create Pydantic schemas based on these models.
 
-This "ORM-first, Pydantic-follows" pattern has become so ubiquitous that many developers have never questioned its rationality. The official full-stack template adopts this approach, community best practice repositories with thousands of stars recommend it, and numerous tutorials and articles teach it. But this doesn't mean it's correct.
+This "ORM-first, Pydantic-follows" pattern has become so ubiquitous that many developers have never questioned its validity. The official full-stack template adopts this approach, community best practice repositories with thousands of stars recommend it, and numerous tutorials and articles teach it. But this doesn't mean it's correct.
 
-When we deeply analyze the practical application of this pattern, some deep-seated issues begin to surface. Pydantic schemas passively copy field definitions from ORM models, resulting in type definitions being duplicated in two places; any change to the database design directly affects API contracts; business concepts are deeply permeated by database structure, making it difficult to express the true semantics of domain models; when data needs to be combined from multiple data sources (databases, RPC, caches, etc.), the code becomes exceptionally complex and hard to maintain.
+When we deeply analyze the practical application of this pattern, some deep-seated issues begin to surface. Pydantic schemas passively copy field definitions from ORM models, resulting in type definitions being duplicated in two places; any change to the database design directly affects API contracts (understood as specific use cases); business concepts are deeply permeated by database structure, making it difficult to express the true semantics of domain models; when data needs to be combined from multiple data sources (databases, RPC, caches, etc.), the code becomes exceptionally complex and hard to maintain.
 
 The root of these problems lies in our confusion between two different levels of abstraction: database models (ORM) and domain models (Entity). ORM models should only be implementation details of data persistence, not the center of the entire architecture. Pydantic schemas shouldn't be shadows of ORM either, but should become independent abstraction layers that express business concepts and API contracts.
 
@@ -20,13 +20,13 @@ The core argument of this article is simple: Pydantic schemas shouldn't be shado
 
 **Specific use cases drive API design**. Each API endpoint serves a specific business scenario, such as "the user list page needs the user's id and name", "the task detail page needs complete task information and detailed information about the person in charge". These use cases determine what data the API should return, not what fields the database has. Pydantic schemas should be defined based on specific use cases, selecting needed fields from domain models, adding use-case-specific computed fields and validation logic. This is the true meaning of "response models".
 
-**The data layer is just an implementation detail**. Whether data is stored in databases like PostgreSQL, MySQL, MongoDB, or read from caches like Redis, Memcached, or obtained from external services through gRPC, REST API, none of these should affect the definition of domain models and API contracts. The data layer is responsible for efficiently and reliably fetching data, but it's just a replaceable implementation detail. Database structures may change, external services may migrate, caching strategies may adjust, but as long as the data layer can provide the data needed by domain models, these changes shouldn't spread to business logic and API contracts.
+**The data layer is just an implementation detail**. Whether data is stored in databases like PostgreSQL, MySQL, MongoDB, or read from caches like Redis, Memcached, or obtained from external services through gRPC, REST API, none of these should affect the definition of domain models and API contracts. The data layer is responsible for efficiently and reliably fetching data, but it's just a replaceable implementation detail. Database structures may change, external services may migrate, caching strategies may adjust, but as long as the data layer can provide the data needed by domain models, these changes shouldn't propagate to business logic and API contracts.
 
-The core value of this layered architecture lies in **stability and evolvability**. Domain models serve as a stable core, existing independently of specific implementations. API contracts are designed based on use cases, providing stable interfaces for the frontend. The data layer serves as a replaceable shell that can be flexibly adjusted according to performance requirements, technology stack upgrades, and business changes. When these three levels are clearly separated, the system gains the ability to evolve continuously—we can optimize data access strategies without affecting business logic, refactor data models without breaking API contracts, and adjust API design without changing domain models.
+The core value of this layered architecture lies in **stability and evolvability**. Domain models serve as a stable core, existing independently of specific implementations. API contracts are designed based on use cases, providing stable interfaces for the frontend. The data layer serves as a replaceable shell that can be flexibly adjusted according to performance requirements, technology stack upgrades, and business changes. When these three layers are clearly separated, the system gains the ability to evolve continuously—we can optimize data access strategies without affecting business logic, refactor data models without breaking API contracts, and adjust API design without changing domain models.
 
 This is not just theoretical elegance, but practical necessity. When project scale grows, business complexity increases, and team collaboration needs increase, clear layered architecture becomes a key factor in whether a project can continue to evolve. A system deeply permeated by database structure requires touching everything with every database change; while a system built on stable domain models can more calmly cope with changes.
 
-## 2. Architectural Problems of "ORM-First"
+## II. Architectural Problems of "ORM-First"
 
 ### 2.1 Typical Project Structure
 
@@ -48,7 +48,7 @@ project/
     └── ...
 ```
 
-This structure looks reasonable—data models and API contracts are stored separately—but the problem is that Pydantic schemas are often just passive copies of database models, with field names, types, and even almost identical comments. The deeper problem is that the entire project stratification has gaps: from database models to Pydantic schemas, there's no independent business concept layer.
+This structure looks reasonable—data models and API contracts are stored separately—but the problem is that Pydantic schemas are often just passive copies of database models, with field names, types, and even almost identical comments. The deeper problem is that the entire project layering has gaps: from database models to Pydantic schemas, there's no independent business concept layer.
 
 ### 2.2 Core Problem Analysis
 
@@ -76,7 +76,7 @@ When database structure becomes the center of the entire architecture, business 
 
 **Database design decision**: In database design, this might be implemented in various ways: two foreign key fields (`owner_id` and `reporter_id`), a single `user_id` plus `role` field, or a many-to-many relationship table. These are purely technical decisions, depending on performance requirements, data volume, query patterns, and other factors.
 
-When APIs directly expose database structure, business concepts are replaced by technical details, which violates the **Law of Demeter** in software engineering: the encapsulation of one level should let upper-level users know as little as possible. Frontend as API users only needs to know business concepts ("task has an owner"), not how data is stored ("stored in two fields").
+When APIs directly expose database structure, business concepts are replaced by technical details, which violates the **Law of Demeter** in software engineering: the encapsulation of one layer should let upper-level users know as little as possible. Frontend as API users only needs to know business concepts ("task has an owner"), not how data is stored ("stored in two fields").
 
 ```python
 # Database design 1: using two foreign keys
@@ -123,7 +123,7 @@ True business concepts—"who does this task belong to", "who is responsible for
 
 #### Problem 3: Data Assembly Dilemma When Unable to Use Relationship Mapping
 
-SQLAlchemy provides `relationship` functionality that can automatically load associated data when querying, which looks convenient. But in actual projects, this functionality is not omnipotent. It's powerless for cross-database queries, difficult to use under complex JOIN conditions, read-only queries or report queries that need performance optimization are often also not suitable for using it. Once脱离 the convenience of `relationship`, developers must manually write lengthy data assembly code.
+SQLAlchemy provides `relationship` functionality that can automatically load associated data when querying, which looks convenient. But in actual projects, this functionality is not omnipotent. It's powerless for cross-database queries, difficult to use under complex JOIN conditions, read-only queries or report queries that need performance optimization are often also not suitable for using it. Once separated from the convenience of `relationship`, developers must manually write lengthy data assembly code.
 
 This process usually contains multiple repetitive steps: first query main data (e.g., article list), then collect all associated IDs (e.g., author IDs of all articles), then batch query associated data (e.g., query users by ID list), then manually build ID to object mapping dictionary, finally loop through main data, manually find corresponding associated objects and assemble into final response structure. This process has large code volume, is error-prone, and needs to be written repeatedly every time similar associated queries are needed.
 
@@ -147,28 +147,86 @@ In traditional approaches, developers either copy-paste code (violating DRY prin
 
 This lack of unified schema definition makes code difficult to maintain. When an entity's field types need modification (e.g., changing user ID from integer to UUID), all related schema definitions need to be searched and modified one by one, easily missed. There's also no type system to guarantee the consistency of these schemas—the compiler won't tell you that the `id` field types in `UserSummary` and `UserDetail` are different.
 
-## 3. Entity-First Architecture
+## III. Entity-First Architecture
 
 ### 3.1 Core Concept
 
-```
-┌─────────────────────────────────────┐
-│   API Layer (Response)              │  ← API contracts, externally exposed
-│   - Select fields from Entity        │
-│   - Define API-specific computed fields│
-├─────────────────────────────────────┤
-│   Domain Layer (Entity)             │  ← Business concepts, relationship definitions
-│   - Define business entities         │
-│   - Define entity relationships (ERD)│
-│   - Independent of specific implementation│
-├─────────────────────────────────────┤
-│   Data Layer (Repository)           │  ← Data access, encapsulate persistence details
-│   - ORM / RPC / Cache / HTTP API    │
-│   - Unified interface through Repository│
-└─────────────────────────────────────┘
+The core idea of Entity-First architecture is: **after defining business entities (Entity) and relationships through Pydantic, you can describe required use case data structures simply by selecting subsets of Entity and extending fields**, with the key difference being that compared to ORM-first, it shields all query details from the use case layer.
+
+If explained with code, once Entity definitions are complete, based on them, through subset selection + composition, declare any number of use case structures, **and fetch the described data structures through some method**.
+
+```python
+# 1. Define business entities (application layer, not dependent on database)
+class UserEntity(BaseModel):
+    id: int
+    name: str
+    email: str
+
+class TaskEntity(BaseModel):
+    id: int
+    name: str
+    owner_id: int  # foreign key, pointing to owner
+    created_at: datetime
+
 ```
 
-**Repository pattern** is the core abstraction of the data layer. It encapsulates all persistence details—whether using ORM to query databases, calling RPC services, reading caches, or accessing external APIs—unified exposure as simple method interfaces (such as `get_by_id`, `get_by_ids`, `find_all`). The domain layer (Entity) obtains data through Repository without needing to care where the data specifically comes from or how it's loaded.
+```python
+# 2. Define API response (select subset + extend fields), similar to GraphQL pick fields
+class UserSummary(DefineSubset):
+    __subset__ = (UserEntity, ('id', 'name'))
+
+class TaskResponse(DefineSubset):
+    __subset__ = (TaskEntity, ('id', 'name', 'owner_id'))
+    owner: Optional[UserSummary]  # extended field, associated data
+
+
+tasks = await get_tasks()
+tasks = [TaskResponse.model_validate(t) for t in tasks]
+tasks = await Resolver().resolve(tasks)  # fetch all data
+```
+
+Expressed as a relationship diagram, it's divided into three major parts: the middle is the core business model (and relationships) description, the upper layer is specific use cases built on top of business models, the lower layer is encapsulation of data query.
+
+```mermaid
+graph TD
+    subgraph DATA["Data Query Details"]
+        D1["Encapsulate persistence details<br/>ORM / RPC / Cache / HTTP API"]
+        D2["Unified data loading interface (Loader)"]
+        D3["Batch loading, caching, error handling"]
+        D4["Example: user_loader, task_to_owner_loader"]
+    end
+
+    subgraph DOMAIN["Business Model and Relationships"]
+        subgraph ENTITY["Entity (Business Entity)"]
+            E1["Define business concepts and fields"]
+            E2["Independent of database and framework"]
+            E3["Example: UserEntity, TaskEntity, TeamEntity"]
+        end
+
+        subgraph ERD["ERD (Entity Relationship Diagram)"]
+            R1["Declare relationships between entities"]
+            R2["Define how to load associated data"]
+            R3["Example: Task.owner -> UserEntity"]
+        end
+    end
+
+    subgraph API["API Contract (Use Case Composition)"]
+        A1["Select fields from Entity"]
+        A2["Define API-specific computed fields"]
+        A3["Declare how to use associated data"]
+        A4["Example: TaskResponse, UserSummary"]
+    end
+
+    API -->|depends on| DOMAIN
+    DOMAIN -->|depends on| DATA
+
+    style DATA fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    style DOMAIN fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    style API fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style ENTITY fill:#ffffff,stroke:#4a148c,stroke-width:1px
+    style ERD fill:#ffffff,stroke:#4a148c,stroke-width:1px
+```
+
 
 ### 3.2 Advantages and Challenges
 
@@ -213,6 +271,29 @@ class TaskService:
 ```
 Problem: Service layer is filled with data assembly code. This code is repetitive, error-prone, difficult to maintain, and mixed with business logic.
 
+**Option 3: Assemble in route/controller layer**
+```python
+@router.get("/tasks")
+async def get_tasks(task_service=Depends(get_task_service),
+                   user_service=Depends(get_user_service)):
+    # Route layer responsible for assembling data
+    tasks = await task_service.get_tasks()
+
+    # ❌ Manually collect IDs, batch query, build mapping, assemble result
+    user_ids = list(set([t.owner_id for t in tasks]))
+    users = await user_service.get_users_by_ids(user_ids)
+    user_map = {u.id: u for u in users}
+
+    result = []
+    for task in tasks:
+        task_dict = task.model_dump()
+        task_dict['owner'] = user_map.get(task.owner_id)
+        result.append(TaskResponse(**task_dict))
+
+    return result
+```
+Problem: Data assembly logic scattered in various routes, lots of duplicate code, easy to produce N+1 queries, difficult to maintain and test.
+
 Whichever option is chosen, the core problem exists: **data assembly logic has no suitable place to be placed**. Repository should only be responsible for data access, Service should only be responsible for business logic, Response should only be responsible for data structure definition. But in Entity-First architecture, when needing to obtain data from multiple Repositories and combine into a response, where should this logic be placed? Traditional three-layer architecture doesn't give a clear answer.
 
 ---
@@ -229,6 +310,10 @@ If this problem is not solved, Entity-First architecture will face a dilemma in 
 This is exactly the problem that pydantic-resolve tries to solve—it provides the missing data assembly execution layer in Entity-First architecture.
 
 ### 3.3 Implementation Approach
+
+**Inspiration from GraphQL**
+
+pydantic-resolve's design is deeply inspired by GraphQL. GraphQL's core advantage lies in: declarative data fetching (client declares which fields are needed), automatic dependency resolution (server automatically resolves dependencies between fields), DataLoader pattern (automatically batch loading to avoid N+1 queries). pydantic-resolve introduces these ideas into REST API—declaring data dependencies through `resolve_*` methods, automatically analyzing and executing resolution logic through Resolver, optimizing performance through DataLoader batch loading. The difference is that pydantic-resolve maintains the simplicity and contract stability of REST API, avoiding the complexity and learning cost introduced by GraphQL.
 
 #### Step 1: Define Business Entities (Entity)
 ```python
@@ -309,6 +394,18 @@ class TaskDetailResponse(DefineSubset):
     __subset__ = (TaskEntity, ('id', 'name', 'estimate', 'created_at'))
 
     owner: Annotated[Optional[UserDetail], LoadBy('owner_id')] = None
+```
+
+#### Step 4: Fetch Main Data, Automatically Load All Sub-Data
+
+```python
+er_diagram = BaseEntity.get_diagram()
+
+config_global_resolver(er_diagram)
+
+tasks = await get_tasks()   # reusable main data query
+tasks = [TaskDetailResponse.model_validate(t) for t in tasks]  # different Response generates different results
+tasks = await Resolver().resolve(tasks)
 ```
 
 **Key points**:
@@ -420,15 +517,13 @@ async def user_batch_loader(user_ids: list[int]):
         users = result.scalars().all()
         return build_list(users, user_ids, lambda u: u.id)
 
-# 2. Define Response (declare how to get associated data)
+# 2. Define Response (declare how to get associated data, note this doesn't use LoadBy but manually sets dataloader call)
 class PostResponse(BaseModel):
     id: int
     title: str
     user_id: int
+    user: Annotated[Optional[UserResponse], LoadBy('user_id')] = None
 
-    user: Optional[UserResponse] = None
-    def resolve_user(self, loader=Loader(user_batch_loader)):
-        return loader.load(self.user_id)
 
 # 3. Use Resolver to automatically assemble
 @router.get("/posts", response_model=List[PostResponse])
@@ -472,27 +567,20 @@ async def get_sprints_with_full_detail(session):
 class SprintResponse(BaseModel):
     id: int
     name: str
-
-    stories: List[StoryResponse] = []
-    def resolve_stories(self, loader=Loader(stprint_to_stories_loader)):
-        return loader.load(self.id)
+    stories: Annotated[List[StoryResponse], LoadBy('id')] = []
 
 class StoryResponse(BaseModel):
     id: int
     name: str
 
-    tasks: List[TaskResponse] = []
-    def resolve_tasks(self, loader=Loader(story_to_tasks_loader)):
-        return loader.load(self.id)
+    tasks: Annotated[List[TaskResponse], LoadBy('id')] = []
 
 class TaskResponse(BaseModel):
     id: int
     name: str
     owner_id: int
 
-    owner: Optional[UserResponse] = None
-    def resolve_owner(self, loader=Loader(user_loader)):
-        return loader.load(self.owner_id)
+    owner: Annotated[Optional[UserResponse], LoadBy('owner_id')] = None
 
 # Use
 sprints = await query_sprints_from_db()
@@ -503,7 +591,7 @@ result = await Resolver().resolve(sprints)
 - Traditional approach: 100+ lines, difficult to maintain
 - pydantic-resolve: 30 lines, clear and readable
 
-## 4. Practical Case: Refactoring Existing Projects
+## IV. Practical Case: Refactoring Existing Projects
 
 ### 4.1 Before Refactoring (ORM-First)
 ```python
@@ -566,6 +654,10 @@ class TaskEntity(BaseModel, BaseEntity):
     owner_id: int
     project_id: int
 
+er_diagram = BaseEntity.get_diagram()
+
+config_global_resolver(er_diagram)
+
 # responses/task.py (API contract)
 class TaskResponse(DefineSubset):
     __subset__ = (TaskEntity, ('id', 'name', 'owner_id', 'project_id'))
@@ -605,7 +697,7 @@ Only need to declare business semantics: "this task needs an owner" → `LoadBy(
 | Test friendliness | Dependent on DB | Can mock Loader |
 | Implementation detail exposure | Route layer exposes DB fields (foreign key IDs) and loading strategies (selectinload) | Route layer only declares business semantics, shields DB details |
 
-## 5. How to Migrate to Entity-First Architecture
+## V. How to Migrate to Entity-First Architecture
 
 ### 5.1 Migration Steps
 
@@ -648,7 +740,7 @@ class TaskResponse(DefineSubset):
 - Prioritize using Entity-First in new features
 - Old code can be gradually migrated during maintenance
 
-## 6. Frequently Asked Questions (FAQ)
+## VI. Frequently Asked Questions (FAQ)
 
 ### Q1: Isn't Entity just a copy of ORM?
 **A**: No, Entity and ORM are fundamentally different:
@@ -676,7 +768,7 @@ class TaskResponse(DefineSubset):
 - Read operations: Use Entity-First to gain architectural advantages
 - Or: Define dedicated CreateDTO/UpdateDTO, derived from Entity
 
-## 7. Summary
+## VII. Summary
 
 ### 7.1 Core Arguments
 
@@ -684,7 +776,7 @@ The core argument of this article is: Pydantic schemas shouldn't be shadows of O
 
 ### 7.2 Architectural Principles
 
-Entity-First architecture follows four core principles: First is clear layering, the system is divided into API layer (external contracts), Domain layer (business entities), Data layer (data access); Second is unidirectional dependency, upper layers depend on lower layers, but lower layers don't depend on upper layers, ensuring independence of each layer; Third is independent evolution, each layer can be independently modified without affecting other layers, optimization of database structure won't spread to business logic and API contracts; Finally is type safety, through Entity unified type definitions, ensuring type consistency throughout the system.
+Entity-First architecture follows four core principles: First is clear layering, the system is divided into API layer (external contracts), Domain layer (business entities), Data layer (data access); Second is unidirectional dependency, upper layers depend on lower layers, but lower layers don't depend on upper layers, ensuring independence of each layer; Third is independent evolution, each layer can be independently modified without affecting other layers, optimization of database structure won't propagate to business logic and API contracts; Finally is type safety, through Entity unified type definitions, ensuring type consistency throughout the system.
 
 ### 7.3 The Role of pydantic-resolve
 
@@ -694,7 +786,7 @@ pydantic-resolve provides complete tool support for Entity-First architecture. I
 
 I hope the FastAPI community can rethink the way Pydantic is used, shifting from the widely used "ORM-First" to a clearer "Entity-First" architecture. This is not just an adjustment of technical choice, but an upgrade of architectural philosophy—building systems on stable business concepts, rather than volatile database structures. In the long run, this architecture can significantly improve system maintainability, evolvability, and team collaboration efficiency.
 
-## 8. Additional Topics
+## VIII. Additional Topics
 
 ### 8.1 How Many Problems Can SQLModel Solve?
 
