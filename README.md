@@ -1,7 +1,8 @@
 # Pydantic Resolve
 
 
-> Transform Pydantic from a static data container into a powerful composable component
+> A tool for building Domain layer modeling and use case assembly.
+
 
 [![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
 [![PyPI Downloads](https://static.pepy.tech/badge/pydantic-resolve/month)](https://pepy.tech/projects/pydantic-resolve)
