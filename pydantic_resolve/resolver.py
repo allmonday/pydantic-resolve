@@ -49,9 +49,32 @@ class Resolver:
         
         self.debug = debug or os.getenv("PYDANTIC_RESOLVE_DEBUG", "false").lower() == "true"
 
-        self.performance = profile_util.Profile() 
+        self.performance = profile_util.Profile()
         self.loader_instance_cache = {}
 
+        # Optimization: Use single dict-based ContextVar for all ancestors
+        # Instead of multiple ContextVars (one per field), use one that holds a dict
+        self._ancestor_contextvar = contextvars.ContextVar(
+            '_ancestors',
+            default=MappingProxyType({}),
+        )
+
+        # Optimization: Use single dict-based ContextVar for collectors
+        self._collector_contextvar = contextvars.ContextVar(
+            '_collectors',
+            default=MappingProxyType({}),
+        )
+
+        # Optimization: Use single dict-based ContextVar for collectors
+        self._collector_contextvar = contextvars.ContextVar(
+            '_collectors',
+            default=MappingProxyType({})
+        )
+
+        # Pre-create parent ContextVar
+        self._parent_contextvar = contextvars.ContextVar('parent', default=None)
+
+        # Legacy compatibility - keep dict-based access for now
         self.ancestor_vars = {}
         self.collector_contextvars = {}
         self.parent_contextvars = {}
@@ -125,50 +148,52 @@ class Resolver:
         alias_map = analysis.generate_alias_map_with_cloned_collector(kls, self.metadata)
         if alias_map:
             # store for later post methods
-            self.object_level_collect_alias_map_store[id(node)] = alias_map  
+            self.object_level_collect_alias_map_store[id(node)] = alias_map
 
-            # expose to descendant
-            token_pairs = []
+            # Optimization: Use single dict-based ContextVar
+            current_collectors = self._collector_contextvar.get()
+            new_collectors = dict(current_collectors)
+
             for alias_name, sign_collector_kv in alias_map.items():
-                if not self.collector_contextvars.get(alias_name):
-                    self.collector_contextvars[alias_name] = contextvars.ContextVar(alias_name, default={})
-                
-                current_pair = self.collector_contextvars[alias_name].get()
-                if set(sign_collector_kv.keys()) - set(current_pair.keys()):  # update only when new sign is found
-                    updated_pair = {**current_pair, **sign_collector_kv}
-                    token = self.collector_contextvars[alias_name].set(updated_pair)
-                    token_pairs.append((alias_name, token))
-            return lambda : [_safe_reset_contextvar(self.collector_contextvars[alias_name], token) for alias_name, token in token_pairs]
-            
-        return lambda : None
+                if alias_name not in new_collectors:
+                    new_collectors[alias_name] = {}
+
+                current_pair = new_collectors[alias_name]
+                if set(sign_collector_kv.keys()) - set(current_pair.keys()):
+                    new_collectors[alias_name] = {**current_pair, **sign_collector_kv}
+
+            token = self._collector_contextvar.set(new_collectors)
+            return lambda: _safe_reset_contextvar(self._collector_contextvar, token)
+
+        return lambda: None
 
     def _prepare_parent(self, node: object):
-        if not self.parent_contextvars.get('parent'):
-            self.parent_contextvars['parent'] = contextvars.ContextVar('parent')
-        token = self.parent_contextvars['parent'].set(node)
-        return lambda : _safe_reset_contextvar(self.parent_contextvars['parent'], token)
+        # Optimization: Use pre-created ContextVar
+        token = self._parent_contextvar.set(node)
+        return lambda: _safe_reset_contextvar(self._parent_contextvar, token)
 
     def _prepare_expose_fields(self, node: object):
         expose_dict: dict | None = getattr(node, const.EXPOSE_TO_DESCENDANT, None)
         if expose_dict:
-            token_pairs = []
-            for field, alias in expose_dict.items():  # eg: {'name': 'bar_name'}
-                if not self.ancestor_vars.get(alias):
-                    self.ancestor_vars[alias] = contextvars.ContextVar(alias)
+            # Optimization: Use single dict-based ContextVar
+            current_ancestors = self._ancestor_contextvar.get()
+            new_ancestors = dict(current_ancestors)
 
+            for field, alias in expose_dict.items():
                 try:
                     val = getattr(node, field)
                 except AttributeError:
                     raise AttributeError(f'{field} does not exist')
+                new_ancestors[alias] = val
 
-                token = self.ancestor_vars[alias].set(val)
-                token_pairs.append((alias, token))
-            return lambda : [_safe_reset_contextvar(self.ancestor_vars[alias], token) for alias, token in token_pairs]
+            token = self._ancestor_contextvar.set(new_ancestors)
+            return lambda: _safe_reset_contextvar(self._ancestor_contextvar, token)
 
-        return lambda : None
+        return lambda: None
 
     def _prepare_ancestor_context(self):
-        return {k: v.get() for k, v in self.ancestor_vars.items()}
+        # Optimization: Single .get() call instead of multiple
+        return self._ancestor_contextvar.get()
 
     def _execute_resolve_method(
             self,
@@ -184,7 +209,7 @@ class Resolver:
         if resolve_param['ancestor_context']:
             params['ancestor_context'] = self._prepare_ancestor_context()
         if resolve_param['parent']:
-            params['parent'] = self.parent_contextvars['parent'].get()
+            params['parent'] = self._parent_contextvar.get()
         
         for loader in resolve_param['dataloaders']:
             cache_key = loader['path']
@@ -209,7 +234,7 @@ class Resolver:
         if post_param['ancestor_context']:
             params['ancestor_context'] = self._prepare_ancestor_context()
         if post_param['parent']:
-            params['parent'] = self.parent_contextvars['parent'].get()
+            params['parent'] = self._parent_contextvar.get()
         
         for loader in post_param['dataloaders']:
             cache_key = loader['path']
@@ -243,7 +268,7 @@ class Resolver:
         if post_default_param['ancestor_context']:
             params['ancestor_context'] = self._prepare_ancestor_context()
         if post_default_param['parent']:
-            params['parent'] = self.parent_contextvars['parent'].get()
+            params['parent'] = self._parent_contextvar.get()
 
         alias_map = self.object_level_collect_alias_map_store.get(id(node), {})
         if alias_map:
@@ -259,12 +284,15 @@ class Resolver:
             alias_list = alias if isinstance(alias, (tuple, list)) else (alias,)
 
             for alias in alias_list:
-                for _, instance in self.collector_contextvars[alias].get().items():
-                    if isinstance(field, tuple):  # only tuple are allowed to be key
-                        val = [getattr(node, f) for f in field]
-                    else:
-                        val = getattr(node, field)
-                    instance.add(val)
+                # Use the single dict-based ContextVar
+                collectors = self._collector_contextvar.get()
+                if alias in collectors:
+                    for _, instance in collectors[alias].items():
+                        if isinstance(field, tuple):  # only tuple are allowed to be key
+                            val = [getattr(node, f) for f in field]
+                        else:
+                            val = getattr(node, field)
+                        instance.add(val)
 
     async def _execute_resolve_method_field(
             self,
