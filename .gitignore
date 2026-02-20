@@ -12,3 +12,4 @@ cov
 .DS_Store
 .benchmarks
 CLAUDE.md
+.claude
