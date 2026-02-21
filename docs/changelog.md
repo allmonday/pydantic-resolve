@@ -2,18 +2,14 @@
 
 ## v2.5
 
-### v2.5.0alpha
+### v2.5.0alpha1
 
 - feat:
-  - **NEW**: `@serialization()` decorator for recursive JSON schema processing
-    - Automatically processes nested Pydantic models in JSON schema generation
-    - Supports `Optional[Model]` (both `Union[X, None]` and `X | None` syntax)
-    - Supports `List[Model]` nested structures
-    - Handles `anyOf`, `oneOf`, `allOf` schema wrappers
-    - Use `mode='serialization'` for proper handling of `exclude=True` fields
+  - **NEW**: `@serialization` decorator for recursive JSON schema processing
+    - No-parameter decorator, use `@serialization` directly
     - Example:
       ```python
-      @serialization()
+      @serialization
       class Person(BaseModel):
           name: str = ''
           address: Address | None = None
@@ -21,6 +17,8 @@
       schema = Person.model_json_schema(mode='serialization')
       # All nested models (Address) will have required fields set correctly
       ```
+
+### v2.5.0alpha
 
 - test:
   - Add edge case tests for Pydantic model resolution and collector handling

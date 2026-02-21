@@ -9,7 +9,7 @@ class Address(BaseModel):
     city: str = ''
 
 
-@serialization()
+@serialization
 class Person(BaseModel):
     name: str = ''
     address: Annotated[Address | None, 'hello'] = None
@@ -40,7 +40,7 @@ class City(BaseModel):
     country: Optional[Country] = None
 
 
-@serialization()
+@serialization
 class User(BaseModel):
     name: str
     city: City
@@ -70,7 +70,7 @@ class Item(BaseModel):
     name: str
 
 
-@serialization()
+@serialization
 class Order(BaseModel):
     items: List[Item]
     total: int
@@ -99,7 +99,7 @@ class InnerWithExclude(BaseModel):
         return 'hidden_value'
 
 
-@serialization()
+@serialization
 class OuterWithExclude(BaseModel):
     name: str
     inner: InnerWithExclude
@@ -132,7 +132,7 @@ class Config(BaseModel):
         return 'debug_value'
 
 
-@serialization()
+@serialization
 class Product(BaseModel):
     name: str
     price: int

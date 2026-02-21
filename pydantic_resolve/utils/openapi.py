@@ -51,9 +51,9 @@ def model_config(default_required: bool=True):
     return wrapper
 
 
-def serialization():
+def serialization(cls):
     """
-    Similar to model_config, but recursively processes nested Pydantic BaseModel fields.
+    Decorator to recursively process nested Pydantic BaseModel fields in JSON schema.
     Only needs to be applied to the root class.
 
     Sets all non-default fields as required in the JSON schema,
@@ -63,29 +63,27 @@ def serialization():
     Use mode='serialization' for proper handling of exclude=True fields.
 
     Usage:
-        @serialization()
+        @serialization
         class MyModel(BaseModel):
             ...
 
         schema = MyModel.model_json_schema(mode='serialization')
     """
-    def wrapper(kls):
-        if safe_issubclass(kls, BaseModel):
-            # Store original model_json_schema method
-            original_method = kls.model_json_schema
+    if safe_issubclass(cls, BaseModel):
+        # Store original model_json_schema method
+        original_method = cls.model_json_schema
 
-            def wrapped_model_json_schema(*args, **kwargs):
-                """Wrapper that auto-processes nested models after schema generation"""
-                schema = original_method(*args, **kwargs)
-                # Post-process to handle nested models
-                _process_schema(schema, kls)
-                return schema
+        def wrapped_model_json_schema(*args, **kwargs):
+            """Wrapper that auto-processes nested models after schema generation"""
+            schema = original_method(*args, **kwargs)
+            # Post-process to handle nested models
+            _process_schema(schema, cls)
+            return schema
 
-            kls.model_json_schema = wrapped_model_json_schema
-            return kls
-        else:
-            raise AttributeError(f'target class {kls.__name__} is not BaseModel')
-    return wrapper
+        cls.model_json_schema = wrapped_model_json_schema
+        return cls
+    else:
+        raise AttributeError(f'target class {cls.__name__} is not BaseModel')
 
 
 def _process_schema(schema: Dict[str, Any], model):
@@ -124,6 +122,7 @@ def _process_schema(schema: Dict[str, Any], model):
             if args:
                 nested_type = args[0]
                 _process_nested_type(schema, field_name, nested_type)
+
         # Handle Union[SomeModel, None] or SomeModel | None case
         # Check for both typing.Union and types.UnionType (Python 3.10+)
         elif origin is Union or (origin is not None and getattr(origin, '__name__', None) == 'UnionType'):
