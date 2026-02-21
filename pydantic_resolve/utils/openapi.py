@@ -1,4 +1,6 @@
-from typing import Any, Dict, Union, get_origin, get_args
+from typing import Any, Dict, Set, get_origin, get_args
+from types import UnionType
+from typing import Union as TypingUnion
 from pydantic import BaseModel
 from pydantic_resolve.utils.class_util import safe_issubclass
 
@@ -51,6 +53,51 @@ def model_config(default_required: bool=True):
     return wrapper
 
 
+def _collect_nested_types(model: type, collected: Set[type] = None) -> Set[type]:
+    """Recursively collect all nested Pydantic BaseModel types from model_fields.
+
+    Args:
+        model: The Pydantic BaseModel class to scan
+        collected: Set of already collected types (to avoid duplicates)
+
+    Returns:
+        Set of nested Pydantic BaseModel types
+    """
+    if collected is None:
+        collected = set()
+
+    for field_name, field_info in model.model_fields.items():
+        field_type = field_info.annotation
+        if field_type is None:
+            continue
+
+        origin = get_origin(field_type)
+
+        # Handle List[SomeModel]
+        if origin is list:
+            args = get_args(field_type)
+            if args:
+                nested_type = args[0]
+                if safe_issubclass(nested_type, BaseModel) and nested_type not in collected:
+                    collected.add(nested_type)
+                    _collect_nested_types(nested_type, collected)
+
+        # Handle Union[SomeModel, None] or SomeModel | None
+        elif origin is TypingUnion or origin is UnionType:
+            args = get_args(field_type)
+            for arg in args:
+                if arg is not type(None) and safe_issubclass(arg, BaseModel) and arg not in collected:
+                    collected.add(arg)
+                    _collect_nested_types(arg, collected)
+
+        # Handle SomeModel directly
+        elif safe_issubclass(field_type, BaseModel) and field_type not in collected:
+            collected.add(field_type)
+            _collect_nested_types(field_type, collected)
+
+    return collected
+
+
 def serialization(cls):
     """
     Decorator to recursively process nested Pydantic BaseModel fields in JSON schema.
@@ -59,8 +106,9 @@ def serialization(cls):
     Sets all non-default fields as required in the JSON schema,
     and removes fields with exclude=True from both properties and required.
 
-    Note: This decorator wraps model_json_schema() to automatically process nested models.
-    Use mode='serialization' for proper handling of exclude=True fields.
+    This decorator uses json_schema_extra mechanism to automatically process
+    nested models. Collects all nested types at decoration time and sets
+    json_schema_extra on each one.
 
     Usage:
         @serialization
@@ -69,116 +117,40 @@ def serialization(cls):
 
         schema = MyModel.model_json_schema(mode='serialization')
     """
-    if safe_issubclass(cls, BaseModel):
-        # Store original model_json_schema method
-        original_method = cls.model_json_schema
-
-        def wrapped_model_json_schema(*args, **kwargs):
-            """Wrapper that auto-processes nested models after schema generation"""
-            schema = original_method(*args, **kwargs)
-            # Post-process to handle nested models
-            _process_schema(schema, cls)
-            return schema
-
-        cls.model_json_schema = wrapped_model_json_schema
-        return cls
-    else:
+    if not safe_issubclass(cls, BaseModel):
         raise AttributeError(f'target class {cls.__name__} is not BaseModel')
 
+    # Step 1: Recursively collect all nested Pydantic types
+    nested_types = _collect_nested_types(cls)
 
-def _process_schema(schema: Dict[str, Any], model):
-    """Recursively process schema for nested models"""
-    # 1. Process exclude fields at current level
-    excluded_fields = [k for k, v in model.model_fields.items() if v.exclude]
-    props = {}
+    # Step 2: Create the json_schema_extra function (same as model_config)
+    def build():
+        def _schema_extra(schema: Dict[str, Any], model) -> None:
+            # Process exclude fields at current level
+            excluded_fields = [k for k, v in model.model_fields.items() if v.exclude]
+            props = {}
 
-    for k, v in schema.get('properties', {}).items():
-        if k not in excluded_fields:
-            props[k] = v
-    schema['properties'] = props
+            for k, v in schema.get('properties', {}).items():
+                if k not in excluded_fields:
+                    props[k] = v
+            schema['properties'] = props
 
-    # 2. Set required fields (default all as required)
-    fnames = list(model.model_fields.keys())
-    if excluded_fields:
-        fnames = [n for n in fnames if n not in excluded_fields]
-    schema['required'] = fnames
+            # Set all non-excluded fields as required
+            fnames = list(model.model_fields.keys())
+            if excluded_fields:
+                fnames = [n for n in fnames if n not in excluded_fields]
+            schema['required'] = fnames
 
-    # 3. Recursively process nested BaseModel fields
-    for field_name, field_info in model.model_fields.items():
-        if field_name in excluded_fields:
+        return _schema_extra
+
+    # Step 3: Set json_schema_extra on root class
+    cls.model_config['json_schema_extra'] = staticmethod(build())
+
+    # Step 4: Set json_schema_extra on each nested type (if not already set)
+    for nested_type in nested_types:
+        # Skip if already has json_schema_extra (respect existing config)
+        if nested_type.model_config.get('json_schema_extra'):
             continue
+        nested_type.model_config['json_schema_extra'] = staticmethod(build())
 
-        # Get field type
-        field_type = field_info.annotation
-        if field_type is None:
-            continue
-
-        # Get the origin (list, Union, etc.)
-        origin = get_origin(field_type)
-
-        # Handle List[SomeModel] case
-        if origin is list:
-            args = get_args(field_type)
-            if args:
-                nested_type = args[0]
-                _process_nested_type(schema, field_name, nested_type)
-
-        # Handle Union[SomeModel, None] or SomeModel | None case
-        # Check for both typing.Union and types.UnionType (Python 3.10+)
-        elif origin is Union or (origin is not None and getattr(origin, '__name__', None) == 'UnionType'):
-            args = get_args(field_type)
-            if args:
-                # Find the non-None type in the Union
-                for arg in args:
-                    if arg is not type(None):
-                        _process_nested_type(schema, field_name, arg)
-                        break
-        # Handle SomeModel case
-        elif safe_issubclass(field_type, BaseModel):
-            _process_nested_type(schema, field_name, field_type)
-
-
-def _process_nested_type(schema, field_name, nested_type):
-    """Process nested model type"""
-    if field_name not in schema.get('properties', {}):
-        return
-
-    prop_schema = schema['properties'][field_name]
-
-    # Handle Optional[Model] which generates anyOf/oneOf with $ref
-    for wrapper_key in ['anyOf', 'oneOf', 'allOf']:
-        if wrapper_key in prop_schema:
-            for item in prop_schema[wrapper_key]:
-                if isinstance(item, dict) and '$ref' in item:
-                    _process_reference(item['$ref'], schema, nested_type)
-            return
-
-    # Handle direct $ref
-    nested_schema = prop_schema.get('$ref', '')
-    if nested_schema:
-        _process_reference(nested_schema, schema, nested_type)
-
-
-def _process_reference(ref_path, schema, nested_type):
-    """Process a $ref reference to find and process the nested model"""
-    # Get ref name from $ref
-    ref_name = ref_path.split('/')[-1]
-    definitions = schema.get('$defs', {})
-
-    # Try to find the matching definition by name
-    target_def = None
-    nested_name = nested_type.__name__
-
-    # First try exact match
-    if ref_name in definitions:
-        target_def = definitions[ref_name]
-    else:
-        # Try to find by class name (pydantic may mangle the name)
-        for key, value in definitions.items():
-            if key.endswith(nested_name) or nested_name in key:
-                target_def = value
-                break
-
-    if target_def:
-        # Recursively process
-        _process_schema(target_def, nested_type)
+    return cls

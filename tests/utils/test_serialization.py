@@ -21,6 +21,7 @@ def test_single_level_nesting():
 
     # Root class: name is required, address is a nested model
     assert 'name' in schema['required']
+    assert 'address' in schema['required']
     assert 'address' in schema['properties']
 
     # Nested class: both street and city should be required
@@ -56,6 +57,7 @@ def test_multi_level_nesting():
     # Level 2: City
     city_def = schema['$defs']['City']
     assert 'name' in city_def['required']
+    assert 'country' in city_def['required']
     assert 'country' in city_def['properties']
 
     # Level 3: Country

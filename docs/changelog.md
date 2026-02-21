@@ -2,6 +2,16 @@
 
 ## v2.5
 
+### v2.5.0alpha2
+
+- refactor:
+  - **serialization decorator**: Use `json_schema_extra` mechanism instead of monkey-patching
+    - Collects all nested Pydantic types at decoration time via `_collect_nested_types`
+    - Sets `json_schema_extra` on root class and all nested types automatically
+    - Respects existing configurations (skips types that already have `json_schema_extra`)
+    - Removes ~100 lines of code (`_process_schema`, `_process_nested_type`, `_process_reference`)
+    - File: `pydantic_resolve/utils/openapi.py`
+
 ### v2.5.0alpha1
 
 - feat:
