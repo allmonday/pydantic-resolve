@@ -2,6 +2,10 @@
 
 ## v2.5
 
+### v2.5.0 (2026-2-21)
+
+- stable release
+
 ### v2.5.0alpha2
 
 - refactor:
