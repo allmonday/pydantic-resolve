@@ -14,7 +14,7 @@ from .resolver import Resolver
 from .utils.depend import LoaderDepend, Loader
 from .utils.subset import DefineSubset, SubsetConfig
 from .utils.openapi import (
-    model_config)
+    model_config, serialization)
 from .utils.er_diagram import Relationship, MultipleRelationship, Link, Entity, ErDiagram, LoadBy, base_entity
 from .utils.resolver_configurator import config_resolver, config_global_resolver
 from .utils.expose import ExposeAs
@@ -41,6 +41,7 @@ __all__ = [
     'mapper',
     'ensure_subset',
     'model_config',
+    'serialization',
     'copy_dataloader_kls',
     'DefineSubset',
     'SubsetConfig',

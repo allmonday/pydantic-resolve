@@ -1,5 +1,59 @@
 # Changelog
 
+## v2.5
+
+### v2.5.0alpha
+
+- feat:
+  - **NEW**: `@serialization()` decorator for recursive JSON schema processing
+    - Automatically processes nested Pydantic models in JSON schema generation
+    - Supports `Optional[Model]` (both `Union[X, None]` and `X | None` syntax)
+    - Supports `List[Model]` nested structures
+    - Handles `anyOf`, `oneOf`, `allOf` schema wrappers
+    - Use `mode='serialization'` for proper handling of `exclude=True` fields
+    - Example:
+      ```python
+      @serialization()
+      class Person(BaseModel):
+          name: str = ''
+          address: Address | None = None
+
+      schema = Person.model_json_schema(mode='serialization')
+      # All nested models (Address) will have required fields set correctly
+      ```
+
+- test:
+  - Add edge case tests for Pydantic model resolution and collector handling
+    - Empty classes, missing fields, collector validation, expose conflicts
+    - Self-reference and circular reference handling
+    - Inheritance chain testing
+    - File: `tests/analysis/test_analysis_edge_cases.py`
+
+- refactor:
+  - **loader management**: Enhance loader classes and validation with new architecture
+    - Improved loader instance creation and validation
+    - Better error messages for missing or invalid loader configurations
+    - File: `pydantic_resolve/loader_manager.py`
+
+  - **ContextVar optimization**: Optimize ancestor and collector management
+    - Use single dict-based ContextVar instead of multiple ContextVars
+    - Reduces context variable overhead from N+1 to 1 per category
+    - Pre-create parent ContextVar to avoid repeated creation
+    - File: `pydantic_resolve/resolver.py`
+
+- doc:
+  - Add Entity-First architecture discussion
+    - Comprehensive documentation on Entity-First design pattern
+    - Examples of data assembly with automatic resolver
+    - GraphQL-inspired concepts for FastAPI + Pydantic
+    - Files:
+      - `docs/fastapi-pydantic-architecture-outline.md`
+      - `docs/fastapi-pydantic-architecture-outline.en.md`
+
+  - Update README with detailed Pydantic response schemas and examples
+  - Clarify ORM and Pydantic schema relationship
+
+
 ## v2.4
 
 ### v2.4.7 (2026-1-29)
