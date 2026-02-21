@@ -925,6 +925,8 @@ Signature: `build_list(data, keys, lambda d: d.key)`
 
 ### model_config
 
+> **Deprecated**: This decorator is deprecated. Use `serialization` instead for better handling of nested Pydantic models.
+
 This decorator improves some web frameworks (like FastAPI) when generating JSON schema from `response_model`.
 
 Using `exclude=True` can remove a field during Pydantic conversion, but in FastAPI-generated `openapi.json`, the field (e.g. `name`) may still appear in the schema definition. Adding the `model_config()` decorator can remove `name` from the schema.
@@ -947,6 +949,46 @@ class Car:
 ```
 
 Note: if you use pydantic v2 in FastAPI, FastAPI already handles similar behavior internally, so you may not need `model_config`.
+
+### serialization
+
+Decorator to recursively process nested Pydantic BaseModel fields in JSON schema.
+
+This is the recommended replacement for `model_config`. It handles:
+- Single level nesting
+- Multi-level nesting (3+ levels)
+- List nesting (`List[Model]`)
+- Optional fields (`Optional[Model]` or `Model | None`)
+- Recursive field exclusion (`exclude=True`)
+
+Only needs to be applied to the root class; it automatically processes all nested models.
+
+```python
+from pydantic_resolve import serialization
+from typing import List, Optional
+
+class Address(BaseModel):
+    street: str = ''
+    city: str = ''
+
+class Person(BaseModel):
+    name: str = ''
+    address: Optional[Address] = None
+
+@serialization
+class Response(BaseModel):
+    person: Person
+    items: List[Item]
+
+# Generate schema
+schema = Response.model_json_schema(mode='serialization')
+```
+
+**Key differences from `model_config`:**
+- Automatically processes nested Pydantic models recursively
+- Only needs to be applied to the root class
+- Handles complex nesting scenarios (List, Optional, multi-level)
+- Properly sets `required` fields and excludes `exclude=True` fields at all levels
 
 ### ensure_subset
 

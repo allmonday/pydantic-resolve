@@ -919,6 +919,8 @@ build_list 返回对象数组， build_object 返回对象。
 
 ### model_config
 
+> **已弃用**：此装饰器已不推荐使用。请改用 `serialization` 来更好地处理嵌套的 Pydantic 模型。
+
 这个装饰器用来改善 FastAPI 等 web frameworb 根据 response_model 生成 json schema 时存在的问题。
 
 使用 exclude 可以在 pydantic 转换成目标数据时移除字段， 但是光这么做在 FastAPI 中生成 openapi.json 时 `name` 字段依然会存在于定义中， 添加 model_config() 装饰器可以移除 `name`。
@@ -941,6 +943,46 @@ class Car:
 ```
 
 注意，如果 FastAPI 中使用的是 pydantic v2， 它内部已经做了类似的处理，因此可以不使用 model_config 装饰器.
+
+### serialization
+
+用于递归处理嵌套 Pydantic BaseModel 字段的 JSON schema 装饰器。
+
+这是 `model_config` 的推荐替代方案。它支持：
+- 单层嵌套
+- 多层嵌套（3层以上）
+- 列表嵌套（`List[Model]`）
+- 可选字段（`Optional[Model]` 或 `Model | None`）
+- 递归字段排除（`exclude=True`）
+
+只需应用于根类，它会自动处理所有嵌套模型。
+
+```python
+from pydantic_resolve import serialization
+from typing import List, Optional
+
+class Address(BaseModel):
+    street: str = ''
+    city: str = ''
+
+class Person(BaseModel):
+    name: str = ''
+    address: Optional[Address] = None
+
+@serialization
+class Response(BaseModel):
+    person: Person
+    items: List[Item]
+
+# 生成 schema
+schema = Response.model_json_schema(mode='serialization')
+```
+
+**与 `model_config` 的主要区别：**
+- 自动递归处理嵌套的 Pydantic 模型
+- 只需应用于根类
+- 支持复杂的嵌套场景（List、Optional、多层）
+- 在所有层级正确设置 `required` 字段并排除 `exclude=True` 的字段
 
 ### ensure_subset
 
