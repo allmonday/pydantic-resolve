@@ -1,5 +1,5 @@
 from inspect import isclass
-from typing import Any
+from typing import Any, Generator
 
 import pydantic_resolve.utils.class_util as class_util
 import pydantic_resolve.utils.params as params_util
@@ -14,7 +14,6 @@ from pydantic import BaseModel
 LoaderType = dict[str, Any]
 
 
-from typing import Generator
 
 def _get_all_loaders_from_meta(metadata: MappedMetaType) -> Generator[LoaderType, None, None]:
     """Fetch all loaders from metadata."""
