@@ -339,6 +339,15 @@ wheels = [
 ]
 
 [[package]]
+name = "graphql-core"
+version = "3.2.7"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ac/9b/037a640a2983b09aed4a823f9cf1729e6d780b0671f854efa4727a7affbe/graphql_core-3.2.7.tar.gz", hash = "sha256:27b6904bdd3b43f2a0556dad5d579bdfdeab1f38e8e8788e555bdcb586a6f62c", size = 513484, upload-time = "2025-11-01T22:30:40.436Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0a/14/933037032608787fb92e365883ad6a741c235e0ff992865ec5d904a38f1e/graphql_core-3.2.7-py3-none-any.whl", hash = "sha256:17fc8f3ca4a42913d8e24d9ac9f08deddf0a0b2483076575757f6c412ead2ec0", size = 207262, upload-time = "2025-11-01T22:30:38.912Z" },
+]
+
+[[package]]
 name = "greenlet"
 version = "3.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -861,12 +870,16 @@ dev = [
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "tox" },
 ]
+graphql = [
+    { name = "graphql-core" },
+]
 
 [package.metadata]
 requires-dist = [
     { name = "aiodataloader", specifier = ">=0.4.0,<0.5.0" },
     { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.18.0,<0.19.0" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.2.1,<8.0.0" },
+    { name = "graphql-core", marker = "extra == 'graphql'", specifier = ">=3.2,<4.0" },
     { name = "mkdocs-material", marker = "extra == 'dev'", specifier = ">=9,<10" },
     { name = "mkdocs-static-i18n", extras = ["material"], marker = "extra == 'dev'", specifier = "==1.2.0" },
     { name = "psutil", marker = "extra == 'dev'", specifier = ">=7.1.0,<8.0.0" },
@@ -879,7 +892,7 @@ requires-dist = [
     { name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'dev'", specifier = ">=2.0.7,<3.0.0" },
     { name = "tox", marker = "extra == 'dev'", specifier = ">=4.4.6,<5.0.0" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["graphql", "dev"]
 
 [[package]]
 name = "pygal"

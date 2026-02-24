@@ -1,0 +1,725 @@
+"""
+GraphQL handler - coordinates all components and provides FastAPI integration.
+"""
+
+import logging
+import re
+from typing import Any, Callable, Dict, Tuple, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from fastapi import APIRouter
+
+from ..resolver import Resolver
+from ..utils.er_diagram import ErDiagram
+from .query_parser import QueryParser
+from .schema_builder import SchemaBuilder
+from .response_builder import ResponseBuilder
+from .exceptions import GraphQLError
+
+logger = logging.getLogger(__name__)
+
+# GraphQL 标量类型定义
+SCALAR_TYPES = {
+    "Int": {
+        "kind": "SCALAR",
+        "name": "Int",
+        "description": "The `Int` scalar type represents non-fractional signed whole numeric values.",
+        "fields": None,
+        "inputFields": None,
+        "interfaces": None,
+        "enumValues": None,
+        "possibleTypes": None
+    },
+    "Float": {
+        "kind": "SCALAR",
+        "name": "Float",
+        "description": "The `Float` scalar type represents signed double-precision fractional values.",
+        "fields": None,
+        "inputFields": None,
+        "interfaces": None,
+        "enumValues": None,
+        "possibleTypes": None
+    },
+    "String": {
+        "kind": "SCALAR",
+        "name": "String",
+        "description": "The `String` scalar type represents textual data.",
+        "fields": None,
+        "inputFields": None,
+        "interfaces": None,
+        "enumValues": None,
+        "possibleTypes": None
+    },
+    "Boolean": {
+        "kind": "SCALAR",
+        "name": "Boolean",
+        "description": "The `Boolean` scalar type represents `true` or `false`.",
+        "fields": None,
+        "inputFields": None,
+        "interfaces": None,
+        "enumValues": None,
+        "possibleTypes": None
+    },
+    "ID": {
+        "kind": "SCALAR",
+        "name": "ID",
+        "description": "The `ID` scalar type represents a unique identifier.",
+        "fields": None,
+        "inputFields": None,
+        "interfaces": None,
+        "enumValues": None,
+        "possibleTypes": None
+    },
+}
+
+# FastAPI 是可选依赖
+try:
+    from fastapi import APIRouter
+    from fastapi.responses import PlainTextResponse
+    from pydantic import BaseModel
+    FASTAPI_AVAILABLE = True
+except ImportError:
+    APIRouter = None  # type: ignore
+    PlainTextResponse = None  # type: ignore
+    BaseModel = None  # type: ignore
+    FASTAPI_AVAILABLE = False
+
+
+if FASTAPI_AVAILABLE:
+    class GraphQLRequest(BaseModel):
+        """GraphQL 请求模型"""
+        query: str
+        variables: Optional[Dict[str, Any]] = None
+        operation_name: Optional[str] = None
+else:
+    GraphQLRequest = None  # type: ignore
+
+
+class GraphQLHandler:
+    """
+    GraphQL 查询处理器
+
+    协调所有组件，解析查询、执行 @query 方法、构建响应模型、解析关联数据
+    """
+
+    def __init__(
+        self,
+        er_diagram: ErDiagram,
+        resolver_class: type[Resolver] = Resolver
+    ):
+        """
+        Args:
+            er_diagram: 实体关系图
+            resolver_class: 自定义 Resolver 类（可选）
+        """
+        self.er_diagram = er_diagram
+        self.parser = QueryParser(er_diagram)
+        self.builder = ResponseBuilder(er_diagram)
+        self.schema_builder = SchemaBuilder(er_diagram)
+        self.resolver_class = resolver_class
+
+        # 构建查询方法映射: { 'users': (UserEntity, UserEntity.get_all) }
+        self.query_map = self._build_query_map()
+
+    def _build_query_map(self) -> Dict[str, Tuple[type, Callable]]:
+        """
+        扫描所有 Entity，构建查询名称到方法的映射
+
+        Returns:
+            查询名称到 (实体类, 方法) 的映射字典
+        """
+        query_map = {}
+        for entity_cfg in self.er_diagram.configs:
+            methods = self.schema_builder._extract_query_methods(entity_cfg.kls)
+            for method_info in methods:
+                query_name = method_info['name']
+                query_map[query_name] = (entity_cfg.kls, method_info['method'])
+        return query_map
+
+    async def execute(
+        self,
+        query: str,
+        variables: Optional[Dict[str, Any]] = None,
+        operation_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        执行 GraphQL 查询
+
+        Args:
+            query: GraphQL 查询字符串
+            variables: 查询变量
+            operation_name: 操作名称
+
+        Returns:
+            GraphQL 响应格式：{"data": {...}, "errors": [...]}
+        """
+        logger.debug(f"Executing GraphQL query: {query[:100]}...")
+        try:
+            # 检测内省查询
+            is_introspection = self._is_introspection_query(query)
+
+            if is_introspection:
+                logger.debug("Processing introspection query")
+                # 使用 graphql-core 的完整功能执行内省查询
+                return await self._execute_introspection(query, variables, operation_name)
+            else:
+                logger.debug("Processing custom query")
+                # 使用自定义逻辑执行普通查询
+                return await self._execute_custom_query(query)
+
+        except GraphQLError as e:
+            logger.warning(f"GraphQL error: {e.message}")
+            return {
+                "data": None,
+                "errors": [e.to_dict()]
+            }
+        except Exception as e:
+            logger.exception("Unexpected error during GraphQL query execution")
+            return {
+                "data": None,
+                "errors": [
+                    {
+                        "message": str(e),
+                        "extensions": {"code": type(e).__name__}
+                    }
+                ]
+            }
+
+    def _is_introspection_query(self, query: str) -> bool:
+        """检测是否为内省查询"""
+        query_stripped = query.strip()
+        # 检查是否包含 __schema, __type, __typename 等内省字段
+        introspection_keywords = ["__schema", "__type", "__typename"]
+        return any(keyword in query_stripped for keyword in introspection_keywords)
+
+    def _parse_introspection_query(self, query: str) -> Dict[str, Any]:
+        """解析内省查询，提取请求的字段"""
+        from graphql import parse as parse_graphql
+
+        try:
+            parse_graphql(query)
+
+            # 简化：检查查询是否请求 __type
+            requests_type = "__type(" in query or '__type (' in query.replace('"', "'")
+
+            return {
+                "requests_schema": "__schema" in query,
+                "requests_type": requests_type
+            }
+        except Exception:
+            # 解析失败，假设两者都请求
+            return {
+                "requests_schema": True,
+                "requests_type": True
+            }
+
+    async def _execute_introspection(
+        self,
+        query: str,
+        variables: Optional[Dict[str, Any]],
+        operation_name: Optional[str]
+    ) -> Dict[str, Any]:
+        """执行内省查询 - 返回完整的内省数据以支持 GraphiQL"""
+
+        # 解析查询以确定请求的内容
+        query_info = self._parse_introspection_query(query)
+
+        # 构建响应数据
+        data = {}
+
+        if query_info["requests_schema"]:
+            data["__schema"] = {
+                "queryType": {
+                    "name": "Query",
+                    "kind": "OBJECT"
+                },
+                "mutationType": None,
+                "subscriptionType": None,
+                "types": self._get_introspection_types(),
+                "directives": []  # 暂不支持 directives
+            }
+
+        if query_info["requests_type"]:
+            # 尝试从查询中提取类型名称
+            type_name = self._extract_type_name_from_query(query)
+            if type_name:
+                data["__type"] = self._get_introspection_type(type_name)
+
+        return {
+            "data": data,
+            "errors": None
+        }
+
+    def _extract_type_name_from_query(self, query: str) -> Optional[str]:
+        """从查询中提取类型名称"""
+        # 匹配 __type(name: "TypeName")
+        match = re.search(r'__type\s*\(\s*name\s*:\s*["\']([^"\']+)["\']', query)
+        if match:
+            return match.group(1)
+
+        # 匹配 __type(name: 'TypeName')
+        match = re.search(r"__type\s*\(\s*name\s*:\s*'([^']+)'", query)
+        if match:
+            return match.group(1)
+
+        return None
+
+    def _get_introspection_type(self, type_name: str) -> Optional[Dict[str, Any]]:
+        """获取指定类型的内省信息"""
+        # 检查标量类型
+        if type_name in SCALAR_TYPES:
+            return SCALAR_TYPES[type_name]
+
+        # 检查实体类型
+        for entity_cfg in self.er_diagram.configs:
+            if entity_cfg.kls.__name__ == type_name:
+                return {
+                    "kind": "OBJECT",
+                    "name": type_name,
+                    "description": f"{type_name} entity",
+                    "fields": self._get_introspection_fields(entity_cfg.kls),
+                    "inputFields": None,
+                    "interfaces": [],  # OBJECT types must have interfaces as array
+                    "enumValues": None,
+                    "possibleTypes": None
+                }
+
+        # 检查 Query 类型
+        if type_name == "Query":
+            return {
+                "kind": "OBJECT",
+                "name": "Query",
+                "description": "Root query type",
+                "fields": self._get_introspection_query_fields(),
+                "inputFields": None,
+                "interfaces": [],  # OBJECT types must have interfaces as array
+                "enumValues": None,
+                "possibleTypes": None
+            }
+
+        return None
+
+    def _get_introspection_types(self):
+        """获取内省类型列表"""
+        types = []
+
+        # 添加标量类型
+        types.extend([SCALAR_TYPES[name] for name in ["Int", "Float", "String", "Boolean", "ID"]])
+
+        # 添加实体类型
+        for entity_cfg in self.er_diagram.configs:
+            entity = entity_cfg.kls
+            entity_type = {
+                "kind": "OBJECT",
+                "name": entity.__name__,
+                "description": f"{entity.__name__} entity",
+                "fields": self._get_introspection_fields(entity),
+                "inputFields": None,
+                "interfaces": [],  # OBJECT types must have interfaces as array
+                "enumValues": None,
+                "possibleTypes": None
+            }
+            types.append(entity_type)
+
+        # 添加 Query 类型
+        types.append({
+            "kind": "OBJECT",
+            "name": "Query",
+            "description": "Root query type",
+            "fields": self._get_introspection_query_fields(),
+            "inputFields": None,
+            "interfaces": [],  # OBJECT types must have interfaces as array
+            "enumValues": None,
+            "possibleTypes": None
+        })
+
+        return types
+
+    def _get_introspection_fields(self, entity):
+        """获取实体的内省字段"""
+        from typing import get_origin, get_args
+        from ..utils.er_diagram import Relationship
+
+        fields = []
+
+        # 1. 处理标量字段（来自 __annotations__）
+        if hasattr(entity, '__annotations__'):
+            for field_name, field_type in entity.__annotations__.items():
+                if field_name.startswith('__'):
+                    continue
+
+                # 映射类型
+                graphql_type = "String"
+                type_kind = "SCALAR"
+                type_desc = None
+
+                if "int" in str(field_type).lower():
+                    graphql_type = "Int"
+                    type_desc = "The `Int` scalar type represents non-fractional signed whole numeric values."
+                elif "bool" in str(field_type).lower():
+                    graphql_type = "Boolean"
+                    type_desc = "The `Boolean` scalar type represents `true` or `false`."
+                elif "float" in str(field_type).lower():
+                    graphql_type = "Float"
+                    type_desc = "The `Float` scalar type represents signed double-precision fractional values."
+
+                fields.append({
+                    "name": field_name,
+                    "description": None,
+                    "args": [],
+                    "type": {
+                        "kind": type_kind,
+                        "name": graphql_type,
+                        "description": type_desc,
+                        "ofType": None
+                    },
+                    "isDeprecated": False,
+                    "deprecationReason": None
+                })
+
+        # 2. 处理关联关系（来自 __relationships__）
+        entity_cfg = None
+        for cfg in self.er_diagram.configs:
+            if cfg.kls == entity:
+                entity_cfg = cfg
+                break
+
+        if entity_cfg:
+            for rel in entity_cfg.relationships:
+                if isinstance(rel, Relationship):
+                    # 只有提供了 default_field_name 的关系才暴露给 GraphQL
+                    if not hasattr(rel, 'default_field_name') or not rel.default_field_name:
+                        continue
+
+                    field_name = rel.default_field_name
+
+                    # 处理泛型类型（如 list[PostEntity]）
+                    target_kls = rel.target_kls
+                    origin = get_origin(target_kls)
+
+                    if origin is list:
+                        # list[PostEntity] -> 提取 PostEntity
+                        args = get_args(target_kls)
+                        if args:
+                            target_name = args[0].__name__
+                        else:
+                            continue  # 无法确定元素类型，跳过
+
+                        # LIST 类型
+                        type_def = {
+                            "kind": "LIST",
+                            "name": None,
+                            "description": None,
+                            "ofType": {
+                                "kind": "OBJECT",
+                                "name": target_name,
+                                "description": f"{target_name} entity",
+                                "ofType": None
+                            },
+                            "fields": None,
+                            "inputFields": None,
+                            "interfaces": None,
+                            "enumValues": None,
+                            "possibleTypes": None
+                        }
+                    else:
+                        # OBJECT 类型
+                        target_name = target_kls.__name__
+                        type_def = {
+                            "kind": "OBJECT",
+                            "name": target_name,
+                            "description": f"{target_name} entity",
+                            "ofType": None,
+                            "fields": self._get_introspection_fields(target_kls),
+                            "inputFields": None,
+                            "interfaces": [],
+                            "enumValues": None,
+                            "possibleTypes": None
+                        }
+
+                    fields.append({
+                        "name": field_name,
+                        "description": None,
+                        "args": [],
+                        "type": type_def,
+                        "isDeprecated": False,
+                        "deprecationReason": None
+                    })
+
+        return fields
+
+    def _get_introspection_query_fields(self):
+        """获取 Query 类型的内省字段"""
+        fields = []
+
+        for query_name, (entity, method) in self.query_map.items():
+            import inspect
+            sig = inspect.signature(method)
+
+            # 构建参数列表
+            args = []
+            for param_name, param in sig.parameters.items():
+                if param_name == 'self':
+                    continue
+
+                # 确定参数类型
+                param_type = "String"
+                param_kind = "SCALAR"
+
+                # 尝试从类型注解获取类型
+                if param.annotation != inspect.Parameter.empty:
+                    annotation_str = str(param.annotation)
+                    if "int" in annotation_str.lower():
+                        param_type = "Int"
+                    elif "bool" in annotation_str.lower():
+                        param_type = "Boolean"
+                    elif "float" in annotation_str.lower():
+                        param_type = "Float"
+
+                # 检查是否有默认值
+                has_default = param.default != inspect.Parameter.empty
+
+                args.append({
+                    "name": param_name,
+                    "description": None,
+                    "type": {
+                        "kind": param_kind,
+                        "name": param_type,
+                        "ofType": None
+                    },
+                    "defaultValue": None if not has_default else str(param.default)
+                })
+
+            # 确定返回类型
+            return_type_str = str(sig.return_annotation) if sig.return_annotation != sig.empty else "String"
+            return_kind = "SCALAR"
+            return_name = "String"
+            of_type = None
+
+            if "list" in return_type_str.lower():
+                return_kind = "LIST"
+                return_name = None
+                # LIST 类型必须有 ofType 指向元素类型
+                if hasattr(entity, '__name__'):
+                    of_type = {
+                        "kind": "OBJECT",
+                        "name": entity.__name__,
+                        "ofType": None
+                    }
+                else:
+                    of_type = {
+                        "kind": "SCALAR",
+                        "name": "String",
+                        "ofType": None
+                    }
+            elif hasattr(entity, '__name__'):
+                return_name = entity.__name__
+                return_kind = "OBJECT"
+
+            type_def = {
+                "kind": return_kind,
+                "name": return_name,
+                "description": None,
+                "ofType": of_type
+            }
+
+            # 根据类型种类添加其他必需字段
+            if return_kind == "SCALAR":
+                type_def["fields"] = None
+                type_def["inputFields"] = None
+                type_def["interfaces"] = None
+                type_def["enumValues"] = None
+                type_def["possibleTypes"] = None
+            elif return_kind == "OBJECT":
+                type_def["fields"] = self._get_introspection_fields(entity)
+                type_def["inputFields"] = None
+                type_def["interfaces"] = None
+                type_def["enumValues"] = None
+                type_def["possibleTypes"] = None
+            elif return_kind == "LIST":
+                type_def["fields"] = None
+                type_def["inputFields"] = None
+                type_def["interfaces"] = None
+                type_def["enumValues"] = None
+                type_def["possibleTypes"] = None
+
+            fields.append({
+                "name": query_name,
+                "description": f"Query for {query_name}",
+                "args": args,
+                "type": type_def,
+                "isDeprecated": False,
+                "deprecationReason": None
+            })
+
+        return fields
+
+    async def _execute_custom_query(
+        self,
+        query: str,
+    ) -> Dict[str, Any]:
+        """执行自定义查询（非内省）"""
+        # 1. 解析查询
+        parsed = self.parser.parse(query)
+
+        # 2. 遍历所有根查询字段（支持多个根查询）
+        errors = []
+        data = {}
+
+        for root_query_name, root_field_selection in parsed.field_tree.items():
+            try:
+                # 3. 查找对应的 @query 方法
+                if root_query_name not in self.query_map:
+                    errors.append({
+                        "message": f"未知的查询: {root_query_name}",
+                        "extensions": {"code": "UNKNOWN_QUERY"}
+                    })
+                    continue
+
+                entity, query_method = self.query_map[root_query_name]
+
+                # 4. 执行查询方法获取数据
+                args = root_field_selection.arguments or {}
+                root_data = await self._execute_query_method(query_method, args)
+
+                # 5. 构建响应模型
+                response_model = self.builder.build_response_model(
+                    entity=entity,
+                    field_selection=root_field_selection
+                )
+
+                # 6. 转换为响应模型
+                if isinstance(root_data, list):
+                    typed_data = [
+                        response_model.model_validate(d.model_dump() if hasattr(d, 'model_dump') else d)
+                        for d in root_data
+                    ]
+                elif root_data is not None:
+                    typed_data = response_model.model_validate(
+                        root_data.model_dump() if hasattr(root_data, 'model_dump') else root_data
+                    )
+                else:
+                    typed_data = None
+
+                # 7. 使用 Resolver 解析 LoadBy 字段
+                result_data = None
+                if typed_data is not None:
+                    if isinstance(typed_data, list):
+                        result = await self.resolver_class().resolve(typed_data)
+                        if result is not None:
+                            result_data = [r.model_dump() for r in result]
+                    else:
+                        result = await self.resolver_class().resolve(typed_data)
+                        if result is not None:
+                            result_data = result.model_dump()
+                else:
+                    result_data = [] if isinstance(root_data, list) else None
+
+                # 8. 添加到结果数据
+                data[root_query_name] = result_data
+
+            except GraphQLError as e:
+                # GraphQL 错误直接转换为字典
+                errors.append(e.to_dict())
+            except Exception as e:
+                # 记录未预期的错误
+                logger.exception(f"Unexpected error executing query: {root_query_name}")
+                errors.append({
+                    "message": str(e),
+                    "extensions": {"code": type(e).__name__}
+                })
+
+        # 9. 格式化响应
+        return {
+            "data": data if data else None,
+            "errors": errors if errors else None
+        }
+
+    async def _execute_query_method(
+        self,
+        method: Callable,
+        arguments: Dict[str, Any]
+    ) -> Any:
+        """
+        执行 @query 方法
+
+        Args:
+            method: @query 装饰的方法（可能是 classmethod 或普通函数）
+            arguments: 参数字典
+
+        Returns:
+            查询结果
+        """
+        logger.debug(f"Executing query method with arguments: {arguments}")
+        try:
+            # classmethod 需要通过 __func__ 调用，传入 None 作为 cls
+            if isinstance(method, classmethod):
+                return await method.__func__(None, **arguments)
+            else:
+                return await method(**arguments)
+        except Exception as e:
+            logger.error(f"Query method execution failed: {e}")
+            raise GraphQLError(
+                f"查询执行失败: {e}",
+                extensions={"code": "EXECUTION_ERROR"}
+            )
+
+
+def create_graphql_route(
+    er_diagram: ErDiagram,
+    path: str = "/graphql"
+):
+    """
+    创建 FastAPI GraphQL 路由
+
+    Args:
+        er_diagram: 实体关系图
+        path: 路由路径
+
+    Returns:
+        FastAPI APIRouter
+
+    使用示例:
+        ```python
+        from fastapi import FastAPI
+        from pydantic_resolve import base_entity, config_global_resolver
+        from pydantic_resolve.graphql import create_graphql_route
+
+        app = FastAPI()
+        BaseEntity = base_entity()
+        config_global_resolver(BaseEntity.get_diagram())
+
+        graphql_router = create_graphql_route(BaseEntity.get_diagram())
+        app.include_router(graphql_router)
+        ```
+    """
+    if not FASTAPI_AVAILABLE:
+        raise ImportError(
+            "FastAPI is required for create_graphql_route. "
+            "Please install it with: pip install fastapi"
+        )
+
+    router = APIRouter()
+    handler = GraphQLHandler(er_diagram)
+    schema_builder = SchemaBuilder(er_diagram)
+
+    @router.post(path)
+    async def graphql_endpoint(req: GraphQLRequest):
+        """GraphQL 查询端点"""
+        result = await handler.execute(
+            query=req.query,
+            variables=req.variables,
+            operation_name=req.operation_name
+        )
+        return result
+
+    @router.get("/schema", response_class=None)
+    async def graphql_schema():
+        """GraphQL Schema 端点（返回 SDL 格式）"""
+        schema_sdl = schema_builder.build_schema()
+        return PlainTextResponse(
+            content=schema_sdl,
+            media_type="text/plain; charset=utf-8"
+        )
+
+    return router

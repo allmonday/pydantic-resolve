@@ -53,6 +53,7 @@ class MultipleRelationship(BaseModel):
 class Relationship(BaseLinkProps):
     field: str  # fk name
     target_kls: Any
+    default_field_name: str | None = None  # GraphQL 查询字段名（必需用于暴露嵌套查询）
 
     @model_validator(mode="after")
     def _validate_defaults(self) -> "Relationship":
@@ -211,9 +212,12 @@ def base_entity() -> type[BaseEntity]:
             entities.append(cls)
             # Check for inline relationships, __relationships__ or __pydantic_resolve_relationships__
             # __pydantic_resolve_relationships__ has higher priority
-            inline_rels = getattr(cls, const.ER_DIAGRAM_INLINE_RELATIONSHIPS, None) or \
-                          getattr(cls, const.ER_DIAGRAM_INLINE_RELATIONSHIPS_SHORT, None)
-            if inline_rels:
+            inline_rels = getattr(cls, const.ER_DIAGRAM_INLINE_RELATIONSHIPS, None)
+            if inline_rels is None:
+                inline_rels = getattr(cls, const.ER_DIAGRAM_INLINE_RELATIONSHIPS_SHORT, None)
+            # Include entities even if they have empty relationships list
+            # This is important for GraphQL @query methods on entities without relationships
+            if inline_rels is not None:
                 inline_configs.append((cls, inline_rels))
 
     # Attach the entities list and diagram to the Base class
