@@ -7,6 +7,9 @@ import logging
 import os
 import re
 from typing import Any, Callable, Dict, List, Tuple, Optional, TYPE_CHECKING, Union
+from typing import get_origin
+from ..utils.class_util import safe_issubclass
+from ..utils.types import get_core_types
 
 if TYPE_CHECKING:
     from fastapi import APIRouter
@@ -360,6 +363,39 @@ class GraphQLHandler:
 
         return types
 
+    def _is_pydantic_basemodel(self, type_hint: Any) -> bool:
+        """
+        检查类型是否是 Pydantic BaseModel
+
+        Args:
+            type_hint: 类型提示
+
+        Returns:
+            是否是 Pydantic BaseModel
+        """
+        # 使用 get_core_types 提取核心类型，处理 Optional[T]、list[T]、Annotated[T, ...] 等包装
+        core_types = get_core_types(type_hint)
+        return any(safe_issubclass(t, BaseModel) for t in core_types)
+
+    def _extract_list_element_type(self, field_type: Any) -> Optional[type]:
+        """
+        从 list[T] 中提取元素类型 T
+
+        Args:
+            field_type: 字段类型（可能是 list[T]）
+
+        Returns:
+            元素类型，如果不是 list 则返回 None
+        """
+        from typing import get_origin, get_args
+
+        origin = get_origin(field_type)
+        if origin is list:
+            args = get_args(field_type)
+            if args:
+                return args[0]
+        return None
+
     def _collect_nested_pydantic_types(self, entities: list, visited: Optional[set] = None) -> Dict[str, type]:
         """
         递归收集所有实体字段中引用的 Pydantic BaseModel 类型
@@ -371,8 +407,6 @@ class GraphQLHandler:
         Returns:
             类型名到类型类的映射字典
         """
-        from typing import get_origin, get_args
-
         if visited is None:
             visited = set()
 
@@ -390,33 +424,13 @@ class GraphQLHandler:
                     if field_name.startswith('__'):
                         continue
 
-                    # 检查是否是 Pydantic BaseModel
-                    if hasattr(field_type, '__bases__') and hasattr(field_type, 'model_dump'):
-                        if field_type.__name__ not in collected and field_type.__name__ not in visited:
-                            collected[field_type.__name__] = field_type
-
-                    # 检查是否是 list[T]
-                    origin = get_origin(field_type)
-                    if origin is list:
-                        args = get_args(field_type)
-                        if args:
-                            element_type = args[0]
-                            # 检查元素类型是否是 Pydantic BaseModel
-                            if hasattr(element_type, '__bases__') and hasattr(element_type, 'model_dump'):
-                                if element_type.__name__ not in collected and element_type.__name__ not in visited:
-                                    collected[element_type.__name__] = element_type
-
-                    # 检查是否是 Optional[T]
-                    elif origin is Union or str(origin) == "typing.Union":
-                        args = get_args(field_type)
-                        for arg in args:
-                            # 跳过 NoneType
-                            if arg is type(None):
-                                continue
-                            # 检查是否是 Pydantic BaseModel
-                            if hasattr(arg, '__bases__') and hasattr(arg, 'model_dump'):
-                                if arg.__name__ not in collected and arg.__name__ not in visited:
-                                    collected[arg.__name__] = arg
+                    # 使用 get_core_types 处理所有包装类型（Optional, list, Annotated 等）
+                    # 然后检查每个核心类型是否是 Pydantic BaseModel
+                    core_types = get_core_types(field_type)
+                    for core_type in core_types:
+                        if safe_issubclass(core_type, BaseModel):
+                            if core_type.__name__ not in collected and core_type.__name__ not in visited:
+                                collected[core_type.__name__] = core_type
 
         # 递归收集新发现的类型的嵌套类型
         if collected:
@@ -427,7 +441,6 @@ class GraphQLHandler:
 
     def _get_introspection_fields(self, entity):
         """获取实体的内省字段"""
-        from typing import get_origin, get_args
         from ..utils.er_diagram import Relationship
 
         fields = []
@@ -453,79 +466,13 @@ class GraphQLHandler:
                 if is_relationship_field:
                     continue
 
-                # 映射类型
-                origin = get_origin(field_type)
-                graphql_type = "String"
-                type_kind = "SCALAR"
-                type_desc = None
-                of_type = None
-
-                # 处理 list[T] 类型
-                if origin is list:
-                    args = get_args(field_type)
-                    if args:
-                        element_type = args[0]
-                        # 检查元素类型是否是 Pydantic BaseModel（实体类型）
-                        if hasattr(element_type, '__bases__') and issubclass(element_type, BaseModel):
-                            # list[Entity] -> LIST 类型，指向 OBJECT
-                            type_kind = "LIST"
-                            graphql_type = None
-                            type_desc = None
-                            of_type = {
-                                "kind": "OBJECT",
-                                "name": element_type.__name__,
-                                "description": f"{element_type.__name__} entity",
-                                "ofType": None
-                            }
-                        else:
-                            # list[Scalar] -> LIST 类型，指向 SCALAR
-                            element_type_str = str(element_type)
-                            if "int" in element_type_str.lower():
-                                element_graphql_type = "Int"
-                            elif "bool" in element_type_str.lower():
-                                element_graphql_type = "Boolean"
-                            elif "float" in element_type_str.lower():
-                                element_graphql_type = "Float"
-                            else:
-                                element_graphql_type = "String"
-
-                            type_kind = "LIST"
-                            graphql_type = None
-                            type_desc = None
-                            of_type = {
-                                "kind": "SCALAR",
-                                "name": element_graphql_type,
-                                "description": None,
-                                "ofType": None
-                            }
-                elif "int" in str(field_type).lower():
-                    graphql_type = "Int"
-                    type_desc = "The `Int` scalar type represents non-fractional signed whole numeric values."
-                elif "bool" in str(field_type).lower():
-                    graphql_type = "Boolean"
-                    type_desc = "The `Boolean` scalar type represents `true` or `false`."
-                elif "float" in str(field_type).lower():
-                    graphql_type = "Float"
-                    type_desc = "The `Float` scalar type represents signed double-precision fractional values."
-                elif "dict" in str(field_type).lower():
-                    graphql_type = "String"  # GraphQL 不支持 dict，映射为 String
-                    type_desc = "JSON string representation"
-                # 检查是否是 Pydantic BaseModel（实体类型）
-                elif hasattr(field_type, '__bases__') and hasattr(field_type, 'model_dump'):
-                    type_kind = "OBJECT"
-                    graphql_type = field_type.__name__
-                    type_desc = f"{field_type.__name__} entity"
-
+                # 构建字段类型信息
+                type_def = self._build_graphql_type(field_type)
                 fields.append({
                     "name": field_name,
                     "description": None,
                     "args": [],
-                    "type": {
-                        "kind": type_kind,
-                        "name": graphql_type,
-                        "description": type_desc,
-                        "ofType": of_type
-                    },
+                    "type": type_def,
                     "isDeprecated": False,
                     "deprecationReason": None
                 })
@@ -545,50 +492,7 @@ class GraphQLHandler:
                         continue
 
                     field_name = rel.default_field_name
-
-                    # 处理泛型类型（如 list[PostEntity]）
-                    target_kls = rel.target_kls
-                    origin = get_origin(target_kls)
-
-                    if origin is list:
-                        # list[PostEntity] -> 提取 PostEntity
-                        args = get_args(target_kls)
-                        if args:
-                            target_name = args[0].__name__
-                        else:
-                            continue  # 无法确定元素类型，跳过
-
-                        # LIST 类型
-                        type_def = {
-                            "kind": "LIST",
-                            "name": None,
-                            "description": None,
-                            "ofType": {
-                                "kind": "OBJECT",
-                                "name": target_name,
-                                "description": f"{target_name} entity",
-                                "ofType": None
-                            },
-                            "fields": None,
-                            "inputFields": None,
-                            "interfaces": None,
-                            "enumValues": None,
-                            "possibleTypes": None
-                        }
-                    else:
-                        # OBJECT 类型
-                        target_name = target_kls.__name__
-                        type_def = {
-                            "kind": "OBJECT",
-                            "name": target_name,
-                            "description": f"{target_name} entity",
-                            "ofType": None,
-                            "fields": self._get_introspection_fields(target_kls),
-                            "inputFields": None,
-                            "interfaces": [],
-                            "enumValues": None,
-                            "possibleTypes": None
-                        }
+                    type_def = self._build_graphql_type(rel.target_kls)
 
                     fields.append({
                         "name": field_name,
@@ -600,6 +504,112 @@ class GraphQLHandler:
                     })
 
         return fields
+
+    def _build_graphql_type(self, field_type: Any) -> Dict[str, Any]:
+        """
+        将 Python 类型映射为 GraphQL 类型定义
+
+        Args:
+            field_type: Python 类型（可以是 list[T]、Optional[T]、T 等）
+
+        Returns:
+            GraphQL 类型定义字典
+        """
+        # 使用 get_core_types 处理所有包装类型
+        core_types = get_core_types(field_type)
+        if not core_types:
+            # 无法确定类型，默认为 String
+            return {
+                "kind": "SCALAR",
+                "name": "String",
+                "description": None,
+                "ofType": None
+            }
+
+        # 获取核心类型
+        core_type = core_types[0]
+        origin = get_origin(field_type)
+
+        # 检查是否是 list[T]
+        is_list = origin is list or (hasattr(field_type, '__origin__') and field_type.__origin__ is list)
+
+        # 辅助函数：映射标量类型
+        def map_scalar_type(t):
+            t_str = str(t).lower()
+            if "int" in t_str:
+                return "Int"
+            elif "bool" in t_str:
+                return "Boolean"
+            elif "float" in t_str:
+                return "Float"
+            else:
+                return "String"
+
+        # 辅助函数：检查是否是 Pydantic BaseModel
+        def is_basemodel(t):
+            return safe_issubclass(t, BaseModel)
+
+        if is_list:
+            # list[T] -> LIST 类型
+            element_type = core_type
+            if is_basemodel(element_type):
+                # list[Entity] -> LIST -> OBJECT
+                return {
+                    "kind": "LIST",
+                    "name": None,
+                    "description": None,
+                    "ofType": {
+                        "kind": "OBJECT",
+                        "name": element_type.__name__,
+                        "description": f"{element_type.__name__} entity",
+                        "ofType": None
+                    }
+                }
+            else:
+                # list[Scalar] -> LIST -> SCALAR
+                scalar_name = map_scalar_type(element_type)
+                return {
+                    "kind": "LIST",
+                    "name": None,
+                    "description": None,
+                    "ofType": {
+                        "kind": "SCALAR",
+                        "name": scalar_name,
+                        "description": None,
+                        "ofType": None
+                    }
+                }
+        else:
+            # T (非 list)
+            if is_basemodel(core_type):
+                # Entity -> OBJECT
+                return {
+                    "kind": "OBJECT",
+                    "name": core_type.__name__,
+                    "description": f"{core_type.__name__} entity",
+                    "ofType": None
+                }
+            else:
+                # Scalar -> SCALAR
+                scalar_name = map_scalar_type(core_type)
+                # 添加特殊描述
+                desc = None
+                if scalar_name == "Int":
+                    desc = "The `Int` scalar type represents non-fractional signed whole numeric values."
+                elif scalar_name == "Boolean":
+                    desc = "The `Boolean` scalar type represents `true` or `false`."
+                elif scalar_name == "Float":
+                    desc = "The `Float` scalar type represents signed double-precision fractional values."
+                elif "dict" in str(core_type).lower():
+                    scalar_name = "String"
+                    desc = "JSON string representation"
+
+                return {
+                    "kind": "SCALAR",
+                    "name": scalar_name,
+                    "description": desc,
+                    "ofType": None
+                }
 
     def _get_introspection_query_fields(self):
         """获取 Query 类型的内省字段"""

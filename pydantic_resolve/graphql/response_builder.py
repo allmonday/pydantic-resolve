@@ -7,6 +7,8 @@ from pydantic import BaseModel, create_model, Field
 
 from ..constant import ENSURE_SUBSET_REFERENCE
 from ..utils.er_diagram import ErDiagram, Relationship, LoadBy, ErLoaderPreGenerator
+from ..utils.class_util import safe_issubclass
+from ..utils.types import get_core_types
 from .types import FieldSelection
 
 
@@ -61,18 +63,19 @@ class ResponseBuilder:
                     # 检查是否是嵌套的 Pydantic 模型（list[Entity] 或 Entity）
                     # 且查询中包含子字段选择
                     if selection.sub_fields:
-                        origin = get_origin(field_type)
+                        # 使用 get_core_types 处理所有包装类型
+                        core_types = get_core_types(field_type)
 
-                        # 处理 list[Entity] 类型
-                        if origin is list:
-                            args = get_args(field_type)
-                            if args:
-                                element_type = args[0]
-                                # 检查元素类型是否是 Pydantic BaseModel
-                                if hasattr(element_type, '__bases__') and hasattr(element_type, 'model_dump'):
+                        for core_type in core_types:
+                            # 检查核心类型是否是 Pydantic BaseModel
+                            if safe_issubclass(core_type, BaseModel):
+                                origin = get_origin(field_type)
+
+                                # 处理 list[Entity] 类型
+                                if origin is list:
                                     # 递归构建嵌套模型
                                     nested_model = self.build_response_model(
-                                        element_type,
+                                        core_type,
                                         selection,
                                         f"{parent_path}.{field_name}"
                                     )
@@ -80,21 +83,27 @@ class ResponseBuilder:
                                         field_definitions[field_name] = (List[nested_model], Field(serialization_alias=selection.alias, default=[]))
                                     else:
                                         field_definitions[field_name] = (List[nested_model], [])
-                                    continue  # 已处理，跳过默认逻辑
+                                else:
+                                    # 处理 Entity 类型（单个对象）
+                                    nested_model = self.build_response_model(
+                                        core_type,
+                                        selection,
+                                        f"{parent_path}.{field_name}"
+                                    )
+                                    if selection.alias:
+                                        field_definitions[field_name] = (Optional[nested_model], Field(serialization_alias=selection.alias, default=None))
+                                    else:
+                                        field_definitions[field_name] = (Optional[nested_model], None)
 
-                        # 处理 Entity 类型（单个对象）
-                        elif hasattr(field_type, '__bases__') and hasattr(field_type, 'model_dump'):
-                            # 递归构建嵌套模型
-                            nested_model = self.build_response_model(
-                                field_type,
-                                selection,
-                                f"{parent_path}.{field_name}"
-                            )
+                                # 已处理，跳出循环
+                                break
+                        else:
+                            # 没有找到嵌套的 Pydantic 模型，使用默认逻辑
                             if selection.alias:
-                                field_definitions[field_name] = (Optional[nested_model], Field(serialization_alias=selection.alias, default=None))
+                                field_definitions[field_name] = (field_type, Field(serialization_alias=selection.alias))
                             else:
-                                field_definitions[field_name] = (Optional[nested_model], None)
-                            continue  # 已处理，跳过默认逻辑
+                                field_definitions[field_name] = (field_type, ...)
+                        continue  # 已处理，跳过后续逻辑
 
                     # 如果有别名，使用 serialization_alias，字段名保持原样
                     if selection.alias:
