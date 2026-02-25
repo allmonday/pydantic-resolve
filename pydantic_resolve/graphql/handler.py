@@ -6,10 +6,11 @@ import asyncio
 import logging
 import os
 import re
-from typing import Any, Callable, Dict, List, Tuple, Optional, TYPE_CHECKING, Union
+from typing import Any, Callable, Dict, List, Tuple, Optional, TYPE_CHECKING
 from typing import get_origin
 from ..utils.class_util import safe_issubclass
 from ..utils.types import get_core_types
+from .type_mapping import map_scalar_type, is_list_type, get_graphql_type_description
 
 if TYPE_CHECKING:
     from fastapi import APIRouter
@@ -387,7 +388,7 @@ class GraphQLHandler:
         Returns:
             元素类型，如果不是 list 则返回 None
         """
-        from typing import get_origin, get_args
+        from typing import get_args
 
         origin = get_origin(field_type)
         if origin is list:
@@ -528,31 +529,11 @@ class GraphQLHandler:
 
         # 获取核心类型
         core_type = core_types[0]
-        origin = get_origin(field_type)
 
         # 检查是否是 list[T]
-        is_list = origin is list or (hasattr(field_type, '__origin__') and field_type.__origin__ is list)
-
-        # 辅助函数：映射标量类型
-        def map_scalar_type(t):
-            t_str = str(t).lower()
-            if "int" in t_str:
-                return "Int"
-            elif "bool" in t_str:
-                return "Boolean"
-            elif "float" in t_str:
-                return "Float"
-            else:
-                return "String"
-
-        # 辅助函数：检查是否是 Pydantic BaseModel
-        def is_basemodel(t):
-            return safe_issubclass(t, BaseModel)
-
-        if is_list:
+        if is_list_type(field_type):
             # list[T] -> LIST 类型
-            element_type = core_type
-            if is_basemodel(element_type):
+            if safe_issubclass(core_type, BaseModel):
                 # list[Entity] -> LIST -> OBJECT
                 return {
                     "kind": "LIST",
@@ -560,14 +541,14 @@ class GraphQLHandler:
                     "description": None,
                     "ofType": {
                         "kind": "OBJECT",
-                        "name": element_type.__name__,
-                        "description": f"{element_type.__name__} entity",
+                        "name": core_type.__name__,
+                        "description": f"{core_type.__name__} entity",
                         "ofType": None
                     }
                 }
             else:
                 # list[Scalar] -> LIST -> SCALAR
-                scalar_name = map_scalar_type(element_type)
+                scalar_name = map_scalar_type(core_type)
                 return {
                     "kind": "LIST",
                     "name": None,
@@ -581,7 +562,7 @@ class GraphQLHandler:
                 }
         else:
             # T (非 list)
-            if is_basemodel(core_type):
+            if safe_issubclass(core_type, BaseModel):
                 # Entity -> OBJECT
                 return {
                     "kind": "OBJECT",
@@ -593,14 +574,8 @@ class GraphQLHandler:
                 # Scalar -> SCALAR
                 scalar_name = map_scalar_type(core_type)
                 # 添加特殊描述
-                desc = None
-                if scalar_name == "Int":
-                    desc = "The `Int` scalar type represents non-fractional signed whole numeric values."
-                elif scalar_name == "Boolean":
-                    desc = "The `Boolean` scalar type represents `true` or `false`."
-                elif scalar_name == "Float":
-                    desc = "The `Float` scalar type represents signed double-precision fractional values."
-                elif "dict" in str(core_type).lower():
+                desc = get_graphql_type_description(scalar_name)
+                if "dict" in str(core_type).lower():
                     scalar_name = "String"
                     desc = "JSON string representation"
 

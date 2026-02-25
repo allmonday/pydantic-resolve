@@ -4,8 +4,7 @@
 
 import pytest
 from pydantic import BaseModel
-from pydantic_resolve import base_entity, Relationship, config_global_resolver
-from pydantic_resolve.graphql.exceptions import FieldNameConflictError
+from pydantic_resolve import base_entity, Relationship
 
 
 def test_scalar_field_conflict():
@@ -190,7 +189,7 @@ def test_multiple_relationships_different_names():
         ]
 
     # 调用 get_diagram() 验证不会抛出异常
-    er_diagram = BaseEntity.get_diagram()
+    BaseEntity.get_diagram()
     assert PostEntity.__name__ == "PostEntity"
 
 
@@ -215,7 +214,7 @@ def test_no_default_field_name_no_conflict():
         ]
 
     # 调用 get_diagram() 验证不会抛出异常
-    er_diagram = BaseEntity.get_diagram()
+    BaseEntity.get_diagram()
     assert UserEntity.__name__ == "UserEntity"
 
 

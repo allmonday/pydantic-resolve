@@ -3,23 +3,18 @@ GraphQL Schema generator from ERD and @query decorated methods.
 """
 
 import inspect
-from typing import Dict, List, Union, get_args, get_origin, get_type_hints
+from typing import Dict, List, get_args, get_origin, get_type_hints
 from pydantic import BaseModel
 
 from ..utils.er_diagram import ErDiagram, Relationship
+from ..utils.class_util import safe_issubclass
+from ..utils.types import get_core_types
 from .exceptions import FieldNameConflictError
+from .type_mapping import map_scalar_type
 
 
 class SchemaBuilder:
     """从 ERD 和 @query 装饰的方法生成 GraphQL Schema"""
-
-    # Python 类型到 GraphQL 类型的映射
-    PYTHON_TO_GQL_TYPES = {
-        int: 'Int',
-        str: 'String',
-        float: 'Float',
-        bool: 'Boolean',
-    }
 
     def __init__(self, er_diagram: ErDiagram, validate_conflicts: bool = True):
         """
@@ -228,75 +223,56 @@ class SchemaBuilder:
         return f"{name}{params_str}: {return_type}"
 
     def _map_python_type_to_gql(self, python_type: type) -> str:
-        """将 Python 类型映射到 GraphQL 类型"""
-        # 处理 Optional 类型
-        origin = getattr(python_type, '__origin__', None)
+        """
+        将 Python 类型映射到 GraphQL 类型
 
-        if origin is not None:
-            # Optional[X] 或 Union[X, None]
-            args = getattr(python_type, '__args__', [])
-            if origin.__name__ in ['Union', 'Optional']:
-                # 取第一个非 None 类型，并去除 ! 表示可选
-                for arg in args:
-                    if arg is not type(None):
-                        base_type = self._map_python_type_to_gql(arg)
-                        # 去除末尾的 !，表示该字段可选
-                        return base_type.rstrip('!')
-            elif origin.__name__ == 'list':
-                # List[X]
-                args = getattr(python_type, '__args__', [])
-                if args:
-                    inner_type = self._map_python_type_to_gql(args[0])
-                    return f"[{inner_type}]!"
-            elif origin.__name__ == 'dict':
-                # Dict
-                return 'String'
+        Args:
+            python_type: Python 类型
 
-        # 基础类型
-        if python_type in self.PYTHON_TO_GQL_TYPES:
-            gql_type = self.PYTHON_TO_GQL_TYPES[python_type]
-            return f"{gql_type}!"
+        Returns:
+            GraphQL 类型字符串（如 "String!", "[Int]!"）
+        """
+        # 使用 get_core_types 处理所有包装类型（Optional, list, Annotated 等）
+        core_types = get_core_types(python_type)
+        if not core_types:
+            return "String!"  # 默认为 String
 
-        # 处理字符串类型
-        if python_type is str or python_type == 'str':
-            return "String!"
+        core_type = core_types[0]
+        origin = get_origin(python_type)
 
-        # 处理 List 类型（作为列表类型提示）
-        if hasattr(python_type, '__origin__') and python_type.__origin__ is list:
-            args = getattr(python_type, '__args__', [])
-            if args:
-                inner_type = self._map_python_type_to_gql(args[0])
-                return f"[{inner_type}]!"
+        # 检查是否是 list[T]
+        is_list = origin is list or (
+            hasattr(python_type, '__origin__') and
+            python_type.__origin__ is list
+        )
 
-        # 处理 Pydantic BaseModel 类型（嵌套的 Pydantic class）
-        try:
-            if isinstance(python_type, type) and issubclass(python_type, BaseModel):
-                return f"{python_type.__name__}!"
-        except TypeError:
-            # python_type 不是类型对象（如类型字符串等），忽略
-            pass
-
-        # 默认为字符串
-        return "String!"
+        if is_list:
+            # list[T] -> [T!]!
+            inner_gql = self._map_python_type_to_gql(core_type)
+            return f"[{inner_gql}]!"
+        else:
+            # T -> T!
+            if safe_issubclass(core_type, BaseModel):
+                return f"{core_type.__name__}!"
+            else:
+                # 标量类型
+                scalar_name = map_scalar_type(core_type)
+                return f"{scalar_name}!"
 
     def _map_return_type_to_gql(self, return_type: type) -> str:
         """映射返回类型到 GraphQL 类型"""
-        origin = getattr(return_type, '__origin__', None)
+        # 使用 get_core_types 处理所有包装类型
+        core_types = get_core_types(return_type)
+        if not core_types:
+            return self._map_python_type_to_gql(return_type)
+
+        core_type = core_types[0]
+        origin = get_origin(return_type)
 
         # 处理 List[X]
-        if origin is list or (hasattr(origin, '__name__') and origin.__name__ == 'list'):
-            args = getattr(return_type, '__args__', [])
-            if args:
-                inner_type = args[0]
-                inner_gql = self._map_python_type_to_gql(inner_type)
-                return f"[{inner_gql}]"
-
-        # 处理 Optional[X]
-        if origin is Union or (hasattr(origin, '__name__') and origin.__name__ in ['Union', 'Optional']):
-            args = getattr(return_type, '__args__', [])
-            for arg in args:
-                if arg is not type(None):
-                    return self._map_python_type_to_gql(arg)
+        if origin is list:
+            inner_gql = self._map_python_type_to_gql(core_type)
+            return f"[{inner_gql}]"
 
         # 默认处理
         return self._map_python_type_to_gql(return_type)
@@ -371,33 +347,15 @@ class SchemaBuilder:
                 continue
 
             for field_type in type_hints.values():
-                # 解析 Optional、List 等包装类型
-                origin = get_origin(field_type)
+                # 使用 get_core_types 处理所有包装类型
+                core_types = get_core_types(field_type)
 
-                if origin is not None:
-                    # 处理 Optional[X] 或 Union[X, None]
-                    if origin.__name__ in ['Union', 'Optional']:
-                        args = get_args(field_type)
-                        for arg in args:
-                            if arg is not type(None):
-                                field_type = arg
-                                break
-
-                    # 处理 List[X]
-                    elif origin.__name__ == 'list':
-                        args = get_args(field_type)
-                        if args:
-                            field_type = args[0]
-
-                # 检查是否是 Pydantic BaseModel
-                try:
-                    if isinstance(field_type, type) and issubclass(field_type, BaseModel):
-                        if field_type not in processed_types and field_type not in nested_types:
-                            nested_types.add(field_type)
-                            types_to_check.append(field_type)
-                except TypeError:
-                    # field_type 不是类型对象，跳过
-                    pass
+                for core_type in core_types:
+                    # 检查是否是 Pydantic BaseModel
+                    if safe_issubclass(core_type, BaseModel):
+                        if core_type not in processed_types and core_type not in nested_types:
+                            nested_types.add(core_type)
+                            types_to_check.append(core_type)
 
         return nested_types
 

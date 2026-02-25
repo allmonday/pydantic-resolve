@@ -4,6 +4,7 @@ Dynamic Pydantic model builder based on GraphQL field selection.
 
 from typing import Any, Dict, List, Optional, Set, Tuple, get_type_hints, get_origin, get_args, Annotated
 from pydantic import BaseModel, create_model, Field
+from functools import lru_cache
 
 from ..constant import ENSURE_SUBSET_REFERENCE
 from ..utils.er_diagram import ErDiagram, Relationship, LoadBy, ErLoaderPreGenerator
@@ -187,11 +188,26 @@ class ResponseBuilder:
 
     def _get_required_fk_fields(self, entity: type, selected_fields: Set[str]) -> Set[str]:
         """
-        确定 LoadBy 需要的外键字段
+        确定 LoadBy 需要的外键字段（带缓存）
 
         Args:
             entity: 实体类
             selected_fields: 选中的字段名集合
+
+        Returns:
+            需要包含的外键字段名集合
+        """
+        # 使用内部方法实现缓存（需要将 set 转为 frozenset）
+        return self._get_required_fk_fields_cached(entity, frozenset(selected_fields))
+
+    @lru_cache(maxsize=128)
+    def _get_required_fk_fields_cached(self, entity: type, selected_fields: frozenset) -> Set[str]:
+        """
+        确定 LoadBy 需要的外键字段（缓存版本）
+
+        Args:
+            entity: 实体类
+            selected_fields: 选中的字段名集合（frozenset，用于缓存）
 
         Returns:
             需要包含的外键字段名集合
