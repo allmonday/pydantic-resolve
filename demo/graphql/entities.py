@@ -66,7 +66,7 @@ class UserMetaEntity(BaseModel):
 class UserEntity(BaseModel, BaseEntity):
     """用户实体"""
     __relationships__ = [
-        Relationship(field='id', target_kls=list['PostEntity'], loader=post_loader, load_many=True, default_field_name='myposts')
+        Relationship(field='id', target_kls=list['PostEntity'], loader=post_loader, default_field_name='myposts')
     ]
     id: int
     name: str
@@ -111,7 +111,7 @@ class PostEntity(BaseModel, BaseEntity):
     """文章实体"""
     __relationships__ = [
         Relationship(field='author_id', target_kls=UserEntity, loader=user_loader, default_field_name='author'),
-        Relationship(field='id', target_kls=list['CommentEntity'], loader=comment_loader, load_many=True, default_field_name='comments')
+        Relationship(field='id', target_kls=list['CommentEntity'], loader=comment_loader, default_field_name='comments')
     ]
     id: int
     title: str

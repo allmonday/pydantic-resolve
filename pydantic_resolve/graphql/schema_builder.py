@@ -4,6 +4,7 @@ GraphQL Schema generator from ERD and @query decorated methods.
 
 import inspect
 from typing import Dict, List, Union, get_args, get_origin, get_type_hints
+from pydantic import BaseModel
 
 from ..utils.er_diagram import ErDiagram, Relationship
 from .exceptions import FieldNameConflictError
@@ -42,16 +43,26 @@ class SchemaBuilder:
 
         type_defs = []
         query_defs = []
+        processed_types = set()  # 跟踪已处理的类型，避免重复
 
         # 生成所有实体类型
         for entity_cfg in self.er_diagram.configs:
             type_def = self._build_type_definition(entity_cfg)
             type_defs.append(type_def)
+            processed_types.add(entity_cfg.kls)
 
             # 提取该实体的 @query 方法
             query_methods = self._extract_query_methods(entity_cfg.kls)
             for method in query_methods:
                 query_defs.append(self._build_query_def(method))
+
+        # 收集并生成所有嵌套的 Pydantic 类型
+        nested_types = self._collect_nested_pydantic_types(processed_types)
+        for nested_type in nested_types:
+            if nested_type not in processed_types:
+                type_def = self._build_type_definition_for_class(nested_type)
+                type_defs.append(type_def)
+                processed_types.add(nested_type)
 
         # 组装完整的 Schema
         schema = "\n".join(type_defs) + "\n\n"
@@ -225,11 +236,12 @@ class SchemaBuilder:
             # Optional[X] 或 Union[X, None]
             args = getattr(python_type, '__args__', [])
             if origin.__name__ in ['Union', 'Optional']:
-                # 取第一个非 None 类型
+                # 取第一个非 None 类型，并去除 ! 表示可选
                 for arg in args:
                     if arg is not type(None):
                         base_type = self._map_python_type_to_gql(arg)
-                        return base_type
+                        # 去除末尾的 !，表示该字段可选
+                        return base_type.rstrip('!')
             elif origin.__name__ == 'list':
                 # List[X]
                 args = getattr(python_type, '__args__', [])
@@ -255,6 +267,14 @@ class SchemaBuilder:
             if args:
                 inner_type = self._map_python_type_to_gql(args[0])
                 return f"[{inner_type}]!"
+
+        # 处理 Pydantic BaseModel 类型（嵌套的 Pydantic class）
+        try:
+            if isinstance(python_type, type) and issubclass(python_type, BaseModel):
+                return f"{python_type.__name__}!"
+        except TypeError:
+            # python_type 不是类型对象（如类型字符串等），忽略
+            pass
 
         # 默认为字符串
         return "String!"
@@ -327,3 +347,86 @@ class SchemaBuilder:
                 field_name=field_name,
                 conflict_type="SCALAR_CONFLICT"
             )
+
+    def _collect_nested_pydantic_types(self, processed_types: set) -> set:
+        """
+        递归收集所有嵌套的 Pydantic BaseModel 类型
+
+        Args:
+            processed_types: 已经处理过的类型集合
+
+        Returns:
+            所有发现的嵌套 Pydantic 类型集合
+        """
+        nested_types = set()
+        types_to_check = list(processed_types)
+
+        while types_to_check:
+            current_type = types_to_check.pop()
+
+            # 获取当前类型的所有字段提示
+            try:
+                type_hints = get_type_hints(current_type)
+            except Exception:
+                continue
+
+            for field_type in type_hints.values():
+                # 解析 Optional、List 等包装类型
+                origin = get_origin(field_type)
+
+                if origin is not None:
+                    # 处理 Optional[X] 或 Union[X, None]
+                    if origin.__name__ in ['Union', 'Optional']:
+                        args = get_args(field_type)
+                        for arg in args:
+                            if arg is not type(None):
+                                field_type = arg
+                                break
+
+                    # 处理 List[X]
+                    elif origin.__name__ == 'list':
+                        args = get_args(field_type)
+                        if args:
+                            field_type = args[0]
+
+                # 检查是否是 Pydantic BaseModel
+                try:
+                    if isinstance(field_type, type) and issubclass(field_type, BaseModel):
+                        if field_type not in processed_types and field_type not in nested_types:
+                            nested_types.add(field_type)
+                            types_to_check.append(field_type)
+                except TypeError:
+                    # field_type 不是类型对象，跳过
+                    pass
+
+        return nested_types
+
+    def _build_type_definition_for_class(self, kls: type) -> str:
+        """
+        为任意 Pydantic BaseModel 类生成 GraphQL 类型定义
+
+        Args:
+            kls: Pydantic BaseModel 类
+
+        Returns:
+            GraphQL 类型定义字符串
+        """
+        fields = []
+
+        # 获取类的所有字段提示
+        try:
+            type_hints = get_type_hints(kls)
+        except Exception:
+            type_hints = {}
+
+        # 处理所有字段
+        for field_name, field_type in type_hints.items():
+            if field_name.startswith('__'):
+                continue
+
+            # 映射 Python 类型到 GraphQL 类型
+            gql_type = self._map_python_type_to_gql(field_type)
+            fields.append(f"  {field_name}: {gql_type}")
+
+        return f"type {kls.__name__} {{\n" + "\n".join(fields) + "\n}"
+

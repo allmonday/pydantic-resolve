@@ -2,11 +2,11 @@
 Dynamic Pydantic model builder based on GraphQL field selection.
 """
 
-from typing import Any, Dict, List, Optional, Set, Tuple, get_type_hints, get_origin, get_args
+from typing import Any, Dict, List, Optional, Set, Tuple, get_type_hints, get_origin, get_args, Annotated
 from pydantic import BaseModel, create_model
-from pydantic_resolve import LoaderDepend
 
-from ..utils.er_diagram import ErDiagram, Relationship
+from ..constant import ENSURE_SUBSET_REFERENCE
+from ..utils.er_diagram import ErDiagram, Relationship, LoadBy, ErLoaderPreGenerator
 from .types import FieldSelection
 
 
@@ -20,6 +20,7 @@ class ResponseBuilder:
         """
         self.er_diagram = er_diagram
         self.entity_map = {cfg.kls: cfg for cfg in er_diagram.configs}
+        self.loader_pre_generator = ErLoaderPreGenerator(er_diagram)
 
     def build_response_model(
         self,
@@ -93,23 +94,20 @@ class ResponseBuilder:
                 else:
                     actual_entity = target_kls
 
-                # 递归构建嵌套模型
-                if relationship.load_many:
-                    # 一对多: List[TargetModel]
-                    nested_model = self.build_response_model(
-                        actual_entity,
-                        selection,
-                        f"{parent_path}.{field_name}"
-                    )
-                    field_definitions[field_name] = (List[nested_model], [])
+                # 递归构建嵌套模型（统一构建，避免重复）
+                nested_model = self.build_response_model(
+                    actual_entity,
+                    selection,
+                    f"{parent_path}.{field_name}"
+                )
+
+                # 根据 target_kls 的原始类型决定字段类型
+                if origin is list:
+                    # target_kls 是 list[T]，一对多关系，字段类型是 List[nested_model]
+                    field_definitions[field_name] = (Annotated[List[nested_model], LoadBy(relationship.field)], [])
                 else:
-                    # 多对一或一对一: TargetModel
-                    nested_model = self.build_response_model(
-                        actual_entity,
-                        selection,
-                        f"{parent_path}.{field_name}"
-                    )
-                    field_definitions[field_name] = (Optional[nested_model], None)
+                    # 多对一或一对一关系，字段类型是 Optional[nested_model]
+                    field_definitions[field_name] = (Annotated[Optional[nested_model], LoadBy(relationship.field)], None)
 
         # 5. 动态创建模型类
         model_name = f"{entity.__name__}Response_{id(field_selection)}"
@@ -119,9 +117,9 @@ class ResponseBuilder:
             **field_definitions
         )
 
-        # 6. 为关联字段添加 LoadBy 自动解析方法
-        if field_selection.sub_fields:
-            self._attach_load_by_methods(dynamic_model, entity, field_selection)
+        # 6. 设置 ENSURE_SUBSET_REFERENCE 指向原始实体
+        # 这样 ErLoaderPreGenerator.prepare() 就能通过 is_compatible_type 找到原始实体的配置
+        setattr(dynamic_model, ENSURE_SUBSET_REFERENCE, entity)
 
         return dynamic_model
 
@@ -177,73 +175,3 @@ class ResponseBuilder:
                 return rel
 
         return None
-
-    def _attach_load_by_methods(
-        self,
-        model: type,
-        entity: type,
-        selection: FieldSelection
-    ):
-        """
-        为动态模型附加 LoadBy 自动解析方法
-
-        Args:
-            model: 动态创建的模型类
-            entity: 基础实体类
-            selection: 字段选择
-        """
-        entity_cfg = self.entity_map.get(entity)
-        if not entity_cfg:
-            return
-
-        if not selection.sub_fields:
-            return
-
-        for field_name in selection.sub_fields.keys():
-            relationship = self._find_relationship(entity, field_name)
-            if not relationship:
-                continue
-
-            # 创建 resolve_XXX 方法
-            method_name = f'resolve_{field_name}'
-
-            # 使用闭包捕获当前 relationship
-            def make_resolve_method(rel: Relationship):
-                if rel.load_many:
-                    # 一对多关系：直接调用 loader 函数
-                    async def resolve_method(self):
-                        fk = getattr(self, rel.field, None)
-                        if fk is None:
-                            return []
-                        if rel.field_fn is not None:
-                            fk = rel.field_fn(fk)
-
-                        # 直接调用 loader 函数（不使用 DataLoader）
-                        result = await rel.loader([fk])
-
-                        # 展平嵌套列表：[[item1, item2], ...] -> [item1, item2, ...]
-                        flattened = []
-                        for item in result:
-                            if isinstance(item, list):
-                                flattened.extend(item)
-                            elif item is not None:
-                                flattened.append(item)
-
-                        return flattened
-                else:
-                    # 多对一或一对一：使用 DataLoader
-                    async def resolve_method(self, loader=LoaderDepend(rel.loader)):
-                        fk = getattr(self, rel.field, None)
-                        if fk is None:
-                            return None
-                        if rel.field_fn is not None:
-                            fk = rel.field_fn(fk)
-                        # DataLoader.load 返回 Future，需要 await
-                        result = await loader.load(fk)
-                        if result and len(result) > 0:
-                            return result[0]
-                        return None
-                return resolve_method
-
-            resolve_method = make_resolve_method(relationship)
-            setattr(model, method_name, resolve_method)
