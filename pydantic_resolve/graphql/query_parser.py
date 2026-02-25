@@ -25,7 +25,6 @@ class QueryParser:
         Args:
             er_diagram: 实体关系图
         """
-        self.er_diagram = er_diagram
         self.entity_map = {cfg.kls.__name__: cfg.kls for cfg in er_diagram.configs}
 
     def parse(self, query: str) -> ParsedQuery:

@@ -3,7 +3,7 @@ Dynamic Pydantic model builder based on GraphQL field selection.
 """
 
 from typing import Any, Dict, List, Optional, Set, Tuple, get_type_hints, get_origin, get_args, Annotated
-from pydantic import BaseModel, create_model
+from pydantic import BaseModel, create_model, Field
 
 from ..constant import ENSURE_SUBSET_REFERENCE
 from ..utils.er_diagram import ErDiagram, Relationship, LoadBy, ErLoaderPreGenerator
@@ -55,10 +55,14 @@ class ResponseBuilder:
 
         # 2. 处理查询中选中的标量字段
         if field_selection.sub_fields:
-            for field_name in field_selection.sub_fields.keys():
+            for field_name, selection in field_selection.sub_fields.items():
                 if field_name in type_hints:
                     field_type = type_hints[field_name]
-                    field_definitions[field_name] = (field_type, ...)
+                    # 如果有别名，使用 serialization_alias，字段名保持原样
+                    if selection.alias:
+                        field_definitions[field_name] = (field_type, Field(serialization_alias=selection.alias))
+                    else:
+                        field_definitions[field_name] = (field_type, ...)
 
         # 3. 自动包含外键字段（用于 LoadBy）
         fk_fields = self._get_required_fk_fields(
@@ -104,10 +108,16 @@ class ResponseBuilder:
                 # 根据 target_kls 的原始类型决定字段类型
                 if origin is list:
                     # target_kls 是 list[T]，一对多关系，字段类型是 List[nested_model]
-                    field_definitions[field_name] = (Annotated[List[nested_model], LoadBy(relationship.field)], [])
+                    if selection.alias:
+                        field_definitions[field_name] = (Annotated[List[nested_model], LoadBy(relationship.field)], Field(serialization_alias=selection.alias, default=[]))
+                    else:
+                        field_definitions[field_name] = (Annotated[List[nested_model], LoadBy(relationship.field)], [])
                 else:
                     # 多对一或一对一关系，字段类型是 Optional[nested_model]
-                    field_definitions[field_name] = (Annotated[Optional[nested_model], LoadBy(relationship.field)], None)
+                    if selection.alias:
+                        field_definitions[field_name] = (Annotated[Optional[nested_model], LoadBy(relationship.field)], Field(serialization_alias=selection.alias, default=None))
+                    else:
+                        field_definitions[field_name] = (Annotated[Optional[nested_model], LoadBy(relationship.field)], None)
 
         # 5. 动态创建模型类
         model_name = f"{entity.__name__}Response_{id(field_selection)}"

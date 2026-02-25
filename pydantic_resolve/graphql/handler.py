@@ -772,13 +772,13 @@ class GraphQLHandler:
                 if is_list:
                     result = await resolver.resolve(typed_data)
                     if result is not None:
-                        result_data = [r.model_dump() for r in result]
+                        result_data = [r.model_dump(by_alias=True) for r in result]
                     else:
                         result_data = []
                 else:
                     result = await resolver.resolve(typed_data)
                     if result is not None:
-                        result_data = result.model_dump()
+                        result_data = result.model_dump(by_alias=True)
                     else:
                         result_data = None
             else:
