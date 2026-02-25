@@ -196,7 +196,7 @@ class SchemaBuilder:
                 'params': params,
                 'return_type': gql_return_type,
                 'entity': entity,
-                'method': method  # 保存原始的 classmethod 对象
+                'method': actual_method  # 保存实际可调用的函数（对于 classmethod 是 __func__）
             })
 
         return methods

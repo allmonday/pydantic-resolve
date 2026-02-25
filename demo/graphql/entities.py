@@ -58,16 +58,22 @@ async def comment_loader(comment_ids: List[int]) -> List[dict]:
 BaseEntity = base_entity()
 
 
+class UserMetaEntity(BaseModel):
+    id: int = 0
+    name: str = ''
+
 # User 实体
 class UserEntity(BaseModel, BaseEntity):
     """用户实体"""
     __relationships__ = [
-        Relationship(field='id', target_kls=list['PostEntity'], loader=post_loader, load_many=True, default_field_name='posts')
+        Relationship(field='id', target_kls=list['PostEntity'], loader=post_loader, load_many=True, default_field_name='myposts')
     ]
     id: int
     name: str
     email: str
     role: str
+    something: dict = {'key': 'value'}
+    meta: list[UserMetaEntity] = [UserMetaEntity()]
 
     @query(name='users')
     async def get_all(cls, limit: int = 10, offset: int = 0) -> List['UserEntity']:

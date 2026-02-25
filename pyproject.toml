@@ -50,6 +50,8 @@ dev = [
     "mkdocs-static-i18n[material]==1.2.0",
     "psutil>=7.1.0,<8.0.0",
     "ruff>=0.14.5,<0.15.0",
+    "fastapi>=0.133.0",
+    "uvicorn>=0.41.0"
 ]
 
 [build-system]

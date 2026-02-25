@@ -667,11 +667,9 @@ class GraphQLHandler:
         """
         logger.debug(f"Executing query method with arguments: {arguments}")
         try:
-            # classmethod 需要通过 __func__ 调用，传入 None 作为 cls
-            if isinstance(method, classmethod):
-                return await method.__func__(None, **arguments)
-            else:
-                return await method(**arguments)
+            # schema_builder 已经提取了底层函数（对于 classmethod 是 __func__）
+            # 直接调用，第一个参数（cls/self）传入 None
+            return await method(None, **arguments)
         except Exception as e:
             logger.error(f"Query method execution failed: {e}")
             raise GraphQLError(
