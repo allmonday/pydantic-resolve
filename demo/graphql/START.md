@@ -78,7 +78,7 @@ cd demo/graphql
 
 ### ❌ ImportError: cannot import name 'create_graphql_route'
 
-**原因**: 没有使用项目的虚拟环境，或者缺少依赖。
+**原因**: 该函数已被移除，请使用 `GraphQLHandler` 直接集成。
 
 **解决**:
 ```bash
@@ -91,6 +91,8 @@ uv pip install fastapi uvicorn graphql-core
 # 使用 uv run 启动
 uv run uvicorn demo.graphql.app:app --reload
 ```
+
+**注意**: 新版本使用 `GraphQLHandler`，详见 `app.py` 和 [集成指南](../../docs/graphql-integration.zh.md)。
 
 ### ❌ ModuleNotFoundError: No module named 'pydantic'
 

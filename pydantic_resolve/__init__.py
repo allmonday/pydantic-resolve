@@ -55,10 +55,9 @@ except (ImportError, AttributeError):
     ResponseBuilder = None
 
 try:
-    from .graphql.handler import GraphQLHandler, create_graphql_route
+    from .graphql.handler import GraphQLHandler
 except (ImportError, AttributeError):
     GraphQLHandler = None
-    create_graphql_route = None
 
 setup_library_logger()
 
@@ -101,7 +100,6 @@ __all__ = [
     # GraphQL 支持
     'query',
     'GraphQLHandler',
-    'create_graphql_route',
     'QueryParser',
     'SchemaBuilder',
     'ResponseBuilder',

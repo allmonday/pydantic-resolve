@@ -3,10 +3,13 @@ GraphQL Demo FastAPI 应用
 提供可查询的 GraphQL endpoint
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
+from fastapi.responses import PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
 from pydantic_resolve import config_global_resolver
-from pydantic_resolve.graphql import create_graphql_route
+from pydantic_resolve.graphql import GraphQLHandler, SchemaBuilder
 
 from demo.graphql.entities import BaseEntity
 
@@ -18,23 +21,49 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# 添加 CORS 中间件以支持 GraphiQL 等客户端
+# 添加 CORS 中间件
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 允许所有来源（开发环境）
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # 允许所有方法
-    allow_headers=["*"],  # 允许所有请求头
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # 配置全局 resolver
 config_global_resolver(BaseEntity.get_diagram())
 
+# 创建 GraphQL handler 和 schema builder
+handler = GraphQLHandler(BaseEntity.get_diagram())
+schema_builder = SchemaBuilder(BaseEntity.get_diagram())
+
+# 定义 GraphQL 请求模型
+class GraphQLRequest(BaseModel):
+    query: str
+    variables: Optional[Dict[str, Any]] = None
+    operation_name: Optional[str] = None
+
 # 创建 GraphQL 路由
-graphql_router = create_graphql_route(
-    er_diagram=BaseEntity.get_diagram(),
-    path="/graphql"
-)
+graphql_router = APIRouter()
+
+@graphql_router.post("/graphql")
+async def graphql_endpoint(req: GraphQLRequest):
+    """GraphQL 查询端点"""
+    result = await handler.execute(
+        query=req.query,
+        variables=req.variables,
+        operation_name=req.operation_name
+    )
+    return result
+
+@graphql_router.get("/schema", response_class=None)
+async def graphql_schema():
+    """GraphQL Schema 端点（返回 SDL 格式）"""
+    schema_sdl = schema_builder.build_schema()
+    return PlainTextResponse(
+        content=schema_sdl,
+        media_type="text/plain; charset=utf-8"
+    )
 
 # 挂载路由
 app.include_router(graphql_router)

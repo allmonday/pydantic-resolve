@@ -333,10 +333,17 @@ pip install graphql-core
 
 ### 基本使用
 
+`pydantic-resolve` 提供框架无关的 `GraphQLHandler`，你可以轻松集成到任何 web framework。
+
+#### FastAPI 集成示例
+
 ```python
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
+from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
 from pydantic_resolve import base_entity, config_global_resolver, query
-from pydantic_resolve.graphql import create_graphql_route
+from pydantic_resolve.graphql import GraphQLHandler, SchemaBuilder
 
 app = FastAPI()
 
@@ -363,10 +370,37 @@ class UserEntity(BaseModel, BaseEntity):
 # 3. 配置全局 resolver
 config_global_resolver(BaseEntity.get_diagram())
 
-# 4. 挂载 GraphQL 路由
-graphql_router = create_graphql_route(BaseEntity.get_diagram())
-app.include_router(graphql_router)
+# 4. 创建 GraphQL handler 和 schema builder
+handler = GraphQLHandler(BaseEntity.get_diagram())
+schema_builder = SchemaBuilder(BaseEntity.get_diagram())
+
+# 5. 定义请求模型
+class GraphQLRequest(BaseModel):
+    query: str
+    variables: Optional[Dict[str, Any]] = None
+    operation_name: Optional[str] = None
+
+# 6. 创建路由
+router = APIRouter()
+
+@router.post("/graphql")
+async def graphql_endpoint(req: GraphQLRequest):
+    result = await handler.execute(
+        query=req.query,
+        variables=req.variables,
+        operation_name=req.operation_name
+    )
+    return result
+
+@router.get("/schema")
+async def graphql_schema():
+    schema_sdl = schema_builder.build_schema()
+    return PlainTextResponse(schema_sdl)
+
+app.include_router(router)
 ```
+
+**其他框架集成指南** (Flask, Starlette, Django 等): [GraphQL 框架集成指南](./graphql-integration.zh.md)
 
 ### 查询示例
 

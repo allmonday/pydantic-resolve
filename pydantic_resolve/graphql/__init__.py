@@ -27,15 +27,6 @@ except ImportError as e:
         "Install with: pip install graphql-core"
     )
 
-# FastAPI integration (requires fastapi)
-try:
-    from .handler import create_graphql_route  # noqa: F401 - re-exported in __all__
-    FASTAPI_INTEGRATION_AVAILABLE = True
-except ImportError as e:
-    FASTAPI_INTEGRATION_AVAILABLE = False
-    _fastapi_import_error = str(e)
-    # Don't warn here - FastAPI is optional
-
 # Build exports list
 if CORE_AVAILABLE:
     __all__ = [
@@ -49,8 +40,5 @@ if CORE_AVAILABLE:
         'QueryParseError',
         'GraphQLError',
     ]
-
-    if FASTAPI_INTEGRATION_AVAILABLE:
-        __all__.append('create_graphql_route')
 else:
     __all__ = []

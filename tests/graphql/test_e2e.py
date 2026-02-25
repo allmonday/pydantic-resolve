@@ -4,9 +4,9 @@
 
 import pytest
 from pydantic_resolve import config_global_resolver, query
-from pydantic_resolve.graphql import create_graphql_route, GraphQLHandler
+from pydantic_resolve.graphql import GraphQLHandler
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional, Dict, Any
 
 
 class TestGraphQLIntegration:
@@ -75,10 +75,44 @@ class TestGraphQLIntegration:
         assert result["errors"] is not None
         assert len(result["errors"]) > 0
 
-    def test_create_graphql_route(self):
-        """测试创建 FastAPI 路由"""
-        router = create_graphql_route(self.er_diagram)
+    def test_graphql_handler_integration(self):
+        """测试 GraphQLHandler 集成"""
+        try:
+            from fastapi import APIRouter
+        except ImportError:
+            pytest.skip("FastAPI not available")
+
+        # 定义请求模型
+        class GraphQLRequest(BaseModel):
+            query: str
+            variables: Optional[Dict[str, Any]] = None
+            operation_name: Optional[str] = None
+
+        # 创建路由
+        router = APIRouter()
+
+        @router.post("/test")
+        async def graphql_endpoint(req: GraphQLRequest):
+            result = await self.handler.execute(
+                query=req.query,
+                variables=req.variables,
+                operation_name=req.operation_name
+            )
+            return result
 
         # 验证路由创建
         assert router is not None
-        assert len(router.routes) >= 2  # POST /graphql 和 GET /schema
+        assert len(router.routes) >= 1
+
+        # 测试查询
+        assert self.handler is not None
+        assert hasattr(self.handler, 'execute')
+
+    def test_create_graphql_route_removed(self):
+        """确认 create_graphql_route 已被移除"""
+        with pytest.raises(ImportError):
+            from pydantic_resolve.graphql import create_graphql_route  # noqa: F401
+
+        with pytest.raises(ImportError):
+            from pydantic_resolve import create_graphql_route  # noqa: F401
+

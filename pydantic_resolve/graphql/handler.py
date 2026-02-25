@@ -6,14 +6,12 @@ import asyncio
 import logging
 import os
 import re
-from typing import Any, Callable, Dict, List, Tuple, Optional, TYPE_CHECKING
+from typing import Any, Callable, Dict, List, Tuple, Optional
 from typing import get_origin
+from pydantic import BaseModel
 from ..utils.class_util import safe_issubclass
 from ..utils.types import get_core_types
 from .type_mapping import map_scalar_type, is_list_type, get_graphql_type_description
-
-if TYPE_CHECKING:
-    from fastapi import APIRouter
 
 from ..resolver import Resolver
 from ..utils.er_diagram import ErDiagram
@@ -77,28 +75,6 @@ SCALAR_TYPES = {
         "possibleTypes": None
     },
 }
-
-# FastAPI 是可选依赖
-try:
-    from fastapi import APIRouter
-    from fastapi.responses import PlainTextResponse
-    from pydantic import BaseModel
-    FASTAPI_AVAILABLE = True
-except ImportError:
-    APIRouter = None  # type: ignore
-    PlainTextResponse = None  # type: ignore
-    BaseModel = None  # type: ignore
-    FASTAPI_AVAILABLE = False
-
-
-if FASTAPI_AVAILABLE:
-    class GraphQLRequest(BaseModel):
-        """GraphQL 请求模型"""
-        query: str
-        variables: Optional[Dict[str, Any]] = None
-        operation_name: Optional[str] = None
-else:
-    GraphQLRequest = None  # type: ignore
 
 
 class GraphQLHandler:
@@ -987,63 +963,3 @@ class GraphQLHandler:
 
         logger.info("[Phase 2] Completed concurrent resolution")
         return resolution_map
-
-
-def create_graphql_route(
-    er_diagram: ErDiagram,
-    path: str = "/graphql"
-):
-    """
-    创建 FastAPI GraphQL 路由
-
-    Args:
-        er_diagram: 实体关系图
-        path: 路由路径
-
-    Returns:
-        FastAPI APIRouter
-
-    使用示例:
-        ```python
-        from fastapi import FastAPI
-        from pydantic_resolve import base_entity, config_global_resolver
-        from pydantic_resolve.graphql import create_graphql_route
-
-        app = FastAPI()
-        BaseEntity = base_entity()
-        config_global_resolver(BaseEntity.get_diagram())
-
-        graphql_router = create_graphql_route(BaseEntity.get_diagram())
-        app.include_router(graphql_router)
-        ```
-    """
-    if not FASTAPI_AVAILABLE:
-        raise ImportError(
-            "FastAPI is required for create_graphql_route. "
-            "Please install it with: pip install fastapi"
-        )
-
-    router = APIRouter()
-    handler = GraphQLHandler(er_diagram)
-    schema_builder = SchemaBuilder(er_diagram)
-
-    @router.post(path)
-    async def graphql_endpoint(req: GraphQLRequest):
-        """GraphQL 查询端点"""
-        result = await handler.execute(
-            query=req.query,
-            variables=req.variables,
-            operation_name=req.operation_name
-        )
-        return result
-
-    @router.get("/schema", response_class=None)
-    async def graphql_schema():
-        """GraphQL Schema 端点（返回 SDL 格式）"""
-        schema_sdl = schema_builder.build_schema()
-        return PlainTextResponse(
-            content=schema_sdl,
-            media_type="text/plain; charset=utf-8"
-        )
-
-    return router
