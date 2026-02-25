@@ -6,6 +6,7 @@ import inspect
 from typing import Dict, List, Union, get_args, get_origin, get_type_hints
 
 from ..utils.er_diagram import ErDiagram, Relationship
+from .exceptions import FieldNameConflictError
 
 
 class SchemaBuilder:
@@ -19,12 +20,14 @@ class SchemaBuilder:
         bool: 'Boolean',
     }
 
-    def __init__(self, er_diagram: ErDiagram):
+    def __init__(self, er_diagram: ErDiagram, validate_conflicts: bool = True):
         """
         Args:
             er_diagram: 实体关系图
+            validate_conflicts: 是否验证字段名冲突（默认 True）
         """
         self.er_diagram = er_diagram
+        self.validate_conflicts = validate_conflicts
 
     def build_schema(self) -> str:
         """
@@ -33,6 +36,10 @@ class SchemaBuilder:
         Returns:
             GraphQL Schema 字符串
         """
+        # 运行时验证字段冲突（双重保障）
+        if self.validate_conflicts:
+            self._validate_all_entities()
+
         type_defs = []
         query_defs = []
 
@@ -291,3 +298,32 @@ class SchemaBuilder:
 
         # 转换为 camelCase
         return method_name
+
+    def _validate_all_entities(self) -> None:
+        """验证所有实体的字段名冲突（运行时检查）。"""
+        for entity_cfg in self.er_diagram.configs:
+            self._validate_entity_fields(entity_cfg)
+
+    def _validate_entity_fields(self, entity_cfg) -> None:
+        """验证单个实体的字段冲突。"""
+        # 收集所有字段（标量 + 关系）
+        try:
+            scalar_fields = set(get_type_hints(entity_cfg.kls).keys())
+        except Exception:
+            scalar_fields = set()
+
+        relationship_fields = set()
+        for rel in entity_cfg.relationships:
+            if isinstance(rel, Relationship) and rel.default_field_name:
+                relationship_fields.add(rel.default_field_name)
+
+        # 检查交集
+        conflicts = scalar_fields & relationship_fields
+        if conflicts:
+            field_name = next(iter(conflicts))
+            raise FieldNameConflictError(
+                message=f"Field name conflict in {entity_cfg.kls.__name__}: '{field_name}'",
+                entity_name=entity_cfg.kls.__name__,
+                field_name=field_name,
+                conflict_type="SCALAR_CONFLICT"
+            )

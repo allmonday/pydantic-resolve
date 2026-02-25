@@ -2,9 +2,11 @@
 GraphQL handler - coordinates all components and provides FastAPI integration.
 """
 
+import asyncio
 import logging
+import os
 import re
-from typing import Any, Callable, Dict, Tuple, Optional, TYPE_CHECKING
+from typing import Any, Callable, Dict, List, Tuple, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from fastapi import APIRouter
@@ -558,82 +560,95 @@ class GraphQLHandler:
         self,
         query: str,
     ) -> Dict[str, Any]:
-        """执行自定义查询（非内省）"""
+        """
+        执行自定义查询，采用优化的两阶段执行：
+        - 阶段 1（串行）：查询方法执行、模型构建、数据转换
+        - 阶段 2（并发）：并行执行所有根查询的 Resolver
+        """
+        logger.info("Starting custom query execution with concurrent optimization")
+
         # 1. 解析查询
         parsed = self.parser.parse(query)
+        logger.debug(f"Query parsed: {len(parsed.field_tree)} root fields found")
 
-        # 2. 遍历所有根查询字段（支持多个根查询）
+        # 2. 初始化结果
         errors = []
         data = {}
 
+        # ===== 阶段 1：串行准备 =====
+        logger.info("[Phase 1] Starting serial preparation phase")
+
+        preparation_results = {}  # query_name -> (typed_data, is_list)
+
         for root_query_name, root_field_selection in parsed.field_tree.items():
             try:
-                # 3. 查找对应的 @query 方法
+                # 检查查询是否存在
                 if root_query_name not in self.query_map:
                     errors.append({
                         "message": f"未知的查询: {root_query_name}",
                         "extensions": {"code": "UNKNOWN_QUERY"}
                     })
+                    logger.warning(f"[Phase 1] Unknown query: {root_query_name}")
                     continue
 
                 entity, query_method = self.query_map[root_query_name]
 
-                # 4. 执行查询方法获取数据
-                args = root_field_selection.arguments or {}
-                root_data = await self._execute_query_method(query_method, args)
-
-                # 5. 构建响应模型
-                response_model = self.builder.build_response_model(
+                # 准备查询解析
+                typed_data, error_msg, error_dict = await self._prepare_query_resolution(
+                    root_query_name=root_query_name,
+                    root_field_selection=root_field_selection,
                     entity=entity,
-                    field_selection=root_field_selection
+                    query_method=query_method
                 )
 
-                # 6. 转换为响应模型
-                if isinstance(root_data, list):
-                    typed_data = [
-                        response_model.model_validate(d.model_dump() if hasattr(d, 'model_dump') else d)
-                        for d in root_data
-                    ]
-                elif root_data is not None:
-                    typed_data = response_model.model_validate(
-                        root_data.model_dump() if hasattr(root_data, 'model_dump') else root_data
-                    )
+                if error_dict:
+                    errors.append(error_dict)
                 else:
-                    typed_data = None
-
-                # 7. 使用 Resolver 解析 LoadBy 字段
-                result_data = None
-                if typed_data is not None:
-                    if isinstance(typed_data, list):
-                        result = await self.resolver_class().resolve(typed_data)
-                        if result is not None:
-                            result_data = [r.model_dump() for r in result]
-                    else:
-                        result = await self.resolver_class().resolve(typed_data)
-                        if result is not None:
-                            result_data = result.model_dump()
-                else:
-                    result_data = [] if isinstance(root_data, list) else None
-
-                # 8. 添加到结果数据
-                data[root_query_name] = result_data
+                    # 存储用于阶段 2
+                    is_list = isinstance(typed_data, list)
+                    preparation_results[root_query_name] = (typed_data, is_list)
 
             except GraphQLError as e:
-                # GraphQL 错误直接转换为字典
                 errors.append(e.to_dict())
             except Exception as e:
-                # 记录未预期的错误
-                logger.exception(f"Unexpected error executing query: {root_query_name}")
+                logger.exception(f"Unexpected error in Phase 1 for {root_query_name}")
                 errors.append({
                     "message": str(e),
                     "extensions": {"code": type(e).__name__}
                 })
 
-        # 9. 格式化响应
-        return {
+        logger.info(f"[Phase 1] Completed: {len(preparation_results)} queries prepared, {len(errors)} errors")
+
+        # ===== 阶段 2：并发解析 =====
+        logger.info("[Phase 2] Starting concurrent resolution phase")
+
+        if preparation_results:
+            # 构建解析任务
+            resolution_tasks = [
+                (name, data, is_list)
+                for name, (data, is_list) in preparation_results.items()
+            ]
+
+            # 并发执行所有解析
+            resolution_map = await self._execute_concurrent_resolutions(resolution_tasks)
+
+            # 收集结果和错误
+            for query_name, (result_data, error_dict) in resolution_map.items():
+                if error_dict:
+                    errors.append(error_dict)
+                else:
+                    data[query_name] = result_data
+
+        logger.info(f"[Phase 2] Completed: {len(data)} queries resolved successfully")
+
+        # 3. 格式化响应
+        response = {
             "data": data if data else None,
             "errors": errors if errors else None
         }
+
+        logger.info(f"Query execution complete: {len(data) if data else 0} successful, {len(errors) if errors else 0} errors")
+        return response
 
     async def _execute_query_method(
         self,
@@ -663,6 +678,177 @@ class GraphQLHandler:
                 f"查询执行失败: {e}",
                 extensions={"code": "EXECUTION_ERROR"}
             )
+
+    async def _prepare_query_resolution(
+        self,
+        root_query_name: str,
+        root_field_selection: Any,
+        entity: type,
+        query_method: Callable
+    ) -> Tuple[Optional[Any], Optional[str], Optional[Dict]]:
+        """
+        准备查询解析（阶段 1：串行）
+
+        Args:
+            root_query_name: 根查询字段名称
+            root_field_selection: 解析的字段选择
+            entity: 实体类
+            query_method: @query 装饰的方法
+
+        Returns:
+            Tuple of (typed_data, error_message, error_dict)
+            - 成功: (typed_data, None, None)
+            - 失败: (None, error_message, error_dict)
+        """
+        logger.debug(f"[Phase 1] Preparing query: {root_query_name}")
+
+        try:
+            # 1. 执行查询方法
+            args = root_field_selection.arguments or {}
+            root_data = await self._execute_query_method(query_method, args)
+            logger.debug(f"[Phase 1] Query method executed: {root_query_name}")
+
+            # 2. 构建响应模型
+            response_model = self.builder.build_response_model(
+                entity=entity,
+                field_selection=root_field_selection
+            )
+            logger.debug(f"[Phase 1] Response model built: {root_query_name}")
+
+            # 3. 转换为响应模型
+            if isinstance(root_data, list):
+                typed_data = [
+                    response_model.model_validate(
+                        d.model_dump() if hasattr(d, 'model_dump') else d
+                    )
+                    for d in root_data
+                ]
+            elif root_data is not None:
+                typed_data = response_model.model_validate(
+                    root_data.model_dump() if hasattr(root_data, 'model_dump') else root_data
+                )
+            else:
+                typed_data = None
+
+            logger.debug(f"[Phase 1] Data transformed: {root_query_name}")
+            return typed_data, None, None
+
+        except GraphQLError as e:
+            logger.warning(f"[Phase 1] GraphQL error preparing {root_query_name}: {e.message}")
+            return None, e.message, e.to_dict()
+        except Exception as e:
+            logger.exception(f"[Phase 1] Unexpected error preparing {root_query_name}")
+            error_dict = {
+                "message": str(e),
+                "extensions": {"code": type(e).__name__}
+            }
+            return None, str(e), error_dict
+
+    async def _resolve_query_data(
+        self,
+        root_query_name: str,
+        typed_data: Any,
+        is_list: bool
+    ) -> Tuple[Optional[Any], Optional[Dict]]:
+        """
+        解析查询数据（阶段 2：并发）
+
+        Args:
+            root_query_name: 根查询字段名称
+            typed_data: 类型化的 Pydantic 数据
+            is_list: 数据是否为列表
+
+        Returns:
+            Tuple of (result_data, error_dict)
+            - 成功: (result_data, None)
+            - 失败: (None, error_dict)
+        """
+        logger.debug(f"[Phase 2] Resolving query: {root_query_name}")
+
+        try:
+            result_data = None
+
+            if typed_data is not None:
+                resolver = self.resolver_class()
+
+                if is_list:
+                    result = await resolver.resolve(typed_data)
+                    if result is not None:
+                        result_data = [r.model_dump() for r in result]
+                    else:
+                        result_data = []
+                else:
+                    result = await resolver.resolve(typed_data)
+                    if result is not None:
+                        result_data = result.model_dump()
+                    else:
+                        result_data = None
+            else:
+                result_data = [] if is_list else None
+
+            logger.debug(f"[Phase 2] Query resolved: {root_query_name}")
+            return result_data, None
+
+        except Exception as e:
+            logger.exception(f"[Phase 2] Error resolving {root_query_name}")
+            error_dict = {
+                "message": f"Resolution failed for {root_query_name}: {str(e)}",
+                "extensions": {"code": type(e).__name__}
+            }
+            return None, error_dict
+
+    async def _execute_concurrent_resolutions(
+        self,
+        resolution_tasks: List[Tuple[str, Any, bool]]
+    ) -> Dict[str, Tuple[Optional[Any], Optional[Dict]]]:
+        """
+        并发执行多个查询解析，使用信号量控制并发数
+
+        Args:
+            resolution_tasks: List of (query_name, typed_data, is_list) tuples
+
+        Returns:
+            Dict mapping query_name to (result_data, error_dict)
+        """
+        if not resolution_tasks:
+            return {}
+
+        logger.info(f"[Phase 2] Starting concurrent resolution of {len(resolution_tasks)} queries")
+
+        # 资源控制：限制并发 Resolver 实例数量
+        max_concurrency = int(os.getenv("PYDANTIC_RESOLVE_MAX_CONCURRENT_QUERIES", "10"))
+        semaphore = asyncio.Semaphore(max_concurrency) if max_concurrency > 0 else None
+
+        async def resolve_with_semaphore(query_name: str, typed_data: Any, is_list: bool):
+            if semaphore:
+                async with semaphore:
+                    return await self._resolve_query_data(query_name, typed_data, is_list)
+            else:
+                return await self._resolve_query_data(query_name, typed_data, is_list)
+
+        # 并发执行所有解析任务
+        results = await asyncio.gather(
+            *[resolve_with_semaphore(name, data, is_list) for name, data, is_list in resolution_tasks],
+            return_exceptions=True
+        )
+
+        # 处理结果并映射到查询名称
+        query_names = [name for name, _, _ in resolution_tasks]
+        resolution_map = {}
+
+        for query_name, result in zip(query_names, results):
+            if isinstance(result, Exception):
+                logger.exception(f"[Phase 2] Unexpected exception for {query_name}")
+                error_dict = {
+                    "message": f"Unexpected error: {str(result)}",
+                    "extensions": {"code": type(result).__name__}
+                }
+                resolution_map[query_name] = (None, error_dict)
+            else:
+                resolution_map[query_name] = result
+
+        logger.info("[Phase 2] Completed concurrent resolution")
+        return resolution_map
 
 
 def create_graphql_route(

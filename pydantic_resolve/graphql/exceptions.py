@@ -59,3 +59,41 @@ class ExecutionError(GraphQLError):
             path=path,
             extensions={"code": "GRAPHQL_EXECUTION_ERROR"}
         )
+
+
+class FieldNameConflictError(ValidationError):
+    """Raised when default_field_name conflicts with other fields."""
+
+    def __init__(
+        self,
+        message: str,
+        entity_name: str,
+        field_name: str,
+        conflict_type: str,
+        details: Optional[Dict[str, Any]] = None
+    ):
+        """
+        Initialize field name conflict error.
+
+        Args:
+            message: Error message
+            entity_name: Name of the entity with the conflict
+            field_name: Name of the conflicting field
+            conflict_type: Type of conflict (SCALAR_CONFLICT, RELATIONSHIP_CONFLICT, INHERITANCE_CONFLICT)
+            details: Additional conflict details
+        """
+        extensions = {
+            "code": "FIELD_NAME_CONFLICT",
+            "entity": entity_name,
+            "field": field_name,
+            "conflict_type": conflict_type
+        }
+        if details:
+            extensions.update(details)
+
+        super().__init__(message, extensions=extensions)
+
+        self.entity_name = entity_name
+        self.field_name = field_name
+        self.conflict_type = conflict_type
+        self.details = details or {}

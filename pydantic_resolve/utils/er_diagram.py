@@ -93,7 +93,63 @@ class Entity(BaseModel):
                 )
             seen.add(key)
 
+        # 验证 default_field_name 冲突
+        self._validate_field_name_conflicts()
+
         return self
+
+    def _validate_field_name_conflicts(self) -> None:
+        """检测 default_field_name 的命名冲突。"""
+        from typing import get_type_hints
+
+        # 1. 收集标量字段
+        try:
+            scalar_fields = set(get_type_hints(self.kls).keys())
+        except Exception:
+            scalar_fields = set()
+
+        # 2. 收集关系字段的 default_field_name
+        relationship_fields = {}
+        for rel in self.relationships or []:
+            if isinstance(rel, Relationship) and rel.default_field_name:
+                field_name = rel.default_field_name
+
+                # 检查重复的关系字段
+                if field_name in relationship_fields:
+                    raise ValueError(
+                        f"Field name conflict in {self.kls.__name__}: '{field_name}' - "
+                        f"multiple relationships use the same default_field_name. "
+                        f"Conflict between Relationship(field={relationship_fields[field_name].field}) "
+                        f"and Relationship(field={rel.field})"
+                    )
+
+                relationship_fields[field_name] = rel
+
+                # 检查与标量字段的冲突
+                if field_name in scalar_fields:
+                    raise ValueError(
+                        f"Field name conflict in {self.kls.__name__}: '{field_name}' - "
+                        f"default_field_name conflicts with scalar field. "
+                        f"Relationship.field={rel.field}, target_kls={rel.target_kls}"
+                    )
+
+        # 3. 检查与父类字段的冲突
+        for base_cls in self.kls.__mro__[1:]:  # 跳过自身
+            if base_cls is object:
+                continue
+            try:
+                base_fields = set(get_type_hints(base_cls).keys())
+            except Exception:
+                continue
+
+            for field_name in relationship_fields:
+                if field_name in base_fields:
+                    rel = relationship_fields[field_name]
+                    raise ValueError(
+                        f"Field name conflict in {self.kls.__name__}: '{field_name}' - "
+                        f"relationship field conflicts with inherited field from {base_cls.__name__}. "
+                        f"Relationship.field={rel.field}, target_kls={rel.target_kls}"
+                    )
 
 class ErDiagram(BaseModel):
     configs: list[Entity]
