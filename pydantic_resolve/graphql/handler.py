@@ -815,9 +815,13 @@ class GraphQLHandler:
 
         logger.info(f"[Phase 2] Starting concurrent resolution of {len(resolution_tasks)} queries")
 
-        # 资源控制：限制并发 Resolver 实例数量
-        max_concurrency = int(os.getenv("PYDANTIC_RESOLVE_MAX_CONCURRENT_QUERIES", "10"))
-        semaphore = asyncio.Semaphore(max_concurrency) if max_concurrency > 0 else None
+        # 资源控制：只有用户明确设置环境变量时才限制并发 Resolver 实例数量
+        max_concurrency_str = os.getenv("PYDANTIC_RESOLVE_MAX_CONCURRENT_QUERIES")
+        if max_concurrency_str:
+            max_concurrency = int(max_concurrency_str)
+            semaphore = asyncio.Semaphore(max_concurrency) if max_concurrency > 0 else None
+        else:
+            semaphore = None
 
         async def resolve_with_semaphore(query_name: str, typed_data: Any, is_list: bool):
             if semaphore:
