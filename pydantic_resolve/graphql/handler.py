@@ -6,7 +6,7 @@ import asyncio
 import logging
 import os
 import re
-from typing import Any, Callable, Dict, List, Tuple, Optional, TYPE_CHECKING
+from typing import Any, Callable, Dict, List, Tuple, Optional, TYPE_CHECKING, Union
 
 if TYPE_CHECKING:
     from fastapi import APIRouter
@@ -272,19 +272,30 @@ class GraphQLHandler:
         if type_name in SCALAR_TYPES:
             return SCALAR_TYPES[type_name]
 
-        # 检查实体类型
+        # 收集所有类型（包括嵌套的 Pydantic 类型）
+        collected_types = {}
         for entity_cfg in self.er_diagram.configs:
-            if entity_cfg.kls.__name__ == type_name:
-                return {
-                    "kind": "OBJECT",
-                    "name": type_name,
-                    "description": f"{type_name} entity",
-                    "fields": self._get_introspection_fields(entity_cfg.kls),
-                    "inputFields": None,
-                    "interfaces": [],  # OBJECT types must have interfaces as array
-                    "enumValues": None,
-                    "possibleTypes": None
-                }
+            collected_types[entity_cfg.kls.__name__] = entity_cfg.kls
+
+        # 收集嵌套类型
+        additional_types = self._collect_nested_pydantic_types(list(collected_types.values()))
+        for name, cls in additional_types.items():
+            if name not in collected_types:
+                collected_types[name] = cls
+
+        # 检查实体类型
+        if type_name in collected_types:
+            entity = collected_types[type_name]
+            return {
+                "kind": "OBJECT",
+                "name": type_name,
+                "description": f"{type_name} entity",
+                "fields": self._get_introspection_fields(entity),
+                "inputFields": None,
+                "interfaces": [],  # OBJECT types must have interfaces as array
+                "enumValues": None,
+                "possibleTypes": None
+            }
 
         # 检查 Query 类型
         if type_name == "Query":
@@ -308,9 +319,21 @@ class GraphQLHandler:
         # 添加标量类型
         types.extend([SCALAR_TYPES[name] for name in ["Int", "Float", "String", "Boolean", "ID"]])
 
-        # 添加实体类型
+        # 收集所有实体类型（包括 ERD 中的实体和字段中引用的嵌套 Pydantic 模型）
+        collected_types = {}
+
+        # 首先收集 ERD 中的实体
         for entity_cfg in self.er_diagram.configs:
-            entity = entity_cfg.kls
+            collected_types[entity_cfg.kls.__name__] = entity_cfg.kls
+
+        # 递归收集所有字段中引用的 Pydantic BaseModel 类型
+        additional_types = self._collect_nested_pydantic_types(list(collected_types.values()))
+        for type_name, type_class in additional_types.items():
+            if type_name not in collected_types:
+                collected_types[type_name] = type_class
+
+        # 为所有收集的类型生成 introspection
+        for type_name, entity in collected_types.items():
             entity_type = {
                 "kind": "OBJECT",
                 "name": entity.__name__,
@@ -337,6 +360,71 @@ class GraphQLHandler:
 
         return types
 
+    def _collect_nested_pydantic_types(self, entities: list, visited: Optional[set] = None) -> Dict[str, type]:
+        """
+        递归收集所有实体字段中引用的 Pydantic BaseModel 类型
+
+        Args:
+            entities: 要扫描的实体列表
+            visited: 已访问的类型名称集合（避免循环引用）
+
+        Returns:
+            类型名到类型类的映射字典
+        """
+        from typing import get_origin, get_args
+
+        if visited is None:
+            visited = set()
+
+        collected = {}
+
+        for entity in entities:
+            type_name = entity.__name__
+            if type_name in visited:
+                continue
+            visited.add(type_name)
+
+            # 扫描实体的所有字段
+            if hasattr(entity, '__annotations__'):
+                for field_name, field_type in entity.__annotations__.items():
+                    if field_name.startswith('__'):
+                        continue
+
+                    # 检查是否是 Pydantic BaseModel
+                    if hasattr(field_type, '__bases__') and hasattr(field_type, 'model_dump'):
+                        if field_type.__name__ not in collected and field_type.__name__ not in visited:
+                            collected[field_type.__name__] = field_type
+
+                    # 检查是否是 list[T]
+                    origin = get_origin(field_type)
+                    if origin is list:
+                        args = get_args(field_type)
+                        if args:
+                            element_type = args[0]
+                            # 检查元素类型是否是 Pydantic BaseModel
+                            if hasattr(element_type, '__bases__') and hasattr(element_type, 'model_dump'):
+                                if element_type.__name__ not in collected and element_type.__name__ not in visited:
+                                    collected[element_type.__name__] = element_type
+
+                    # 检查是否是 Optional[T]
+                    elif origin is Union or str(origin) == "typing.Union":
+                        args = get_args(field_type)
+                        for arg in args:
+                            # 跳过 NoneType
+                            if arg is type(None):
+                                continue
+                            # 检查是否是 Pydantic BaseModel
+                            if hasattr(arg, '__bases__') and hasattr(arg, 'model_dump'):
+                                if arg.__name__ not in collected and arg.__name__ not in visited:
+                                    collected[arg.__name__] = arg
+
+        # 递归收集新发现的类型的嵌套类型
+        if collected:
+            nested_types = self._collect_nested_pydantic_types(list(collected.values()), visited)
+            collected.update(nested_types)
+
+        return collected
+
     def _get_introspection_fields(self, entity):
         """获取实体的内省字段"""
         from typing import get_origin, get_args
@@ -350,12 +438,67 @@ class GraphQLHandler:
                 if field_name.startswith('__'):
                     continue
 
+                # 跳过关系字段（由关系部分处理）
+                is_relationship_field = False
+                entity_cfg = None
+                for cfg in self.er_diagram.configs:
+                    if cfg.kls == entity:
+                        entity_cfg = cfg
+                        break
+                if entity_cfg:
+                    for rel in entity_cfg.relationships:
+                        if isinstance(rel, Relationship) and hasattr(rel, 'default_field_name') and rel.default_field_name == field_name:
+                            is_relationship_field = True
+                            break
+                if is_relationship_field:
+                    continue
+
                 # 映射类型
+                origin = get_origin(field_type)
                 graphql_type = "String"
                 type_kind = "SCALAR"
                 type_desc = None
+                of_type = None
 
-                if "int" in str(field_type).lower():
+                # 处理 list[T] 类型
+                if origin is list:
+                    args = get_args(field_type)
+                    if args:
+                        element_type = args[0]
+                        # 检查元素类型是否是 Pydantic BaseModel（实体类型）
+                        if hasattr(element_type, '__bases__') and issubclass(element_type, BaseModel):
+                            # list[Entity] -> LIST 类型，指向 OBJECT
+                            type_kind = "LIST"
+                            graphql_type = None
+                            type_desc = None
+                            of_type = {
+                                "kind": "OBJECT",
+                                "name": element_type.__name__,
+                                "description": f"{element_type.__name__} entity",
+                                "ofType": None
+                            }
+                        else:
+                            # list[Scalar] -> LIST 类型，指向 SCALAR
+                            element_type_str = str(element_type)
+                            if "int" in element_type_str.lower():
+                                element_graphql_type = "Int"
+                            elif "bool" in element_type_str.lower():
+                                element_graphql_type = "Boolean"
+                            elif "float" in element_type_str.lower():
+                                element_graphql_type = "Float"
+                            else:
+                                element_graphql_type = "String"
+
+                            type_kind = "LIST"
+                            graphql_type = None
+                            type_desc = None
+                            of_type = {
+                                "kind": "SCALAR",
+                                "name": element_graphql_type,
+                                "description": None,
+                                "ofType": None
+                            }
+                elif "int" in str(field_type).lower():
                     graphql_type = "Int"
                     type_desc = "The `Int` scalar type represents non-fractional signed whole numeric values."
                 elif "bool" in str(field_type).lower():
@@ -364,6 +507,14 @@ class GraphQLHandler:
                 elif "float" in str(field_type).lower():
                     graphql_type = "Float"
                     type_desc = "The `Float` scalar type represents signed double-precision fractional values."
+                elif "dict" in str(field_type).lower():
+                    graphql_type = "String"  # GraphQL 不支持 dict，映射为 String
+                    type_desc = "JSON string representation"
+                # 检查是否是 Pydantic BaseModel（实体类型）
+                elif hasattr(field_type, '__bases__') and hasattr(field_type, 'model_dump'):
+                    type_kind = "OBJECT"
+                    graphql_type = field_type.__name__
+                    type_desc = f"{field_type.__name__} entity"
 
                 fields.append({
                     "name": field_name,
@@ -373,7 +524,7 @@ class GraphQLHandler:
                         "kind": type_kind,
                         "name": graphql_type,
                         "description": type_desc,
-                        "ofType": None
+                        "ofType": of_type
                     },
                     "isDeprecated": False,
                     "deprecationReason": None

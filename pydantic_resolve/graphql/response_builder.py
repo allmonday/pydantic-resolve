@@ -39,10 +39,9 @@ class ResponseBuilder:
         Returns:
             动态创建的 Pydantic 模型类
         """
-        # 获取实体配置
+        # 获取实体配置（可能在 ERD 中，也可能不在）
         entity_cfg = self.entity_map.get(entity)
-        if not entity_cfg:
-            raise ValueError(f"实体 {entity.__name__} 未在 ERD 中注册")
+        is_registered = entity_cfg is not None
 
         # 1. 收集字段定义
         field_definitions: Dict[str, Tuple[type, Any]] = {}
@@ -58,24 +57,68 @@ class ResponseBuilder:
             for field_name, selection in field_selection.sub_fields.items():
                 if field_name in type_hints:
                     field_type = type_hints[field_name]
+
+                    # 检查是否是嵌套的 Pydantic 模型（list[Entity] 或 Entity）
+                    # 且查询中包含子字段选择
+                    if selection.sub_fields:
+                        origin = get_origin(field_type)
+
+                        # 处理 list[Entity] 类型
+                        if origin is list:
+                            args = get_args(field_type)
+                            if args:
+                                element_type = args[0]
+                                # 检查元素类型是否是 Pydantic BaseModel
+                                if hasattr(element_type, '__bases__') and hasattr(element_type, 'model_dump'):
+                                    # 递归构建嵌套模型
+                                    nested_model = self.build_response_model(
+                                        element_type,
+                                        selection,
+                                        f"{parent_path}.{field_name}"
+                                    )
+                                    if selection.alias:
+                                        field_definitions[field_name] = (List[nested_model], Field(serialization_alias=selection.alias, default=[]))
+                                    else:
+                                        field_definitions[field_name] = (List[nested_model], [])
+                                    continue  # 已处理，跳过默认逻辑
+
+                        # 处理 Entity 类型（单个对象）
+                        elif hasattr(field_type, '__bases__') and hasattr(field_type, 'model_dump'):
+                            # 递归构建嵌套模型
+                            nested_model = self.build_response_model(
+                                field_type,
+                                selection,
+                                f"{parent_path}.{field_name}"
+                            )
+                            if selection.alias:
+                                field_definitions[field_name] = (Optional[nested_model], Field(serialization_alias=selection.alias, default=None))
+                            else:
+                                field_definitions[field_name] = (Optional[nested_model], None)
+                            continue  # 已处理，跳过默认逻辑
+
                     # 如果有别名，使用 serialization_alias，字段名保持原样
                     if selection.alias:
                         field_definitions[field_name] = (field_type, Field(serialization_alias=selection.alias))
                     else:
                         field_definitions[field_name] = (field_type, ...)
 
-        # 3. 自动包含外键字段（用于 LoadBy）
-        fk_fields = self._get_required_fk_fields(
-            entity,
-            set(field_selection.sub_fields.keys()) if field_selection.sub_fields else set()
-        )
-        for fk_field in fk_fields:
-            if fk_field not in field_definitions and fk_field in type_hints:
-                field_definitions[fk_field] = (type_hints[fk_field], ...)
+        # 3. 自动包含外键字段（用于 LoadBy）- 仅对在 ERD 中注册的实体
+        if is_registered:
+            fk_fields = self._get_required_fk_fields(
+                entity,
+                set(field_selection.sub_fields.keys()) if field_selection.sub_fields else set()
+            )
+            for fk_field in fk_fields:
+                if fk_field not in field_definitions and fk_field in type_hints:
+                    field_definitions[fk_field] = (type_hints[fk_field], ...)
 
-        # 4. 处理嵌套对象字段（关联关系）
-        if field_selection.sub_fields:
+        # 4. 处理嵌套对象字段（关联关系）- 仅对在 ERD 中注册的实体
+        if is_registered and field_selection.sub_fields:
             for field_name, selection in field_selection.sub_fields.items():
+                # 跳过已经处理过的字段（在第 2 步中处理的嵌套模型）
+                if field_name in field_definitions:
+                    continue
+
                 if not selection.sub_fields:
                     continue
 
