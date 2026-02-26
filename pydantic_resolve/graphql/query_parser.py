@@ -18,50 +18,50 @@ from .exceptions import QueryParseError
 
 
 class QueryParser:
-    """解析 GraphQL 查询并提取字段选择树"""
+    """Parse GraphQL queries and extract field selection trees"""
 
     def __init__(self, er_diagram: ErDiagram):
         """
         Args:
-            er_diagram: 实体关系图
+            er_diagram: Entity relationship diagram
         """
         self.entity_map = {cfg.kls.__name__: cfg.kls for cfg in er_diagram.configs}
 
     def parse(self, query: str) -> ParsedQuery:
         """
-        解析 GraphQL 查询字符串
+        Parse GraphQL query string
 
         Args:
-            query: GraphQL 查询字符串
+            query: GraphQL query string
 
         Returns:
-            ParsedQuery 对象，包含解析后的查询信息
+            ParsedQuery object containing parsed query information
 
         Raises:
-            QueryParseError: 当查询解析失败时
+            QueryParseError: When query parsing fails
         """
         try:
             document = parse_graphql(query)
         except Exception as e:
-            raise QueryParseError(f"GraphQL 语法错误: {e}")
+            raise QueryParseError(f"GraphQL syntax error: {e}")
 
-        # 提取操作定义（Query）
+        # Extract operation definition (Query)
         operation = self._extract_operation(document)
         if not operation:
-            raise QueryParseError("未找到查询操作")
+            raise QueryParseError("No query operation found")
 
-        # 提取所有根查询字段（支持多个）
+        # Extract all root query fields (supports multiple)
         root_fields = self._extract_root_fields(operation)
         if not root_fields:
-            raise QueryParseError("查询为空")
+            raise QueryParseError("Query is empty")
 
-        # 为所有根字段构建字段选择树
+        # Build field selection trees for all root fields
         field_tree = {}
         for root_field in root_fields:
             root_field_name = root_field.name.value
             field_tree[root_field_name] = self._build_field_tree(root_field)
 
-        # 尝试推断第一个实体名称（用于向后兼容，但不验证）
+        # Try to infer first entity name (for backward compatibility, but don't validate)
         root_entity = None
         first_field = root_fields[0]
         try:
@@ -70,7 +70,7 @@ class QueryParser:
             if root_entity_name in self.entity_map:
                 root_entity = self.entity_map[root_entity_name]
         except QueryParseError:
-            # 如果推断失败，让 handler 通过 query_map 来查找
+            # If inference fails, let handler find it via query_map
             pass
 
         return ParsedQuery(
@@ -81,21 +81,21 @@ class QueryParser:
         )
 
     def _extract_operation(self, document: DocumentNode) -> OperationDefinitionNode:
-        """提取操作定义（支持 Query 和 Mutation）"""
+        """Extract operation definition (supports Query and Mutation)"""
         for definition in document.definitions:
             if isinstance(definition, OperationDefinitionNode):
-                # 支持 Query 和 Mutation 操作
+                # Support Query and Mutation operations
                 if definition.operation in (OperationType.QUERY, OperationType.MUTATION):
                     return definition
         return None
 
     def _extract_root_fields(self, operation: OperationDefinitionNode) -> list[FieldNode]:
-        """提取所有根查询字段"""
+        """Extract all root query fields"""
         selection_set = operation.selection_set
         if not selection_set or not selection_set.selections:
-            raise QueryParseError("查询为空")
+            raise QueryParseError("Query is empty")
 
-        # 返回所有根查询字段
+        # Return all root query fields
         root_fields = []
         for selection in selection_set.selections:
             if isinstance(selection, FieldNode):
@@ -105,49 +105,49 @@ class QueryParser:
 
     def _infer_entity_from_field(self, field_name: str) -> str:
         """
-        从字段名推断实体名称
+        Infer entity name from field name
 
         Examples:
             users -> UserEntity
             user -> UserEntity
             posts -> PostEntity
         """
-        # 将字段名转换为 PascalCase
+        # Convert field name to PascalCase
         # users -> Users
         # user -> User
         pascal_name = field_name.capitalize()
 
-        # 尝试匹配实体名称
+        # Try to match entity name
         if pascal_name + 'Entity' in self.entity_map:
             return pascal_name + 'Entity'
 
-        # 尝试移除尾部的 's'（复数转单数）
+        # Try removing trailing 's' (plural to singular)
         if field_name.endswith('s'):
             singular = field_name[:-1].capitalize()
             if singular + 'Entity' in self.entity_map:
                 return singular + 'Entity'
 
-        # 遍历所有实体，查找匹配
+        # Iterate through all entities to find a match
         for entity_name in self.entity_map.keys():
             entity_lower = entity_name.lower()
-            # 检查是否是单数形式
+            # Check if it's singular form
             if field_name.lower() == entity_lower.replace('entity', ''):
                 return entity_name
-            # 检查是否是复数形式
+            # Check if it's plural form
             if field_name.lower().endswith('s') and field_name[:-1].lower() == entity_lower.replace('entity', ''):
                 return entity_name
 
-        raise QueryParseError(f"无法从字段名 '{field_name}' 推断实体名称")
+        raise QueryParseError(f"Cannot infer entity name from field name '{field_name}'")
 
     def _build_field_tree(self, field_node: FieldNode) -> FieldSelection:
-        """递归构建字段选择树"""
-        # 提取别名
+        """Recursively build field selection tree"""
+        # Extract alias
         alias = field_node.alias.value if field_node.alias else None
 
-        # 提取参数
+        # Extract arguments
         arguments = self._extract_arguments(field_node)
 
-        # 递归处理嵌套字段
+        # Recursively process nested fields
         sub_fields = None
         if field_node.selection_set:
             sub_fields = {}
@@ -163,19 +163,19 @@ class QueryParser:
         )
 
     def _extract_arguments(self, field_node: FieldNode) -> Dict[str, any]:
-        """提取字段参数"""
+        """Extract field arguments"""
         arguments = {}
         if field_node.arguments:
             for arg in field_node.arguments:
                 if isinstance(arg, ArgumentNode):
-                    # 获取参数值
+                    # Get argument value
                     value = self._get_argument_value(arg.value)
                     arguments[arg.name.value] = value
         return arguments
 
     def _get_argument_value(self, value_node) -> any:
-        """获取参数值（从 GraphQL AST 节点）"""
-        # GraphQL AST 中 kind 是字符串，不是枚举
+        """Get argument value from GraphQL AST node"""
+        # kind is string in GraphQL AST, not enum
         kind = getattr(value_node, 'kind', '')
 
         # IntValue
@@ -190,7 +190,7 @@ class QueryParser:
         # BooleanValue
         elif kind == 'boolean_value':
             return value_node.value
-        # ObjectValue (对象字面量)
+        # ObjectValue (object literal)
         elif kind == 'object_value' and hasattr(value_node, 'fields'):
             obj = {}
             for field in value_node.fields:
@@ -200,7 +200,7 @@ class QueryParser:
         # ListValue
         elif hasattr(value_node, 'values'):
             return [self._get_argument_value(v) for v in value_node.values]
-        # 其他类型，尝试获取 value 属性
+        # Other types, try to get value attribute
         elif hasattr(value_node, 'value'):
             return value_node.value
         else:

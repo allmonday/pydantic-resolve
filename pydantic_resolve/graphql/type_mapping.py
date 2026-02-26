@@ -10,7 +10,7 @@ from ..utils.types import get_core_types
 from pydantic import BaseModel
 
 
-# Python 基础类型到 GraphQL 类型的映射
+# Python basic types to GraphQL types mapping
 PYTHON_TO_GQL_TYPES = {
     int: 'Int',
     str: 'String',
@@ -21,14 +21,14 @@ PYTHON_TO_GQL_TYPES = {
 
 def map_python_to_graphql(python_type: type, include_required: bool = True) -> str:
     """
-    将 Python 类型映射为 GraphQL 类型字符串
+    Map Python type to GraphQL type string
 
     Args:
-        python_type: Python 类型
-        include_required: 是否包含 !（表示非空）
+        python_type: Python type
+        include_required: Whether to include ! (non-null marker)
 
     Returns:
-        GraphQL 类型字符串（如 "String!", "[Int]!"）
+        GraphQL type string (e.g., "String!", "[Int]!")
 
     Examples:
         >>> map_python_to_graphql(int)
@@ -40,15 +40,15 @@ def map_python_to_graphql(python_type: type, include_required: bool = True) -> s
     """
     required_suffix = "!" if include_required else ""
 
-    # 使用 get_core_types 处理所有包装类型
+    # Use get_core_types to handle all wrapper types
     core_types = get_core_types(python_type)
     if not core_types:
-        return "String" + required_suffix  # 默认为 String
+        return "String" + required_suffix  # Default to String
 
     core_type = core_types[0]
     origin = get_origin(python_type)
 
-    # 检查是否是 list 类型
+    # Check if it's list type
     is_list = origin is list or (
         hasattr(python_type, '__origin__') and
         python_type.__origin__ is list
@@ -63,20 +63,20 @@ def map_python_to_graphql(python_type: type, include_required: bool = True) -> s
         if safe_issubclass(core_type, BaseModel):
             return f"{core_type.__name__}{required_suffix}"
         else:
-            # 标量类型
+            # Scalar type
             scalar_name = map_scalar_type(core_type)
             return f"{scalar_name}{required_suffix}"
 
 
 def map_scalar_type(python_type: type) -> str:
     """
-    将 Python 标量类型映射为 GraphQL 标量类型名
+    Map Python scalar type to GraphQL scalar type name
 
     Args:
-        python_type: Python 类型
+        python_type: Python type
 
     Returns:
-        GraphQL 标量类型名（"Int", "String", "Boolean", "Float"）
+        GraphQL scalar type name ("Int", "String", "Boolean", "Float")
 
     Examples:
         >>> map_scalar_type(int)
@@ -84,11 +84,11 @@ def map_scalar_type(python_type: type) -> str:
         >>> map_scalar_type(str)
         "String"
     """
-    # 检查直接映射
+    # Check direct mapping
     if python_type in PYTHON_TO_GQL_TYPES:
         return PYTHON_TO_GQL_TYPES[python_type]
 
-    # 通过字符串检查（处理类型字符串等情况）
+    # Check via string (handle type strings, etc.)
     type_str = str(python_type).lower()
     if "int" in type_str:
         return "Int"
@@ -102,13 +102,13 @@ def map_scalar_type(python_type: type) -> str:
 
 def get_graphql_type_description(gql_type: str) -> str:
     """
-    获取 GraphQL 标量类型的描述
+    Get description of GraphQL scalar type
 
     Args:
-        gql_type: GraphQL 类型名
+        gql_type: GraphQL type name
 
     Returns:
-        类型描述字符串
+        Type description string
     """
     descriptions = {
         "Int": "The `Int` scalar type represents non-fractional signed whole numeric values.",
@@ -122,13 +122,13 @@ def get_graphql_type_description(gql_type: str) -> str:
 
 def is_union_type(type_hint: type) -> bool:
     """
-    检查类型是否是 Union（包括 Optional）
+    Check if type is Union (including Optional)
 
     Args:
-        type_hint: 类型提示
+        type_hint: Type hint
 
     Returns:
-        是否是 Union 类型
+        Whether it's a Union type
     """
     origin = get_origin(type_hint)
     return origin is Union
@@ -136,13 +136,13 @@ def is_union_type(type_hint: type) -> bool:
 
 def is_list_type(type_hint: type) -> bool:
     """
-    检查类型是否是 list
+    Check if type is list
 
     Args:
-        type_hint: 类型提示
+        type_hint: Type hint
 
     Returns:
-        是否是 list 类型
+        Whether it's a list type
     """
     origin = get_origin(type_hint)
     return origin is list
@@ -150,14 +150,14 @@ def is_list_type(type_hint: type) -> bool:
 
 def unwrap_optional(type_hint: type):
     """
-    从 Optional[T] 或 Union[T, None] 中提取 T
+    Extract T from Optional[T] or Union[T, None]
 
     Args:
-        type_hint: 类型提示
+        type_hint: Type hint
 
     Returns:
-        如果是 Optional[T]，返回 T
-        否则返回原类型
+        If it's Optional[T], return T
+        Otherwise return the original type
 
     Examples:
         >>> unwrap_optional(Optional[int])
@@ -166,20 +166,20 @@ def unwrap_optional(type_hint: type):
         int
     """
     core_types = get_core_types(type_hint)
-    # 过滤掉 NoneType
+    # Filter out NoneType
     non_none_types = [t for t in core_types if t is not type(None)]
     return non_none_types[0] if non_none_types else type_hint
 
 
 def extract_list_element_type(list_type: type):
     """
-    从 list[T] 中提取元素类型 T
+    Extract element type T from list[T]
 
     Args:
-        list_type: 列表类型
+        list_type: List type
 
     Returns:
-        元素类型，如果不是 list 则返回 None
+        Element type, or None if not a list
 
     Examples:
         >>> extract_list_element_type(list[int])

@@ -22,7 +22,7 @@ from .exceptions import GraphQLError
 
 logger = logging.getLogger(__name__)
 
-# GraphQL 标量类型定义
+# GraphQL scalar type definitions
 SCALAR_TYPES = {
     "Int": {
         "kind": "SCALAR",
@@ -79,9 +79,10 @@ SCALAR_TYPES = {
 
 class GraphQLHandler:
     """
-    GraphQL 查询处理器
+    GraphQL query handler
 
-    协调所有组件，解析查询、执行 @query 方法、构建响应模型、解析关联数据
+    Coordinates all components: parses queries, executes @query methods,
+    builds response models, and resolves relationships.
     """
 
     def __init__(
@@ -91,8 +92,8 @@ class GraphQLHandler:
     ):
         """
         Args:
-            er_diagram: 实体关系图
-            resolver_class: 自定义 Resolver 类（可选）
+            er_diagram: Entity relationship diagram
+            resolver_class: Custom Resolver class (optional)
         """
         self.er_diagram = er_diagram
         self.parser = QueryParser(er_diagram)
@@ -100,18 +101,18 @@ class GraphQLHandler:
         self.schema_builder = SchemaBuilder(er_diagram)
         self.resolver_class = resolver_class
 
-        # 构建查询方法映射: { 'users': (UserEntity, UserEntity.get_all) }
+        # Build query method map: { 'users': (UserEntity, UserEntity.get_all) }
         self.query_map = self._build_query_map()
 
-        # 构建 mutation 方法映射: { 'createUser': (UserEntity, UserEntity.create_user) }
+        # Build mutation method map: { 'createUser': (UserEntity, UserEntity.create_user) }
         self.mutation_map = self._build_mutation_map()
 
     def _build_query_map(self) -> Dict[str, Tuple[type, Callable]]:
         """
-        扫描所有 Entity，构建查询名称到方法的映射
+        Scan all entities and build query name to method mapping.
 
         Returns:
-            查询名称到 (实体类, 方法) 的映射字典
+            Dictionary mapping query names to (entity class, method) tuples
         """
         query_map = {}
         for entity_cfg in self.er_diagram.configs:
@@ -123,10 +124,10 @@ class GraphQLHandler:
 
     def _build_mutation_map(self) -> Dict[str, Tuple[type, Callable]]:
         """
-        扫描所有 Entity，构建 mutation 名称到方法的映射
+        Scan all entities and build mutation name to method mapping.
 
         Returns:
-            mutation 名称到 (实体类, 方法) 的映射字典
+            Dictionary mapping mutation names to (entity class, method) tuples
         """
         mutation_map = {}
         for entity_cfg in self.er_diagram.configs:
@@ -143,27 +144,27 @@ class GraphQLHandler:
         operation_name: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        执行 GraphQL 查询或 mutation
+        Execute a GraphQL query or mutation.
 
         Args:
-            query: GraphQL 查询字符串
-            variables: 查询变量
-            operation_name: 操作名称
+            query: GraphQL query string
+            variables: Query variables
+            operation_name: Operation name
 
         Returns:
-            GraphQL 响应格式：{"data": {...}, "errors": [...]}
+            GraphQL response format: {"data": {...}, "errors": [...]}
         """
         logger.debug(f"Executing GraphQL: {query[:100]}...")
         try:
-            # 检测内省查询
+            # Check for introspection query
             is_introspection = self._is_introspection_query(query)
 
             if is_introspection:
                 logger.debug("Processing introspection query")
-                # 使用 graphql-core 的完整功能执行内省查询
+                # Execute introspection query using graphql-core
                 return await self._execute_introspection(query, variables, operation_name)
             else:
-                # 检测操作类型（query 或 mutation）
+                # Detect operation type (query or mutation)
                 operation_type = self._detect_operation_type(query)
 
                 if operation_type == 'mutation':
@@ -192,29 +193,29 @@ class GraphQLHandler:
             }
 
     def _is_introspection_query(self, query: str) -> bool:
-        """检测是否为内省查询"""
+        """Check if this is an introspection query."""
         query_stripped = query.strip()
-        # 检查是否包含 __schema, __type, __typename 等内省字段
+        # Check for introspection keywords: __schema, __type, __typename
         introspection_keywords = ["__schema", "__type", "__typename"]
         return any(keyword in query_stripped for keyword in introspection_keywords)
 
     def _detect_operation_type(self, query: str) -> str:
         """
-        检测操作类型（query 或 mutation）
+        Detect operation type (query or mutation).
 
         Args:
-            query: GraphQL 查询字符串
+            query: GraphQL query string
 
         Returns:
-            'query' 或 'mutation'
+            'query' or 'mutation'
         """
         query_stripped = query.strip()
 
-        # 检查显式的 'mutation' 关键字
+        # Check for explicit 'mutation' keyword
         if query_stripped.startswith('mutation'):
             return 'mutation'
 
-        # 检查根字段是否在 mutation_map 中（对于没有 'mutation' 关键字的隐式 mutation）
+        # Check if root field is in mutation_map (for implicit mutations without 'mutation' keyword)
         for mutation_name in self.mutation_map.keys():
             if mutation_name in query_stripped:
                 return 'mutation'
@@ -222,13 +223,13 @@ class GraphQLHandler:
         return 'query'
 
     def _parse_introspection_query(self, query: str) -> Dict[str, Any]:
-        """解析内省查询，提取请求的字段"""
+        """Parse introspection query and extract requested fields."""
         from graphql import parse as parse_graphql
 
         try:
             parse_graphql(query)
 
-            # 简化：检查查询是否请求 __type
+            # Simplified: check if query requests __type
             requests_type = "__type(" in query or '__type (' in query.replace('"', "'")
 
             return {
@@ -236,7 +237,7 @@ class GraphQLHandler:
                 "requests_type": requests_type
             }
         except Exception:
-            # 解析失败，假设两者都请求
+            # Parse failed, assume both are requested
             return {
                 "requests_schema": True,
                 "requests_type": True
@@ -248,12 +249,12 @@ class GraphQLHandler:
         variables: Optional[Dict[str, Any]],
         operation_name: Optional[str]
     ) -> Dict[str, Any]:
-        """执行内省查询 - 返回完整的内省数据以支持 GraphiQL"""
+        """Execute introspection query - returns full introspection data to support GraphiQL."""
 
-        # 解析查询以确定请求的内容
+        # Parse query to determine requested content
         query_info = self._parse_introspection_query(query)
 
-        # 构建响应数据
+        # Build response data
         data = {}
 
         if query_info["requests_schema"]:
@@ -268,11 +269,11 @@ class GraphQLHandler:
                 } if self.mutation_map else None,
                 "subscriptionType": None,
                 "types": self._get_introspection_types(),
-                "directives": []  # 暂不支持 directives
+                "directives": []  # Directives not supported yet
             }
 
         if query_info["requests_type"]:
-            # 尝试从查询中提取类型名称
+            # Try to extract type name from query
             type_name = self._extract_type_name_from_query(query)
             if type_name:
                 data["__type"] = self._get_introspection_type(type_name)
@@ -283,13 +284,13 @@ class GraphQLHandler:
         }
 
     def _extract_type_name_from_query(self, query: str) -> Optional[str]:
-        """从查询中提取类型名称"""
-        # 匹配 __type(name: "TypeName")
+        """Extract type name from query."""
+        # Match __type(name: "TypeName")
         match = re.search(r'__type\s*\(\s*name\s*:\s*["\']([^"\']+)["\']', query)
         if match:
             return match.group(1)
 
-        # 匹配 __type(name: 'TypeName')
+        # Match __type(name: 'TypeName')
         match = re.search(r"__type\s*\(\s*name\s*:\s*'([^']+)'", query)
         if match:
             return match.group(1)
@@ -297,26 +298,26 @@ class GraphQLHandler:
         return None
 
     def _get_introspection_type(self, type_name: str) -> Optional[Dict[str, Any]]:
-        """获取指定类型的内省信息"""
-        # 检查标量类型
+        """Get introspection info for a specific type."""
+        # Check scalar types
         if type_name in SCALAR_TYPES:
             return SCALAR_TYPES[type_name]
 
-        # 收集所有类型（包括嵌套的 Pydantic 类型）
+        # Collect all types (including nested Pydantic types)
         collected_types = {}
         for entity_cfg in self.er_diagram.configs:
             collected_types[entity_cfg.kls.__name__] = entity_cfg.kls
 
-        # 收集嵌套类型
+        # Collect nested types
         additional_types = self._collect_nested_pydantic_types(list(collected_types.values()))
         for name, cls in additional_types.items():
             if name not in collected_types:
                 collected_types[name] = cls
 
-        # 检查实体类型
+        # Check entity types
         if type_name in collected_types:
             entity = collected_types[type_name]
-            # 获取类描述
+            # Get class description
             description = self._get_class_description(entity)
             return {
                 "kind": "OBJECT",
@@ -329,7 +330,7 @@ class GraphQLHandler:
                 "possibleTypes": None
             }
 
-        # 检查 Query 类型
+        # Check Query type
         if type_name == "Query":
             return {
                 "kind": "OBJECT",
@@ -342,7 +343,7 @@ class GraphQLHandler:
                 "possibleTypes": None
             }
 
-        # 检查 Mutation 类型
+        # Check Mutation type
         if type_name == "Mutation":
             return {
                 "kind": "OBJECT",
@@ -358,28 +359,28 @@ class GraphQLHandler:
         return None
 
     def _get_introspection_types(self):
-        """获取内省类型列表"""
+        """Get introspection type list."""
         types = []
 
-        # 添加标量类型
+        # Add scalar types
         types.extend([SCALAR_TYPES[name] for name in ["Int", "Float", "String", "Boolean", "ID"]])
 
-        # 收集所有实体类型（包括 ERD 中的实体和字段中引用的嵌套 Pydantic 模型）
+        # Collect all entity types (including entities in ERD and nested Pydantic models in fields)
         collected_types = {}
 
-        # 首先收集 ERD 中的实体
+        # First collect entities from ERD
         for entity_cfg in self.er_diagram.configs:
             collected_types[entity_cfg.kls.__name__] = entity_cfg.kls
 
-        # 递归收集所有字段中引用的 Pydantic BaseModel 类型
+        # Recursively collect all Pydantic BaseModel types referenced in fields
         additional_types = self._collect_nested_pydantic_types(list(collected_types.values()))
         for type_name, type_class in additional_types.items():
             if type_name not in collected_types:
                 collected_types[type_name] = type_class
 
-        # 为所有收集的类型生成 introspection
+        # Generate introspection for all collected types
         for type_name, entity in collected_types.items():
-            # 获取类描述
+            # Get class description
             description = self._get_class_description(entity)
             entity_type = {
                 "kind": "OBJECT",
@@ -393,7 +394,7 @@ class GraphQLHandler:
             }
             types.append(entity_type)
 
-        # 收集并添加所有 Input Types
+        # Collect and add all Input Types
         input_types = self._collect_input_types_for_introspection()
         for input_type in input_types:
             description = self._get_class_description(input_type)
@@ -409,7 +410,7 @@ class GraphQLHandler:
             }
             types.append(input_type_def)
 
-        # 添加 Query 类型
+        # Add Query type
         types.append({
             "kind": "OBJECT",
             "name": "Query",
@@ -421,7 +422,7 @@ class GraphQLHandler:
             "possibleTypes": None
         })
 
-        # 添加 Mutation 类型（如果有 mutations）
+        # Add Mutation type (if there are mutations)
         if self.mutation_map:
             types.append({
                 "kind": "OBJECT",
@@ -438,17 +439,17 @@ class GraphQLHandler:
 
     def _collect_input_types_for_introspection(self) -> set:
         """
-        收集所有方法参数中的 BaseModel 类型作为 Input Types（用于 Introspection）
+        Collect all BaseModel types from method parameters as Input Types (for Introspection).
 
         Returns:
-            所有需要生成 input 定义的 BaseModel 类型集合
+            Set of all BaseModel types that need input definitions
         """
         import inspect
         input_types = set()
         visited = set()
 
         def collect_from_type(param_type):
-            """递归收集类型中的 BaseModel"""
+            """Recursively collect BaseModel types."""
             core_types = get_core_types(param_type)
 
             for core_type in core_types:
@@ -458,12 +459,12 @@ class GraphQLHandler:
                         visited.add(type_name)
                         input_types.add(core_type)
 
-                        # 递归收集嵌套的 BaseModel 类型
+                        # Recursively collect nested BaseModel types
                         if hasattr(core_type, '__annotations__'):
                             for field_type in core_type.__annotations__.values():
                                 collect_from_type(field_type)
 
-        # 遍历所有 @query 方法
+        # Traverse all @query methods
         for query_name, (entity, method) in self.query_map.items():
             try:
                 sig = inspect.signature(method)
@@ -475,7 +476,7 @@ class GraphQLHandler:
             except Exception:
                 pass
 
-        # 遍历所有 @mutation 方法
+        # Traverse all @mutation methods
         for mutation_name, (entity, method) in self.mutation_map.items():
             try:
                 sig = inspect.signature(method)
@@ -491,13 +492,13 @@ class GraphQLHandler:
 
     def _get_introspection_input_fields(self, input_type: type) -> List[Dict]:
         """
-        获取 Input Type 的内省字段
+        Get introspection fields for an Input Type.
 
         Args:
-            input_type: Pydantic BaseModel 类
+            input_type: Pydantic BaseModel class
 
         Returns:
-            字段信息列表
+            List of field info dictionaries
         """
         fields = []
 
@@ -506,10 +507,10 @@ class GraphQLHandler:
                 if field_name.startswith('__'):
                     continue
 
-                # 构建字段类型信息
+                # Build field type info
                 type_def = self._build_input_graphql_type(field_type)
 
-                # 获取字段描述
+                # Get field description
                 description = self._get_field_description(input_type, field_name)
 
                 fields.append({
@@ -523,13 +524,13 @@ class GraphQLHandler:
 
     def _build_input_graphql_type(self, field_type: Any) -> Dict[str, Any]:
         """
-        将 Python 类型映射为 GraphQL Input 类型定义（用于 Introspection）
+        Map Python type to GraphQL Input type definition (for Introspection).
 
         Args:
-            field_type: Python 类型
+            field_type: Python type
 
         Returns:
-            GraphQL 类型定义字典
+            GraphQL type definition dictionary
         """
         core_types = get_core_types(field_type)
         if not core_types:
@@ -542,7 +543,7 @@ class GraphQLHandler:
 
         core_type = core_types[0]
 
-        # 检查是否是 list[T]
+        # Check if it's list[T]
         if is_list_type(field_type):
             if safe_issubclass(core_type, BaseModel):
                 return {
@@ -589,27 +590,27 @@ class GraphQLHandler:
 
     def _is_pydantic_basemodel(self, type_hint: Any) -> bool:
         """
-        检查类型是否是 Pydantic BaseModel
+        Check if type is Pydantic BaseModel
 
         Args:
-            type_hint: 类型提示
+            type_hint: Type hint
 
         Returns:
-            是否是 Pydantic BaseModel
+            Whether it's Pydantic BaseModel
         """
-        # 使用 get_core_types 提取核心类型，处理 Optional[T]、list[T]、Annotated[T, ...] 等包装
+        # Use get_core_types to extract core types, handling Optional[T], list[T], Annotated[T, ...] wrappers
         core_types = get_core_types(type_hint)
         return any(safe_issubclass(t, BaseModel) for t in core_types)
 
     def _extract_list_element_type(self, field_type: Any) -> Optional[type]:
         """
-        从 list[T] 中提取元素类型 T
+        Extract element type T from list[T]
 
         Args:
-            field_type: 字段类型（可能是 list[T]）
+            field_type: Field type (possibly list[T])
 
         Returns:
-            元素类型，如果不是 list 则返回 None
+            Element type, or None if not a list
         """
         from typing import get_args
 
@@ -622,14 +623,14 @@ class GraphQLHandler:
 
     def _collect_nested_pydantic_types(self, entities: list, visited: Optional[set] = None) -> Dict[str, type]:
         """
-        递归收集所有实体字段中引用的 Pydantic BaseModel 类型
+        Recursively collect all Pydantic BaseModel types referenced in entity fields
 
         Args:
-            entities: 要扫描的实体列表
-            visited: 已访问的类型名称集合（避免循环引用）
+            entities: List of entities to scan
+            visited: Set of already visited type names (to avoid circular references)
 
         Returns:
-            类型名到类型类的映射字典
+            Dictionary mapping type names to type classes
         """
         if visited is None:
             visited = set()
@@ -642,21 +643,21 @@ class GraphQLHandler:
                 continue
             visited.add(type_name)
 
-            # 扫描实体的所有字段
+            # Scan all fields of the entity
             if hasattr(entity, '__annotations__'):
                 for field_name, field_type in entity.__annotations__.items():
                     if field_name.startswith('__'):
                         continue
 
-                    # 使用 get_core_types 处理所有包装类型（Optional, list, Annotated 等）
-                    # 然后检查每个核心类型是否是 Pydantic BaseModel
+                    # Use get_core_types to handle all wrapper types (Optional, list, Annotated, etc.)
+                    # Then check if each core type is Pydantic BaseModel
                     core_types = get_core_types(field_type)
                     for core_type in core_types:
                         if safe_issubclass(core_type, BaseModel):
                             if core_type.__name__ not in collected and core_type.__name__ not in visited:
                                 collected[core_type.__name__] = core_type
 
-        # 递归收集新发现的类型的嵌套类型
+        # Recursively collect nested types of newly discovered types
         if collected:
             nested_types = self._collect_nested_pydantic_types(list(collected.values()), visited)
             collected.update(nested_types)
@@ -665,18 +666,18 @@ class GraphQLHandler:
 
     def _get_field_description(self, entity, field_name: str) -> Optional[str]:
         """
-        获取字段的描述信息
+        Get field description information
 
-        优先使用 Pydantic Field 的 description 属性
+        Prefer Pydantic Field's description attribute
 
         Args:
-            entity: 实体类
-            field_name: 字段名
+            entity: Entity class
+            field_name: Field name
 
         Returns:
-            字段描述字符串，如果没有则返回 None
+            Field description string, or None if not found
         """
-        # 检查是否是 Pydantic 模型且有 model_fields
+        # Check if it's a Pydantic model with model_fields
         if not hasattr(entity, 'model_fields'):
             return None
 
@@ -688,41 +689,41 @@ class GraphQLHandler:
 
     def _get_class_description(self, entity) -> str:
         """
-        获取类的描述信息
+        Get class description information
 
-        优先使用类的 __doc__，如果没有则使用默认格式
+        Prefer class's __doc__, otherwise use default format
 
         Args:
-            entity: 实体类
+            entity: Entity class
 
         Returns:
-            类描述字符串
+            Class description string
         """
-        # 获取类的 docstring
+        # Get class docstring
         doc = getattr(entity, '__doc__', None)
 
-        # 清理 docstring（去除首尾空白）
+        # Clean docstring (remove leading/trailing whitespace)
         if doc:
             doc = doc.strip()
             if doc:
                 return doc
 
-        # 如果没有 docstring，使用默认格式
+        # If no docstring, use default format
         return f"{entity.__name__} entity"
 
     def _get_introspection_fields(self, entity):
-        """获取实体的内省字段"""
+        """Get introspection fields for entity"""
         from ..utils.er_diagram import Relationship
 
         fields = []
 
-        # 1. 处理标量字段（来自 __annotations__）
+        # 1. Process scalar fields (from __annotations__)
         if hasattr(entity, '__annotations__'):
             for field_name, field_type in entity.__annotations__.items():
                 if field_name.startswith('__'):
                     continue
 
-                # 跳过关系字段（由关系部分处理）
+                # Skip relationship fields (handled by relationship section)
                 is_relationship_field = False
                 entity_cfg = None
                 for cfg in self.er_diagram.configs:
@@ -737,9 +738,9 @@ class GraphQLHandler:
                 if is_relationship_field:
                     continue
 
-                # 构建字段类型信息
+                # Build field type information
                 type_def = self._build_graphql_type(field_type)
-                # 获取字段描述
+                # Get field description
                 description = self._get_field_description(entity, field_name)
                 fields.append({
                     "name": field_name,
@@ -750,7 +751,7 @@ class GraphQLHandler:
                     "deprecationReason": None
                 })
 
-        # 2. 处理关联关系（来自 __relationships__）
+        # 2. Process relationships (from __relationships__)
         entity_cfg = None
         for cfg in self.er_diagram.configs:
             if cfg.kls == entity:
@@ -760,7 +761,7 @@ class GraphQLHandler:
         if entity_cfg:
             for rel in entity_cfg.relationships:
                 if isinstance(rel, Relationship):
-                    # 只有提供了 default_field_name 的关系才暴露给 GraphQL
+                    # Only relationships with default_field_name are exposed to GraphQL
                     if not hasattr(rel, 'default_field_name') or not rel.default_field_name:
                         continue
 
@@ -780,18 +781,18 @@ class GraphQLHandler:
 
     def _build_graphql_type(self, field_type: Any) -> Dict[str, Any]:
         """
-        将 Python 类型映射为 GraphQL 类型定义
+        Map Python type to GraphQL type definition
 
         Args:
-            field_type: Python 类型（可以是 list[T]、Optional[T]、T 等）
+            field_type: Python type (can be list[T], Optional[T], T, etc.)
 
         Returns:
-            GraphQL 类型定义字典
+            GraphQL type definition dictionary
         """
-        # 使用 get_core_types 处理所有包装类型
+        # Use get_core_types to handle all wrapper types
         core_types = get_core_types(field_type)
         if not core_types:
-            # 无法确定类型，默认为 String
+            # Cannot determine type, default to String
             return {
                 "kind": "SCALAR",
                 "name": "String",
@@ -799,12 +800,12 @@ class GraphQLHandler:
                 "ofType": None
             }
 
-        # 获取核心类型
+        # Get core type
         core_type = core_types[0]
 
-        # 检查是否是 list[T]
+        # Check if it's list[T]
         if is_list_type(field_type):
-            # list[T] -> LIST 类型
+            # list[T] -> LIST type
             if safe_issubclass(core_type, BaseModel):
                 # list[Entity] -> LIST -> OBJECT
                 return {
@@ -833,7 +834,7 @@ class GraphQLHandler:
                     }
                 }
         else:
-            # T (非 list)
+            # T (non-list)
             if safe_issubclass(core_type, BaseModel):
                 # Entity -> OBJECT
                 return {
@@ -845,7 +846,7 @@ class GraphQLHandler:
             else:
                 # Scalar -> SCALAR
                 scalar_name = map_scalar_type(core_type)
-                # 添加特殊描述
+                # Add special description
                 desc = get_graphql_type_description(scalar_name)
                 if "dict" in str(core_type).lower():
                     scalar_name = "String"
@@ -859,28 +860,28 @@ class GraphQLHandler:
                 }
 
     def _get_introspection_query_fields(self):
-        """获取 Query 类型的内省字段"""
+        """Get introspection fields for Query type"""
         fields = []
 
         for query_name, (entity, method) in self.query_map.items():
             import inspect
             sig = inspect.signature(method)
 
-            # 构建参数列表
+            # Build parameter list
             args = []
             for param_name, param in sig.parameters.items():
                 if param_name in ('self', 'cls'):
                     continue
 
-                # 确定参数类型
+                # Determine parameter type
                 param_type_def = None
 
-                # 尝试从类型注解获取类型
+                # Try to get type from type annotation
                 if param.annotation != inspect.Parameter.empty:
-                    # 使用 _build_input_graphql_type 来处理所有类型（包括 BaseModel）
+                    # Use _build_input_graphql_type to handle all types (including BaseModel)
                     param_type_def = self._build_input_graphql_type(param.annotation)
 
-                # 如果无法确定类型，使用默认的 String
+                # If type cannot be determined, use default String
                 if param_type_def is None:
                     param_type_def = {
                         "kind": "SCALAR",
@@ -888,7 +889,7 @@ class GraphQLHandler:
                         "ofType": None
                     }
 
-                # 检查是否有默认值
+                # Check if it has default value
                 has_default = param.default != inspect.Parameter.empty
 
                 args.append({
@@ -898,7 +899,7 @@ class GraphQLHandler:
                     "defaultValue": None if not has_default else str(param.default)
                 })
 
-            # 确定返回类型
+            # Determine return type
             return_type_str = str(sig.return_annotation) if sig.return_annotation != sig.empty else "String"
             return_kind = "SCALAR"
             return_name = "String"
@@ -907,7 +908,7 @@ class GraphQLHandler:
             if "list" in return_type_str.lower():
                 return_kind = "LIST"
                 return_name = None
-                # LIST 类型必须有 ofType 指向元素类型
+                # LIST type must have ofType pointing to element type
                 if hasattr(entity, '__name__'):
                     of_type = {
                         "kind": "OBJECT",
@@ -931,7 +932,7 @@ class GraphQLHandler:
                 "ofType": of_type
             }
 
-            # 根据类型种类添加其他必需字段
+            # Add other required fields based on type kind
             if return_kind == "SCALAR":
                 type_def["fields"] = None
                 type_def["inputFields"] = None
@@ -963,28 +964,28 @@ class GraphQLHandler:
         return fields
 
     def _get_introspection_mutation_fields(self):
-        """获取 Mutation 类型的内省字段"""
+        """Get introspection fields for Mutation type"""
         fields = []
 
         for mutation_name, (entity, method) in self.mutation_map.items():
             import inspect
             sig = inspect.signature(method)
 
-            # 构建参数列表
+            # Build parameter list
             args = []
             for param_name, param in sig.parameters.items():
                 if param_name in ('self', 'cls'):
                     continue
 
-                # 确定参数类型
+                # Determine parameter type
                 param_type_def = None
 
-                # 尝试从类型注解获取类型
+                # Try to get type from type annotation
                 if param.annotation != inspect.Parameter.empty:
-                    # 使用 _build_input_graphql_type 来处理所有类型（包括 BaseModel）
+                    # Use _build_input_graphql_type to handle all types (including BaseModel)
                     param_type_def = self._build_input_graphql_type(param.annotation)
 
-                # 如果无法确定类型，使用默认的 String
+                # If type cannot be determined, use default String
                 if param_type_def is None:
                     param_type_def = {
                         "kind": "SCALAR",
@@ -992,7 +993,7 @@ class GraphQLHandler:
                         "ofType": None
                     }
 
-                # 检查是否有默认值
+                # Check if it has default value
                 has_default = param.default != inspect.Parameter.empty
 
                 args.append({
@@ -1002,7 +1003,7 @@ class GraphQLHandler:
                     "defaultValue": None if not has_default else str(param.default)
                 })
 
-            # 确定返回类型
+            # Determine return type
             return_type_str = str(sig.return_annotation) if sig.return_annotation != sig.empty else "String"
             return_kind = "SCALAR"
             return_name = "String"
@@ -1034,7 +1035,7 @@ class GraphQLHandler:
                 "ofType": of_type
             }
 
-            # 根据类型种类添加其他必需字段
+            # Add other required fields based on type kind
             if return_kind == "SCALAR":
                 type_def["fields"] = None
                 type_def["inputFields"] = None
@@ -1070,31 +1071,31 @@ class GraphQLHandler:
         query: str,
     ) -> Dict[str, Any]:
         """
-        执行自定义查询，采用优化的两阶段执行：
-        - 阶段 1（串行）：查询方法执行、模型构建、数据转换
-        - 阶段 2（并发）：并行执行所有根查询的 Resolver
+        Execute custom query with optimized two-phase execution:
+        - Phase 1 (Serial): Query method execution, model building, data transformation
+        - Phase 2 (Concurrent): Parallel execution of all root query Resolvers
         """
         logger.info("Starting custom query execution with concurrent optimization")
 
-        # 1. 解析查询
+        # 1. Parse query
         parsed = self.parser.parse(query)
         logger.debug(f"Query parsed: {len(parsed.field_tree)} root fields found")
 
-        # 2. 初始化结果
+        # 2. Initialize results
         errors = []
         data = {}
 
-        # ===== 阶段 1：串行准备 =====
+        # ===== Phase 1: Serial Preparation =====
         logger.info("[Phase 1] Starting serial preparation phase")
 
         preparation_results = {}  # query_name -> (typed_data, is_list)
 
         for root_query_name, root_field_selection in parsed.field_tree.items():
             try:
-                # 检查查询是否存在
+                # Check if query exists
                 if root_query_name not in self.query_map:
                     errors.append({
-                        "message": f"未知的查询: {root_query_name}",
+                        "message": f"Unknown query: {root_query_name}",
                         "extensions": {"code": "UNKNOWN_QUERY"}
                     })
                     logger.warning(f"[Phase 1] Unknown query: {root_query_name}")
@@ -1102,7 +1103,7 @@ class GraphQLHandler:
 
                 entity, query_method = self.query_map[root_query_name]
 
-                # 准备查询解析
+                # Prepare query resolution
                 typed_data, error_msg, error_dict = await self._prepare_query_resolution(
                     root_query_name=root_query_name,
                     root_field_selection=root_field_selection,
@@ -1113,7 +1114,7 @@ class GraphQLHandler:
                 if error_dict:
                     errors.append(error_dict)
                 else:
-                    # 存储用于阶段 2
+                    # Store for Phase 2
                     is_list = isinstance(typed_data, list)
                     preparation_results[root_query_name] = (typed_data, is_list)
 
@@ -1128,20 +1129,20 @@ class GraphQLHandler:
 
         logger.info(f"[Phase 1] Completed: {len(preparation_results)} queries prepared, {len(errors)} errors")
 
-        # ===== 阶段 2：并发解析 =====
+        # ===== Phase 2: Concurrent Resolution =====
         logger.info("[Phase 2] Starting concurrent resolution phase")
 
         if preparation_results:
-            # 构建解析任务
+            # Build resolution tasks
             resolution_tasks = [
                 (name, data, is_list)
                 for name, (data, is_list) in preparation_results.items()
             ]
 
-            # 并发执行所有解析
+            # Execute all resolutions concurrently
             resolution_map = await self._execute_concurrent_resolutions(resolution_tasks)
 
-            # 收集结果和错误
+            # Collect results and errors
             for query_name, (result_data, error_dict) in resolution_map.items():
                 if error_dict:
                     errors.append(error_dict)
@@ -1150,7 +1151,7 @@ class GraphQLHandler:
 
         logger.info(f"[Phase 2] Completed: {len(data)} queries resolved successfully")
 
-        # 3. 格式化响应
+        # 3. Format response
         response = {
             "data": data if data else None,
             "errors": errors if errors else None
@@ -1164,29 +1165,29 @@ class GraphQLHandler:
         query: str,
     ) -> Dict[str, Any]:
         """
-        执行自定义 mutation，采用两阶段执行：
-        - 阶段 1（串行）：mutation 方法执行、模型构建、数据转换
-        - 阶段 2（串行）：执行 Resolver 解析关联数据（每个 mutation 依次执行）
+        Execute custom mutation with two-phase execution:
+        - Phase 1 (Serial): Mutation method execution, model building, data transformation
+        - Phase 2 (Serial): Execute Resolver to resolve related data (each mutation executed sequentially)
         """
         logger.info("Starting custom mutation execution")
 
-        # 1. 解析 mutation
+        # 1. Parse mutation
         parsed = self.parser.parse(query)
         logger.debug(f"Mutation parsed: {len(parsed.field_tree)} root fields found")
 
-        # 2. 初始化结果
+        # 2. Initialize results
         errors = []
         data = {}
 
-        # ===== 阶段 1 + 阶段 2：串行执行每个 mutation =====
+        # ===== Phase 1 + Phase 2: Serial execution of each mutation =====
         logger.info("Starting serial mutation execution with two-phase resolution")
 
         for root_mutation_name, root_field_selection in parsed.field_tree.items():
             try:
-                # 检查 mutation 是否存在
+                # Check if mutation exists
                 if root_mutation_name not in self.mutation_map:
                     errors.append({
-                        "message": f"未知的 mutation: {root_mutation_name}",
+                        "message": f"Unknown mutation: {root_mutation_name}",
                         "extensions": {"code": "UNKNOWN_MUTATION"}
                     })
                     logger.warning(f"Unknown mutation: {root_mutation_name}")
@@ -1194,19 +1195,19 @@ class GraphQLHandler:
 
                 entity, mutation_method = self.mutation_map[root_mutation_name]
 
-                # === Phase 1: 执行 mutation 方法 ===
+                # === Phase 1: Execute mutation method ===
                 args = root_field_selection.arguments or {}
                 root_data = await self._execute_mutation_method(mutation_method, args)
                 logger.debug(f"Mutation method executed: {root_mutation_name}")
 
-                # === Phase 1: 构建响应模型 ===
+                # === Phase 1: Build response model ===
                 response_model = self.builder.build_response_model(
                     entity=entity,
                     field_selection=root_field_selection
                 )
                 logger.debug(f"Response model built: {root_mutation_name}")
 
-                # === Phase 1: 转换为响应模型 ===
+                # === Phase 1: Transform to response model ===
                 if isinstance(root_data, list):
                     typed_data = [
                         response_model.model_validate(
@@ -1223,7 +1224,7 @@ class GraphQLHandler:
 
                 logger.debug(f"Data transformed: {root_mutation_name}")
 
-                # === Phase 2: 解析关联数据 ===
+                # === Phase 2: Resolve related data ===
                 if typed_data is not None:
                     resolver = self.resolver_class()
 
@@ -1249,7 +1250,7 @@ class GraphQLHandler:
 
         logger.info(f"Mutation execution complete: {len(data) if data else 0} successful, {len(errors) if errors else 0} errors")
 
-        # 3. 格式化响应
+        # 3. Format response
         response = {
             "data": data if data else None,
             "errors": errors if errors else None
@@ -1263,27 +1264,27 @@ class GraphQLHandler:
         arguments: Dict[str, Any]
     ) -> Any:
         """
-        执行 @query 方法
+        Execute @query method
 
         Args:
-            method: @query 装饰的方法（可能是 classmethod 或普通函数）
-            arguments: 参数字典
+            method: @query decorated method (can be classmethod or regular function)
+            arguments: Parameter dictionary
 
         Returns:
-            查询结果
+            Query result
         """
         logger.debug(f"Executing query method with arguments: {arguments}")
         try:
-            # 转换参数（处理 BaseModel 类型）
+            # Convert arguments (handle BaseModel types)
             converted_args = self._convert_arguments(method, arguments)
 
-            # schema_builder 已经提取了底层函数（对于 classmethod 是 __func__）
-            # 直接调用，第一个参数（cls/self）传入 None
+            # schema_builder has extracted the underlying function (for classmethod it's __func__)
+            # Call directly, passing None for first parameter (cls/self)
             return await method(None, **converted_args)
         except Exception as e:
             logger.error(f"Query method execution failed: {e}")
             raise GraphQLError(
-                f"查询执行失败: {e}",
+                f"Query execution failed: {e}",
                 extensions={"code": "EXECUTION_ERROR"}
             )
 
@@ -1293,22 +1294,22 @@ class GraphQLHandler:
         arguments: Dict[str, Any]
     ) -> Any:
         """
-        执行 @mutation 方法
+        Execute @mutation method
 
         Args:
-            method: @mutation 装饰的方法（可能是 classmethod 或普通函数）
-            arguments: 参数字典
+            method: @mutation decorated method (can be classmethod or regular function)
+            arguments: Parameter dictionary
 
         Returns:
-            mutation 结果
+            Mutation result
         """
         logger.debug(f"Executing mutation method with arguments: {arguments}")
         try:
-            # 转换参数（处理 BaseModel 类型）
+            # Convert arguments (handle BaseModel types)
             converted_args = self._convert_arguments(method, arguments)
 
-            # schema_builder 已经提取了底层函数（对于 classmethod 是 __func__）
-            # 直接调用，第一个参数（cls/self）传入 None
+            # schema_builder has extracted the underlying function (for classmethod it's __func__)
+            # Call directly, passing None for first parameter (cls/self)
             return await method(None, **converted_args)
         except Exception as e:
             logger.error(f"Mutation method execution failed: {e}")
@@ -1323,14 +1324,14 @@ class GraphQLHandler:
         arguments: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        转换方法参数，将 dict 转换为对应的 Pydantic BaseModel 实例
+        Convert method parameters, transforming dict to corresponding Pydantic BaseModel instances
 
         Args:
-            method: 方法对象
-            arguments: 原始参数字典
+            method: Method object
+            arguments: Original parameter dictionary
 
         Returns:
-            转换后的参数字典
+            Converted parameter dictionary
         """
         import inspect
 
@@ -1347,7 +1348,7 @@ class GraphQLHandler:
                 value = arguments[param_name]
                 param_type = param.annotation
 
-                # If parameter类型是 BaseModel 且值是 dict, 进行转换
+                # If parameter type is BaseModel and value is dict, convert
                 if param_type != inspect.Parameter.empty:
                     core_types = get_core_types(param_type)
                     converted_value = None
@@ -1379,16 +1380,16 @@ class GraphQLHandler:
 
     def _convert_to_model(self, data: dict, model_class: type) -> BaseModel:
         """
-        递归将 dict 转换为 Pydantic BaseModel 实例
+        Recursively convert dict to Pydantic BaseModel instance
 
         Args:
-            data: 字典数据
-            model_class: 目标 BaseModel 类
+            data: Dictionary data
+            model_class: Target BaseModel class
 
         Returns:
-            BaseModel 实例
+            BaseModel instance
         """
-        # 获取模型的所有字段类型
+        # Get all field types of the model
         try:
             type_hints = model_class.__annotations__
         except Exception:
@@ -1400,7 +1401,7 @@ class GraphQLHandler:
                 field_type = type_hints[field_name]
                 core_types = get_core_types(field_type)
 
-                # 检查字段类型是否是 BaseModel
+                # Check if field type is BaseModel
                 is_model_field = False
                 for core_type in core_types:
                     if safe_issubclass(core_type, BaseModel):
@@ -1431,35 +1432,35 @@ class GraphQLHandler:
         query_method: Callable
     ) -> Tuple[Optional[Any], Optional[str], Optional[Dict]]:
         """
-        准备查询解析（阶段 1：串行）
+        Prepare query resolution (Phase 1: Serial)
 
         Args:
-            root_query_name: 根查询字段名称
-            root_field_selection: 解析的字段选择
-            entity: 实体类
-            query_method: @query 装饰的方法
+            root_query_name: Root query field name
+            root_field_selection: Parsed field selection
+            entity: Entity class
+            query_method: @query decorated method
 
         Returns:
             Tuple of (typed_data, error_message, error_dict)
-            - 成功: (typed_data, None, None)
-            - 失败: (None, error_message, error_dict)
+            - Success: (typed_data, None, None)
+            - Failure: (None, error_message, error_dict)
         """
         logger.debug(f"[Phase 1] Preparing query: {root_query_name}")
 
         try:
-            # 1. 执行查询方法
+            # 1. Execute query method
             args = root_field_selection.arguments or {}
             root_data = await self._execute_query_method(query_method, args)
             logger.debug(f"[Phase 1] Query method executed: {root_query_name}")
 
-            # 2. 构建响应模型
+            # 2. Build response model
             response_model = self.builder.build_response_model(
                 entity=entity,
                 field_selection=root_field_selection
             )
             logger.debug(f"[Phase 1] Response model built: {root_query_name}")
 
-            # 3. 转换为响应模型
+            # 3. Transform to response model
             if isinstance(root_data, list):
                 typed_data = [
                     response_model.model_validate(
@@ -1495,17 +1496,17 @@ class GraphQLHandler:
         is_list: bool
     ) -> Tuple[Optional[Any], Optional[Dict]]:
         """
-        解析查询数据（阶段 2：并发）
+        Resolve query data (Phase 2: Concurrent)
 
         Args:
-            root_query_name: 根查询字段名称
-            typed_data: 类型化的 Pydantic 数据
-            is_list: 数据是否为列表
+            root_query_name: Root query field name
+            typed_data: Typed Pydantic data
+            is_list: Whether data is a list
 
         Returns:
             Tuple of (result_data, error_dict)
-            - 成功: (result_data, None)
-            - 失败: (None, error_dict)
+            - Success: (result_data, None)
+            - Failure: (None, error_dict)
         """
         logger.debug(f"[Phase 2] Resolving query: {root_query_name}")
 
@@ -1546,7 +1547,7 @@ class GraphQLHandler:
         resolution_tasks: List[Tuple[str, Any, bool]]
     ) -> Dict[str, Tuple[Optional[Any], Optional[Dict]]]:
         """
-        并发执行多个查询解析，使用信号量控制并发数
+        Execute multiple query resolutions concurrently, using semaphore to control concurrency
 
         Args:
             resolution_tasks: List of (query_name, typed_data, is_list) tuples
@@ -1559,7 +1560,7 @@ class GraphQLHandler:
 
         logger.info(f"[Phase 2] Starting concurrent resolution of {len(resolution_tasks)} queries")
 
-        # 资源控制：只有用户明确设置环境变量时才限制并发 Resolver 实例数量
+        # Resource control: Only limit concurrent Resolver instances if user explicitly sets environment variable
         max_concurrency_str = os.getenv("PYDANTIC_RESOLVE_MAX_CONCURRENT_QUERIES")
         if max_concurrency_str:
             max_concurrency = int(max_concurrency_str)
@@ -1574,13 +1575,13 @@ class GraphQLHandler:
             else:
                 return await self._resolve_query_data(query_name, typed_data, is_list)
 
-        # 并发执行所有解析任务
+        # Execute all resolution tasks concurrently
         results = await asyncio.gather(
             *[resolve_with_semaphore(name, data, is_list) for name, data, is_list in resolution_tasks],
             return_exceptions=True
         )
 
-        # 处理结果并映射到查询名称
+        # Process results and map to query names
         query_names = [name for name, _, _ in resolution_tasks]
         resolution_map = {}
 
