@@ -43,7 +43,7 @@ async def test_all_mutations():
     print("=" * 70)
 
     # 显示统计信息
-    print(f"\n📊 Mutation 统计:")
+    print("\n📊 Mutation 统计:")
     print(f"   总 mutations: {len(handler.mutation_map)}")
     print(f"   UserEntity: {len([m for m in handler.mutation_map if 'user' in m.lower()])}")
     print(f"   PostEntity: {len([m for m in handler.mutation_map if 'post' in m.lower()])}")

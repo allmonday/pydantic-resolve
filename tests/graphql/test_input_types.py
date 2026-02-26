@@ -11,7 +11,6 @@ from typing import Optional, List
 
 from pydantic_resolve import base_entity, query, mutation, config_global_resolver
 from pydantic_resolve.graphql import GraphQLHandler, SchemaBuilder
-from pydantic_resolve.utils.er_diagram import Relationship
 
 
 # Define Input Types

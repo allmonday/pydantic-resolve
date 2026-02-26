@@ -2,7 +2,7 @@
 示例实体定义 - 用于 GraphQL 演示
 """
 
-from typing import List, Optional, Dict, TYPE_CHECKING
+from typing import List, Optional, Dict
 from pydantic import BaseModel, Field
 from pydantic_resolve import base_entity, query, mutation, Relationship
 from pydantic_resolve.utils.dataloader import build_list
