@@ -53,32 +53,32 @@ comment_id_counter = 4
 # 创建 DataLoader
 async def user_loader(user_ids: List[int]) -> List[dict]:
     """用户批量加载器 - 从全局数据库读取"""
-    users = [u.model_dump() if u else None for u in [users_db.get(uid) for uid in user_ids]]
-    return list(build_object(users, user_ids, lambda u: u['id'] if u else None))
+    users = [u if u else None for u in [users_db.get(uid) for uid in user_ids]]
+    return list(build_object(users, user_ids, lambda u: u.id if u else None))
 
 
 async def post_loader(post_ids: List[int]) -> List[dict]:
     """文章批量加载器 - 从全局数据库读取"""
-    posts = [p.model_dump() if p else None for p in [posts_db.get(pid) for pid in post_ids]]
-    return list(build_object(posts, post_ids, lambda p: p['id'] if p else None))
+    posts = [p if p else None for p in [posts_db.get(pid) for pid in post_ids]]
+    return list(build_object(posts, post_ids, lambda p: p.id if p else None))
 
 
 async def user_posts_loader(user_ids: List[int]) -> List[List[dict]]:
     """Load posts by author IDs - for UserEntity.myposts relationship"""
-    all_posts = [p.model_dump() for p in posts_db.values()]
-    return list(build_list(all_posts, user_ids, lambda p: p['author_id']))
+    all_posts = [p for p in posts_db.values()]
+    return list(build_list(all_posts, user_ids, lambda p: p.author_id))
 
 
 async def comment_loader(comment_ids: List[int]) -> List[dict]:
     """评论批量加载器 - 从全局数据库读取"""
-    comments = [c.model_dump() if c else None for c in [comments_db.get(cid) for cid in comment_ids]]
-    return list(build_object(comments, comment_ids, lambda c: c['id'] if c else None))
+    comments = [c if c else None for c in [comments_db.get(cid) for cid in comment_ids]]
+    return list(build_object(comments, comment_ids, lambda c: c.id if c else None))
 
 
 async def post_comments_loader(post_ids: List[int]) -> List[List[dict]]:
     """Load comments by post IDs - for PostEntity.comments relationship"""
-    all_comments = [c.model_dump() for c in comments_db.values()]
-    return list(build_list(all_comments, post_ids, lambda c: c['post_id']))
+    all_comments = [c for c in comments_db.values()]
+    return list(build_list(all_comments, post_ids, lambda c: c.post_id))
 
 
 # 创建 BaseEntity

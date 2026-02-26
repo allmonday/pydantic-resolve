@@ -34,7 +34,7 @@ app.add_middleware(
 config_global_resolver(BaseEntity.get_diagram())
 
 # 创建 GraphQL handler 和 schema builder
-handler = GraphQLHandler(BaseEntity.get_diagram())
+handler = GraphQLHandler(BaseEntity.get_diagram(), enable_from_attribute_in_type_adapter=True)
 schema_builder = SchemaBuilder(BaseEntity.get_diagram())
 
 # 定义 GraphQL 请求模型

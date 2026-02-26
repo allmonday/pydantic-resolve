@@ -88,18 +88,22 @@ class GraphQLHandler:
     def __init__(
         self,
         er_diagram: ErDiagram,
-        resolver_class: type[Resolver] = Resolver
+        resolver_class: type[Resolver] = Resolver,
+        enable_from_attribute_in_type_adapter: bool = False
     ):
         """
         Args:
             er_diagram: Entity relationship diagram
             resolver_class: Custom Resolver class (optional)
+            enable_from_attribute_in_type_adapter: Enable Pydantic from_attributes mode for type adapter validation.
+                Allows loaders to return Pydantic instances instead of dictionaries.
         """
         self.er_diagram = er_diagram
         self.parser = QueryParser(er_diagram)
         self.builder = ResponseBuilder(er_diagram)
         self.schema_builder = SchemaBuilder(er_diagram)
         self.resolver_class = resolver_class
+        self.enable_from_attribute_in_type_adapter = enable_from_attribute_in_type_adapter
 
         # Build query method map: { 'users': (UserEntity, UserEntity.get_all) }
         self.query_map = self._build_query_map()
@@ -1226,7 +1230,7 @@ class GraphQLHandler:
 
                 # === Phase 2: Resolve related data ===
                 if typed_data is not None:
-                    resolver = self.resolver_class()
+                    resolver = self.resolver_class(enable_from_attribute_in_type_adapter=self.enable_from_attribute_in_type_adapter)
 
                     if isinstance(typed_data, list):
                         resolved = await resolver.resolve(typed_data)
@@ -1514,7 +1518,7 @@ class GraphQLHandler:
             result_data = None
 
             if typed_data is not None:
-                resolver = self.resolver_class()
+                resolver = self.resolver_class(enable_from_attribute_in_type_adapter=self.enable_from_attribute_in_type_adapter)
 
                 if is_list:
                     result = await resolver.resolve(typed_data)

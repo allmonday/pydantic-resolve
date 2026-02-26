@@ -1,25 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## v3.0
 
-### Breaking Changes
+### v3.0.0alpha (2026-2-27)
 
-- **Removed**: `create_graphql_route` 函数
-  - 该函数绑定到 FastAPI，不符合框架无关的设计原则
-  - 请使用 `GraphQLHandler` 直接集成
-  - 详细迁移指南: [GraphQL 框架集成指南](./graphql-integration.zh.md)
-
-### Changes
-
-- refactor(graphql): 移除 `create_graphql_route` 和 FastAPI 依赖
-  - 核心库现在是完全框架无关的
-  - 从 handler.py 移除 FastAPI 导入
-  - `GraphQLRequest` 模型移除（在应用层定义）
-- docs(graphql): 添加框架集成指南
-  - FastAPI、Starlette、Flask、Django 集成示例
-  - 详细的使用说明和最佳实践
-- chore(graphql): 更新 demo 使用 `GraphQLHandler`
-- test(graphql): 更新测试验证新集成方式
+- add support for auto-generating graphql interface for ERD.
 
 ## v2.5
 
