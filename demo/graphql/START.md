@@ -2,13 +2,11 @@
 
 ## ⚠️ 重要提示
 
-**必须使用项目的虚拟环境，不要使用系统 Python！**
-
 ## 1. 安装依赖
 
 ```bash
 # 在项目根目录执行
-uv pip install fastapi uvicorn graphql-core
+uv pip install -e '.[dev, graphql]'
 ```
 
 ## 2. 启动服务器
@@ -17,17 +15,12 @@ uv pip install fastapi uvicorn graphql-core
 # 方式 1: 使用 uvicorn（推荐，支持热重载）
 uv run uvicorn demo.graphql.app:app --reload
 
-# 方式 2: 使用 Makefile
-cd demo/graphql
-make run
-
-# 方式 3: 使用启动脚本
-./demo/graphql/run.sh
-```
-
 服务器将在 `http://localhost:8000` 启动。
 
 ## 3. 测试查询
+
+graphiql online
+https://lucasconstantino.github.io/graphiql-online/
 
 ### 获取所有用户
 ```bash
@@ -93,18 +86,3 @@ uv run uvicorn demo.graphql.app:app --reload
 ```
 
 **注意**: 新版本使用 `GraphQLHandler`，详见 `app.py` 和 [集成指南](../../docs/graphql-integration.zh.md)。
-
-### ❌ ModuleNotFoundError: No module named 'pydantic'
-
-**原因**: 未安装项目依赖。
-
-**解决**:
-```bash
-uv pip install pydantic fastapi graphql-core uvicorn
-```
-
-## 更多信息
-
-- 详细文档: [README.md](./README.md)
-- 快速入门: [QUICKSTART.md](./QUICKSTART.md)
-- 目录结构: [STRUCTURE.md](./STRUCTURE.md)

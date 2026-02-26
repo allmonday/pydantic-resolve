@@ -319,7 +319,71 @@ fastapi-voyager's interactive features make debugging much easier. Click any mod
 
 ---
 
-## 5. Why Not GraphQL?
+## 5. GraphQL Support
+
+pydantic-resolve now supports GraphQL query interface, leveraging the existing ERD system to automatically generate Schema and dynamically create Pydantic models based on GraphQL queries.
+
+### Installation
+
+```bash
+# Install with GraphQL support
+pip install "pydantic-resolve[graphql]"
+
+# Or install graphql-core directly
+pip install graphql-core
+```
+
+### Quick Start
+
+```python
+from fastapi import FastAPI
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
+from pydantic_resolve import base_entity, query, config_global_resolver
+from pydantic_resolve.graphql import GraphQLHandler, SchemaBuilder
+
+app = FastAPI()
+
+# 1. Define BaseEntity
+BaseEntity = base_entity()
+
+# 2. Define Entity with @query methods
+class UserEntity(BaseModel, BaseEntity):
+    id: int
+    name: str
+    email: str
+
+    @query(name='users')
+    async def get_all(cls, limit: int = 10) -> list['UserEntity']:
+        return await fetch_users(limit=limit)
+
+# 3. Configure global resolver
+config_global_resolver(BaseEntity.get_diagram())
+
+# 4. Create GraphQL handler
+handler = GraphQLHandler(BaseEntity.get_diagram())
+
+# 5. Define endpoint
+@app.post("/graphql")
+async def graphql_endpoint(req: Dict[str, Any]):
+    return await handler.execute(query=req["query"])
+```
+
+### Query Example
+
+```graphql
+query {
+  users(limit: 10) {
+    id
+    name
+    email
+  }
+}
+```
+
+---
+
+## 6. Why Not GraphQL?
 
 Although pydantic-resolve is inspired by GraphQL, it's better suited as a BFF (Backend For Frontend) layer solution:
 
