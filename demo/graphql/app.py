@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 from pydantic_resolve import config_global_resolver
-from pydantic_resolve.graphql import GraphQLHandler, SchemaBuilder
+from pydantic_resolve import GraphQLHandler, SchemaBuilder
 
 from demo.graphql.entities import BaseEntity
 

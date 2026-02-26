@@ -896,10 +896,11 @@ wheels = [
 
 [[package]]
 name = "pydantic-resolve"
-version = "2.5.0"
+version = "3.0.0a0"
 source = { editable = "." }
 dependencies = [
     { name = "aiodataloader" },
+    { name = "graphql-core" },
 ]
 
 [package.optional-dependencies]
@@ -920,9 +921,6 @@ dev = [
     { name = "tox" },
     { name = "uvicorn" },
 ]
-graphql = [
-    { name = "graphql-core" },
-]
 
 [package.metadata]
 requires-dist = [
@@ -930,7 +928,7 @@ requires-dist = [
     { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.18.0,<0.19.0" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.2.1,<8.0.0" },
     { name = "fastapi", marker = "extra == 'dev'", specifier = ">=0.133.0" },
-    { name = "graphql-core", marker = "extra == 'graphql'", specifier = ">=3.2,<4.0" },
+    { name = "graphql-core", specifier = ">=3.2,<4.0" },
     { name = "mkdocs-material", marker = "extra == 'dev'", specifier = ">=9,<10" },
     { name = "mkdocs-static-i18n", extras = ["material"], marker = "extra == 'dev'", specifier = "==1.2.0" },
     { name = "psutil", marker = "extra == 'dev'", specifier = ">=7.1.0,<8.0.0" },
@@ -944,7 +942,7 @@ requires-dist = [
     { name = "tox", marker = "extra == 'dev'", specifier = ">=4.4.6,<5.0.0" },
     { name = "uvicorn", marker = "extra == 'dev'", specifier = ">=0.41.0" },
 ]
-provides-extras = ["graphql", "dev"]
+provides-extras = ["dev"]
 
 [[package]]
 name = "pygal"

@@ -323,23 +323,18 @@ fastapi-voyager's interactive features make debugging much easier. Click any mod
 
 pydantic-resolve now supports GraphQL query interface, leveraging the existing ERD system to automatically generate Schema and dynamically create Pydantic models based on GraphQL queries.
 
-### Installation
+### Basic Usage
 
-```bash
-# Install with GraphQL support
-pip install "pydantic-resolve[graphql]"
+`pydantic-resolve` provides a framework-agnostic `GraphQLHandler` that you can easily integrate into any web framework.
 
-# Or install graphql-core directly
-pip install graphql-core
-```
-
-### Quick Start
+#### FastAPI Integration Example
 
 ```python
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
-from pydantic_resolve import base_entity, query, config_global_resolver
+from pydantic_resolve import base_entity, config_global_resolver, query
 from pydantic_resolve.graphql import GraphQLHandler, SchemaBuilder
 
 app = FastAPI()
@@ -349,6 +344,9 @@ BaseEntity = base_entity()
 
 # 2. Define Entity with @query methods
 class UserEntity(BaseModel, BaseEntity):
+    __relationships__ = [
+        Relationship(field='id', target_kls=list['Post'], loader=post_loader)
+    ]
     id: int
     name: str
     email: str
@@ -357,29 +355,88 @@ class UserEntity(BaseModel, BaseEntity):
     async def get_all(cls, limit: int = 10) -> list['UserEntity']:
         return await fetch_users(limit=limit)
 
+    @query(name='user')
+    async def get_by_id(cls, id: int) -> Optional['UserEntity']:
+        return await fetch_user(id=id)
+
 # 3. Configure global resolver
 config_global_resolver(BaseEntity.get_diagram())
 
-# 4. Create GraphQL handler
+# 4. Create GraphQL handler and schema builder
 handler = GraphQLHandler(BaseEntity.get_diagram())
+schema_builder = SchemaBuilder(BaseEntity.get_diagram())
 
-# 5. Define endpoint
-@app.post("/graphql")
-async def graphql_endpoint(req: Dict[str, Any]):
-    return await handler.execute(query=req["query"])
+# 5. Define request model
+class GraphQLRequest(BaseModel):
+    query: str
+    variables: Optional[Dict[str, Any]] = None
+    operation_name: Optional[str] = None
+
+# 6. Create routes
+router = APIRouter()
+
+@router.post("/graphql")
+async def graphql_endpoint(req: GraphQLRequest):
+    result = await handler.execute(
+        query=req.query,
+        variables=req.variables,
+        operation_name=req.operation_name
+    )
+    return result
+
+@router.get("/schema")
+async def graphql_schema():
+    schema_sdl = schema_builder.build_schema()
+    return PlainTextResponse(schema_sdl)
+
+app.include_router(router)
 ```
 
-### Query Example
+**Other Framework Integration Guides** (Flask, Starlette, Django, etc.): [GraphQL Framework Integration Guide](./graphql-integration.md)
+
+### Query Examples
 
 ```graphql
+# Get all users
 query {
-  users(limit: 10) {
+  users {
     id
     name
     email
   }
 }
+
+# Get single user with posts
+query {
+  user(id: 1) {
+    id
+    name
+    posts {
+      title
+      content
+    }
+  }
+}
 ```
+
+### Try the Demo
+
+The project includes a complete GraphQL demo application:
+
+```bash
+# Install dependencies
+pip install fastapi uvicorn graphql-core
+
+# Start server
+uv run uvicorn demo.graphql.app:app --reload
+
+# Test query
+curl -X POST http://localhost:8000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ users { id name email } }"}'
+```
+
+See [demo/graphql/README.md](demo/graphql/README.md) for complete documentation.
 
 ---
 

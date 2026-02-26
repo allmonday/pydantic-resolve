@@ -1,6 +1,6 @@
 [project]
 name = "pydantic-resolve"
-version = "2.5.0"
+version = "3.0.0alpha"
 description = "pydantic-resolve turns pydantic from a static data container into a powerful composable component."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -10,7 +10,8 @@ authors = [
 ]
 keywords = ["pydantic", "dataloader", "resolver"]
 dependencies = [
-    "aiodataloader >= 0.4.0,<0.5.0"
+    "aiodataloader >= 0.4.0,<0.5.0",
+    "graphql-core >= 3.2,<4.0"
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -33,9 +34,6 @@ Repository = "https://github.com/allmonday/pydantic_resolve"
 
 
 [project.optional-dependencies]
-graphql = [
-    "graphql-core>=3.2,<4.0"
-]
 dev = [
     "tox>=4.4.6,<5.0.0",
     "pytest>=7.2.2,<8.0.0",
