@@ -11,6 +11,7 @@ import warnings
 # Core imports (require graphql-core)
 try:
     from .query_decorator import query
+    from .mutation_decorator import mutation
     from .query_parser import QueryParser
     from .schema_builder import SchemaBuilder
     from .response_builder import ResponseBuilder
@@ -31,6 +32,7 @@ except ImportError as e:
 if CORE_AVAILABLE:
     __all__ = [
         'query',
+        'mutation',
         'GraphQLHandler',
         'QueryParser',
         'SchemaBuilder',

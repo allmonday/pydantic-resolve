@@ -38,6 +38,7 @@ class SchemaBuilder:
 
         type_defs = []
         query_defs = []
+        mutation_defs = []
         processed_types = set()  # 跟踪已处理的类型，避免重复
 
         # 生成所有实体类型
@@ -50,6 +51,11 @@ class SchemaBuilder:
             query_methods = self._extract_query_methods(entity_cfg.kls)
             for method in query_methods:
                 query_defs.append(self._build_query_def(method))
+
+            # 提取该实体的 @mutation 方法
+            mutation_methods = self._extract_mutation_methods(entity_cfg.kls)
+            for method in mutation_methods:
+                mutation_defs.append(self._build_mutation_def(method))
 
         # 收集并生成所有嵌套的 Pydantic 类型
         nested_types = self._collect_nested_pydantic_types(processed_types)
@@ -64,7 +70,13 @@ class SchemaBuilder:
         schema += "type Query {\n"
         if query_defs:
             schema += "\n".join(f"  {qd}" for qd in query_defs) + "\n"
-        schema += "}\n"
+        schema += "}\n\n"
+
+        # 只有在有 mutation 时才生成 Mutation 类型
+        if mutation_defs:
+            schema += "type Mutation {\n"
+            schema += "\n".join(f"  {md}" for md in mutation_defs) + "\n"
+            schema += "}\n"
 
         return schema
 
@@ -207,8 +219,112 @@ class SchemaBuilder:
 
         return methods
 
+    def _extract_mutation_methods(self, entity: type) -> List[Dict]:
+        """
+        提取 Entity 上所有 @mutation 装饰的方法
+
+        Returns:
+            方法信息列表，每个元素包含:
+            - name: GraphQL mutation 名称
+            - description: mutation 描述
+            - params: 参数列表
+            - return_type: 返回类型
+            - entity: 实体类
+            - method: 方法对象
+        """
+        methods = []
+
+        for name, method in entity.__dict__.items():
+            # 处理 classmethod - 访问底层函数
+            actual_method = method
+            if isinstance(method, classmethod):
+                actual_method = method.__func__
+
+            # 检查是否有 @mutation 装饰器的标记
+            if not hasattr(actual_method, '_pydantic_resolve_mutation'):
+                continue
+
+            # 获取方法签名
+            try:
+                sig = inspect.signature(actual_method)
+            except Exception:
+                continue
+
+            params = []
+
+            # 跳过 self/cls 参数
+            for param_name, param in sig.parameters.items():
+                if param_name in ('self', 'cls'):
+                    continue
+
+                # 构建 GraphQL 参数定义
+                try:
+                    gql_type = self._map_python_type_to_gql(param.annotation)
+                except Exception:
+                    # 无法推断类型，使用 Any
+                    gql_type = 'Any'
+
+                # 检查是否为必需参数
+                default = param.default
+                is_required = default == inspect.Parameter.empty
+
+                if is_required:
+                    param_str = f"${param_name}: {gql_type}!"
+                else:
+                    param_str = f"${param_name}: {gql_type}"
+
+                params.append({
+                    'name': param_name,
+                    'type': gql_type,
+                    'required': is_required,
+                    'default': default,
+                    'definition': param_str
+                })
+
+            # 确定返回类型
+            try:
+                return_type = sig.return_annotation
+                gql_return_type = self._map_return_type_to_gql(return_type)
+            except Exception:
+                # 无法推断返回类型
+                gql_return_type = 'Any'
+
+            # 确定 GraphQL mutation 名称
+            mutation_name = actual_method._pydantic_resolve_mutation_name
+            if not mutation_name:
+                # 默认: create_user -> createUser
+                mutation_name = self._convert_to_mutation_name(name)
+
+            description = actual_method._pydantic_resolve_mutation_description or ""
+
+            methods.append({
+                'name': mutation_name,
+                'description': description,
+                'params': params,
+                'return_type': gql_return_type,
+                'entity': entity,
+                'method': actual_method  # 保存实际可调用的函数（对于 classmethod 是 __func__）
+            })
+
+        return methods
+
     def _build_query_def(self, method_info: Dict) -> str:
         """构建单个查询定义"""
+        name = method_info['name']
+
+        # 构建参数部分
+        params_str = ""
+        if method_info['params']:
+            params = ", ".join(p['definition'] for p in method_info['params'])
+            params_str = f"({params})"
+
+        # 构建返回类型
+        return_type = method_info['return_type']
+
+        return f"{name}{params_str}: {return_type}"
+
+    def _build_mutation_def(self, method_info: Dict) -> str:
+        """构建单个 mutation 定义"""
         name = method_info['name']
 
         # 构建参数部分
@@ -294,6 +410,20 @@ class SchemaBuilder:
 
         # 转换为 camelCase
         return method_name
+
+    def _convert_to_mutation_name(self, method_name: str) -> str:
+        """
+        将方法名转换为 GraphQL mutation 名称
+
+        Examples:
+            create_user -> createUser
+            update_user -> updateUser
+            delete_post -> deletePost
+            add_comment -> addComment
+        """
+        # 转换 snake_case 到 camelCase
+        components = method_name.split('_')
+        return components[0] + ''.join(word.capitalize() for word in components[1:])
 
     def _validate_all_entities(self) -> None:
         """验证所有实体的字段名冲突（运行时检查）。"""

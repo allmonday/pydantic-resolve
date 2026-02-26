@@ -27,6 +27,11 @@ except (ImportError, AttributeError):
     query = None
 
 try:
+    from .graphql.mutation_decorator import mutation
+except (ImportError, AttributeError):
+    mutation = None
+
+try:
     from .graphql.types import FieldSelection, ParsedQuery
 except (ImportError, AttributeError):
     FieldSelection = None
@@ -99,6 +104,7 @@ __all__ = [
 
     # GraphQL 支持
     'query',
+    'mutation',
     'GraphQLHandler',
     'QueryParser',
     'SchemaBuilder',

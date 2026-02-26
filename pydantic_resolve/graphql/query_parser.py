@@ -81,11 +81,11 @@ class QueryParser:
         )
 
     def _extract_operation(self, document: DocumentNode) -> OperationDefinitionNode:
-        """提取操作定义"""
+        """提取操作定义（支持 Query 和 Mutation）"""
         for definition in document.definitions:
             if isinstance(definition, OperationDefinitionNode):
-                # 只支持 Query 操作
-                if definition.operation == OperationType.QUERY:
+                # 支持 Query 和 Mutation 操作
+                if definition.operation in (OperationType.QUERY, OperationType.MUTATION):
                     return definition
         return None
 

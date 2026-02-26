@@ -103,6 +103,9 @@ class GraphQLHandler:
         # 构建查询方法映射: { 'users': (UserEntity, UserEntity.get_all) }
         self.query_map = self._build_query_map()
 
+        # 构建 mutation 方法映射: { 'createUser': (UserEntity, UserEntity.create_user) }
+        self.mutation_map = self._build_mutation_map()
+
     def _build_query_map(self) -> Dict[str, Tuple[type, Callable]]:
         """
         扫描所有 Entity，构建查询名称到方法的映射
@@ -118,6 +121,21 @@ class GraphQLHandler:
                 query_map[query_name] = (entity_cfg.kls, method_info['method'])
         return query_map
 
+    def _build_mutation_map(self) -> Dict[str, Tuple[type, Callable]]:
+        """
+        扫描所有 Entity，构建 mutation 名称到方法的映射
+
+        Returns:
+            mutation 名称到 (实体类, 方法) 的映射字典
+        """
+        mutation_map = {}
+        for entity_cfg in self.er_diagram.configs:
+            methods = self.schema_builder._extract_mutation_methods(entity_cfg.kls)
+            for method_info in methods:
+                mutation_name = method_info['name']
+                mutation_map[mutation_name] = (entity_cfg.kls, method_info['method'])
+        return mutation_map
+
     async def execute(
         self,
         query: str,
@@ -125,7 +143,7 @@ class GraphQLHandler:
         operation_name: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        执行 GraphQL 查询
+        执行 GraphQL 查询或 mutation
 
         Args:
             query: GraphQL 查询字符串
@@ -135,7 +153,7 @@ class GraphQLHandler:
         Returns:
             GraphQL 响应格式：{"data": {...}, "errors": [...]}
         """
-        logger.debug(f"Executing GraphQL query: {query[:100]}...")
+        logger.debug(f"Executing GraphQL: {query[:100]}...")
         try:
             # 检测内省查询
             is_introspection = self._is_introspection_query(query)
@@ -145,9 +163,15 @@ class GraphQLHandler:
                 # 使用 graphql-core 的完整功能执行内省查询
                 return await self._execute_introspection(query, variables, operation_name)
             else:
-                logger.debug("Processing custom query")
-                # 使用自定义逻辑执行普通查询
-                return await self._execute_custom_query(query)
+                # 检测操作类型（query 或 mutation）
+                operation_type = self._detect_operation_type(query)
+
+                if operation_type == 'mutation':
+                    logger.debug("Processing mutation")
+                    return await self._execute_custom_mutation(query)
+                else:
+                    logger.debug("Processing query")
+                    return await self._execute_custom_query(query)
 
         except GraphQLError as e:
             logger.warning(f"GraphQL error: {e.message}")
@@ -173,6 +197,29 @@ class GraphQLHandler:
         # 检查是否包含 __schema, __type, __typename 等内省字段
         introspection_keywords = ["__schema", "__type", "__typename"]
         return any(keyword in query_stripped for keyword in introspection_keywords)
+
+    def _detect_operation_type(self, query: str) -> str:
+        """
+        检测操作类型（query 或 mutation）
+
+        Args:
+            query: GraphQL 查询字符串
+
+        Returns:
+            'query' 或 'mutation'
+        """
+        query_stripped = query.strip()
+
+        # 检查显式的 'mutation' 关键字
+        if query_stripped.startswith('mutation'):
+            return 'mutation'
+
+        # 检查根字段是否在 mutation_map 中（对于没有 'mutation' 关键字的隐式 mutation）
+        for mutation_name in self.mutation_map.keys():
+            if mutation_name in query_stripped:
+                return 'mutation'
+
+        return 'query'
 
     def _parse_introspection_query(self, query: str) -> Dict[str, Any]:
         """解析内省查询，提取请求的字段"""
@@ -215,7 +262,10 @@ class GraphQLHandler:
                     "name": "Query",
                     "kind": "OBJECT"
                 },
-                "mutationType": None,
+                "mutationType": {
+                    "name": "Mutation",
+                    "kind": "OBJECT"
+                } if self.mutation_map else None,
                 "subscriptionType": None,
                 "types": self._get_introspection_types(),
                 "directives": []  # 暂不支持 directives
@@ -266,10 +316,12 @@ class GraphQLHandler:
         # 检查实体类型
         if type_name in collected_types:
             entity = collected_types[type_name]
+            # 获取类描述
+            description = self._get_class_description(entity)
             return {
                 "kind": "OBJECT",
                 "name": type_name,
-                "description": f"{type_name} entity",
+                "description": description,
                 "fields": self._get_introspection_fields(entity),
                 "inputFields": None,
                 "interfaces": [],  # OBJECT types must have interfaces as array
@@ -286,6 +338,19 @@ class GraphQLHandler:
                 "fields": self._get_introspection_query_fields(),
                 "inputFields": None,
                 "interfaces": [],  # OBJECT types must have interfaces as array
+                "enumValues": None,
+                "possibleTypes": None
+            }
+
+        # 检查 Mutation 类型
+        if type_name == "Mutation":
+            return {
+                "kind": "OBJECT",
+                "name": "Mutation",
+                "description": "Root mutation type",
+                "fields": self._get_introspection_mutation_fields(),
+                "inputFields": None,
+                "interfaces": [],
                 "enumValues": None,
                 "possibleTypes": None
             }
@@ -314,10 +379,12 @@ class GraphQLHandler:
 
         # 为所有收集的类型生成 introspection
         for type_name, entity in collected_types.items():
+            # 获取类描述
+            description = self._get_class_description(entity)
             entity_type = {
                 "kind": "OBJECT",
                 "name": entity.__name__,
-                "description": f"{entity.__name__} entity",
+                "description": description,
                 "fields": self._get_introspection_fields(entity),
                 "inputFields": None,
                 "interfaces": [],  # OBJECT types must have interfaces as array
@@ -337,6 +404,19 @@ class GraphQLHandler:
             "enumValues": None,
             "possibleTypes": None
         })
+
+        # 添加 Mutation 类型（如果有 mutations）
+        if self.mutation_map:
+            types.append({
+                "kind": "OBJECT",
+                "name": "Mutation",
+                "description": "Root mutation type",
+                "fields": self._get_introspection_mutation_fields(),
+                "inputFields": None,
+                "interfaces": [],
+                "enumValues": None,
+                "possibleTypes": None
+            })
 
         return types
 
@@ -416,6 +496,53 @@ class GraphQLHandler:
 
         return collected
 
+    def _get_field_description(self, entity, field_name: str) -> Optional[str]:
+        """
+        获取字段的描述信息
+
+        优先使用 Pydantic Field 的 description 属性
+
+        Args:
+            entity: 实体类
+            field_name: 字段名
+
+        Returns:
+            字段描述字符串，如果没有则返回 None
+        """
+        # 检查是否是 Pydantic 模型且有 model_fields
+        if not hasattr(entity, 'model_fields'):
+            return None
+
+        if field_name not in entity.model_fields:
+            return None
+
+        field = entity.model_fields[field_name]
+        return getattr(field, 'description', None)
+
+    def _get_class_description(self, entity) -> str:
+        """
+        获取类的描述信息
+
+        优先使用类的 __doc__，如果没有则使用默认格式
+
+        Args:
+            entity: 实体类
+
+        Returns:
+            类描述字符串
+        """
+        # 获取类的 docstring
+        doc = getattr(entity, '__doc__', None)
+
+        # 清理 docstring（去除首尾空白）
+        if doc:
+            doc = doc.strip()
+            if doc:
+                return doc
+
+        # 如果没有 docstring，使用默认格式
+        return f"{entity.__name__} entity"
+
     def _get_introspection_fields(self, entity):
         """获取实体的内省字段"""
         from ..utils.er_diagram import Relationship
@@ -445,9 +572,11 @@ class GraphQLHandler:
 
                 # 构建字段类型信息
                 type_def = self._build_graphql_type(field_type)
+                # 获取字段描述
+                description = self._get_field_description(entity, field_name)
                 fields.append({
                     "name": field_name,
-                    "description": None,
+                    "description": description,
                     "args": [],
                     "type": type_def,
                     "isDeprecated": False,
@@ -668,6 +797,111 @@ class GraphQLHandler:
 
         return fields
 
+    def _get_introspection_mutation_fields(self):
+        """获取 Mutation 类型的内省字段"""
+        fields = []
+
+        for mutation_name, (entity, method) in self.mutation_map.items():
+            import inspect
+            sig = inspect.signature(method)
+
+            # 构建参数列表
+            args = []
+            for param_name, param in sig.parameters.items():
+                if param_name == 'self':
+                    continue
+
+                # 确定参数类型
+                param_type = "String"
+                param_kind = "SCALAR"
+
+                # 尝试从类型注解获取类型
+                if param.annotation != inspect.Parameter.empty:
+                    annotation_str = str(param.annotation)
+                    if "int" in annotation_str.lower():
+                        param_type = "Int"
+                    elif "bool" in annotation_str.lower():
+                        param_type = "Boolean"
+                    elif "float" in annotation_str.lower():
+                        param_type = "Float"
+
+                # 检查是否有默认值
+                has_default = param.default != inspect.Parameter.empty
+
+                args.append({
+                    "name": param_name,
+                    "description": None,
+                    "type": {
+                        "kind": param_kind,
+                        "name": param_type,
+                        "ofType": None
+                    },
+                    "defaultValue": None if not has_default else str(param.default)
+                })
+
+            # 确定返回类型
+            return_type_str = str(sig.return_annotation) if sig.return_annotation != sig.empty else "String"
+            return_kind = "SCALAR"
+            return_name = "String"
+            of_type = None
+
+            if "list" in return_type_str.lower():
+                return_kind = "LIST"
+                return_name = None
+                if hasattr(entity, '__name__'):
+                    of_type = {
+                        "kind": "OBJECT",
+                        "name": entity.__name__,
+                        "ofType": None
+                    }
+                else:
+                    of_type = {
+                        "kind": "SCALAR",
+                        "name": "String",
+                        "ofType": None
+                    }
+            elif hasattr(entity, '__name__'):
+                return_name = entity.__name__
+                return_kind = "OBJECT"
+
+            type_def = {
+                "kind": return_kind,
+                "name": return_name,
+                "description": None,
+                "ofType": of_type
+            }
+
+            # 根据类型种类添加其他必需字段
+            if return_kind == "SCALAR":
+                type_def["fields"] = None
+                type_def["inputFields"] = None
+                type_def["interfaces"] = None
+                type_def["enumValues"] = None
+                type_def["possibleTypes"] = None
+            elif return_kind == "OBJECT":
+                type_def["fields"] = self._get_introspection_fields(entity)
+                type_def["inputFields"] = None
+                type_def["interfaces"] = None
+                type_def["enumValues"] = None
+                type_def["possibleTypes"] = None
+            elif return_kind == "LIST":
+                type_def["fields"] = None
+                type_def["inputFields"] = None
+                type_def["interfaces"] = None
+                type_def["enumValues"] = None
+                type_def["possibleTypes"] = None
+
+            fields.append({
+                "name": mutation_name,
+                "description": f"Mutation for {mutation_name}",
+                "args": args,
+                "type": type_def,
+                "isDeprecated": False,
+                "deprecationReason": None
+            })
+
+        return fields
+
     async def _execute_custom_query(
         self,
         query: str,
@@ -762,6 +996,104 @@ class GraphQLHandler:
         logger.info(f"Query execution complete: {len(data) if data else 0} successful, {len(errors) if errors else 0} errors")
         return response
 
+    async def _execute_custom_mutation(
+        self,
+        query: str,
+    ) -> Dict[str, Any]:
+        """
+        执行自定义 mutation，采用两阶段执行：
+        - 阶段 1（串行）：mutation 方法执行、模型构建、数据转换
+        - 阶段 2（串行）：执行 Resolver 解析关联数据（每个 mutation 依次执行）
+        """
+        logger.info("Starting custom mutation execution")
+
+        # 1. 解析 mutation
+        parsed = self.parser.parse(query)
+        logger.debug(f"Mutation parsed: {len(parsed.field_tree)} root fields found")
+
+        # 2. 初始化结果
+        errors = []
+        data = {}
+
+        # ===== 阶段 1 + 阶段 2：串行执行每个 mutation =====
+        logger.info("Starting serial mutation execution with two-phase resolution")
+
+        for root_mutation_name, root_field_selection in parsed.field_tree.items():
+            try:
+                # 检查 mutation 是否存在
+                if root_mutation_name not in self.mutation_map:
+                    errors.append({
+                        "message": f"未知的 mutation: {root_mutation_name}",
+                        "extensions": {"code": "UNKNOWN_MUTATION"}
+                    })
+                    logger.warning(f"Unknown mutation: {root_mutation_name}")
+                    continue
+
+                entity, mutation_method = self.mutation_map[root_mutation_name]
+
+                # === Phase 1: 执行 mutation 方法 ===
+                args = root_field_selection.arguments or {}
+                root_data = await self._execute_mutation_method(mutation_method, args)
+                logger.debug(f"Mutation method executed: {root_mutation_name}")
+
+                # === Phase 1: 构建响应模型 ===
+                response_model = self.builder.build_response_model(
+                    entity=entity,
+                    field_selection=root_field_selection
+                )
+                logger.debug(f"Response model built: {root_mutation_name}")
+
+                # === Phase 1: 转换为响应模型 ===
+                if isinstance(root_data, list):
+                    typed_data = [
+                        response_model.model_validate(
+                            d.model_dump() if hasattr(d, 'model_dump') else d
+                        )
+                        for d in root_data
+                    ]
+                elif root_data is not None:
+                    typed_data = response_model.model_validate(
+                        root_data.model_dump() if hasattr(root_data, 'model_dump') else root_data
+                    )
+                else:
+                    typed_data = None
+
+                logger.debug(f"Data transformed: {root_mutation_name}")
+
+                # === Phase 2: 解析关联数据 ===
+                if typed_data is not None:
+                    resolver = self.resolver_class()
+
+                    if isinstance(typed_data, list):
+                        resolved = await resolver.resolve(typed_data)
+                        data[root_mutation_name] = [r.model_dump(by_alias=True) for r in resolved] if resolved else []
+                    else:
+                        resolved = await resolver.resolve(typed_data)
+                        data[root_mutation_name] = resolved.model_dump(by_alias=True) if resolved else None
+                else:
+                    data[root_mutation_name] = None
+
+                logger.debug(f"Mutation resolved: {root_mutation_name}")
+
+            except GraphQLError as e:
+                errors.append(e.to_dict())
+            except Exception as e:
+                logger.exception(f"Unexpected error executing {root_mutation_name}")
+                errors.append({
+                    "message": str(e),
+                    "extensions": {"code": type(e).__name__}
+                })
+
+        logger.info(f"Mutation execution complete: {len(data) if data else 0} successful, {len(errors) if errors else 0} errors")
+
+        # 3. 格式化响应
+        response = {
+            "data": data if data else None,
+            "errors": errors if errors else None
+        }
+
+        return response
+
     async def _execute_query_method(
         self,
         method: Callable,
@@ -786,6 +1118,33 @@ class GraphQLHandler:
             logger.error(f"Query method execution failed: {e}")
             raise GraphQLError(
                 f"查询执行失败: {e}",
+                extensions={"code": "EXECUTION_ERROR"}
+            )
+
+    async def _execute_mutation_method(
+        self,
+        method: Callable,
+        arguments: Dict[str, Any]
+    ) -> Any:
+        """
+        执行 @mutation 方法
+
+        Args:
+            method: @mutation 装饰的方法（可能是 classmethod 或普通函数）
+            arguments: 参数字典
+
+        Returns:
+            mutation 结果
+        """
+        logger.debug(f"Executing mutation method with arguments: {arguments}")
+        try:
+            # schema_builder 已经提取了底层函数（对于 classmethod 是 __func__）
+            # 直接调用，第一个参数（cls/self）传入 None
+            return await method(None, **arguments)
+        except Exception as e:
+            logger.error(f"Mutation method execution failed: {e}")
+            raise GraphQLError(
+                f"Mutation execution failed: {e}",
                 extensions={"code": "EXECUTION_ERROR"}
             )
 
