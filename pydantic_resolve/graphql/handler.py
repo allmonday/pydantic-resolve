@@ -393,6 +393,22 @@ class GraphQLHandler:
             }
             types.append(entity_type)
 
+        # 收集并添加所有 Input Types
+        input_types = self._collect_input_types_for_introspection()
+        for input_type in input_types:
+            description = self._get_class_description(input_type)
+            input_type_def = {
+                "kind": "INPUT_OBJECT",
+                "name": input_type.__name__,
+                "description": description,
+                "fields": None,
+                "inputFields": self._get_introspection_input_fields(input_type),
+                "interfaces": None,
+                "enumValues": None,
+                "possibleTypes": None
+            }
+            types.append(input_type_def)
+
         # 添加 Query 类型
         types.append({
             "kind": "OBJECT",
@@ -419,6 +435,157 @@ class GraphQLHandler:
             })
 
         return types
+
+    def _collect_input_types_for_introspection(self) -> set:
+        """
+        收集所有方法参数中的 BaseModel 类型作为 Input Types（用于 Introspection）
+
+        Returns:
+            所有需要生成 input 定义的 BaseModel 类型集合
+        """
+        import inspect
+        input_types = set()
+        visited = set()
+
+        def collect_from_type(param_type):
+            """递归收集类型中的 BaseModel"""
+            core_types = get_core_types(param_type)
+
+            for core_type in core_types:
+                if safe_issubclass(core_type, BaseModel):
+                    type_name = core_type.__name__
+                    if type_name not in visited:
+                        visited.add(type_name)
+                        input_types.add(core_type)
+
+                        # 递归收集嵌套的 BaseModel 类型
+                        if hasattr(core_type, '__annotations__'):
+                            for field_type in core_type.__annotations__.values():
+                                collect_from_type(field_type)
+
+        # 遍历所有 @query 方法
+        for query_name, (entity, method) in self.query_map.items():
+            try:
+                sig = inspect.signature(method)
+                for param_name, param in sig.parameters.items():
+                    if param_name in ('self', 'cls'):
+                        continue
+                    if param.annotation != inspect.Parameter.empty:
+                        collect_from_type(param.annotation)
+            except Exception:
+                pass
+
+        # 遍历所有 @mutation 方法
+        for mutation_name, (entity, method) in self.mutation_map.items():
+            try:
+                sig = inspect.signature(method)
+                for param_name, param in sig.parameters.items():
+                    if param_name in ('self', 'cls'):
+                        continue
+                    if param.annotation != inspect.Parameter.empty:
+                        collect_from_type(param.annotation)
+            except Exception:
+                pass
+
+        return input_types
+
+    def _get_introspection_input_fields(self, input_type: type) -> List[Dict]:
+        """
+        获取 Input Type 的内省字段
+
+        Args:
+            input_type: Pydantic BaseModel 类
+
+        Returns:
+            字段信息列表
+        """
+        fields = []
+
+        if hasattr(input_type, '__annotations__'):
+            for field_name, field_type in input_type.__annotations__.items():
+                if field_name.startswith('__'):
+                    continue
+
+                # 构建字段类型信息
+                type_def = self._build_input_graphql_type(field_type)
+
+                # 获取字段描述
+                description = self._get_field_description(input_type, field_name)
+
+                fields.append({
+                    "name": field_name,
+                    "description": description,
+                    "type": type_def,
+                    "defaultValue": None
+                })
+
+        return fields
+
+    def _build_input_graphql_type(self, field_type: Any) -> Dict[str, Any]:
+        """
+        将 Python 类型映射为 GraphQL Input 类型定义（用于 Introspection）
+
+        Args:
+            field_type: Python 类型
+
+        Returns:
+            GraphQL 类型定义字典
+        """
+        core_types = get_core_types(field_type)
+        if not core_types:
+            return {
+                "kind": "SCALAR",
+                "name": "String",
+                "description": None,
+                "ofType": None
+            }
+
+        core_type = core_types[0]
+
+        # 检查是否是 list[T]
+        if is_list_type(field_type):
+            if safe_issubclass(core_type, BaseModel):
+                return {
+                    "kind": "LIST",
+                    "name": None,
+                    "description": None,
+                    "ofType": {
+                        "kind": "INPUT_OBJECT",
+                        "name": core_type.__name__,
+                        "description": f"{core_type.__name__} input",
+                        "ofType": None
+                    }
+                }
+            else:
+                scalar_name = map_scalar_type(core_type)
+                return {
+                    "kind": "LIST",
+                    "name": None,
+                    "description": None,
+                    "ofType": {
+                        "kind": "SCALAR",
+                        "name": scalar_name,
+                        "description": None,
+                        "ofType": None
+                    }
+                }
+        else:
+            if safe_issubclass(core_type, BaseModel):
+                return {
+                    "kind": "INPUT_OBJECT",
+                    "name": core_type.__name__,
+                    "description": f"{core_type.__name__} input",
+                    "ofType": None
+                }
+            else:
+                scalar_name = map_scalar_type(core_type)
+                desc = get_graphql_type_description(scalar_name)
+                return {
+                    "kind": "SCALAR",
+                    "name": scalar_name,
+                    "description": desc,
+                    "ofType": None
+                }
 
     def _is_pydantic_basemodel(self, type_hint: Any) -> bool:
         """
@@ -702,22 +869,24 @@ class GraphQLHandler:
             # 构建参数列表
             args = []
             for param_name, param in sig.parameters.items():
-                if param_name == 'self':
+                if param_name in ('self', 'cls'):
                     continue
 
                 # 确定参数类型
-                param_type = "String"
-                param_kind = "SCALAR"
+                param_type_def = None
 
                 # 尝试从类型注解获取类型
                 if param.annotation != inspect.Parameter.empty:
-                    annotation_str = str(param.annotation)
-                    if "int" in annotation_str.lower():
-                        param_type = "Int"
-                    elif "bool" in annotation_str.lower():
-                        param_type = "Boolean"
-                    elif "float" in annotation_str.lower():
-                        param_type = "Float"
+                    # 使用 _build_input_graphql_type 来处理所有类型（包括 BaseModel）
+                    param_type_def = self._build_input_graphql_type(param.annotation)
+
+                # 如果无法确定类型，使用默认的 String
+                if param_type_def is None:
+                    param_type_def = {
+                        "kind": "SCALAR",
+                        "name": "String",
+                        "ofType": None
+                    }
 
                 # 检查是否有默认值
                 has_default = param.default != inspect.Parameter.empty
@@ -725,11 +894,7 @@ class GraphQLHandler:
                 args.append({
                     "name": param_name,
                     "description": None,
-                    "type": {
-                        "kind": param_kind,
-                        "name": param_type,
-                        "ofType": None
-                    },
+                    "type": param_type_def,
                     "defaultValue": None if not has_default else str(param.default)
                 })
 
@@ -808,22 +973,24 @@ class GraphQLHandler:
             # 构建参数列表
             args = []
             for param_name, param in sig.parameters.items():
-                if param_name == 'self':
+                if param_name in ('self', 'cls'):
                     continue
 
                 # 确定参数类型
-                param_type = "String"
-                param_kind = "SCALAR"
+                param_type_def = None
 
                 # 尝试从类型注解获取类型
                 if param.annotation != inspect.Parameter.empty:
-                    annotation_str = str(param.annotation)
-                    if "int" in annotation_str.lower():
-                        param_type = "Int"
-                    elif "bool" in annotation_str.lower():
-                        param_type = "Boolean"
-                    elif "float" in annotation_str.lower():
-                        param_type = "Float"
+                    # 使用 _build_input_graphql_type 来处理所有类型（包括 BaseModel）
+                    param_type_def = self._build_input_graphql_type(param.annotation)
+
+                # 如果无法确定类型，使用默认的 String
+                if param_type_def is None:
+                    param_type_def = {
+                        "kind": "SCALAR",
+                        "name": "String",
+                        "ofType": None
+                    }
 
                 # 检查是否有默认值
                 has_default = param.default != inspect.Parameter.empty
@@ -831,11 +998,7 @@ class GraphQLHandler:
                 args.append({
                     "name": param_name,
                     "description": None,
-                    "type": {
-                        "kind": param_kind,
-                        "name": param_type,
-                        "ofType": None
-                    },
+                    "type": param_type_def,
                     "defaultValue": None if not has_default else str(param.default)
                 })
 
@@ -1111,9 +1274,12 @@ class GraphQLHandler:
         """
         logger.debug(f"Executing query method with arguments: {arguments}")
         try:
+            # 转换参数（处理 BaseModel 类型）
+            converted_args = self._convert_arguments(method, arguments)
+
             # schema_builder 已经提取了底层函数（对于 classmethod 是 __func__）
             # 直接调用，第一个参数（cls/self）传入 None
-            return await method(None, **arguments)
+            return await method(None, **converted_args)
         except Exception as e:
             logger.error(f"Query method execution failed: {e}")
             raise GraphQLError(
@@ -1138,15 +1304,124 @@ class GraphQLHandler:
         """
         logger.debug(f"Executing mutation method with arguments: {arguments}")
         try:
+            # 转换参数（处理 BaseModel 类型）
+            converted_args = self._convert_arguments(method, arguments)
+
             # schema_builder 已经提取了底层函数（对于 classmethod 是 __func__）
             # 直接调用，第一个参数（cls/self）传入 None
-            return await method(None, **arguments)
+            return await method(None, **converted_args)
         except Exception as e:
             logger.error(f"Mutation method execution failed: {e}")
             raise GraphQLError(
                 f"Mutation execution failed: {e}",
                 extensions={"code": "EXECUTION_ERROR"}
             )
+
+    def _convert_arguments(
+        self,
+        method: Callable,
+        arguments: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        转换方法参数，将 dict 转换为对应的 Pydantic BaseModel 实例
+
+        Args:
+            method: 方法对象
+            arguments: 原始参数字典
+
+        Returns:
+            转换后的参数字典
+        """
+        import inspect
+
+        converted = {}
+        try:
+            sig = inspect.signature(method)
+            for param_name, param in sig.parameters.items():
+                if param_name in ('self', 'cls'):
+                    continue
+
+                if param_name not in arguments:
+                    continue
+
+                value = arguments[param_name]
+                param_type = param.annotation
+
+                # If parameter类型是 BaseModel 且值是 dict, 进行转换
+                if param_type != inspect.Parameter.empty:
+                    core_types = get_core_types(param_type)
+                    converted_value = None
+                    for core_type in core_types:
+                        if safe_issubclass(core_type, BaseModel):
+                            if isinstance(value, dict):
+                                converted_value = self._convert_to_model(value, core_type)
+                                break
+                            elif isinstance(value, list):
+                                list_element_type = self._extract_list_element_type(param_type)
+                                if list_element_type and safe_issubclass(list_element_type, BaseModel):
+                                    converted_value = [
+                                        self._convert_to_model(item, list_element_type) if isinstance(item, dict) else item
+                                        for item in value
+                                    ]
+                                break
+                    if converted_value is not None:
+                        converted[param_name] = converted_value
+                    else:
+                        converted[param_name] = value
+                else:
+                    converted[param_name] = value
+
+        except Exception as e:
+            logger.warning(f"Failed to convert arguments: {e}")
+            return arguments
+
+        return converted
+
+    def _convert_to_model(self, data: dict, model_class: type) -> BaseModel:
+        """
+        递归将 dict 转换为 Pydantic BaseModel 实例
+
+        Args:
+            data: 字典数据
+            model_class: 目标 BaseModel 类
+
+        Returns:
+            BaseModel 实例
+        """
+        # 获取模型的所有字段类型
+        try:
+            type_hints = model_class.__annotations__
+        except Exception:
+            type_hints = {}
+
+        converted_data = {}
+        for field_name, field_value in data.items():
+            if field_name in type_hints:
+                field_type = type_hints[field_name]
+                core_types = get_core_types(field_type)
+
+                # 检查字段类型是否是 BaseModel
+                is_model_field = False
+                for core_type in core_types:
+                    if safe_issubclass(core_type, BaseModel):
+                        if isinstance(field_value, dict):
+                            converted_data[field_name] = self._convert_to_model(field_value, core_type)
+                        elif isinstance(field_value, list):
+                            converted_data[field_name] = [
+                                self._convert_to_model(item, core_type) if isinstance(item, dict) else item
+                                for item in field_value
+                            ]
+                        else:
+                            converted_data[field_name] = field_value
+                        is_model_field = True
+                        break
+
+                if not is_model_field:
+                    converted_data[field_name] = field_value
+            else:
+                converted_data[field_name] = field_value
+
+        return model_class(**converted_data)
 
     async def _prepare_query_resolution(
         self,

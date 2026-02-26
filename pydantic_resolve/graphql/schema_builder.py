@@ -36,10 +36,12 @@ class SchemaBuilder:
         if self.validate_conflicts:
             self._validate_all_entities()
 
-        type_defs = []
+        input_defs = []  # Input types
+        type_defs = []   # Output types
         query_defs = []
         mutation_defs = []
         processed_types = set()  # 跟踪已处理的类型，避免重复
+        processed_input_types = set()  # 跟踪已处理的 input 类型
 
         # 生成所有实体类型
         for entity_cfg in self.er_diagram.configs:
@@ -65,8 +67,28 @@ class SchemaBuilder:
                 type_defs.append(type_def)
                 processed_types.add(nested_type)
 
-        # 组装完整的 Schema
-        schema = "\n".join(type_defs) + "\n\n"
+        # 收集并生成所有 Input Types（从方法参数）
+        input_types = self._collect_input_types()
+        for input_type in input_types:
+            if input_type not in processed_input_types:
+                input_def = self._build_input_definition(input_type)
+                input_defs.append(input_def)
+                processed_input_types.add(input_type)
+
+        # 组装完整的 Schema：先 input，再 type
+        schema_parts = []
+
+        # Input types
+        if input_defs:
+            schema_parts.append("\n".join(input_defs))
+
+        # Output types
+        if type_defs:
+            schema_parts.append("\n".join(type_defs))
+
+        schema = "\n\n".join(schema_parts) + "\n\n"
+
+        # Query type
         schema += "type Query {\n"
         if query_defs:
             schema += "\n".join(f"  {qd}" for qd in query_defs) + "\n"
@@ -179,10 +201,12 @@ class SchemaBuilder:
                 default = param.default
                 is_required = default == inspect.Parameter.empty
 
+                # 参数定义不使用 $ 前缀，且 gql_type 已包含 ! 后缀
                 if is_required:
-                    param_str = f"${param_name}: {gql_type}!"
+                    param_str = f"{param_name}: {gql_type}"
                 else:
-                    param_str = f"${param_name}: {gql_type}"
+                    # 移除末尾的 ! 表示可选
+                    param_str = f"{param_name}: {gql_type.rstrip('!')}"
 
                 params.append({
                     'name': param_name,
@@ -268,10 +292,12 @@ class SchemaBuilder:
                 default = param.default
                 is_required = default == inspect.Parameter.empty
 
+                # 参数定义不使用 $ 前缀，且 gql_type 已包含 ! 后缀
                 if is_required:
-                    param_str = f"${param_name}: {gql_type}!"
+                    param_str = f"{param_name}: {gql_type}"
                 else:
-                    param_str = f"${param_name}: {gql_type}"
+                    # 移除末尾的 ! 表示可选
+                    param_str = f"{param_name}: {gql_type.rstrip('!')}"
 
                 params.append({
                     'name': param_name,
@@ -517,4 +543,153 @@ class SchemaBuilder:
             fields.append(f"  {field_name}: {gql_type}")
 
         return f"type {kls.__name__} {{\n" + "\n".join(fields) + "\n}"
+
+    def _collect_input_types(self) -> set:
+        """
+        收集所有方法参数中的 BaseModel 类型作为 Input Types
+
+        Returns:
+            所有需要生成 input 定义的 BaseModel 类型集合
+        """
+        input_types = set()
+        visited = set()
+
+        def collect_from_type(param_type):
+            """递归收集类型中的 BaseModel"""
+            # 使用 get_core_types 处理包装类型
+            core_types = get_core_types(param_type)
+
+            for core_type in core_types:
+                if safe_issubclass(core_type, BaseModel):
+                    type_name = core_type.__name__
+                    if type_name not in visited:
+                        visited.add(type_name)
+                        input_types.add(core_type)
+
+                        # 递归收集嵌套的 BaseModel 类型
+                        try:
+                            type_hints = get_type_hints(core_type)
+                            for field_type in type_hints.values():
+                                collect_from_type(field_type)
+                        except Exception:
+                            pass
+
+        # 遍历所有实体的 @query 和 @mutation 方法
+        for entity_cfg in self.er_diagram.configs:
+            # 收集 @query 方法的参数类型
+            query_methods = self._extract_query_methods(entity_cfg.kls)
+            for method_info in query_methods:
+                for param in method_info.get('params', []):
+                    # 获取原始参数类型（从 method 签名）
+                    method = method_info.get('method')
+                    if method:
+                        try:
+                            sig = inspect.signature(method)
+                            param_name = param['name']
+                            if param_name in sig.parameters:
+                                param_type = sig.parameters[param_name].annotation
+                                if param_type != inspect.Parameter.empty:
+                                    collect_from_type(param_type)
+                        except Exception:
+                            pass
+
+            # 收集 @mutation 方法的参数类型
+            mutation_methods = self._extract_mutation_methods(entity_cfg.kls)
+            for method_info in mutation_methods:
+                for param in method_info.get('params', []):
+                    method = method_info.get('method')
+                    if method:
+                        try:
+                            sig = inspect.signature(method)
+                            param_name = param['name']
+                            if param_name in sig.parameters:
+                                param_type = sig.parameters[param_name].annotation
+                                if param_type != inspect.Parameter.empty:
+                                    collect_from_type(param_type)
+                        except Exception:
+                            pass
+
+        return input_types
+
+    def _build_input_definition(self, kls: type) -> str:
+        """
+        为 Pydantic BaseModel 类生成 GraphQL Input 类型定义
+
+        Args:
+            kls: Pydantic BaseModel 类
+
+        Returns:
+            GraphQL input 类型定义字符串
+        """
+        fields = []
+
+        # 获取类的所有字段提示
+        try:
+            type_hints = get_type_hints(kls)
+        except Exception:
+            type_hints = {}
+
+        # 处理所有字段
+        for field_name, field_type in type_hints.items():
+            if field_name.startswith('__'):
+                continue
+
+            # 映射 Python 类型到 GraphQL 类型（用于 input）
+            gql_type = self._map_python_type_to_gql_for_input(field_type)
+            fields.append(f"  {field_name}: {gql_type}")
+
+        return f"input {kls.__name__} {{\n" + "\n".join(fields) + "\n}"
+
+    def _map_python_type_to_gql_for_input(self, python_type: type) -> str:
+        """
+        将 Python 类型映射到 GraphQL 类型（用于 Input 类型）
+
+        与 _map_python_type_to_gql 类似，但处理嵌套的 Input 类型
+
+        Args:
+            python_type: Python 类型
+
+        Returns:
+            GraphQL 类型字符串
+        """
+        from typing import Union
+
+        origin = get_origin(python_type)
+
+        # 处理 Optional[T] (Union[T, None])
+        if origin is Union:
+            args = get_args(python_type)
+            # 过滤掉 NoneType
+            non_none_args = [a for a in args if a is not type(None)]
+            if non_none_args:
+                # 取第一个非 None 类型，递归处理（不加 ! 后缀，因为它是可选的）
+                inner_gql = self._map_python_type_to_gql_for_input(non_none_args[0])
+                # 移除 ! 后缀表示可选
+                return inner_gql.rstrip('!')
+
+        # 处理 list[T]
+        if origin is list:
+            args = get_args(python_type)
+            if args:
+                inner_gql = self._map_python_type_to_gql_for_input(args[0])
+                # 确保内部类型有 ! 后缀
+                if not inner_gql.endswith('!'):
+                    inner_gql = inner_gql + '!'
+                return f"[{inner_gql}]!"
+            return "[String!]!"
+
+        # 处理核心类型
+        core_types = get_core_types(python_type)
+        if not core_types:
+            return "String!"
+
+        core_type = core_types[0]
+
+        if safe_issubclass(core_type, BaseModel):
+            # Input 类型引用其他 Input 类型
+            return f"{core_type.__name__}!"
+        else:
+            # 标量类型
+            scalar_name = map_scalar_type(core_type)
+            return f"{scalar_name}!"
 

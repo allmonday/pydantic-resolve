@@ -8,6 +8,39 @@ from pydantic_resolve import base_entity, query, mutation, Relationship
 from pydantic_resolve.utils.dataloader import build_list
 
 
+# =====================================
+# Input Types for Mutations
+# =====================================
+
+class CreateUserInput(BaseModel):
+    """创建用户的输入类型"""
+    name: str = Field(description="用户名称")
+    email: str = Field(description="邮箱地址")
+    role: str = Field(default="user", description="用户角色")
+
+
+class CreatePostInput(BaseModel):
+    """创建文章的输入类型"""
+    title: str = Field(description="文章标题")
+    content: str = Field(description="文章内容")
+    author_id: int = Field(description="作者ID")
+    status: str = Field(default="draft", description="文章状态")
+
+
+class UpdateUserInput(BaseModel):
+    """更新用户的输入类型"""
+    name: Optional[str] = Field(default=None, description="用户名称")
+    email: Optional[str] = Field(default=None, description="邮箱地址")
+    role: Optional[str] = Field(default=None, description="用户角色")
+
+
+class UpdatePostInput(BaseModel):
+    """更新文章的输入类型"""
+    title: Optional[str] = Field(default=None, description="文章标题")
+    content: Optional[str] = Field(default=None, description="文章内容")
+    status: Optional[str] = Field(default=None, description="文章状态")
+
+
 # 模拟数据库（在类定义后初始化）
 users_db: Dict[int, 'UserEntity'] = {}
 posts_db: Dict[int, 'PostEntity'] = {}
@@ -19,47 +52,29 @@ comment_id_counter = 4
 
 # 创建 DataLoader
 async def user_loader(user_ids: List[int]) -> List[dict]:
-    """用户批量加载器"""
-    users_db = {
-        1: {"id": 1, "name": "Alice", "email": "alice@example.com", "role": "admin"},
-        2: {"id": 2, "name": "Bob", "email": "bob@example.com", "role": "user"},
-        3: {"id": 3, "name": "Charlie", "email": "charlie@example.com", "role": "user"},
-        4: {"id": 4, "name": "Diana", "email": "diana@example.com", "role": "admin"},
-    }
+    """用户批量加载器 - 从全局数据库读取"""
     return build_list(
         [users_db.get(uid) for uid in user_ids],
         user_ids,
-        lambda u: u["id"] if u else None
+        lambda u: u.id if u else None
     )
 
 
 async def post_loader(post_ids: List[int]) -> List[dict]:
-    """文章批量加载器"""
-    posts_db = {
-        1: {"id": 1, "title": "First Post", "content": "Hello World!", "author_id": 1, "status": "published"},
-        2: {"id": 2, "title": "Second Post", "content": "GraphQL is awesome", "author_id": 2, "status": "published"},
-        3: {"id": 3, "title": "Third Post", "content": "Python tips", "author_id": 1, "status": "draft"},
-        4: {"id": 4, "title": "Fourth Post", "content": "FastAPI tutorial", "author_id": 3, "status": "published"},
-    }
+    """文章批量加载器 - 从全局数据库读取"""
     return build_list(
         [posts_db.get(pid) for pid in post_ids],
         post_ids,
-        lambda p: p["id"] if p else None
+        lambda p: p.id if p else None
     )
 
 
 async def comment_loader(comment_ids: List[int]) -> List[dict]:
-    """评论批量加载器"""
-    comments_db = {
-        1: {"id": 1, "text": "Great post!", "author_id": 2, "post_id": 1},
-        2: {"id": 2, "text": "Thanks!", "author_id": 1, "post_id": 1},
-        3: {"id": 3, "text": "Very helpful", "author_id": 3, "post_id": 2},
-        4: {"id": 4, "text": "Nice tutorial", "author_id": 4, "post_id": 4},
-    }
+    """评论批量加载器 - 从全局数据库读取"""
     return build_list(
         [comments_db.get(cid) for cid in comment_ids],
         comment_ids,
-        lambda c: c["id"] if c else None
+        lambda c: c.id if c else None
     )
 
 
@@ -91,32 +106,18 @@ class UserEntity(BaseModel, BaseEntity):
     @query(name='users')
     async def get_all(cls, limit: int = 10, offset: int = 0) -> List['UserEntity']:
         """获取所有用户（分页）"""
-        all_users = [
-            UserEntity(id=1, name="Alice", email="alice@example.com", role="admin"),
-            UserEntity(id=2, name="Bob", email="bob@example.com", role="user"),
-            UserEntity(id=3, name="Charlie", email="charlie@example.com", role="user"),
-            UserEntity(id=4, name="Diana", email="diana@example.com", role="admin"),
-        ]
+        all_users = list(users_db.values())
         return all_users[offset:offset + limit]
 
     @query(name='user')
     async def get_by_id(cls, id: int) -> Optional['UserEntity']:
         """根据 ID 获取用户"""
-        users = {
-            1: UserEntity(id=1, name="Alice", email="alice@example.com", role="admin"),
-            2: UserEntity(id=2, name="Bob", email="bob@example.com", role="user"),
-            3: UserEntity(id=3, name="Charlie", email="charlie@example.com", role="user"),
-            4: UserEntity(id=4, name="Diana", email="diana@example.com", role="admin"),
-        }
-        return users.get(id)
+        return users_db.get(id)
 
     @query(name='admins')
     async def get_admins(cls) -> List['UserEntity']:
         """获取所有管理员"""
-        return [
-            UserEntity(id=1, name="Alice", email="alice@example.com", role="admin"),
-            UserEntity(id=4, name="Diana", email="diana@example.com", role="admin"),
-        ]
+        return [u for u in users_db.values() if u.role == 'admin']
 
     @mutation(name='createUser', description='创建新用户')
     async def create_user(cls, name: str, email: str, role: str = 'user') -> 'UserEntity':
@@ -152,6 +153,34 @@ class UserEntity(BaseModel, BaseEntity):
             return True
         return False
 
+    @mutation(name='createUserWithInput', description='使用 Input Type 创建新用户')
+    async def create_user_with_input(cls, input: CreateUserInput) -> 'UserEntity':
+        """使用 Input Type 创建新用户"""
+        global user_id_counter
+        user_id_counter += 1
+        new_user = UserEntity(
+            id=user_id_counter,
+            name=input.name,
+            email=input.email,
+            role=input.role
+        )
+        users_db[user_id_counter] = new_user
+        return new_user
+
+    @mutation(name='updateUserWithInput', description='使用 Input Type 更新用户')
+    async def update_user_with_input(cls, id: int, input: UpdateUserInput) -> Optional['UserEntity']:
+        """使用 Input Type 更新用户信息"""
+        if id in users_db:
+            user = users_db[id]
+            if input.name is not None:
+                user.name = input.name
+            if input.email is not None:
+                user.email = input.email
+            if input.role is not None:
+                user.role = input.role
+            return user
+        return None
+
 
 # Post 实体
 class PostEntity(BaseModel, BaseEntity):
@@ -172,12 +201,7 @@ class PostEntity(BaseModel, BaseEntity):
     @query(name='posts')
     async def get_all(cls, limit: int = 10, status: Optional[str] = None) -> List['PostEntity']:
         """获取所有文章（可按状态筛选）"""
-        all_posts = [
-            PostEntity(id=1, title="First Post", content="Hello World!", author_id=1, status="published"),
-            PostEntity(id=2, title="Second Post", content="GraphQL is awesome", author_id=2, status="published"),
-            PostEntity(id=3, title="Third Post", content="Python tips", author_id=1, status="draft"),
-            PostEntity(id=4, title="Fourth Post", content="FastAPI tutorial", author_id=3, status="published"),
-        ]
+        all_posts = list(posts_db.values())
         if status:
             return [p for p in all_posts if p.status == status][:limit]
         return all_posts[:limit]
@@ -185,13 +209,7 @@ class PostEntity(BaseModel, BaseEntity):
     @query(name='post')
     async def get_by_id(cls, id: int) -> Optional['PostEntity']:
         """根据 ID 获取文章"""
-        posts = {
-            1: PostEntity(id=1, title="First Post", content="Hello World!", author_id=1, status="published"),
-            2: PostEntity(id=2, title="Second Post", content="GraphQL is awesome", author_id=2, status="published"),
-            3: PostEntity(id=3, title="Third Post", content="Python tips", author_id=1, status="draft"),
-            4: PostEntity(id=4, title="Fourth Post", content="FastAPI tutorial", author_id=3, status="published"),
-        }
-        return posts.get(id)
+        return posts_db.get(id)
 
     @mutation(name='createPost', description='创建新文章')
     async def create_post(cls, title: str, content: str, author_id: int, status: str = 'draft') -> 'PostEntity':
@@ -239,6 +257,35 @@ class PostEntity(BaseModel, BaseEntity):
             return True
         return False
 
+    @mutation(name='createPostWithInput', description='使用 Input Type 创建新文章')
+    async def create_post_with_input(cls, input: CreatePostInput) -> 'PostEntity':
+        """使用 Input Type 创建新文章"""
+        global post_id_counter
+        post_id_counter += 1
+        new_post = PostEntity(
+            id=post_id_counter,
+            title=input.title,
+            content=input.content,
+            author_id=input.author_id,
+            status=input.status
+        )
+        posts_db[post_id_counter] = new_post
+        return new_post
+
+    @mutation(name='updatePostWithInput', description='使用 Input Type 更新文章')
+    async def update_post_with_input(cls, id: int, input: UpdatePostInput) -> Optional['PostEntity']:
+        """使用 Input Type 更新文章内容或状态"""
+        if id in posts_db:
+            post = posts_db[id]
+            if input.title is not None:
+                post.title = input.title
+            if input.content is not None:
+                post.content = input.content
+            if input.status is not None:
+                post.status = input.status
+            return post
+        return None
+
 
 # Comment 实体
 class CommentEntity(BaseModel, BaseEntity):
@@ -258,12 +305,7 @@ class CommentEntity(BaseModel, BaseEntity):
     @query(name='comments')
     async def get_all(cls) -> List['CommentEntity']:
         """获取所有评论"""
-        return [
-            CommentEntity(id=1, text="Great post!", author_id=2, post_id=1),
-            CommentEntity(id=2, text="Thanks!", author_id=1, post_id=1),
-            CommentEntity(id=3, text="Very helpful", author_id=3, post_id=2),
-            CommentEntity(id=4, text="Nice tutorial", author_id=4, post_id=4),
-        ]
+        return list(comments_db.values())
 
     @mutation(name='createComment', description='创建新评论')
     async def create_comment(cls, text: str, author_id: int, post_id: int) -> 'CommentEntity':

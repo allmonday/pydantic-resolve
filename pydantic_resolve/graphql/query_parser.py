@@ -190,6 +190,13 @@ class QueryParser:
         # BooleanValue
         elif kind == 'boolean_value':
             return value_node.value
+        # ObjectValue (对象字面量)
+        elif kind == 'object_value' and hasattr(value_node, 'fields'):
+            obj = {}
+            for field in value_node.fields:
+                field_name = field.name.value
+                obj[field_name] = self._get_argument_value(field.value)
+            return obj
         # ListValue
         elif hasattr(value_node, 'values'):
             return [self._get_argument_value(v) for v in value_node.values]
