@@ -89,7 +89,12 @@ diagram = ErDiagram(
     ]
 )
 
-config_global_resolver(er_diagram=diagram)
+
+@pytest.fixture(autouse=True)
+def setup_global_resolver():
+    """Set up global resolver for this test module."""
+    config_global_resolver(er_diagram=diagram)
+    yield
 
 class BizCase1(DefineSubset):
     __pydantic_resolve_subset__ = (Biz, ('id', 'name', 'user_id'))

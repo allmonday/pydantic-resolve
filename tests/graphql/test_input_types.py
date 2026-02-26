@@ -115,7 +115,13 @@ class PostEntity(BaseModel, BaseEntity):
 
 
 # Configure global resolver
-config_global_resolver(BaseEntity.get_diagram())
+
+
+@pytest.fixture(autouse=True)
+def setup_global_resolver():
+    """Set up global resolver for this test module."""
+    config_global_resolver(BaseEntity.get_diagram())
+    yield
 
 
 class TestInputTypeSchemaGeneration:

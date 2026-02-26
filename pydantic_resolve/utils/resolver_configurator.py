@@ -19,3 +19,13 @@ def config_resolver(name: Optional[str]=None,
 def config_global_resolver(er_diagram: Optional[ErDiagram]=None):
     setattr(resolver.Resolver, const.ER_DIAGRAM, er_diagram)
     setattr(resolver.Resolver, const.ER_DIAGRAM_PRE_GENERATOR, erd.ErLoaderPreGenerator(er_diagram=er_diagram))
+
+
+def reset_global_resolver():
+    """Reset global resolver to default state (None).
+
+    This is useful for test isolation to prevent cross-contamination
+    between tests that use config_global_resolver().
+    """
+    setattr(resolver.Resolver, const.ER_DIAGRAM, None)
+    setattr(resolver.Resolver, const.ER_DIAGRAM_PRE_GENERATOR, None)

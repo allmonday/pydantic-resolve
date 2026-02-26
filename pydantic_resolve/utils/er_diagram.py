@@ -158,11 +158,24 @@ class ErDiagram(BaseModel):
     def _validate_configs(self) -> "ErDiagram":
         cfgs = self.configs or []
         seen = set()
+        seen_names = {}
         for cfg in cfgs:
             kls = cfg.kls
             if kls in seen:
                 raise ValueError(f"Duplicate config.kls detected: {kls}")
             seen.add(kls)
+
+            # Check for duplicate class names (important for GraphQL integration)
+            class_name = kls.__name__
+            if class_name in seen_names:
+                existing_module = seen_names[class_name].__module__
+                current_module = kls.__module__
+                raise ValueError(
+                    f"Duplicate entity name '{class_name}' detected. "
+                    f"Entity names must be unique for GraphQL schema generation. "
+                    f"Conflict: {existing_module}.{class_name} vs {current_module}.{class_name}"
+                )
+            seen_names[class_name] = kls
         return self
 
     description: str | None = None
