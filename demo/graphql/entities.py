@@ -100,7 +100,7 @@ class UserEntity(BaseModel, BaseEntity):
         Relationship(field='id', target_kls=list['PostEntity'], loader=user_posts_loader, default_field_name='myposts')
     ]
     id: int = Field(description="用户唯一标识ID")
-    name: str = Field(description="用户姓名", example="Alice")
+    name: str = Field(description="用户姓名")
     email: str = Field(description="用户邮箱地址")
     role: str = Field(description="用户角色（admin/user）")
     something: dict = Field(default={'key': 'value'}, description="额外信息字典")

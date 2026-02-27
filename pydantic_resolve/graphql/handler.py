@@ -163,7 +163,8 @@ class GraphQLHandler:
             Entity class if found, None otherwise
         """
         import inspect
-        from typing import ForwardRef, get_origin, get_args
+        import types
+        from typing import ForwardRef, get_origin, get_args, Union
 
         sig = inspect.signature(method)
         return_annotation = sig.return_annotation
@@ -171,17 +172,25 @@ class GraphQLHandler:
         if return_annotation == inspect.Parameter.empty:
             return None
 
-        # Unwrap Optional[List[T]] or List[T]
-        if get_origin(return_annotation) in (list,):
+        origin = get_origin(return_annotation)
+
+        # Unwrap Optional[List[T]] -> List[T] -> T
+        if origin is list:
             args = get_args(return_annotation)
             if args:
                 return_annotation = args[0]
-        elif get_origin(return_annotation) is type or None:
-            # Handle Optional[Entity] - extract Entity from Union
+                origin = get_origin(return_annotation)
+        # Handle Optional[Entity] (Union[Entity, None]) - extract Entity
+        elif origin is Union or (hasattr(types, 'UnionType') and isinstance(return_annotation, types.UnionType)):
             args = get_args(return_annotation)
             non_none_args = [a for a in args if a is not type(None)]
             if len(non_none_args) == 1:
                 return_annotation = non_none_args[0]
+                # Check if it's Optional[List[T]]
+                if get_origin(return_annotation) is list:
+                    args = get_args(return_annotation)
+                    if args:
+                        return_annotation = args[0]
 
         # Handle ForwardRef
         if isinstance(return_annotation, ForwardRef):
