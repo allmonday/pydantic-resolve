@@ -191,6 +191,25 @@ class TestErDiagramBinding:
         assert result[0].name == "Alice"
 
 
+# ========== 混合使用测试用的实体（模块级别，避免动态类导致的 teardown 问题）==========
+class UserWithDecorator(BaseModel):
+    id: int
+    name: str
+
+    @query(name='allUsers')
+    async def get_all(cls, limit: int = 10) -> List['UserWithDecorator']:
+        return []
+
+
+class PostWithConfig(BaseModel):
+    id: int
+    title: str
+
+
+async def _get_posts_for_mixed_test() -> List[PostWithConfig]:
+    return []
+
+
 class TestSchemaBuilderCompatibility:
     """测试 SchemaBuilder 与配置化方法的兼容性"""
 
@@ -222,29 +241,12 @@ class TestSchemaBuilderCompatibility:
 
     def test_mixed_decorator_and_config(self):
         """测试装饰器和配置混合使用"""
-        # 使用装饰器的实体
-        class UserWithDecorator(BaseModel):
-            id: int
-            name: str
-
-            @query(name='allUsers')
-            async def get_all(cls, limit: int = 10) -> List['UserWithDecorator']:
-                return []
-
-        # 使用配置的实体
-        class PostWithConfig(BaseModel):
-            id: int
-            title: str
-
-        async def get_posts() -> List[PostWithConfig]:
-            return []
-
         diagram = ErDiagram(configs=[
             Entity(kls=UserWithDecorator, relationships=[]),
             Entity(
                 kls=PostWithConfig,
                 relationships=[],
-                queries=[QueryConfig(method=get_posts, name='posts')]
+                queries=[QueryConfig(method=_get_posts_for_mixed_test, name='posts')]
             )
         ])
 
@@ -256,6 +258,26 @@ class TestSchemaBuilderCompatibility:
         assert 'posts: [PostWithConfig!]' in schema
 
 
+# ========== 循环引用测试用的实体（模块级别，避免动态类导致的 teardown 问题）==========
+class AuthorEntity(BaseModel):
+    id: int
+    name: str
+
+
+class BookEntity(BaseModel):
+    id: int
+    title: str
+    author_id: int
+
+
+async def _get_authors() -> List[AuthorEntity]:
+    return [AuthorEntity(id=1, name="Author 1")]
+
+
+async def _get_books_by_author(author_id: int) -> List[BookEntity]:
+    return [BookEntity(id=1, title="Book 1", author_id=author_id)]
+
+
 class TestCircularReferenceScenario:
     """测试循环引用场景（配置化的主要用例）"""
 
@@ -265,34 +287,17 @@ class TestCircularReferenceScenario:
         这是配置化的主要用例：Entity A 和 B 相互引用，
         但方法定义在外部，避免了循环导入。
         """
-        # 定义实体（不含方法，不含循环导入）
-        class AuthorEntity(BaseModel):
-            id: int
-            name: str
-
-        class BookEntity(BaseModel):
-            id: int
-            title: str
-            author_id: int
-
-        # 方法定义在外部（可以安全地引用两个 Entity）
-        async def get_authors() -> List[AuthorEntity]:
-            return [AuthorEntity(id=1, name="Author 1")]
-
-        async def get_books_by_author(author_id: int) -> List[BookEntity]:
-            return [BookEntity(id=1, title="Book 1", author_id=author_id)]
-
         # 配置 ErDiagram
         diagram = ErDiagram(configs=[
             Entity(
                 kls=AuthorEntity,
                 relationships=[Relationship(field='id', target_kls=list[BookEntity])],
-                queries=[QueryConfig(method=get_authors, name='authors')]
+                queries=[QueryConfig(method=_get_authors, name='authors')]
             ),
             Entity(
                 kls=BookEntity,
                 relationships=[Relationship(field='author_id', target_kls=AuthorEntity)],
-                queries=[QueryConfig(method=get_books_by_author, name='booksByAuthor')]
+                queries=[QueryConfig(method=_get_books_by_author, name='booksByAuthor')]
             )
         ])
 

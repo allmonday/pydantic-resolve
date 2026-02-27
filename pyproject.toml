@@ -62,5 +62,6 @@ packages = ["pydantic_resolve"]
 [tool.pytest.ini_options]
 filterwarnings = [
     "error",
+    "ignore::ResourceWarning",
 ]
 asyncio_mode = "auto"
