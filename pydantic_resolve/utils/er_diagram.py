@@ -26,6 +26,9 @@ class BaseLinkProps(BaseModel):
 
     loader: Callable | None = None
 
+    # GraphQL 查询字段名（用于暴露嵌套查询）
+    default_field_name: str | None = None
+
 class Link(BaseLinkProps):
     biz: str
 
@@ -53,7 +56,6 @@ class MultipleRelationship(BaseModel):
 class Relationship(BaseLinkProps):
     field: str  # fk name
     target_kls: Any
-    default_field_name: str | None = None  # GraphQL 查询字段名（必需用于暴露嵌套查询）
 
     @model_validator(mode="after")
     def _validate_defaults(self) -> "Relationship":
@@ -109,29 +111,68 @@ class Entity(BaseModel):
             scalar_fields = set()
 
         # 2. 收集关系字段的 default_field_name
+        # 使用元组 (source_type, source_info) 来跟踪来源
+        # source_type: 'Relationship' 或 'Link'
+        # source_info: 关系的详细信息
         relationship_fields = {}
+
+        def _get_rel_source_info(rel, link=None):
+            """获取关系来源的描述信息"""
+            if isinstance(rel, Relationship):
+                return ('Relationship', f"Relationship(field={rel.field})")
+            elif isinstance(rel, MultipleRelationship) and link:
+                return ('Link', f"Link(biz={link.biz}) in MultipleRelationship(field={rel.field})")
+            return ('Unknown', 'Unknown')
+
         for rel in self.relationships or []:
             if isinstance(rel, Relationship) and rel.default_field_name:
                 field_name = rel.default_field_name
+                source_type, source_info = _get_rel_source_info(rel)
 
                 # 检查重复的关系字段
                 if field_name in relationship_fields:
+                    prev_source_type, prev_source_info = relationship_fields[field_name]
                     raise ValueError(
                         f"Field name conflict in {self.kls.__name__}: '{field_name}' - "
                         f"multiple relationships use the same default_field_name. "
-                        f"Conflict between Relationship(field={relationship_fields[field_name].field}) "
-                        f"and Relationship(field={rel.field})"
+                        f"Conflict between {prev_source_info} and {source_info}"
                     )
 
-                relationship_fields[field_name] = rel
+                relationship_fields[field_name] = (source_type, source_info)
 
                 # 检查与标量字段的冲突
                 if field_name in scalar_fields:
                     raise ValueError(
                         f"Field name conflict in {self.kls.__name__}: '{field_name}' - "
                         f"default_field_name conflicts with scalar field. "
-                        f"Relationship.field={rel.field}, target_kls={rel.target_kls}"
+                        f"{source_info}, target_kls={rel.target_kls}"
                     )
+
+            elif isinstance(rel, MultipleRelationship):
+                # 检查 MultipleRelationship 的 links
+                for link in rel.links:
+                    if link.default_field_name:
+                        field_name = link.default_field_name
+                        source_type, source_info = _get_rel_source_info(rel, link)
+
+                        # 检查重复的关系字段
+                        if field_name in relationship_fields:
+                            prev_source_type, prev_source_info = relationship_fields[field_name]
+                            raise ValueError(
+                                f"Field name conflict in {self.kls.__name__}: '{field_name}' - "
+                                f"multiple relationships use the same default_field_name. "
+                                f"Conflict between {prev_source_info} and {source_info}"
+                            )
+
+                        relationship_fields[field_name] = (source_type, source_info)
+
+                        # 检查与标量字段的冲突
+                        if field_name in scalar_fields:
+                            raise ValueError(
+                                f"Field name conflict in {self.kls.__name__}: '{field_name}' - "
+                                f"default_field_name conflicts with scalar field. "
+                                f"{source_info}, target_kls={rel.target_kls}"
+                            )
 
         # 3. 检查与父类字段的冲突
         for base_cls in self.kls.__mro__[1:]:  # 跳过自身
@@ -142,13 +183,12 @@ class Entity(BaseModel):
             except Exception:
                 continue
 
-            for field_name in relationship_fields:
+            for field_name, (source_type, source_info) in relationship_fields.items():
                 if field_name in base_fields:
-                    rel = relationship_fields[field_name]
                     raise ValueError(
                         f"Field name conflict in {self.kls.__name__}: '{field_name}' - "
                         f"relationship field conflicts with inherited field from {base_cls.__name__}. "
-                        f"Relationship.field={rel.field}, target_kls={rel.target_kls}"
+                        f"{source_info}"
                     )
 
 class ErDiagram(BaseModel):

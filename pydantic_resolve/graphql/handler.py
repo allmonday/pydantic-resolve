@@ -797,7 +797,7 @@ class GraphQLHandler:
 
     def _get_introspection_fields(self, entity):
         """Get introspection fields for entity"""
-        from ..utils.er_diagram import Relationship
+        from ..utils.er_diagram import Relationship, MultipleRelationship
 
         fields = []
 
@@ -816,9 +816,18 @@ class GraphQLHandler:
                         break
                 if entity_cfg:
                     for rel in entity_cfg.relationships:
-                        if isinstance(rel, Relationship) and hasattr(rel, 'default_field_name') and rel.default_field_name == field_name:
-                            is_relationship_field = True
-                            break
+                        if isinstance(rel, Relationship):
+                            if hasattr(rel, 'default_field_name') and rel.default_field_name == field_name:
+                                is_relationship_field = True
+                                break
+                        elif isinstance(rel, MultipleRelationship):
+                            # 检查 links 中的 default_field_name
+                            for link in rel.links:
+                                if hasattr(link, 'default_field_name') and link.default_field_name == field_name:
+                                    is_relationship_field = True
+                                    break
+                            if is_relationship_field:
+                                break
                 if is_relationship_field:
                     continue
 
@@ -860,6 +869,24 @@ class GraphQLHandler:
                         "isDeprecated": False,
                         "deprecationReason": None
                     })
+
+                elif isinstance(rel, MultipleRelationship):
+                    # Process MultipleRelationship links
+                    for link in rel.links:
+                        if not hasattr(link, 'default_field_name') or not link.default_field_name:
+                            continue
+
+                        field_name = link.default_field_name
+                        type_def = self._build_graphql_type(rel.target_kls)
+
+                        fields.append({
+                            "name": field_name,
+                            "description": None,
+                            "args": [],
+                            "type": type_def,
+                            "isDeprecated": False,
+                            "deprecationReason": None
+                        })
 
         return fields
 

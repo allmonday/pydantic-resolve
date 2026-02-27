@@ -2,15 +2,26 @@
 Dynamic Pydantic model builder based on GraphQL field selection.
 """
 
-from typing import Any, Dict, List, Optional, Set, Tuple, get_type_hints, get_origin, get_args, Annotated
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, get_type_hints, get_origin, get_args, Annotated
 from pydantic import BaseModel, create_model, Field
 from functools import lru_cache
 
 from ..constant import ENSURE_SUBSET_REFERENCE
-from ..utils.er_diagram import ErDiagram, Relationship, LoadBy, ErLoaderPreGenerator
+from ..utils.er_diagram import ErDiagram, Relationship, MultipleRelationship, LoadBy, ErLoaderPreGenerator
 from ..utils.class_util import safe_issubclass
 from ..utils.types import get_core_types
 from .types import FieldSelection
+
+
+@dataclass
+class RelationshipInfo:
+    """统一封装 Relationship 和 Link 的信息"""
+    field: str  # FK 字段名
+    target_kls: type  # 目标类型
+    loader: Callable | None  # 加载器
+    biz: str | None = None  # 仅 Link 有
+    is_link: bool = False  # 是否为 Link（MultipleRelationship 中的链接）
 
 
 class ResponseBuilder:
@@ -230,12 +241,12 @@ class ResponseBuilder:
 
     def _build_relationship_field(
         self,
-        relationship: Relationship,
+        rel_info: RelationshipInfo,
         selection: FieldSelection,
         parent_path: str
     ) -> Optional[Tuple[type, Any]]:
-        """Build field definition for a relationship."""
-        target_kls = relationship.target_kls
+        """Build field definition for a relationship (supports both Relationship and Link)."""
+        target_kls = rel_info.target_kls
         origin = get_origin(target_kls)
 
         # Extract actual entity type
@@ -249,12 +260,22 @@ class ResponseBuilder:
         )
 
         # Build annotated type with LoadBy
-        if origin is list:
-            base_type = Annotated[List[nested_model], LoadBy(relationship.field)]
-            default = []
+        if rel_info.is_link:
+            # Link 需要传入 biz 参数
+            if origin is list:
+                base_type = Annotated[List[nested_model], LoadBy(rel_info.field, biz=rel_info.biz)]
+                default = []
+            else:
+                base_type = Annotated[Optional[nested_model], LoadBy(rel_info.field, biz=rel_info.biz)]
+                default = None
         else:
-            base_type = Annotated[Optional[nested_model], LoadBy(relationship.field)]
-            default = None
+            # Relationship 的现有逻辑
+            if origin is list:
+                base_type = Annotated[List[nested_model], LoadBy(rel_info.field)]
+                default = []
+            else:
+                base_type = Annotated[Optional[nested_model], LoadBy(rel_info.field)]
+                default = None
 
         return self._apply_alias((base_type, default), selection.alias)
 
@@ -332,34 +353,53 @@ class ResponseBuilder:
 
         for field_name in selected_fields:
             for rel in entity_cfg.relationships:
-                if not isinstance(rel, Relationship):
-                    continue
+                if isinstance(rel, Relationship):
+                    if hasattr(rel, 'default_field_name') and rel.default_field_name == field_name:
+                        fk_fields.add(rel.field)
 
-                if hasattr(rel, 'default_field_name') and rel.default_field_name == field_name:
-                    fk_fields.add(rel.field)
+                elif isinstance(rel, MultipleRelationship):
+                    # 检查 links
+                    for link in rel.links:
+                        if hasattr(link, 'default_field_name') and link.default_field_name == field_name:
+                            fk_fields.add(rel.field)  # 使用 MultipleRelationship 的 field
 
         return fk_fields
 
-    def _find_relationship(self, entity: type, field_name: str) -> Optional[Relationship]:
+    def _find_relationship(self, entity: type, field_name: str) -> Optional[RelationshipInfo]:
         """
-        Find relationship for a given field
+        Find relationship for a given field (supports both Relationship and MultipleRelationship)
 
         Args:
             entity: Entity class
-            field_name: Field name
+            field_name: Field name (default_field_name)
 
         Returns:
-            Relationship object, or None if not found
+            RelationshipInfo object, or None if not found
         """
         entity_cfg = self.entity_map.get(entity)
         if not entity_cfg:
             return None
 
         for rel in entity_cfg.relationships:
-            if not isinstance(rel, Relationship):
-                continue
+            if isinstance(rel, Relationship):
+                if hasattr(rel, 'default_field_name') and rel.default_field_name == field_name:
+                    return RelationshipInfo(
+                        field=rel.field,
+                        target_kls=rel.target_kls,
+                        loader=rel.loader,
+                        is_link=False
+                    )
 
-            if hasattr(rel, 'default_field_name') and rel.default_field_name == field_name:
-                return rel
+            elif isinstance(rel, MultipleRelationship):
+                # 在 links 中查找
+                for link in rel.links:
+                    if hasattr(link, 'default_field_name') and link.default_field_name == field_name:
+                        return RelationshipInfo(
+                            field=rel.field,  # 使用 MultipleRelationship 的 field
+                            target_kls=rel.target_kls,  # 使用 MultipleRelationship 的 target_kls
+                            loader=link.loader,
+                            biz=link.biz,
+                            is_link=True
+                        )
 
         return None

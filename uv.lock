@@ -896,7 +896,7 @@ wheels = [
 
 [[package]]
 name = "pydantic-resolve"
-version = "3.0.0a3"
+version = "3.0.0a4"
 source = { editable = "." }
 dependencies = [
     { name = "aiodataloader" },

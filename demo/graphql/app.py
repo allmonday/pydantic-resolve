@@ -12,10 +12,13 @@ from pydantic_resolve import config_global_resolver
 from pydantic_resolve import GraphQLHandler, SchemaBuilder
 
 from demo.graphql.entities import BaseEntity
+# from demo.graphql.entities_v2 import diagram_v2
 
+diagram = BaseEntity.get_diagram()  # 获取 V1 实体图
+# diagram = diagram_v2
 
 # 创建 FastAPI 应用
-app = FastAPI(
+app = FastAPI(diagram = diagram,  # 获取 V1 实体图
     title="Pydantic Resolve GraphQL Demo",
     description="演示 pydantic-resolve 的 GraphQL 查询功能",
     version="1.0.0"
@@ -31,11 +34,11 @@ app.add_middleware(
 )
 
 # 配置全局 resolver
-config_global_resolver(BaseEntity.get_diagram())
+config_global_resolver(diagram)
 
 # 创建 GraphQL handler 和 schema builder
-handler = GraphQLHandler(BaseEntity.get_diagram(), enable_from_attribute_in_type_adapter=True)
-schema_builder = SchemaBuilder(BaseEntity.get_diagram())
+handler = GraphQLHandler(diagram, enable_from_attribute_in_type_adapter=True)
+schema_builder = SchemaBuilder(diagram)
 
 # 定义 GraphQL 请求模型
 class GraphQLRequest(BaseModel):
