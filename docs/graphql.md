@@ -4,6 +4,145 @@
 
 `pydantic-resolve` provides `GraphQLHandler` as a framework-agnostic core for executing GraphQL queries. This guide shows how to integrate it with various web frameworks.
 
+## Defining Entities and Queries/Mutations
+
+pydantic-resolve supports two configuration methods for defining entities and their GraphQL operations.
+
+### Method 1: BaseEntity with Decorators
+
+Define entities that inherit from `BaseEntity`, using decorators for queries and mutations:
+
+```python
+from pydantic import BaseModel
+from typing import List, Optional
+from pydantic_resolve import base_entity, query, mutation, Relationship
+
+BaseEntity = base_entity()
+
+class UserEntity(BaseModel, BaseEntity):
+    __relationships__ = [
+        Relationship(field='id', target_kls=list['PostEntity'],
+                     loader=user_posts_loader, default_field_name='myposts')
+    ]
+    id: int
+    name: str
+    email: str
+
+    @query(name='users')
+    async def get_all(cls, limit: int = 10) -> List['UserEntity']:
+        return await fetch_users(limit)
+
+    @mutation(name='createUser')
+    async def create(cls, name: str, email: str) -> 'UserEntity':
+        return await create_user(name, email)
+
+# Use BaseEntity.get_diagram() to get ErDiagram
+handler = GraphQLHandler(BaseEntity.get_diagram())
+```
+
+### Method 2: ErDiagram with QueryConfig/MutationConfig
+
+Define plain Pydantic models and configure them externally:
+
+```python
+from pydantic import BaseModel
+from typing import List, Optional
+from pydantic_resolve import Entity, ErDiagram, QueryConfig, MutationConfig, Relationship
+
+class UserEntity(BaseModel):  # Only BaseModel, no BaseEntity
+    id: int
+    name: str
+    email: str
+
+# Standalone query function (no cls parameter needed)
+async def get_all_users(limit: int = 10) -> List[UserEntity]:
+    return await fetch_users(limit)
+
+# Create ErDiagram with configuration
+diagram = ErDiagram(configs=[
+    Entity(
+        kls=UserEntity,
+        relationships=[
+            Relationship(field='id', target_kls=list[PostEntity],
+                         loader=user_posts_loader, default_field_name='myposts')
+        ],
+        queries=[
+            QueryConfig(method=get_all_users, name='users', description='Get all users'),
+        ],
+        mutations=[
+            MutationConfig(method=create_user, name='createUser', description='Create user'),
+        ]
+    ),
+])
+
+handler = GraphQLHandler(diagram)
+```
+
+### Comparison
+
+| Feature | BaseEntity + Decorators | ErDiagram + Config |
+|---------|------------------------|-------------------|
+| Class inheritance | `BaseModel, BaseEntity` | `BaseModel` only |
+| Query/Mutation location | Inside class | External functions |
+| cls parameter | Required in methods | Not needed |
+| Configuration style | Decorators | Explicit config objects |
+| Best for | Self-contained entities | Separating concerns |
+
+## Key Concepts
+
+### default_field_name
+
+Defines the GraphQL field name for nested queries:
+
+```python
+Relationship(
+    field='author_id',           # FK field in entity
+    target_kls=UserEntity,       # Target entity
+    loader=user_loader,          # DataLoader function
+    default_field_name='author'  # GraphQL field name
+)
+```
+
+This allows queries like:
+```graphql
+{
+  posts {
+    title
+    author { name }  # Uses default_field_name
+  }
+}
+```
+
+**Note:** `default_field_name` must not conflict with existing scalar fields in the entity.
+
+### @query Decorator
+
+Marks a class method as a GraphQL root query:
+
+```python
+@query(name='users', description='Get all users')
+async def get_all(cls, limit: int = 10) -> List['UserEntity']:
+    return await fetch_users(limit)
+```
+
+- Method is automatically converted to classmethod
+- `name`: GraphQL query name (defaults to camelCase of method name)
+- `description`: GraphQL schema description
+
+### @mutation Decorator
+
+Marks a class method as a GraphQL mutation:
+
+```python
+@mutation(name='createUser', description='Create a new user')
+async def create_user(cls, name: str, email: str) -> 'UserEntity':
+    return await create_user_in_db(name, email)
+```
+
+- Return type determines GraphQL output type
+- `Optional[T]` -> nullable, `T` -> non-null
+- `list[T]` -> `[T!]!` (non-null list of non-null items)
+
 ## GraphQLHandler API
 
 ### Constructor
@@ -334,5 +473,5 @@ async def graphql_endpoint(req: GraphQLRequest):
 ## See Also
 
 - [GraphQL Demo](https://github.com/allmonday/pydantic-resolve/tree/main/demo/graphql)
-- [Chinese Documentation](./graphql-integration.zh.md)
+- [Chinese Documentation](./graphql.zh.md)
 - [API Reference](https://allmonday.github.io/pydantic-resolve/api/)

@@ -4,6 +4,145 @@
 
 `pydantic-resolve` 提供了框架无关的 `GraphQLHandler` 核心来执行 GraphQL 查询。本指南展示如何将其集成到各种 Web 框架中。
 
+## 定义实体和查询/变更
+
+pydantic-resolve 支持两种配置方式来定义实体及其 GraphQL 操作。
+
+### 方式一：BaseEntity + 装饰器
+
+定义继承自 `BaseEntity` 的实体，使用装饰器来声明查询和变更：
+
+```python
+from pydantic import BaseModel
+from typing import List, Optional
+from pydantic_resolve import base_entity, query, mutation, Relationship
+
+BaseEntity = base_entity()
+
+class UserEntity(BaseModel, BaseEntity):
+    __relationships__ = [
+        Relationship(field='id', target_kls=list['PostEntity'],
+                     loader=user_posts_loader, default_field_name='myposts')
+    ]
+    id: int
+    name: str
+    email: str
+
+    @query(name='users')
+    async def get_all(cls, limit: int = 10) -> List['UserEntity']:
+        return await fetch_users(limit)
+
+    @mutation(name='createUser')
+    async def create(cls, name: str, email: str) -> 'UserEntity':
+        return await create_user(name, email)
+
+# 使用 BaseEntity.get_diagram() 获取 ErDiagram
+handler = GraphQLHandler(BaseEntity.get_diagram())
+```
+
+### 方式二：ErDiagram + QueryConfig/MutationConfig
+
+定义纯 Pydantic 模型，在外部进行配置：
+
+```python
+from pydantic import BaseModel
+from typing import List, Optional
+from pydantic_resolve import Entity, ErDiagram, QueryConfig, MutationConfig, Relationship
+
+class UserEntity(BaseModel):  # 仅继承 BaseModel，不继承 BaseEntity
+    id: int
+    name: str
+    email: str
+
+# 独立的查询函数（无需 cls 参数）
+async def get_all_users(limit: int = 10) -> List[UserEntity]:
+    return await fetch_users(limit)
+
+# 创建 ErDiagram 并配置
+diagram = ErDiagram(configs=[
+    Entity(
+        kls=UserEntity,
+        relationships=[
+            Relationship(field='id', target_kls=list[PostEntity],
+                         loader=user_posts_loader, default_field_name='myposts')
+        ],
+        queries=[
+            QueryConfig(method=get_all_users, name='users', description='获取所有用户'),
+        ],
+        mutations=[
+            MutationConfig(method=create_user, name='createUser', description='创建用户'),
+        ]
+    ),
+])
+
+handler = GraphQLHandler(diagram)
+```
+
+### 对比
+
+| 特性 | BaseEntity + 装饰器 | ErDiagram + Config |
+|-----|-------------------|-------------------|
+| 类继承 | `BaseModel, BaseEntity` | 仅 `BaseModel` |
+| 查询/变更位置 | 类内部 | 外部函数 |
+| cls 参数 | 方法中必需 | 不需要 |
+| 配置风格 | 装饰器 | 显式配置对象 |
+| 适用场景 | 自包含实体 | 关注点分离 |
+
+## 核心概念
+
+### default_field_name
+
+定义嵌套查询的 GraphQL 字段名：
+
+```python
+Relationship(
+    field='author_id',           # 实体中的外键字段
+    target_kls=UserEntity,       # 目标实体
+    loader=user_loader,          # DataLoader 函数
+    default_field_name='author'  # GraphQL 字段名
+)
+```
+
+这允许如下查询：
+```graphql
+{
+  posts {
+    title
+    author { name }  # 使用 default_field_name
+  }
+}
+```
+
+**注意：** `default_field_name` 不能与实体中已有的标量字段冲突。
+
+### @query 装饰器
+
+将类方法标记为 GraphQL 根查询：
+
+```python
+@query(name='users', description='获取所有用户')
+async def get_all(cls, limit: int = 10) -> List['UserEntity']:
+    return await fetch_users(limit)
+```
+
+- 方法自动转换为类方法
+- `name`：GraphQL 查询名称（默认为方法名的驼峰形式）
+- `description`：GraphQL schema 描述
+
+### @mutation 装饰器
+
+将类方法标记为 GraphQL 变更：
+
+```python
+@mutation(name='createUser', description='创建新用户')
+async def create_user(cls, name: str, email: str) -> 'UserEntity':
+    return await create_user_in_db(name, email)
+```
+
+- 返回类型决定 GraphQL 输出类型
+- `Optional[T]` -> 可空，`T` -> 非空
+- `list[T]` -> `[T!]!`（非空列表，元素非空）
+
 ## GraphQLHandler API
 
 ### 构造函数
@@ -334,5 +473,5 @@ async def graphql_endpoint(req: GraphQLRequest):
 ## 相关资源
 
 - [GraphQL Demo](https://github.com/allmonday/pydantic-resolve/tree/main/demo/graphql)
-- [英文文档](./graphql-integration.md)
+- [英文文档](./graphql.md)
 - [API 参考](https://allmonday.github.io/pydantic-resolve/api/)

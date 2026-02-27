@@ -42,6 +42,7 @@ nav:
       - Inherit and reuse: ./inherit_reuse.md
       - Expose and collect: ./expose_and_collect.md
       - Connect to UI: ./connect_to_ui.md
+      - GraphQL Support: ./graphql.md
   - API:
       - Reference: ./api.md
       - Change log: ./changelog.md
@@ -83,6 +84,7 @@ plugins:
             Expose and collect: "提供和收集"
             Reference: "文档"
             Connect to UI: "连接UI"
+            GraphQL Support: "GraphQL 支持"
             ERD Driven Pattern: "ERD 驱动开发"
             Change log: "变更记录"
             Install: "安装"
