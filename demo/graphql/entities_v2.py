@@ -1,15 +1,18 @@
 """
-V2 实体定义 - 验证 ErDiagram 方式与 @query/@mutation 装饰器结合使用
+V2 实体定义 - 使用 QueryConfig/MutationConfig 配置化方式
 
 与 entities.py 的区别：
 - 不继承 BaseEntity，只继承 BaseModel
 - 关系定义从类内部移到外部的 ErDiagram
-- @query/@mutation 装饰器正常使用
+- Query/Mutation 方法通过 QueryConfig/MutationConfig 配置，而非装饰器
 """
 
 from typing import List, Optional, Dict
 from pydantic import BaseModel, Field
-from pydantic_resolve import query, mutation, Relationship, ErDiagram, Entity, config_global_resolver
+from pydantic_resolve import (
+    Relationship, ErDiagram, Entity,
+    QueryConfig, MutationConfig, config_global_resolver
+)
 from pydantic_resolve.utils.dataloader import build_list, build_object
 
 
@@ -42,8 +45,7 @@ comment_id_counter_v2 = 0
 
 
 # =====================================
-# 实体类定义（不继承 BaseEntity）
-# 注意：所有类必须先定义，然后在 ErDiagram 中使用直接引用
+# 实体类定义（不继承 BaseEntity，不含 @query/@mutation）
 # =====================================
 
 class CommentEntityV2(BaseModel):
@@ -55,25 +57,6 @@ class CommentEntityV2(BaseModel):
     text: str = Field(description="评论内容")
     author_id: int = Field(description="评论者用户ID")
     post_id: int = Field(description="被评论的文章ID")
-
-    @query(name='comments_v2')
-    async def get_all(cls) -> List['CommentEntityV2']:
-        """获取所有评论"""
-        return list(comments_db_v2.values())
-
-    @mutation(name='createCommentV2')
-    async def create_comment(cls, text: str, author_id: int, post_id: int) -> 'CommentEntityV2':
-        """创建新评论并返回创建的评论对象"""
-        global comment_id_counter_v2
-        comment_id_counter_v2 += 1
-        new_comment = CommentEntityV2(
-            id=comment_id_counter_v2,
-            text=text,
-            author_id=author_id,
-            post_id=post_id
-        )
-        comments_db_v2[comment_id_counter_v2] = new_comment
-        return new_comment
 
 
 class PostEntityV2(BaseModel):
@@ -87,49 +70,6 @@ class PostEntityV2(BaseModel):
     author_id: int = Field(description="作者用户ID")
     status: str = Field(description="文章状态（published/draft）")
 
-    @query(name='posts_v2')
-    async def get_all(cls, limit: int = 10, status: Optional[str] = None) -> List['PostEntityV2']:
-        """获取所有文章（可按状态筛选）"""
-        all_posts = list(posts_db_v2.values())
-        if status:
-            return [p for p in all_posts if p.status == status][:limit]
-        return all_posts[:limit]
-
-    @query(name='post_v2')
-    async def get_by_id(cls, id: int) -> Optional['PostEntityV2']:
-        """根据 ID 获取文章"""
-        return posts_db_v2.get(id)
-
-    @mutation(name='createPostV2')
-    async def create_post(cls, title: str, content: str, author_id: int, status: str = 'draft') -> 'PostEntityV2':
-        """创建新文章并返回创建的文章对象"""
-        global post_id_counter_v2
-        post_id_counter_v2 += 1
-        new_post = PostEntityV2(
-            id=post_id_counter_v2,
-            title=title,
-            content=content,
-            author_id=author_id,
-            status=status
-        )
-        posts_db_v2[post_id_counter_v2] = new_post
-        return new_post
-
-    @mutation(name='createPostWithInputV2')
-    async def create_post_with_input(cls, input: CreatePostInput) -> 'PostEntityV2':
-        """使用 Input Type 创建新文章"""
-        global post_id_counter_v2
-        post_id_counter_v2 += 1
-        new_post = PostEntityV2(
-            id=post_id_counter_v2,
-            title=input.title,
-            content=input.content,
-            author_id=input.author_id,
-            status=input.status
-        )
-        posts_db_v2[post_id_counter_v2] = new_post
-        return new_post
-
 
 class UserEntityV2(BaseModel):
     """用户实体 V2 - 不继承 BaseEntity
@@ -140,45 +80,6 @@ class UserEntityV2(BaseModel):
     name: str = Field(description="用户姓名")
     email: str = Field(description="用户邮箱地址")
     role: str = Field(description="用户角色（admin/user）")
-
-    @query(name='users_v2')
-    async def get_all(cls, limit: int = 10, offset: int = 0) -> List['UserEntityV2']:
-        """获取所有用户（分页）"""
-        all_users = list(users_db_v2.values())
-        return all_users[offset:offset + limit]
-
-    @query(name='user_v2')
-    async def get_by_id(cls, id: int) -> Optional['UserEntityV2']:
-        """根据 ID 获取用户"""
-        return users_db_v2.get(id)
-
-    @mutation(name='createUserV2')
-    async def create_user(cls, name: str, email: str, role: str = 'user') -> 'UserEntityV2':
-        """创建新用户并返回创建的用户对象"""
-        global user_id_counter_v2
-        user_id_counter_v2 += 1
-        new_user = UserEntityV2(
-            id=user_id_counter_v2,
-            name=name,
-            email=email,
-            role=role
-        )
-        users_db_v2[user_id_counter_v2] = new_user
-        return new_user
-
-    @mutation(name='createUserWithInputV2')
-    async def create_user_with_input(cls, input: CreateUserInput) -> 'UserEntityV2':
-        """使用 Input Type 创建新用户"""
-        global user_id_counter_v2
-        user_id_counter_v2 += 1
-        new_user = UserEntityV2(
-            id=user_id_counter_v2,
-            name=input.name,
-            email=input.email,
-            role=input.role
-        )
-        users_db_v2[user_id_counter_v2] = new_user
-        return new_user
 
 
 # =====================================
@@ -210,27 +111,166 @@ async def post_comments_loader_v2(post_ids: List[int]) -> List[List[dict]]:
 
 
 # =====================================
-# 手动创建 ErDiagram（关系定义移到这里）
-# 注意：使用直接类引用，而不是字符串 ForwardRef
+# Query 方法定义（外部函数，无需 cls 参数）
+# =====================================
+
+async def get_all_comments() -> List[CommentEntityV2]:
+    """获取所有评论"""
+    return list(comments_db_v2.values())
+
+
+async def get_all_posts(limit: int = 10, status: Optional[str] = None) -> List[PostEntityV2]:
+    """获取所有文章（可按状态筛选）"""
+    all_posts = list(posts_db_v2.values())
+    if status:
+        return [p for p in all_posts if p.status == status][:limit]
+    return all_posts[:limit]
+
+
+async def get_post_by_id(id: int) -> Optional[PostEntityV2]:
+    """根据 ID 获取文章"""
+    return posts_db_v2.get(id)
+
+
+async def get_all_users(limit: int = 10, offset: int = 0) -> List[UserEntityV2]:
+    """获取所有用户（分页）"""
+    all_users = list(users_db_v2.values())
+    return all_users[offset:offset + limit]
+
+
+async def get_user_by_id(id: int) -> Optional[UserEntityV2]:
+    """根据 ID 获取用户"""
+    return users_db_v2.get(id)
+
+
+# =====================================
+# Mutation 方法定义（外部函数，无需 cls 参数）
+# =====================================
+
+async def create_comment(text: str, author_id: int, post_id: int) -> CommentEntityV2:
+    """创建新评论并返回创建的评论对象"""
+    global comment_id_counter_v2
+    comment_id_counter_v2 += 1
+    new_comment = CommentEntityV2(
+        id=comment_id_counter_v2,
+        text=text,
+        author_id=author_id,
+        post_id=post_id
+    )
+    comments_db_v2[comment_id_counter_v2] = new_comment
+    return new_comment
+
+
+async def create_post(title: str, content: str, author_id: int, status: str = 'draft') -> PostEntityV2:
+    """创建新文章并返回创建的文章对象"""
+    global post_id_counter_v2
+    post_id_counter_v2 += 1
+    new_post = PostEntityV2(
+        id=post_id_counter_v2,
+        title=title,
+        content=content,
+        author_id=author_id,
+        status=status
+    )
+    posts_db_v2[post_id_counter_v2] = new_post
+    return new_post
+
+
+async def create_post_with_input(input: CreatePostInput) -> PostEntityV2:
+    """使用 Input Type 创建新文章"""
+    global post_id_counter_v2
+    post_id_counter_v2 += 1
+    new_post = PostEntityV2(
+        id=post_id_counter_v2,
+        title=input.title,
+        content=input.content,
+        author_id=input.author_id,
+        status=input.status
+    )
+    posts_db_v2[post_id_counter_v2] = new_post
+    return new_post
+
+
+async def create_user(name: str, email: str, role: str = 'user') -> UserEntityV2:
+    """创建新用户并返回创建的用户对象"""
+    global user_id_counter_v2
+    user_id_counter_v2 += 1
+    new_user = UserEntityV2(
+        id=user_id_counter_v2,
+        name=name,
+        email=email,
+        role=role
+    )
+    users_db_v2[user_id_counter_v2] = new_user
+    return new_user
+
+
+async def create_user_with_input(input: CreateUserInput) -> UserEntityV2:
+    """使用 Input Type 创建新用户"""
+    global user_id_counter_v2
+    user_id_counter_v2 += 1
+    new_user = UserEntityV2(
+        id=user_id_counter_v2,
+        name=input.name,
+        email=input.email,
+        role=input.role
+    )
+    users_db_v2[user_id_counter_v2] = new_user
+    return new_user
+
+
+# =====================================
+# 手动创建 ErDiagram（关系定义 + QueryConfig/MutationConfig）
 # =====================================
 
 diagram_v2 = ErDiagram(configs=[
-    Entity(kls=UserEntityV2, relationships=[
-        Relationship(field='id', target_kls=list[PostEntityV2],
-                     loader=user_posts_loader_v2, default_field_name='myposts')
-    ]),
-    Entity(kls=PostEntityV2, relationships=[
-        Relationship(field='author_id', target_kls=UserEntityV2,
-                     loader=user_loader_v2, default_field_name='author'),
-        Relationship(field='id', target_kls=list[CommentEntityV2],
-                     loader=post_comments_loader_v2, default_field_name='comments')
-    ]),
-    Entity(kls=CommentEntityV2, relationships=[
-        Relationship(field='author_id', target_kls=UserEntityV2,
-                     loader=user_loader_v2, default_field_name='author'),
-        Relationship(field='post_id', target_kls=PostEntityV2,
-                     loader=post_loader_v2, default_field_name='post')
-    ]),
+    Entity(
+        kls=UserEntityV2,
+        relationships=[
+            Relationship(field='id', target_kls=list[PostEntityV2],
+                         loader=user_posts_loader_v2, default_field_name='myposts')
+        ],
+        queries=[
+            QueryConfig(method=get_all_users, name='users_v2', description='获取所有用户（分页）'),
+            QueryConfig(method=get_user_by_id, name='user_v2', description='根据 ID 获取用户'),
+        ],
+        mutations=[
+            MutationConfig(method=create_user, name='createUserV2', description='创建新用户'),
+            MutationConfig(method=create_user_with_input, name='createUserWithInputV2', description='使用 Input Type 创建新用户'),
+        ]
+    ),
+    Entity(
+        kls=PostEntityV2,
+        relationships=[
+            Relationship(field='author_id', target_kls=UserEntityV2,
+                         loader=user_loader_v2, default_field_name='author'),
+            Relationship(field='id', target_kls=list[CommentEntityV2],
+                         loader=post_comments_loader_v2, default_field_name='comments')
+        ],
+        queries=[
+            QueryConfig(method=get_all_posts, name='posts_v2', description='获取所有文章（可按状态筛选）'),
+            QueryConfig(method=get_post_by_id, name='post_v2', description='根据 ID 获取文章'),
+        ],
+        mutations=[
+            MutationConfig(method=create_post, name='createPostV2', description='创建新文章'),
+            MutationConfig(method=create_post_with_input, name='createPostWithInputV2', description='使用 Input Type 创建新文章'),
+        ]
+    ),
+    Entity(
+        kls=CommentEntityV2,
+        relationships=[
+            Relationship(field='author_id', target_kls=UserEntityV2,
+                         loader=user_loader_v2, default_field_name='author'),
+            Relationship(field='post_id', target_kls=PostEntityV2,
+                         loader=post_loader_v2, default_field_name='post')
+        ],
+        queries=[
+            QueryConfig(method=get_all_comments, name='comments_v2', description='获取所有评论'),
+        ],
+        mutations=[
+            MutationConfig(method=create_comment, name='createCommentV2', description='创建新评论'),
+        ]
+    ),
 ])
 
 

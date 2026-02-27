@@ -11,14 +11,14 @@ from pydantic_resolve.utils.depend import LoaderDepend
 
 
 class QueryConfig(BaseModel):
-    """Query 方法配置，用于在 Entity 外部定义 Query 方法并动态绑定。"""
+    """Query method configuration for defining Query methods outside Entity and binding dynamically."""
     method: Callable
     name: Optional[str] = None
     description: Optional[str] = None
 
 
 class MutationConfig(BaseModel):
-    """Mutation 方法配置，用于在 Entity 外部定义 Mutation 方法并动态绑定。"""
+    """Mutation method configuration for defining Mutation methods outside Entity and binding dynamically."""
     method: Callable
     name: Optional[str] = None
     description: Optional[str] = None
@@ -41,15 +41,15 @@ class BaseLinkProps(BaseModel):
 
     loader: Callable | None = None
 
-    # GraphQL 查询字段名（用于暴露嵌套查询）
+    # GraphQL query field name (for exposing nested queries)
     default_field_name: str | None = None
 
 class Link(BaseLinkProps):
     biz: str
 
     # specific a loader which only return one field of target model
-    field_name: str | None = None  
-    
+    field_name: str | None = None
+
 class MultipleRelationship(BaseModel):
     field: str  # fk name
     # use biz to distinguish multiple same target_kls under same field
@@ -112,29 +112,29 @@ class Entity(BaseModel):
                 )
             seen.add(key)
 
-        # 验证 default_field_name 冲突
+        # Validate default_field_name conflicts
         self._validate_field_name_conflicts()
 
         return self
 
     def _validate_field_name_conflicts(self) -> None:
-        """检测 default_field_name 的命名冲突。"""
+        """Detect naming conflicts for default_field_name."""
         from typing import get_type_hints
 
-        # 1. 收集标量字段
+        # 1. Collect scalar fields
         try:
             scalar_fields = set(get_type_hints(self.kls).keys())
         except Exception:
             scalar_fields = set()
 
-        # 2. 收集关系字段的 default_field_name
-        # 使用元组 (source_type, source_info) 来跟踪来源
-        # source_type: 'Relationship' 或 'Link'
-        # source_info: 关系的详细信息
+        # 2. Collect default_field_name from relationship fields
+        # Use tuple (source_type, source_info) to track the source
+        # source_type: 'Relationship' or 'Link'
+        # source_info: detailed information about the relationship
         relationship_fields = {}
 
         def _get_rel_source_info(rel, link=None):
-            """获取关系来源的描述信息"""
+            """Get description information about the relationship source."""
             if isinstance(rel, Relationship):
                 return ('Relationship', f"Relationship(field={rel.field})")
             elif isinstance(rel, MultipleRelationship) and link:
@@ -146,7 +146,7 @@ class Entity(BaseModel):
                 field_name = rel.default_field_name
                 source_type, source_info = _get_rel_source_info(rel)
 
-                # 检查重复的关系字段
+                # Check for duplicate relationship fields
                 if field_name in relationship_fields:
                     prev_source_type, prev_source_info = relationship_fields[field_name]
                     raise ValueError(
@@ -157,7 +157,7 @@ class Entity(BaseModel):
 
                 relationship_fields[field_name] = (source_type, source_info)
 
-                # 检查与标量字段的冲突
+                # Check for conflicts with scalar fields
                 if field_name in scalar_fields:
                     raise ValueError(
                         f"Field name conflict in {self.kls.__name__}: '{field_name}' - "
@@ -166,13 +166,13 @@ class Entity(BaseModel):
                     )
 
             elif isinstance(rel, MultipleRelationship):
-                # 检查 MultipleRelationship 的 links
+                # Check MultipleRelationship's links
                 for link in rel.links:
                     if link.default_field_name:
                         field_name = link.default_field_name
                         source_type, source_info = _get_rel_source_info(rel, link)
 
-                        # 检查重复的关系字段
+                        # Check for duplicate relationship fields
                         if field_name in relationship_fields:
                             prev_source_type, prev_source_info = relationship_fields[field_name]
                             raise ValueError(
@@ -183,7 +183,7 @@ class Entity(BaseModel):
 
                         relationship_fields[field_name] = (source_type, source_info)
 
-                        # 检查与标量字段的冲突
+                        # Check for conflicts with scalar fields
                         if field_name in scalar_fields:
                             raise ValueError(
                                 f"Field name conflict in {self.kls.__name__}: '{field_name}' - "
@@ -191,8 +191,8 @@ class Entity(BaseModel):
                                 f"{source_info}, target_kls={rel.target_kls}"
                             )
 
-        # 3. 检查与父类字段的冲突
-        for base_cls in self.kls.__mro__[1:]:  # 跳过自身
+        # 3. Check for conflicts with parent class fields
+        for base_cls in self.kls.__mro__[1:]:  # Skip self
             if base_cls is object:
                 continue
             try:
@@ -234,16 +234,21 @@ class ErDiagram(BaseModel):
                 )
             seen_names[class_name] = kls
 
-        # 动态绑定 queries 和 mutations
+        # Dynamically bind queries and mutations
         self._bind_query_mutation_methods()
         return self
 
     description: str | None = None
 
     def _bind_query_mutation_methods(self) -> None:
-        """将 queries/mutations 配置中的方法动态绑定到 Entity 类。
+        """Dynamically bind methods from queries/mutations config to Entity classes.
 
-        使用包装器自动忽略 cls 参数，让用户方法看起来像普通函数。
+        Uses a wrapper to automatically ignore the cls parameter, making user methods
+        look like regular functions.
+
+        Raises:
+            ValueError: If a pydantic-resolve method with the same name already exists
+                on the target class (defined via decorator)
         """
         for entity_cfg in self.configs:
             kls = entity_cfg.kls
@@ -252,34 +257,66 @@ class ErDiagram(BaseModel):
                 method = query_cfg.method
                 method_name = method.__name__
 
-                # 创建包装器，自动忽略 cls 参数
+                # Conflict detection: check if a pydantic-resolve method with the same name exists
+                # Only detect methods defined via decorator (with _pydantic_resolve_decorator marker)
+                # Do not detect config-bound methods (allow re-binding for idempotency)
+                if method_name in kls.__dict__:
+                    existing = kls.__dict__[method_name]
+                    func = getattr(existing, '__func__', existing)
+                    # Check if the method is defined via decorator (not config-bound)
+                    if hasattr(func, '_pydantic_resolve_query') or hasattr(func, '_pydantic_resolve_mutation'):
+                        # If the method is from decorator, raise exception
+                        if not hasattr(func, '_pydantic_resolve_config_bound'):
+                            raise ValueError(
+                                f"Method '{method_name}' already exists in {kls.__name__} "
+                                f"(defined via @query/@mutation decorator). "
+                                f"Cannot bind QueryConfig method with the same name. "
+                                f"Use either decorator OR QueryConfig, not both."
+                            )
+
+                # Create wrapper that automatically ignores cls parameter
                 @functools.wraps(method)
                 def query_wrapper(cls, *args, _method=method, **kwargs):
                     return _method(*args, **kwargs)
 
-                # 设置元数据（与 @query 装饰器一致）
+                # Set metadata (consistent with @query decorator)
                 query_wrapper._pydantic_resolve_query = True
                 query_wrapper._pydantic_resolve_query_name = query_cfg.name
                 query_wrapper._pydantic_resolve_query_description = query_cfg.description
+                query_wrapper._pydantic_resolve_config_bound = True  # Mark as config-bound
 
-                # 绑定为 classmethod
+                # Bind as classmethod
                 setattr(kls, method_name, classmethod(query_wrapper))
 
             for mutation_cfg in entity_cfg.mutations:
                 method = mutation_cfg.method
                 method_name = method.__name__
 
-                # 创建包装器，自动忽略 cls 参数
+                # Conflict detection: check if a pydantic-resolve method with the same name exists
+                if method_name in kls.__dict__:
+                    existing = kls.__dict__[method_name]
+                    func = getattr(existing, '__func__', existing)
+                    if hasattr(func, '_pydantic_resolve_query') or hasattr(func, '_pydantic_resolve_mutation'):
+                        if not hasattr(func, '_pydantic_resolve_config_bound'):
+                            raise ValueError(
+                                f"Method '{method_name}' already exists in {kls.__name__} "
+                                f"(defined via @query/@mutation decorator). "
+                                f"Cannot bind MutationConfig method with the same name. "
+                                f"Use either decorator OR MutationConfig, not both."
+                            )
+
+                # Create wrapper that automatically ignores cls parameter
                 @functools.wraps(method)
                 def mutation_wrapper(cls, *args, _method=method, **kwargs):
                     return _method(*args, **kwargs)
 
-                # 设置元数据（与 @mutation 装饰器一致）
+                # Set metadata (consistent with @mutation decorator)
                 mutation_wrapper._pydantic_resolve_mutation = True
                 mutation_wrapper._pydantic_resolve_mutation_name = mutation_cfg.name
                 mutation_wrapper._pydantic_resolve_mutation_description = mutation_cfg.description
+                mutation_wrapper._pydantic_resolve_config_bound = True  # Mark as config-bound
 
-                # 绑定为 classmethod
+                # Bind as classmethod
                 setattr(kls, method_name, classmethod(mutation_wrapper))
 
 
@@ -420,7 +457,7 @@ class ErLoaderPreGenerator:
 
             if isinstance(rel, Relationship) and class_util.is_compatible_type(target_kls, rel.target_kls):
                 return rel
-            
+
             elif isinstance(rel, MultipleRelationship):
                 for link in rel.links:
                     if link.biz == loader_info.biz:
@@ -453,7 +490,7 @@ class ErLoaderPreGenerator:
         auto_loader_fields = list(_get_pydantic_field_items_with_load_by(kls))
 
         if not auto_loader_fields:
-            return 
+            return
 
         if self.er_configs_map is None:
             raise ValueError('er_configs_map is None, cannot identify config')
@@ -545,4 +582,3 @@ def _get_pydantic_field_items_with_load_by(kls) -> Iterator[tuple[str, LoaderInf
         for meta in metadata:
             if isinstance(meta, LoaderInfo):
                 yield name, meta, v.annotation
-

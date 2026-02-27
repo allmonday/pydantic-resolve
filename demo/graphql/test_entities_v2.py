@@ -9,16 +9,11 @@
 """
 
 import pytest
-import asyncio
 from demo.graphql.entities_v2 import (
     diagram_v2,
     UserEntityV2,
     PostEntityV2,
-    CommentEntityV2,
     init_db_v2,
-    users_db_v2,
-    posts_db_v2,
-    comments_db_v2,
 )
 from pydantic_resolve.graphql import GraphQLHandler
 from pydantic_resolve import config_global_resolver

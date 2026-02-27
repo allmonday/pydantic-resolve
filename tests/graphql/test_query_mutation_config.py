@@ -114,7 +114,7 @@ class TestErDiagramBinding:
 
     def test_bind_query_to_entity(self):
         """测试将 Query 方法绑定到 Entity"""
-        diagram = ErDiagram(configs=[
+        _diagram = ErDiagram(configs=[
             Entity(
                 kls=UserEntityForConfig,
                 relationships=[],
@@ -135,7 +135,7 @@ class TestErDiagramBinding:
 
     def test_bind_mutation_to_entity(self):
         """测试将 Mutation 方法绑定到 Entity"""
-        diagram = ErDiagram(configs=[
+        _diagram = ErDiagram(configs=[
             Entity(
                 kls=PostEntityForConfig,
                 relationships=[],
@@ -156,7 +156,7 @@ class TestErDiagramBinding:
 
     def test_wrapper_ignores_cls_parameter(self):
         """测试包装器自动忽略 cls 参数"""
-        diagram = ErDiagram(configs=[
+        _diagram = ErDiagram(configs=[
             Entity(
                 kls=UserEntityForConfig,
                 relationships=[],
@@ -175,7 +175,7 @@ class TestErDiagramBinding:
 
     def test_method_callable_without_cls(self):
         """测试绑定后的方法可以正常调用（无需传递 cls）"""
-        diagram = ErDiagram(configs=[
+        _diagram = ErDiagram(configs=[
             Entity(
                 kls=UserEntityForConfig,
                 relationships=[],
@@ -330,3 +330,60 @@ class TestEntityDefaultValues:
         assert entity.relationships == []
         assert len(entity.queries) == 1
         assert entity.mutations == []
+
+
+# ========== 冲突检测测试用的独立实体 ==========
+class UserWithDecoratorForConflict(BaseModel):
+    """用于测试冲突检测的实体，带装饰器方法"""
+    id: int
+    name: str
+
+    @query(name='allUsers')
+    async def get_all(cls, limit: int = 10) -> List['UserWithDecoratorForConflict']:
+        return []
+
+
+class EntityWithMutationForConflict(BaseModel):
+    """用于测试冲突检测的实体，带装饰器方法"""
+    id: int
+
+    @mutation(name='delete')
+    async def delete_entity(cls, id: int) -> bool:
+        return True
+
+
+class TestMethodConflictDetection:
+    """测试方法冲突检测"""
+
+    def test_query_conflict_with_decorator(self):
+        """测试 QueryConfig 与装饰器定义的方法冲突时抛出异常"""
+        # UserWithDecoratorForConflict 已通过 @query 装饰器定义了 get_all 方法
+        # 尝试用 QueryConfig 绑定同名方法应该抛出异常
+
+        # 方法名必须与现有方法名相同才能触发冲突检测
+        async def get_all(cls, limit: int = 10) -> List[UserWithDecoratorForConflict]:
+            return []
+
+        with pytest.raises(ValueError, match="Method 'get_all' already exists in UserWithDecoratorForConflict"):
+            ErDiagram(configs=[
+                Entity(
+                    kls=UserWithDecoratorForConflict,
+                    relationships=[],
+                    queries=[QueryConfig(method=get_all, name='users')]
+                )
+            ])
+
+    def test_mutation_conflict_with_decorator(self):
+        """测试 MutationConfig 与装饰器定义的方法冲突时抛出异常"""
+        # 方法名必须与现有方法名相同才能触发冲突检测
+        async def delete_entity(cls, id: int) -> bool:
+            return False
+
+        with pytest.raises(ValueError, match="Method 'delete_entity' already exists in EntityWithMutationForConflict"):
+            ErDiagram(configs=[
+                Entity(
+                    kls=EntityWithMutationForConflict,
+                    relationships=[],
+                    mutations=[MutationConfig(method=delete_entity, name='delete')]
+                )
+            ])
