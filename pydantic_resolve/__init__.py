@@ -15,7 +15,7 @@ from .utils.depend import LoaderDepend, Loader
 from .utils.subset import DefineSubset, SubsetConfig
 from .utils.openapi import (
     model_config, serialization)
-from .utils.er_diagram import Relationship, MultipleRelationship, Link, Entity, ErDiagram, LoadBy, base_entity
+from .utils.er_diagram import Relationship, MultipleRelationship, Link, Entity, ErDiagram, LoadBy, base_entity, QueryConfig, MutationConfig
 from .utils.resolver_configurator import config_resolver, config_global_resolver, reset_global_resolver
 from .utils.expose import ExposeAs
 
@@ -59,6 +59,8 @@ __all__ = [
     'ErDiagram',
     'LoadBy',
     'base_entity',
+    'QueryConfig',
+    'MutationConfig',
 
     'config_resolver',
     'config_global_resolver',

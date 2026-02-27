@@ -1,12 +1,27 @@
 from dataclasses import dataclass
-from typing import Iterator, Any, Callable
+from typing import Iterator, Any, Callable, Optional
 from pydantic import BaseModel, model_validator, Field
 import warnings
 import importlib
+import functools
 
 import pydantic_resolve.constant as const
 from pydantic_resolve.utils import class_util, types
 from pydantic_resolve.utils.depend import LoaderDepend
+
+
+class QueryConfig(BaseModel):
+    """Query 方法配置，用于在 Entity 外部定义 Query 方法并动态绑定。"""
+    method: Callable
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
+class MutationConfig(BaseModel):
+    """Mutation 方法配置，用于在 Entity 外部定义 Mutation 方法并动态绑定。"""
+    method: Callable
+    name: Optional[str] = None
+    description: Optional[str] = None
 
 
 class BaseLinkProps(BaseModel):
@@ -71,7 +86,9 @@ class Relationship(BaseLinkProps):
 
 class Entity(BaseModel):
     kls: type[BaseModel]
-    relationships: list[Relationship | MultipleRelationship]
+    relationships: list[Relationship | MultipleRelationship] = Field(default_factory=list)
+    queries: list[QueryConfig] = Field(default_factory=list)
+    mutations: list[MutationConfig] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _validate_relationships(self) -> "Entity":
@@ -216,9 +233,54 @@ class ErDiagram(BaseModel):
                     f"Conflict: {existing_module}.{class_name} vs {current_module}.{class_name}"
                 )
             seen_names[class_name] = kls
+
+        # 动态绑定 queries 和 mutations
+        self._bind_query_mutation_methods()
         return self
 
     description: str | None = None
+
+    def _bind_query_mutation_methods(self) -> None:
+        """将 queries/mutations 配置中的方法动态绑定到 Entity 类。
+
+        使用包装器自动忽略 cls 参数，让用户方法看起来像普通函数。
+        """
+        for entity_cfg in self.configs:
+            kls = entity_cfg.kls
+
+            for query_cfg in entity_cfg.queries:
+                method = query_cfg.method
+                method_name = method.__name__
+
+                # 创建包装器，自动忽略 cls 参数
+                @functools.wraps(method)
+                def query_wrapper(cls, *args, _method=method, **kwargs):
+                    return _method(*args, **kwargs)
+
+                # 设置元数据（与 @query 装饰器一致）
+                query_wrapper._pydantic_resolve_query = True
+                query_wrapper._pydantic_resolve_query_name = query_cfg.name
+                query_wrapper._pydantic_resolve_query_description = query_cfg.description
+
+                # 绑定为 classmethod
+                setattr(kls, method_name, classmethod(query_wrapper))
+
+            for mutation_cfg in entity_cfg.mutations:
+                method = mutation_cfg.method
+                method_name = method.__name__
+
+                # 创建包装器，自动忽略 cls 参数
+                @functools.wraps(method)
+                def mutation_wrapper(cls, *args, _method=method, **kwargs):
+                    return _method(*args, **kwargs)
+
+                # 设置元数据（与 @mutation 装饰器一致）
+                mutation_wrapper._pydantic_resolve_mutation = True
+                mutation_wrapper._pydantic_resolve_mutation_name = mutation_cfg.name
+                mutation_wrapper._pydantic_resolve_mutation_description = mutation_cfg.description
+
+                # 绑定为 classmethod
+                setattr(kls, method_name, classmethod(mutation_wrapper))
 
 
 class BaseEntity:  # just type (TODO: optimize)
