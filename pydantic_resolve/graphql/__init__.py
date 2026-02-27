@@ -10,8 +10,7 @@ import warnings
 
 # Core imports (require graphql-core)
 try:
-    from .query_decorator import query
-    from .mutation_decorator import mutation
+    from .decorator import query, mutation
     from .query_parser import QueryParser
     from .schema_builder import SchemaBuilder
     from .response_builder import ResponseBuilder

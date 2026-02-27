@@ -20,8 +20,7 @@ from .utils.resolver_configurator import config_resolver, config_global_resolver
 from .utils.expose import ExposeAs
 
 # GraphQL support
-from .graphql.query_decorator import query
-from .graphql.mutation_decorator import mutation
+from .graphql.decorator import query, mutation
 from .graphql.schema_builder import SchemaBuilder
 from .graphql.handler import GraphQLHandler
 
