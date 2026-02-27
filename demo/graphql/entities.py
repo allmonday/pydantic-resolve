@@ -214,6 +214,12 @@ class PostEntity(BaseModel, BaseEntity):
         """根据 ID 获取文章"""
         return posts_db.get(id)
 
+    @query(name='postComments')
+    async def get_comments(cls, post_id: int, limit: int = 10, offset: int = 0) -> List['CommentEntity']:
+        """获取指定文章的评论（分页）"""
+        comments = [c for c in comments_db.values() if c.post_id == post_id]
+        return comments[offset:offset + limit]
+
     @mutation(name='createPost', description='创建新文章')
     async def create_post(cls, title: str, content: str, author_id: int, status: str = 'draft') -> 'PostEntity':
         """创建新文章并返回创建的文章对象"""

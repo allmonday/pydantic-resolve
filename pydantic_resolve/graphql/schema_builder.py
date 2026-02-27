@@ -3,7 +3,7 @@ GraphQL Schema generator from ERD and @query decorated methods.
 """
 
 import inspect
-from typing import Dict, List, get_args, get_origin, get_type_hints
+from typing import Dict, ForwardRef, List, get_args, get_origin, get_type_hints
 from pydantic import BaseModel
 
 from ..utils.er_diagram import ErDiagram, Relationship
@@ -382,6 +382,14 @@ class SchemaBuilder:
         core_type = core_types[0]
         origin = get_origin(python_type)
 
+        # Handle ForwardRef (string type references like 'CommentEntity')
+        if isinstance(core_type, ForwardRef):
+            type_name = core_type.__forward_arg__
+            entity_kls = self._get_entity_by_name(type_name)
+            if entity_kls:
+                # Continue processing with the resolved class
+                core_type = entity_kls
+
         # Check if it's list[T]
         is_list = origin is list or (
             hasattr(python_type, '__origin__') and
@@ -400,6 +408,21 @@ class SchemaBuilder:
                 # Scalar type
                 scalar_name = map_scalar_type(core_type)
                 return f"{scalar_name}!"
+
+    def _get_entity_by_name(self, name: str):
+        """
+        Find entity class by name from ERD
+
+        Args:
+            name: Entity class name
+
+        Returns:
+            Entity class if found, None otherwise
+        """
+        for cfg in self.er_diagram.configs:
+            if cfg.kls.__name__ == name:
+                return cfg.kls
+        return None
 
     def _map_return_type_to_gql(self, return_type: type) -> str:
         """Map return type to GraphQL type"""

@@ -62,3 +62,34 @@ class TestSchemaBuilder:
         from typing import Optional
         gql_type = self.builder._map_python_type_to_gql(Optional[int])
         assert 'Int' in gql_type
+
+    def test_forward_ref_type_in_schema(self):
+        """测试 ForwardRef 类型在 Schema 中正确解析"""
+        schema = self.builder.build_schema()
+
+        # 验证 CommentEntity 类型被正确生成
+        assert 'type CommentEntity' in schema
+
+        # 验证 postComments 查询返回正确的类型
+        assert 'postComments' in schema
+        # 验证返回类型是 [CommentEntity] 而不是 [String] 或 [PostEntity]
+        # 查找 postComments 行并检查返回类型
+        lines = schema.split('\n')
+        for line in lines:
+            if 'postComments' in line:
+                # 提取返回类型部分
+                if ': [CommentEntity]' in line or ': [CommentEntity!]' in line:
+                    return
+        # 如果没有找到正确的返回类型，测试失败
+        raise AssertionError(f"postComments should return [CommentEntity], but schema shows: {line}")
+
+    def test_get_entity_by_name(self):
+        """测试 _get_entity_by_name 方法"""
+        # 测试存在的实体
+        entity = self.builder._get_entity_by_name('UserEntity')
+        assert entity is not None
+        assert entity.__name__ == 'UserEntity'
+
+        # 测试不存在的实体
+        entity = self.builder._get_entity_by_name('NonExistentEntity')
+        assert entity is None

@@ -116,15 +116,86 @@ class GraphQLHandler:
         Scan all entities and build query name to method mapping.
 
         Returns:
-            Dictionary mapping query names to (entity class, method) tuples
+            Dictionary mapping query names to (return entity class, method) tuples
         """
         query_map = {}
         for entity_cfg in self.er_diagram.configs:
             methods = self.schema_builder._extract_query_methods(entity_cfg.kls)
             for method_info in methods:
                 query_name = method_info['name']
-                query_map[query_name] = (entity_cfg.kls, method_info['method'])
+                # Extract return entity class from method's return type annotation
+                return_entity = self._extract_return_entity(method_info['method'])
+                query_map[query_name] = (return_entity, method_info['method'])
         return query_map
+
+    def _build_mutation_map(self) -> Dict[str, Tuple[type, Callable]]:
+        """
+        Scan all entities and build mutation name to method mapping.
+
+        Returns:
+            Dictionary mapping mutation names to (return entity class, method) tuples
+        """
+        mutation_map = {}
+        for entity_cfg in self.er_diagram.configs:
+            methods = self.schema_builder._extract_mutation_methods(entity_cfg.kls)
+            for method_info in methods:
+                mutation_name = method_info['name']
+                # Extract return entity class from method's return type annotation
+                return_entity = self._extract_return_entity(method_info['method'])
+                mutation_map[mutation_name] = (return_entity, method_info['method'])
+        return mutation_map
+
+    def _extract_return_entity(self, method: Callable) -> Optional[type]:
+        """
+        Extract the return entity class from method's return type annotation.
+
+        Handles:
+        - List[Entity] -> Entity (first element)
+        - Optional[List[Entity]] -> Entity (first element)
+        - Optional[Entity] -> Entity
+        - Entity -> Entity
+        - Forward references are resolved using ERD lookup
+
+        Args:
+            method: @query decorated method
+
+        Returns:
+            Entity class if found, None otherwise
+        """
+        import inspect
+        from typing import ForwardRef, get_origin, get_args
+
+        sig = inspect.signature(method)
+        return_annotation = sig.return_annotation
+
+        if return_annotation == inspect.Parameter.empty:
+            return None
+
+        # Unwrap Optional[List[T]] or List[T]
+        if get_origin(return_annotation) in (list,):
+            args = get_args(return_annotation)
+            if args:
+                return_annotation = args[0]
+        elif get_origin(return_annotation) is type or None:
+            # Handle Optional[Entity] - extract Entity from Union
+            args = get_args(return_annotation)
+            non_none_args = [a for a in args if a is not type(None)]
+            if len(non_none_args) == 1:
+                return_annotation = non_none_args[0]
+
+        # Handle ForwardRef
+        if isinstance(return_annotation, ForwardRef):
+            type_name = return_annotation.__forward_arg__
+            # Look up in ERD
+            for cfg in self.er_diagram.configs:
+                if cfg.kls.__name__ == type_name:
+                    return cfg.kls
+
+        # Handle direct class reference
+        if isinstance(return_annotation, type):
+            return return_annotation
+
+        return None
 
     def _build_mutation_map(self) -> Dict[str, Tuple[type, Callable]]:
         """
