@@ -3,6 +3,7 @@ GraphQL handler - coordinates all components and provides FastAPI integration.
 """
 
 import asyncio
+import inspect
 import logging
 import os
 import re
@@ -162,7 +163,6 @@ class GraphQLHandler:
         Returns:
             Entity class if found, None otherwise
         """
-        import inspect
         import types
         from typing import ForwardRef, get_origin, get_args, Union
 
@@ -200,26 +200,18 @@ class GraphQLHandler:
                 if cfg.kls.__name__ == type_name:
                     return cfg.kls
 
+        # Handle string annotation (from __future__ import annotations)
+        if isinstance(return_annotation, str):
+            # Look up in ERD
+            for cfg in self.er_diagram.configs:
+                if cfg.kls.__name__ == return_annotation:
+                    return cfg.kls
+
         # Handle direct class reference
         if isinstance(return_annotation, type):
             return return_annotation
 
         return None
-
-    def _build_mutation_map(self) -> Dict[str, Tuple[type, Callable]]:
-        """
-        Scan all entities and build mutation name to method mapping.
-
-        Returns:
-            Dictionary mapping mutation names to (entity class, method) tuples
-        """
-        mutation_map = {}
-        for entity_cfg in self.er_diagram.configs:
-            methods = self.schema_builder._extract_mutation_methods(entity_cfg.kls)
-            for method_info in methods:
-                mutation_name = method_info['name']
-                mutation_map[mutation_name] = (entity_cfg.kls, method_info['method'])
-        return mutation_map
 
     async def execute(
         self,
@@ -246,7 +238,7 @@ class GraphQLHandler:
             if is_introspection:
                 logger.debug("Processing introspection query")
                 # Execute introspection query using graphql-core
-                return await self._execute_introspection(query, variables, operation_name)
+                return await self._execute_introspection(query)
             else:
                 # Detect operation type (query or mutation)
                 operation_type = self._detect_operation_type(query)
@@ -327,12 +319,7 @@ class GraphQLHandler:
                 "requests_type": True
             }
 
-    async def _execute_introspection(
-        self,
-        query: str,
-        variables: Optional[Dict[str, Any]],
-        operation_name: Optional[str]
-    ) -> Dict[str, Any]:
+    async def _execute_introspection(self, query: str) -> Dict[str, Any]:
         """Execute introspection query - returns full introspection data to support GraphiQL."""
 
         # Parse query to determine requested content
@@ -528,7 +515,6 @@ class GraphQLHandler:
         Returns:
             Set of all BaseModel types that need input definitions
         """
-        import inspect
         input_types = set()
         visited = set()
 
@@ -549,7 +535,7 @@ class GraphQLHandler:
                                 collect_from_type(field_type)
 
         # Traverse all @query methods
-        for query_name, (entity, method) in self.query_map.items():
+        for _, (entity, method) in self.query_map.items():
             try:
                 sig = inspect.signature(method)
                 for param_name, param in sig.parameters.items():
@@ -561,7 +547,7 @@ class GraphQLHandler:
                 pass
 
         # Traverse all @mutation methods
-        for mutation_name, (entity, method) in self.mutation_map.items():
+        for _, (entity, method) in self.mutation_map.items():
             try:
                 sig = inspect.signature(method)
                 for param_name, param in sig.parameters.items():
@@ -748,7 +734,7 @@ class GraphQLHandler:
 
         return collected
 
-    def _get_field_description(self, entity, field_name: str) -> Optional[str]:
+    def _get_field_description(self, entity: type, field_name: str) -> Optional[str]:
         """
         Get field description information
 
@@ -771,7 +757,7 @@ class GraphQLHandler:
         field = entity.model_fields[field_name]
         return getattr(field, 'description', None)
 
-    def _get_class_description(self, entity) -> str:
+    def _get_class_description(self, entity: type) -> str:
         """
         Get class description information
 
@@ -795,7 +781,7 @@ class GraphQLHandler:
         # If no docstring, use default format
         return f"{entity.__name__} entity"
 
-    def _get_introspection_fields(self, entity):
+    def _get_introspection_fields(self, entity: type) -> List[Dict]:
         """Get introspection fields for entity"""
         from ..utils.er_diagram import Relationship, MultipleRelationship
 
@@ -970,12 +956,17 @@ class GraphQLHandler:
                     "ofType": None
                 }
 
-    def _get_introspection_query_fields(self):
-        """Get introspection fields for Query type"""
+    def _get_introspection_operation_fields(self, operation_map: Dict[str, Tuple[type, Callable]], operation_type: str) -> List[Dict]:
+        """
+        Get introspection fields for Query or Mutation type.
+
+        Args:
+            operation_map: Either self.query_map or self.mutation_map
+            operation_type: "Query" or "Mutation" for description
+        """
         fields = []
 
-        for query_name, (entity, method) in self.query_map.items():
-            import inspect
+        for field_name, (entity, method) in operation_map.items():
             sig = inspect.signature(method)
 
             # Build parameter list
@@ -989,7 +980,6 @@ class GraphQLHandler:
 
                 # Try to get type from type annotation
                 if param.annotation != inspect.Parameter.empty:
-                    # Use _build_input_graphql_type to handle all types (including BaseModel)
                     param_type_def = self._build_input_graphql_type(param.annotation)
 
                 # If type cannot be determined, use default String
@@ -1019,7 +1009,6 @@ class GraphQLHandler:
             if "list" in return_type_str.lower():
                 return_kind = "LIST"
                 return_name = None
-                # LIST type must have ofType pointing to element type
                 if hasattr(entity, '__name__'):
                     of_type = {
                         "kind": "OBJECT",
@@ -1064,8 +1053,8 @@ class GraphQLHandler:
                 type_def["possibleTypes"] = None
 
             fields.append({
-                "name": query_name,
-                "description": f"Query for {query_name}",
+                "name": field_name,
+                "description": f"{operation_type} for {field_name}",
                 "args": args,
                 "type": type_def,
                 "isDeprecated": False,
@@ -1073,109 +1062,14 @@ class GraphQLHandler:
             })
 
         return fields
+
+    def _get_introspection_query_fields(self):
+        """Get introspection fields for Query type"""
+        return self._get_introspection_operation_fields(self.query_map, "Query")
 
     def _get_introspection_mutation_fields(self):
         """Get introspection fields for Mutation type"""
-        fields = []
-
-        for mutation_name, (entity, method) in self.mutation_map.items():
-            import inspect
-            sig = inspect.signature(method)
-
-            # Build parameter list
-            args = []
-            for param_name, param in sig.parameters.items():
-                if param_name in ('self', 'cls'):
-                    continue
-
-                # Determine parameter type
-                param_type_def = None
-
-                # Try to get type from type annotation
-                if param.annotation != inspect.Parameter.empty:
-                    # Use _build_input_graphql_type to handle all types (including BaseModel)
-                    param_type_def = self._build_input_graphql_type(param.annotation)
-
-                # If type cannot be determined, use default String
-                if param_type_def is None:
-                    param_type_def = {
-                        "kind": "SCALAR",
-                        "name": "String",
-                        "ofType": None
-                    }
-
-                # Check if it has default value
-                has_default = param.default != inspect.Parameter.empty
-
-                args.append({
-                    "name": param_name,
-                    "description": None,
-                    "type": param_type_def,
-                    "defaultValue": None if not has_default else str(param.default)
-                })
-
-            # Determine return type
-            return_type_str = str(sig.return_annotation) if sig.return_annotation != sig.empty else "String"
-            return_kind = "SCALAR"
-            return_name = "String"
-            of_type = None
-
-            if "list" in return_type_str.lower():
-                return_kind = "LIST"
-                return_name = None
-                if hasattr(entity, '__name__'):
-                    of_type = {
-                        "kind": "OBJECT",
-                        "name": entity.__name__,
-                        "ofType": None
-                    }
-                else:
-                    of_type = {
-                        "kind": "SCALAR",
-                        "name": "String",
-                        "ofType": None
-                    }
-            elif hasattr(entity, '__name__'):
-                return_name = entity.__name__
-                return_kind = "OBJECT"
-
-            type_def = {
-                "kind": return_kind,
-                "name": return_name,
-                "description": None,
-                "ofType": of_type
-            }
-
-            # Add other required fields based on type kind
-            if return_kind == "SCALAR":
-                type_def["fields"] = None
-                type_def["inputFields"] = None
-                type_def["interfaces"] = None
-                type_def["enumValues"] = None
-                type_def["possibleTypes"] = None
-            elif return_kind == "OBJECT":
-                type_def["fields"] = self._get_introspection_fields(entity)
-                type_def["inputFields"] = None
-                type_def["interfaces"] = None
-                type_def["enumValues"] = None
-                type_def["possibleTypes"] = None
-            elif return_kind == "LIST":
-                type_def["fields"] = None
-                type_def["inputFields"] = None
-                type_def["interfaces"] = None
-                type_def["enumValues"] = None
-                type_def["possibleTypes"] = None
-
-            fields.append({
-                "name": mutation_name,
-                "description": f"Mutation for {mutation_name}",
-                "args": args,
-                "type": type_def,
-                "isDeprecated": False,
-                "deprecationReason": None
-            })
-
-        return fields
+        return self._get_introspection_operation_fields(self.mutation_map, "Mutation")
 
     async def _execute_custom_query(
         self,
@@ -1308,7 +1202,7 @@ class GraphQLHandler:
 
                 # === Phase 1: Execute mutation method ===
                 args = root_field_selection.arguments or {}
-                root_data = await self._execute_mutation_method(mutation_method, args)
+                root_data = await self._execute_method(mutation_method, args, "mutation")
                 logger.debug(f"Mutation method executed: {root_mutation_name}")
 
                 # === Phase 1: Build response model ===
@@ -1369,22 +1263,24 @@ class GraphQLHandler:
 
         return response
 
-    async def _execute_query_method(
+    async def _execute_method(
         self,
         method: Callable,
-        arguments: Dict[str, Any]
+        arguments: Dict[str, Any],
+        operation_type: str = "query"
     ) -> Any:
         """
-        Execute @query method
+        Execute @query or @mutation method
 
         Args:
-            method: @query decorated method (can be classmethod or regular function)
+            method: @query/@mutation decorated method (can be classmethod or regular function)
             arguments: Parameter dictionary
+            operation_type: "query" or "mutation" for logging
 
         Returns:
-            Query result
+            Method result
         """
-        logger.debug(f"Executing query method with arguments: {arguments}")
+        logger.debug(f"Executing {operation_type} method with arguments: {arguments}")
         try:
             # Convert arguments (handle BaseModel types)
             converted_args = self._convert_arguments(method, arguments)
@@ -1393,39 +1289,9 @@ class GraphQLHandler:
             # Call directly, passing None for first parameter (cls/self)
             return await method(None, **converted_args)
         except Exception as e:
-            logger.error(f"Query method execution failed: {e}")
+            logger.error(f"{operation_type.capitalize()} method execution failed: {e}")
             raise GraphQLError(
-                f"Query execution failed: {e}",
-                extensions={"code": "EXECUTION_ERROR"}
-            )
-
-    async def _execute_mutation_method(
-        self,
-        method: Callable,
-        arguments: Dict[str, Any]
-    ) -> Any:
-        """
-        Execute @mutation method
-
-        Args:
-            method: @mutation decorated method (can be classmethod or regular function)
-            arguments: Parameter dictionary
-
-        Returns:
-            Mutation result
-        """
-        logger.debug(f"Executing mutation method with arguments: {arguments}")
-        try:
-            # Convert arguments (handle BaseModel types)
-            converted_args = self._convert_arguments(method, arguments)
-
-            # schema_builder has extracted the underlying function (for classmethod it's __func__)
-            # Call directly, passing None for first parameter (cls/self)
-            return await method(None, **converted_args)
-        except Exception as e:
-            logger.error(f"Mutation method execution failed: {e}")
-            raise GraphQLError(
-                f"Mutation execution failed: {e}",
+                f"{operation_type.capitalize()} execution failed: {e}",
                 extensions={"code": "EXECUTION_ERROR"}
             )
 
@@ -1444,8 +1310,6 @@ class GraphQLHandler:
         Returns:
             Converted parameter dictionary
         """
-        import inspect
-
         converted = {}
         try:
             sig = inspect.signature(method)
@@ -1561,7 +1425,7 @@ class GraphQLHandler:
         try:
             # 1. Execute query method
             args = root_field_selection.arguments or {}
-            root_data = await self._execute_query_method(query_method, args)
+            root_data = await self._execute_method(query_method, args, "query")
             logger.debug(f"[Phase 1] Query method executed: {root_query_name}")
 
             # 2. Build response model
