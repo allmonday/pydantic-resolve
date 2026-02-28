@@ -8,7 +8,7 @@ from pydantic import BaseModel, create_model, Field
 from functools import lru_cache
 
 from ..constant import ENSURE_SUBSET_REFERENCE
-from ..utils.er_diagram import ErDiagram, Relationship, MultipleRelationship, LoadBy, ErLoaderPreGenerator
+from ..utils.er_diagram import ErDiagram, Relationship, MultipleRelationship, LoadBy
 from ..utils.class_util import safe_issubclass
 from ..utils.types import get_core_types
 from .types import FieldSelection
@@ -63,7 +63,6 @@ class ResponseBuilder:
         """
         self.er_diagram = er_diagram
         self.entity_map = {cfg.kls: cfg for cfg in er_diagram.configs}
-        self.loader_pre_generator = ErLoaderPreGenerator(er_diagram)
 
     def build_response_model(
         self,
