@@ -6,7 +6,7 @@ import pytest
 from pydantic_resolve import config_global_resolver, query
 from pydantic_resolve.graphql import GraphQLHandler
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 
 
 class TestGraphQLIntegration:

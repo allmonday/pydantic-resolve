@@ -1,0 +1,274 @@
+"""
+Unified type mapping logic for GraphQL schema generation.
+
+This module provides TypeMapper that converts Python types to GraphQL type information.
+It supports multiple output formats (SDL string, Introspection dict) through a unified
+internal representation.
+"""
+
+from dataclasses import dataclass
+from typing import Any, Dict, ForwardRef, Optional, Union, get_args, get_origin
+
+from pydantic import BaseModel
+
+from .type_registry import FieldInfo, ArgumentInfo
+from ...utils.class_util import safe_issubclass
+from ...utils.types import get_core_types
+from ..type_mapping import map_scalar_type, is_list_type
+
+
+@dataclass
+class GraphQLTypeInfo:
+    """
+    Unified GraphQL type representation.
+
+    This is the internal representation that can be converted to:
+    - SDL string: "String!", "[User!]!", "User"
+    - Introspection dict: {"kind": "LIST", "name": None, "ofType": {...}}
+    """
+    kind: str  # SCALAR, OBJECT, INPUT_OBJECT, LIST, NON_NULL
+    name: Optional[str] = None
+    of_type: Optional['GraphQLTypeInfo'] = None
+    description: Optional[str] = None
+
+    def to_sdl(self) -> str:
+        """Convert to SDL type string."""
+        if self.kind == "NON_NULL":
+            inner = self.of_type.to_sdl() if self.of_type else "String"
+            return f"{inner}!"
+        elif self.kind == "LIST":
+            inner = self.of_type.to_sdl() if self.of_type else "String"
+            return f"[{inner}]"
+        elif self.kind in ("SCALAR", "OBJECT", "INPUT_OBJECT", "ENUM"):
+            return self.name or "String"
+        else:
+            return self.name or "String"
+
+    def to_introspection(self) -> Dict[str, Any]:
+        """Convert to introspection format."""
+        result = {
+            "kind": self.kind,
+            "name": self.name,
+            "description": self.description,
+            "ofType": None
+        }
+
+        if self.of_type:
+            result["ofType"] = self.of_type.to_introspection()
+
+        return result
+
+
+class TypeMapper:
+    """
+    Maps Python types to GraphQL type information.
+
+    This is the unified type mapping logic used by both
+    SDL and Introspection generators.
+    """
+
+    def map_to_graphql_type(
+        self,
+        python_type: type,
+        is_input: bool = False
+    ) -> GraphQLTypeInfo:
+        """
+        Map a Python type to GraphQL type information.
+
+        Args:
+            python_type: Python type (can be list[T], Optional[T], T, etc.)
+            is_input: Whether this is for an input type
+
+        Returns:
+            GraphQLTypeInfo representing the GraphQL type
+        """
+        core_types = get_core_types(python_type)
+        if not core_types:
+            return GraphQLTypeInfo(
+                kind="SCALAR",
+                name="String",
+                description="Default String type"
+            )
+
+        core_type = core_types[0]
+        origin = get_origin(python_type)
+
+        # Handle ForwardRef
+        if isinstance(core_type, ForwardRef):
+            type_name = core_type.__forward_arg__
+            return GraphQLTypeInfo(
+                kind="INPUT_OBJECT" if is_input else "OBJECT",
+                name=type_name,
+                description=f"{type_name} type"
+            )
+
+        # Check if it's list[T]
+        if is_list_type(python_type):
+            inner_type = self.map_to_graphql_type(core_type, is_input)
+            return GraphQLTypeInfo(
+                kind="LIST",
+                of_type=GraphQLTypeInfo(
+                    kind="NON_NULL",
+                    of_type=inner_type
+                )
+            )
+
+        # Handle Optional[T] - check if None is in the union
+        if origin is Union:
+            args = get_args(python_type)
+            non_none_args = [a for a in args if a is not type(None)]
+            if non_none_args:
+                inner = self.map_to_graphql_type(non_none_args[0], is_input)
+                return inner  # Optional means no NON_NULL wrapper
+
+        # Handle BaseModel types
+        if safe_issubclass(core_type, BaseModel):
+            return GraphQLTypeInfo(
+                kind="INPUT_OBJECT" if is_input else "OBJECT",
+                name=core_type.__name__,
+                description=f"{core_type.__name__} type"
+            )
+
+        # Handle scalar types
+        scalar_name = map_scalar_type(core_type)
+        return GraphQLTypeInfo(
+            kind="SCALAR",
+            name=scalar_name,
+            description=self._get_scalar_description(scalar_name)
+        )
+
+    def map_to_sdl(self, python_type: type, is_input: bool = False, required: bool = True) -> str:
+        """
+        Map Python type to SDL type string.
+
+        Args:
+            python_type: Python type
+            is_input: Whether this is for an input type
+            required: Whether to add ! suffix for required fields
+
+        Returns:
+            SDL type string (e.g., "String!", "[User!]!")
+        """
+        gql_type = self.map_to_graphql_type(python_type, is_input)
+        sdl = gql_type.to_sdl()
+
+        # Add NON_NULL wrapper if required and not already wrapped
+        if required and not sdl.endswith('!'):
+            sdl = f"{sdl}!"
+
+        return sdl
+
+    def map_to_introspection(self, python_type: type, is_input: bool = False) -> Dict[str, Any]:
+        """
+        Map Python type to introspection format.
+
+        Args:
+            python_type: Python type
+            is_input: Whether this is for an input type
+
+        Returns:
+            Introspection type dictionary
+        """
+        gql_type = self.map_to_graphql_type(python_type, is_input)
+        return gql_type.to_introspection()
+
+    def _get_scalar_description(self, scalar_name: str) -> Optional[str]:
+        """Get description for a scalar type."""
+        descriptions = {
+            "Int": "The `Int` scalar type represents non-fractional signed whole numeric values.",
+            "Float": "The `Float` scalar type represents signed double-precision fractional values.",
+            "String": "The `String` scalar type represents textual data.",
+            "Boolean": "The `Boolean` scalar type represents `true` or `false`.",
+            "ID": "The `ID` scalar type represents a unique identifier.",
+        }
+        return descriptions.get(scalar_name)
+
+    def extract_field_info(
+        self,
+        field_name: str,
+        field_type: type,
+        description: Optional[str] = None,
+        is_relationship: bool = False,
+        relationship_target: Optional[str] = None
+    ) -> FieldInfo:
+        """
+        Extract FieldInfo from a Python field.
+
+        Args:
+            field_name: Name of the field
+            field_type: Python type of the field
+            description: Optional field description
+            is_relationship: Whether this is a relationship field
+            relationship_target: Target type name for relationships
+
+        Returns:
+            FieldInfo object
+        """
+        gql_type = self.map_to_graphql_type(field_type)
+
+        # Determine if optional (no NON_NULL wrapper)
+        is_optional = not (gql_type.kind == "NON_NULL" or
+                          (gql_type.of_type and gql_type.of_type.kind == "NON_NULL"))
+
+        # Determine if list
+        is_list = gql_type.kind == "LIST" or (
+            gql_type.of_type and gql_type.of_type.kind == "LIST"
+        )
+
+        # Get the actual type name
+        type_name = gql_type.name
+        if gql_type.of_type:
+            type_name = gql_type.of_type.name or type_name
+
+        return FieldInfo(
+            name=field_name,
+            python_type=field_type,
+            graphql_type_name=type_name or "String",
+            is_list=is_list,
+            is_optional=is_optional,
+            description=description,
+            is_relationship=is_relationship,
+            relationship_target=relationship_target
+        )
+
+    def extract_argument_info(
+        self,
+        param_name: str,
+        param_type: type,
+        default_value: Optional[str] = None,
+        description: Optional[str] = None
+    ) -> ArgumentInfo:
+        """
+        Extract ArgumentInfo from a method parameter.
+
+        Args:
+            param_name: Name of the parameter
+            param_type: Python type of the parameter
+            default_value: Optional default value string
+            description: Optional argument description
+
+        Returns:
+            ArgumentInfo object
+        """
+        gql_type = self.map_to_graphql_type(param_type, is_input=True)
+
+        is_optional = not (gql_type.kind == "NON_NULL" or
+                          (gql_type.of_type and gql_type.of_type.kind == "NON_NULL"))
+
+        is_list = gql_type.kind == "LIST" or (
+            gql_type.of_type and gql_type.of_type.kind == "LIST"
+        )
+
+        type_name = gql_type.name
+        if gql_type.of_type:
+            type_name = gql_type.of_type.name or type_name
+
+        return ArgumentInfo(
+            name=param_name,
+            python_type=param_type,
+            graphql_type_name=type_name or "String",
+            is_list=is_list,
+            is_optional=is_optional,
+            default_value=default_value,
+            description=description
+        )

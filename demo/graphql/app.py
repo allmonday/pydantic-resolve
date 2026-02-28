@@ -7,7 +7,7 @@ from fastapi import FastAPI, APIRouter
 from fastapi.responses import PlainTextResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Optional
 from pydantic_resolve import config_global_resolver
 from pydantic_resolve import GraphQLHandler, SchemaBuilder
 
