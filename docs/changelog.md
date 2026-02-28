@@ -2,7 +2,11 @@
 
 ## v3.0
 
-### v3.0.0alpha (2026-2-27)
+### v3.0.1 (2026-2-28)
+- refactor:
+  - graphql interface
+
+### v3.0.0 (2026-2-27)
 
 - add support for auto-generating graphql interface for ERD.
 
