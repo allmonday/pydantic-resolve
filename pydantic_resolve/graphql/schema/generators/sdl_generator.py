@@ -12,11 +12,11 @@ from pydantic import BaseModel
 
 from .base import SchemaGenerator
 from ..type_registry import TypeInfo, FieldInfo
-from ....utils.class_util import safe_issubclass
-from ....utils.er_diagram import Relationship
-from ....utils.types import get_core_types
-from ...type_mapping import map_scalar_type
-from ...exceptions import FieldNameConflictError
+from pydantic_resolve.utils.class_util import safe_issubclass
+from pydantic_resolve.utils.er_diagram import Relationship
+from pydantic_resolve.utils.types import get_core_types
+from pydantic_resolve.graphql.type_mapping import map_scalar_type
+from pydantic_resolve.graphql.exceptions import FieldNameConflictError
 
 
 class SDLGenerator(SchemaGenerator):

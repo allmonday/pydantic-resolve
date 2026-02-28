@@ -14,9 +14,9 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, get_type_hin
 from pydantic import BaseModel
 
 from .type_registry import TypeRegistry
-from ...utils.class_util import safe_issubclass
-from ...utils.types import get_core_types
-from ...utils.er_diagram import ErDiagram
+from pydantic_resolve.utils.class_util import safe_issubclass
+from pydantic_resolve.utils.types import get_core_types
+from pydantic_resolve.utils.er_diagram import ErDiagram
 
 
 class TypeCollector:

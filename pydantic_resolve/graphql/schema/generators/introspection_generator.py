@@ -13,10 +13,10 @@ from pydantic import BaseModel
 
 from .base import SchemaGenerator
 from ..type_registry import TypeInfo, FieldInfo, ArgumentInfo, SCALAR_TYPES
-from ....utils.class_util import safe_issubclass
-from ....utils.er_diagram import Relationship
-from ....utils.types import get_core_types
-from ...type_mapping import map_scalar_type, is_list_type
+from pydantic_resolve.utils.class_util import safe_issubclass
+from pydantic_resolve.utils.er_diagram import Relationship
+from pydantic_resolve.utils.types import get_core_types
+from pydantic_resolve.graphql.type_mapping import map_scalar_type, is_list_type
 
 
 class IntrospectionGenerator(SchemaGenerator):

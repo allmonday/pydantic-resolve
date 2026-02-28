@@ -12,9 +12,9 @@ from typing import Any, Dict, ForwardRef, Optional, Union, get_args, get_origin
 from pydantic import BaseModel
 
 from .type_registry import FieldInfo, ArgumentInfo
-from ...utils.class_util import safe_issubclass
-from ...utils.types import get_core_types
-from ..type_mapping import map_scalar_type, is_list_type
+from pydantic_resolve.utils.class_util import safe_issubclass
+from pydantic_resolve.utils.types import get_core_types
+from pydantic_resolve.graphql.type_mapping import map_scalar_type, is_list_type
 
 
 @dataclass

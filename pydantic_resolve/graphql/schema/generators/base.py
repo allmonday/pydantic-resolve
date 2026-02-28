@@ -13,7 +13,7 @@ from ..type_collector import TypeCollector
 from ..type_mapper import TypeMapper
 
 if TYPE_CHECKING:
-    from ....utils.er_diagram import ErDiagram
+    from pydantic_resolve.utils.er_diagram import ErDiagram
 
 
 class SchemaGenerator(ABC):
