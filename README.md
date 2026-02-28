@@ -369,8 +369,7 @@ schema_builder = SchemaBuilder(BaseEntity.get_diagram())
 # 5. Define request model
 class GraphQLRequest(BaseModel):
     query: str
-    variables: Optional[Dict[str, Any]] = None
-    operation_name: Optional[str] = None
+    operationName: Optional[str] = None
 
 # 6. Create routes
 router = APIRouter()
@@ -379,8 +378,6 @@ router = APIRouter()
 async def graphql_endpoint(req: GraphQLRequest):
     result = await handler.execute(
         query=req.query,
-        variables=req.variables,
-        operation_name=req.operation_name
     )
     return result
 

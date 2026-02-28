@@ -43,8 +43,7 @@ schema_builder = SchemaBuilder(diagram)
 # 定义 GraphQL 请求模型
 class GraphQLRequest(BaseModel):
     query: str
-    variables: Optional[Dict[str, Any]] = None
-    operation_name: Optional[str] = None
+    operationName: Optional[str] = None
 
 
 # GraphiQL Playground HTML
@@ -129,10 +128,9 @@ async def graphiql_playground():
 @graphql_router.post("/graphql")
 async def graphql_endpoint(req: GraphQLRequest):
     """GraphQL 查询端点"""
+    print(req)
     result = await handler.execute(
         query=req.query,
-        variables=req.variables,
-        operation_name=req.operation_name
     )
     return result
 

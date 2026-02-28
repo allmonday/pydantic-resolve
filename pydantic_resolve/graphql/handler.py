@@ -159,16 +159,12 @@ class GraphQLHandler:
     async def execute(
         self,
         query: str,
-        variables: Optional[Dict[str, Any]] = None,
-        operation_name: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Execute a GraphQL query or mutation.
 
         Args:
             query: GraphQL query string
-            variables: Query variables
-            operation_name: Operation name
 
         Returns:
             GraphQL response format: {"data": {...}, "errors": [...]}

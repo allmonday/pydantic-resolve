@@ -161,8 +161,6 @@ handler = GraphQLHandler(
 ```python
 result = await handler.execute(
     query: str,
-    variables: Optional[Dict[str, Any]] = None,
-    operation_name: Optional[str] = None
 ) -> Dict[str, Any]
 ```
 
@@ -199,8 +197,7 @@ schema_builder = SchemaBuilder(BaseEntity.get_diagram())
 # 定义请求模型
 class GraphQLRequest(BaseModel):
     query: str
-    variables: Optional[Dict[str, Any]] = None
-    operation_name: Optional[str] = None
+    operationName: Optional[str] = None
 
 # 创建路由
 router = APIRouter()
@@ -210,8 +207,6 @@ async def graphql_endpoint(req: GraphQLRequest):
     """GraphQL 查询端点"""
     result = await handler.execute(
         query=req.query,
-        variables=req.variables,
-        operation_name=req.operation_name
     )
     return result
 
@@ -249,8 +244,6 @@ async def graphql_endpoint(request: Request):
     data = await request.json()
     result = await handler.execute(
         query=data.get('query'),
-        variables=data.get('variables'),
-        operation_name=data.get('operation_name')
     )
     return JSONResponse(result)
 
@@ -288,8 +281,6 @@ def graphql_endpoint():
     data = request.get_json()
     result = await handler.execute(
         query=data.get('query'),
-        variables=data.get('variables'),
-        operation_name=data.get('operation_name')
     )
     return jsonify(result)
 
@@ -325,8 +316,6 @@ def graphql_endpoint(request):
         data = json.loads(request.body)
         result = await handler.execute(
             query=data.get('query'),
-            variables=data.get('variables'),
-            operation_name=data.get('operation_name')
         )
         return JsonResponse(result)
     return JsonResponse({'error': 'Only POST allowed'}, status=405)
@@ -358,8 +347,6 @@ class GraphQLEndpoint(tornado.web.RequestHandler):
         data = tornado.escape.json_decode(self.request.body)
         result = await handler.execute(
             query=data.get('query'),
-            variables=data.get('variables'),
-            operation_name=data.get('operation_name')
         )
         self.write(result)
 
@@ -393,8 +380,6 @@ from fastapi.responses import JSONResponse
 async def graphql_endpoint(req: GraphQLRequest):
     result = await handler.execute(
         query=req.query,
-        variables=req.variables,
-        operation_name=req.operation_name
     )
 
     # 添加自定义 headers
@@ -412,8 +397,6 @@ async def graphql_endpoint(req: GraphQLRequest):
     try:
         result = await handler.execute(
             query=req.query,
-            variables=req.variables,
-            operation_name=req.operation_name
         )
         return result
     except Exception as e:
@@ -442,8 +425,6 @@ async def graphql_endpoint(
 
     result = await handler.execute(
         query=req.query,
-        variables=req.variables,
-        operation_name=req.operation_name
     )
     return result
 ```
@@ -464,8 +445,6 @@ async def graphql_endpoint(req: GraphQLRequest):
 
     result = await handler.execute(
         query=req.query,
-        variables=req.variables,
-        operation_name=req.operation_name
     )
     return result
 ```

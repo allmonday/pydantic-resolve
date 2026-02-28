@@ -85,8 +85,7 @@ class TestGraphQLIntegration:
         # 定义请求模型
         class GraphQLRequest(BaseModel):
             query: str
-            variables: Optional[Dict[str, Any]] = None
-            operation_name: Optional[str] = None
+            operationName: Optional[str] = None
 
         # 创建路由
         router = APIRouter()
@@ -95,8 +94,6 @@ class TestGraphQLIntegration:
         async def graphql_endpoint(req: GraphQLRequest):
             result = await self.handler.execute(
                 query=req.query,
-                variables=req.variables,
-                operation_name=req.operation_name
             )
             return result
 
