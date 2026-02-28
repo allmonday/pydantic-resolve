@@ -3,7 +3,7 @@ Dynamic Pydantic model builder based on GraphQL field selection.
 """
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, get_type_hints, get_origin, get_args, Annotated
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union, get_type_hints, get_origin, get_args, Annotated
 from pydantic import BaseModel, create_model, Field
 from functools import lru_cache
 
@@ -80,6 +80,44 @@ class ResponseBuilder:
 
         Returns:
             Dynamically created Pydantic model class
+
+        Example Transformation:
+        ─────────────────────────────────────────────────────────────────
+        GraphQL Query:
+            { users { id name posts { title } } }
+
+        Input:
+            UserEntity: { id, name, posts: list[PostEntity] }
+            FieldSelection: { users: { id, name, posts: { title } } }
+
+        Process:
+            1. UserEntity → UserResponse (id, name, posts)
+            2. posts field triggers recursive call
+            3. PostEntity → PostResponse (title)
+            4. Inject LoadBy annotation for relationship resolution
+
+        Output (dynamic models):
+            class PostResponse(BaseModel):
+                title: str
+
+            class UserResponse(BaseModel):
+                id: int
+                name: str
+                posts: Annotated[List[PostResponse], LoadBy('id')] = []
+
+        Key Implementation Details:
+        ─────────────────────────────────────────────────────────────────
+        1. Model Name Uniqueness:
+           - Uses id(field_selection) suffix: "UserResponse_4302384832"
+           - Prevents conflicts when same entity queried with different fields
+           - Example: { userA: user { id }, userB: user { name } }
+                     → UserResponse_4302384832 vs UserResponse_4302384987
+
+        2. ENSURE_SUBSET_REFERENCE:
+           - Dynamic model sets __pydantic_resolve_subset__ = original entity
+           - Allows ErLoaderPreGenerator.prepare() to find entity config
+           - Required for LoadBy annotation to resolve correct loader
+        ─────────────────────────────────────────────────────────────────
         """
         field_definitions: Dict[str, Tuple[type, Any]] = {}
         type_hints = self._get_type_hints(entity)
@@ -126,6 +164,18 @@ class ResponseBuilder:
         Build a single field definition.
 
         Returns None if field should be skipped.
+
+        Example:
+        ─────────────────────────────────────────────────────────────────
+        Input:  field_type = str, selection.alias = None
+        Output: (str, ...)
+
+        Input:  field_type = Optional[str], selection.alias = "userName"
+        Output: (Optional[str], Field(serialization_alias="userName"))
+
+        Input:  field_type = list[PostEntity], selection.sub_fields = {title, content}
+        Output: (List[PostResponse_123], [])  # recursive call to build nested model
+        ─────────────────────────────────────────────────────────────────
         """
         # Handle nested Pydantic models with sub-field selections
         if selection.sub_fields:
@@ -146,6 +196,19 @@ class ResponseBuilder:
         Try to build nested field definition for Pydantic models.
 
         Returns None if no nested Pydantic model found.
+
+        Example:
+        ─────────────────────────────────────────────────────────────────
+        Input:  field_type = list[PostEntity], selection.sub_fields = {title}
+        Process:
+            1. get_core_types() extracts [PostEntity]
+            2. PostEntity is BaseModel subclass → recursive build
+            3. _build_nested_type() wraps with List[]
+        Output: (List[PostResponse_123], [])
+
+        Input:  field_type = str, selection.sub_fields = None
+        Output: None  # not a Pydantic model, fallback to scalar
+        ─────────────────────────────────────────────────────────────────
         """
         core_types = get_core_types(field_type)
 
@@ -164,20 +227,52 @@ class ResponseBuilder:
         field_type: type,
         nested_model: type[BaseModel]
     ) -> Tuple[type, Any]:
-        """Build type tuple for nested model based on container type."""
-        origin = get_origin(field_type)
+        """
+        Build type tuple for nested model based on container type.
 
+        Example:
+        ─────────────────────────────────────────────────────────────────
+        Input:  field_type = list[PostEntity], nested_model = PostResponse
+        Output: (List[PostResponse], [])
+
+        Input:  field_type = Optional[UserEntity], nested_model = UserResponse
+        Output: (Optional[UserResponse], None)
+
+        Input:  field_type = UserEntity (plain), nested_model = UserResponse
+        Output: (UserResponse, ...)  # required field
+        ─────────────────────────────────────────────────────────────────
+        """
+        origin = get_origin(field_type)
+        args = get_args(field_type)
+
+        # Case 1: List container
         if origin is list:
             return (List[nested_model], [])
-        else:
+
+        # Case 2: Optional (Union[X, None])
+        if origin is Union and type(None) in args:
             return (Optional[nested_model], None)
+
+        # Case 3: Plain required type
+        return (nested_model, ...)
 
     def _apply_alias(
         self,
         type_default: Tuple[type, Any],
         alias: Optional[str]
     ) -> Tuple[type, Any]:
-        """Apply serialization alias to field definition if present."""
+        """
+        Apply serialization alias to field definition if present.
+
+        Example:
+        ─────────────────────────────────────────────────────────────────
+        Input:  type_default = (str, ...), alias = None
+        Output: (str, ...)
+
+        Input:  type_default = (str, ...), alias = "userName"
+        Output: (str, Field(serialization_alias="userName", default=...))
+        ─────────────────────────────────────────────────────────────────
+        """
         if alias is None:
             return type_default
 
@@ -189,7 +284,18 @@ class ResponseBuilder:
         field_type: type,
         alias: Optional[str]
     ) -> Tuple[type, Any]:
-        """Build field definition for scalar types."""
+        """
+        Build field definition for scalar types.
+
+        Example:
+        ─────────────────────────────────────────────────────────────────
+        Input:  field_type = int, alias = None
+        Output: (int, ...)  # ... means required field
+
+        Input:  field_type = str, alias = "id"
+        Output: (str, Field(serialization_alias="id"))
+        ─────────────────────────────────────────────────────────────────
+        """
         if alias:
             return (field_type, Field(serialization_alias=alias))
         return (field_type, ...)
@@ -203,7 +309,23 @@ class ResponseBuilder:
         type_hints: Dict[str, type],
         field_definitions: Dict[str, Tuple[type, Any]]
     ) -> None:
-        """Add required foreign key fields to field definitions."""
+        """
+        Add required foreign key fields to field definitions.
+
+        Example:
+        ─────────────────────────────────────────────────────────────────
+        Scenario: UserEntity has Relationship(field='id', target=PostEntity)
+                  Query selects 'posts' field which needs 'id' for LoadBy
+
+        Before:
+            field_definitions = {'name': (str, ...)}
+
+        After:
+            field_definitions = {'name': (str, ...), 'id': (int, ...)}
+
+        Why: LoadBy('id') needs the FK field to fetch related posts
+        ─────────────────────────────────────────────────────────────────
+        """
         selected_fields = set(field_selection.sub_fields.keys()) if field_selection.sub_fields else set()
         fk_fields = self._get_required_fk_fields(entity, selected_fields)
 
@@ -218,7 +340,28 @@ class ResponseBuilder:
         field_definitions: Dict[str, Tuple[type, Any]],
         parent_path: str
     ) -> None:
-        """Add relationship fields based on ERD configuration."""
+        """
+        Add relationship fields based on ERD configuration.
+
+        Example:
+        ─────────────────────────────────────────────────────────────────
+        Scenario: UserEntity.__relationships__ = [
+            Relationship(field='id', target_kls=list[PostEntity], loader=post_loader)
+        ]
+        Query: { users { id posts { title } } }
+
+        Process:
+            1. 'posts' not in field_definitions (not a direct field)
+            2. _find_relationship('posts') finds the Relationship
+            3. _build_relationship_field() creates LoadBy annotation
+
+        Result:
+            field_definitions['posts'] = (
+                Annotated[List[PostResponse], LoadBy('id')],
+                []
+            )
+        ─────────────────────────────────────────────────────────────────
+        """
         for field_name, selection in field_selection.sub_fields.items():
             # Skip already processed fields
             if field_name in field_definitions:
@@ -244,7 +387,31 @@ class ResponseBuilder:
         selection: FieldSelection,
         parent_path: str
     ) -> Optional[Tuple[type, Any]]:
-        """Build field definition for a relationship (supports both Relationship and Link)."""
+        """
+        Build field definition for a relationship (supports both Relationship and Link).
+
+        Example:
+        ─────────────────────────────────────────────────────────────────
+        Input (Relationship):
+            rel_info = RelationshipInfo(field='id', target_kls=list[PostEntity], is_link=False)
+            selection = {title, content}
+
+        Process:
+            1. Extract PostEntity from list[PostEntity]
+            2. Recursively build PostResponse model
+            3. Wrap with Annotated[..., LoadBy('id')]
+
+        Output:
+            (Annotated[List[PostResponse], LoadBy('id')], [])
+
+        ─────────────────────────────────────────────────────────────────
+        Input (Link with biz):
+            rel_info = RelationshipInfo(field='user_id', target_kls=list[TaskEntity],
+                                        biz='assigned', is_link=True)
+        Output:
+            (Annotated[List[TaskResponse], LoadBy('user_id', biz='assigned')], [])
+        ─────────────────────────────────────────────────────────────────
+        """
         target_kls = rel_info.target_kls
         origin = get_origin(target_kls)
 
@@ -279,7 +446,21 @@ class ResponseBuilder:
         return self._apply_alias((base_type, default), selection.alias)
 
     def _extract_entity_type(self, target_kls: type) -> Optional[type]:
-        """Extract entity type from potentially generic type like list[Entity]."""
+        """
+        Extract entity type from potentially generic type like list[Entity].
+
+        Example:
+        ─────────────────────────────────────────────────────────────────
+        Input:  list[PostEntity]
+        Output: PostEntity
+
+        Input:  Optional[UserEntity]
+        Output: UserEntity
+
+        Input:  CommentEntity
+        Output: CommentEntity
+        ─────────────────────────────────────────────────────────────────
+        """
         origin = get_origin(target_kls)
 
         if origin is list:
@@ -291,7 +472,18 @@ class ResponseBuilder:
     # ========== Utility Methods ==========
 
     def _get_type_hints(self, entity: type) -> Dict[str, type]:
-        """Safely get type hints for an entity."""
+        """
+        Safely get type hints for an entity.
+
+        Example:
+        ─────────────────────────────────────────────────────────────────
+        Input:  UserEntity (with fields: id: int, name: str, posts: list[Post])
+        Output: {'id': int, 'name': str, 'posts': list[Post]}
+
+        Input:  Invalid class with forward reference issues
+        Output: {}  # graceful fallback
+        ─────────────────────────────────────────────────────────────────
+        """
         try:
             return get_type_hints(entity)
         except Exception:
@@ -303,7 +495,33 @@ class ResponseBuilder:
         field_selection: FieldSelection,
         field_definitions: Dict[str, Tuple[type, Any]]
     ) -> type[BaseModel]:
-        """Create dynamic Pydantic model with proper configuration."""
+        """
+        Create dynamic Pydantic model with proper configuration.
+
+        Example:
+        ─────────────────────────────────────────────────────────────────
+        Input:
+            entity = UserEntity
+            field_selection = FieldSelection with id(field_selection) = 123456789
+            field_definitions = {
+                'id': (int, ...),
+                'name': (str, ...),
+                'posts': (Annotated[List[PostResponse], LoadBy('id')], [])
+            }
+
+        Process:
+            1. Generate unique name: "UserEntityResponse_123456789"
+            2. Call pydantic.create_model() with field definitions
+            3. Set __pydantic_resolve_subset__ = UserEntity
+
+        Output:
+            class UserEntityResponse_123456789(BaseModel):
+                id: int
+                name: str
+                posts: Annotated[List[PostResponse], LoadBy('id')] = []
+                __pydantic_resolve_subset__ = UserEntity
+        ─────────────────────────────────────────────────────────────────
+        """
         model_name = f"{entity.__name__}Response_{id(field_selection)}"
         dynamic_model = create_model(
             model_name,
@@ -329,6 +547,22 @@ class ResponseBuilder:
 
         Returns:
             Set of foreign key field names that need to be included
+
+        Example:
+        ─────────────────────────────────────────────────────────────────
+        Scenario:
+            UserEntity.__relationships__ = [
+                Relationship(field='id', target_kls=list[PostEntity], default_field_name='posts')
+            ]
+            Query selects: {'id', 'name', 'posts'}
+
+        Process:
+            1. Look up relationships for 'posts' field
+            2. Find Relationship with default_field_name='posts'
+            3. Extract field='id' (the FK needed for LoadBy)
+
+        Output: {'id'}
+        ─────────────────────────────────────────────────────────────────
         """
         return self._get_required_fk_fields_cached(entity, frozenset(selected_fields))
 
@@ -343,6 +577,26 @@ class ResponseBuilder:
 
         Returns:
             Set of foreign key field names that need to be included
+
+        Example:
+        ─────────────────────────────────────────────────────────────────
+        Scenario (MultipleRelationship):
+            TaskEntity.__relationships__ = [
+                MultipleRelationship(
+                    field='user_id',
+                    links=[Link(default_field_name='created_tasks', biz='created'),
+                           Link(default_field_name='assigned_tasks', biz='assigned')]
+                )
+            ]
+            Query selects: {'created_tasks'}
+
+        Process:
+            1. Iterate through relationships
+            2. Find MultipleRelationship with link.default_field_name='created_tasks'
+            3. Extract field='user_id'
+
+        Output: {'user_id'}
+        ─────────────────────────────────────────────────────────────────
         """
         fk_fields = set()
 
@@ -374,6 +628,45 @@ class ResponseBuilder:
 
         Returns:
             RelationshipInfo object, or None if not found
+
+        Example:
+        ─────────────────────────────────────────────────────────────────
+        Input (Relationship):
+            entity = UserEntity
+            field_name = 'posts'
+            UserEntity.__relationships__ = [
+                Relationship(field='id', target_kls=list[PostEntity], default_field_name='posts')
+            ]
+
+        Output:
+            RelationshipInfo(
+                field='id',
+                target_kls=list[PostEntity],
+                loader=post_loader,
+                is_link=False
+            )
+
+        ─────────────────────────────────────────────────────────────────
+        Input (MultipleRelationship/Link):
+            entity = TaskEntity
+            field_name = 'assigned_tasks'
+            TaskEntity.__relationships__ = [
+                MultipleRelationship(
+                    field='user_id',
+                    target_kls=list[TaskEntity],
+                    links=[Link(default_field_name='assigned_tasks', biz='assigned', ...)]
+                )
+            ]
+
+        Output:
+            RelationshipInfo(
+                field='user_id',        # from MultipleRelationship
+                target_kls=list[TaskEntity],  # from MultipleRelationship
+                loader=assigned_loader, # from Link
+                biz='assigned',         # from Link
+                is_link=True
+            )
+        ─────────────────────────────────────────────────────────────────
         """
         entity_cfg = self.entity_map.get(entity)
         if not entity_cfg:
