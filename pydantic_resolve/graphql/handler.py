@@ -99,7 +99,7 @@ class GraphQLHandler:
                 Allows loaders to return Pydantic instances instead of dictionaries.
         """
         self.er_diagram = er_diagram
-        self.parser = QueryParser(er_diagram)
+        self.parser = QueryParser()
         self.builder = ResponseBuilder(er_diagram)
         self.schema_builder = SchemaBuilder(er_diagram)
         self.resolver_class = resolver_class

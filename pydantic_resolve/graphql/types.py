@@ -17,7 +17,6 @@ class FieldSelection:
 @dataclass
 class ParsedQuery:
     """Represents a parsed GraphQL query."""
-    root_entity: type
     field_tree: Dict[str, FieldSelection]
     variables: Dict[str, Any] = field(default_factory=dict)
     operation_name: Optional[str] = None

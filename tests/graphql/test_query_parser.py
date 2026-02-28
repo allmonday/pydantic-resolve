@@ -4,7 +4,6 @@
 
 import pytest
 from pydantic_resolve.graphql import QueryParser, QueryParseError
-from tests.graphql.fixtures.entities import BaseEntity
 
 
 class TestQueryParser:
@@ -12,15 +11,13 @@ class TestQueryParser:
 
     def setup_method(self):
         """设置测试环境"""
-        self.er_diagram = BaseEntity.get_diagram()
-        self.parser = QueryParser(self.er_diagram)
+        self.parser = QueryParser()
 
     def test_parse_simple_query(self):
         """测试解析简单查询"""
         query = "{ users { id name } }"
         parsed = self.parser.parse(query)
 
-        assert parsed.root_entity.__name__ == 'UserEntity'
         assert 'users' in parsed.field_tree
         assert 'id' in parsed.field_tree['users'].sub_fields
         assert 'name' in parsed.field_tree['users'].sub_fields
@@ -30,7 +27,6 @@ class TestQueryParser:
         query = "{ users(limit: 10) { id } }"
         parsed = self.parser.parse(query)
 
-        assert parsed.root_entity.__name__ == 'UserEntity'
         assert 'users' in parsed.field_tree
         # 参数值会被正确转换为整数
         assert 'limit' in parsed.field_tree['users'].arguments
@@ -55,8 +51,6 @@ class TestQueryParser:
         # 验证解析成功（语法正确）
         assert parsed is not None
         assert 'invalid' in parsed.field_tree
-        # root_entity 可能为 None（如果无法推断）
-        assert parsed.root_entity is None or parsed.root_entity.__name__ == 'InvalidEntity'
 
     def test_parse_empty_query(self):
         """测试解析空查询"""

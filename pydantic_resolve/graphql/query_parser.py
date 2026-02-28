@@ -12,20 +12,12 @@ from graphql.language.ast import (
     OperationType,
 )
 
-from ..utils.er_diagram import ErDiagram
 from .types import FieldSelection, ParsedQuery
 from .exceptions import QueryParseError
 
 
 class QueryParser:
     """Parse GraphQL queries and extract field selection trees"""
-
-    def __init__(self, er_diagram: ErDiagram):
-        """
-        Args:
-            er_diagram: Entity relationship diagram
-        """
-        self.entity_map = {cfg.kls.__name__: cfg.kls for cfg in er_diagram.configs}
 
     def parse(self, query: str) -> ParsedQuery:
         """
@@ -61,20 +53,7 @@ class QueryParser:
             root_field_name = root_field.name.value
             field_tree[root_field_name] = self._build_field_tree(root_field)
 
-        # Try to infer first entity name (for backward compatibility, but don't validate)
-        root_entity = None
-        first_field = root_fields[0]
-        try:
-            first_field_name = first_field.name.value
-            root_entity_name = self._infer_entity_from_field(first_field_name)
-            if root_entity_name in self.entity_map:
-                root_entity = self.entity_map[root_entity_name]
-        except QueryParseError:
-            # If inference fails, let handler find it via query_map
-            pass
-
         return ParsedQuery(
-            root_entity=root_entity,
             field_tree=field_tree,
             variables={},
             operation_name=None
@@ -102,42 +81,6 @@ class QueryParser:
                 root_fields.append(selection)
 
         return root_fields
-
-    def _infer_entity_from_field(self, field_name: str) -> str:
-        """
-        Infer entity name from field name
-
-        Examples:
-            users -> UserEntity
-            user -> UserEntity
-            posts -> PostEntity
-        """
-        # Convert field name to PascalCase
-        # users -> Users
-        # user -> User
-        pascal_name = field_name.capitalize()
-
-        # Try to match entity name
-        if pascal_name + 'Entity' in self.entity_map:
-            return pascal_name + 'Entity'
-
-        # Try removing trailing 's' (plural to singular)
-        if field_name.endswith('s'):
-            singular = field_name[:-1].capitalize()
-            if singular + 'Entity' in self.entity_map:
-                return singular + 'Entity'
-
-        # Iterate through all entities to find a match
-        for entity_name in self.entity_map.keys():
-            entity_lower = entity_name.lower()
-            # Check if it's singular form
-            if field_name.lower() == entity_lower.replace('entity', ''):
-                return entity_name
-            # Check if it's plural form
-            if field_name.lower().endswith('s') and field_name[:-1].lower() == entity_lower.replace('entity', ''):
-                return entity_name
-
-        raise QueryParseError(f"Cannot infer entity name from field name '{field_name}'")
 
     def _build_field_tree(self, field_node: FieldNode) -> FieldSelection:
         """Recursively build field selection tree"""
