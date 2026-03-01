@@ -7,6 +7,8 @@
 ![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
+![](./docs/images/features.png)
+
 ## 这是什么？
 
 **pydantic-resolve** 是一个基于 Pydantic 的声明式数据组装工具，让你可以用简洁的方式构建复杂的数据结构，无需编写繁琐的数据获取和组装代码。

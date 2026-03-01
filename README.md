@@ -9,6 +9,8 @@
 
 [中文版](./README.zh.md)
 
+![](./docs/images/features.png)
+
 ## What is this?
 
 **pydantic-resolve** is a Pydantic-based declarative data assembly tool that enables you to build complex data structures with concise code, without writing tedious data fetching and assembly logic.
