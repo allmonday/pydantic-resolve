@@ -1,5 +1,9 @@
 # Changelog
 
+- **Major (X.0.0)**: Major new features or breaking changes
+- **Minor (x.Y.0)**: New features, backward compatible
+- **Patch (x.y.Z)**: Bug fixes and minor improvements
+
 ## v3.0
 
 ### v3.0.2 (2026-3-1)
