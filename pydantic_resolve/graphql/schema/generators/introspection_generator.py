@@ -11,8 +11,8 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, get_type_hin
 
 from pydantic import BaseModel
 
-from .base import SchemaGenerator
-from ..type_registry import TypeInfo, FieldInfo, ArgumentInfo, SCALAR_TYPES
+from pydantic_resolve.graphql.schema.generators.base import SchemaGenerator
+from pydantic_resolve.graphql.schema.type_registry import TypeInfo, FieldInfo, ArgumentInfo, SCALAR_TYPES
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.er_diagram import Relationship
 from pydantic_resolve.utils.types import get_core_types

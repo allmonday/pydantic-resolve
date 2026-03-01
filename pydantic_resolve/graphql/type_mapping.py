@@ -5,8 +5,8 @@ Provides centralized type conversion between Python and GraphQL types.
 """
 
 from typing import get_origin, get_args, Union
-from ..utils.class_util import safe_issubclass
-from ..utils.types import get_core_types
+from pydantic_resolve.utils.class_util import safe_issubclass
+from pydantic_resolve.utils.types import get_core_types
 from pydantic import BaseModel
 
 

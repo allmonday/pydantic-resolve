@@ -8,9 +8,9 @@ ensuring consistency between SDL and Introspection output formats.
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
 
-from ..type_registry import TypeRegistry, TypeInfo, FieldInfo
-from ..type_collector import TypeCollector
-from ..type_mapper import TypeMapper
+from pydantic_resolve.graphql.schema.type_registry import TypeRegistry, TypeInfo, FieldInfo
+from pydantic_resolve.graphql.schema.type_collector import TypeCollector
+from pydantic_resolve.graphql.schema.type_mapper import TypeMapper
 
 if TYPE_CHECKING:
     from pydantic_resolve.utils.er_diagram import ErDiagram

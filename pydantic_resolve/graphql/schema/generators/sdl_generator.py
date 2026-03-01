@@ -10,8 +10,8 @@ from typing import Dict, List, get_args, get_origin, get_type_hints
 
 from pydantic import BaseModel
 
-from .base import SchemaGenerator
-from ..type_registry import TypeInfo, FieldInfo
+from pydantic_resolve.graphql.schema.generators.base import SchemaGenerator
+from pydantic_resolve.graphql.schema.type_registry import TypeInfo, FieldInfo
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.er_diagram import Relationship
 from pydantic_resolve.utils.types import get_core_types

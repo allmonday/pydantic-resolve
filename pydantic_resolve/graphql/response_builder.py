@@ -7,11 +7,11 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union, get_t
 from pydantic import BaseModel, create_model, Field
 from functools import lru_cache
 
-from ..constant import ENSURE_SUBSET_REFERENCE
-from ..utils.er_diagram import ErDiagram, Relationship, MultipleRelationship, LoadBy
-from ..utils.class_util import safe_issubclass
-from ..utils.types import get_core_types
-from .types import FieldSelection
+from pydantic_resolve.constant import ENSURE_SUBSET_REFERENCE
+from pydantic_resolve.utils.er_diagram import ErDiagram, Relationship, MultipleRelationship, LoadBy
+from pydantic_resolve.utils.class_util import safe_issubclass
+from pydantic_resolve.utils.types import get_core_types
+from pydantic_resolve.graphql.types import FieldSelection
 
 
 @dataclass

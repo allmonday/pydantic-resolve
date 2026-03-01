@@ -12,8 +12,8 @@ from graphql.language.ast import (
     OperationType,
 )
 
-from .types import FieldSelection, ParsedQuery
-from .exceptions import QueryParseError
+from pydantic_resolve.graphql.types import FieldSelection, ParsedQuery
+from pydantic_resolve.graphql.exceptions import QueryParseError
 
 
 class QueryParser:

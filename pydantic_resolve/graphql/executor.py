@@ -14,12 +14,12 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel
 
-from ..resolver import Resolver
-from ..utils.class_util import safe_issubclass
-from ..utils.types import get_core_types
-from .exceptions import GraphQLError
-from .query_parser import QueryParser
-from .response_builder import ResponseBuilder
+from pydantic_resolve.resolver import Resolver
+from pydantic_resolve.utils.class_util import safe_issubclass
+from pydantic_resolve.utils.types import get_core_types
+from pydantic_resolve.graphql.exceptions import GraphQLError
+from pydantic_resolve.graphql.query_parser import QueryParser
+from pydantic_resolve.graphql.response_builder import ResponseBuilder
 
 logger = logging.getLogger(__name__)
 

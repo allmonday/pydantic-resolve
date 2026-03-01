@@ -9,8 +9,8 @@ backward compatibility with the public API.
 from typing import Dict, List
 
 
-from .schema.generators.sdl_generator import SDLGenerator
-from ..utils.er_diagram import ErDiagram
+from pydantic_resolve.graphql.schema.generators.sdl_generator import SDLGenerator
+from pydantic_resolve.utils.er_diagram import ErDiagram
 
 
 class SchemaBuilder:

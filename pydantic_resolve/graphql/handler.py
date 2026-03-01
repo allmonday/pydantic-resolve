@@ -7,14 +7,14 @@ import logging
 import types
 from typing import Any, Callable, Dict, ForwardRef, Optional, Tuple, Union, get_args, get_origin
 
-from ..resolver import Resolver
-from ..utils.er_diagram import ErDiagram
-from .exceptions import GraphQLError
-from .executor import QueryExecutor
-from .introspection import IntrospectionHelper
-from .query_parser import QueryParser
-from .response_builder import ResponseBuilder
-from .schema_builder import SchemaBuilder
+from pydantic_resolve.utils.er_diagram import ErDiagram
+from pydantic_resolve.utils.resolver_configurator import config_resolver
+from pydantic_resolve.graphql.exceptions import GraphQLError
+from pydantic_resolve.graphql.executor import QueryExecutor
+from pydantic_resolve.graphql.introspection import IntrospectionHelper
+from pydantic_resolve.graphql.query_parser import QueryParser
+from pydantic_resolve.graphql.response_builder import ResponseBuilder
+from pydantic_resolve.graphql.schema_builder import SchemaBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -30,19 +30,22 @@ class GraphQLHandler:
     def __init__(
         self,
         er_diagram: ErDiagram,
-        resolver_class: type[Resolver] = Resolver,
         enable_from_attribute_in_type_adapter: bool = False
     ):
         """
         Args:
             er_diagram: Entity relationship diagram
-            resolver_class: Custom Resolver class (optional)
             enable_from_attribute_in_type_adapter: Enable Pydantic from_attributes mode for type adapter validation.
                 Allows loaders to return Pydantic instances instead of dictionaries.
         """
         self.er_diagram = er_diagram
-        self.resolver_class = resolver_class
         self.enable_from_attribute_in_type_adapter = enable_from_attribute_in_type_adapter
+
+        # Create diagram-specific resolver class
+        self.resolver_class = config_resolver(
+            name='GraphQLResolver',
+            er_diagram=er_diagram
+        )
 
         # Initialize components
         self.parser = QueryParser()
@@ -58,7 +61,7 @@ class GraphQLHandler:
         self.executor = QueryExecutor(
             parser=self.parser,
             builder=self.builder,
-            resolver_class=resolver_class,
+            resolver_class=self.resolver_class,
             enable_from_attribute_in_type_adapter=enable_from_attribute_in_type_adapter
         )
 

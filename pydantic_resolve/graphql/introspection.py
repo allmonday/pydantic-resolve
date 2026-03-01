@@ -7,7 +7,7 @@ This module provides the IntrospectionHelper class that delegates to Introspecti
 
 from typing import Any, Callable, Dict, Tuple
 
-from .schema.generators.introspection_generator import IntrospectionGenerator
+from pydantic_resolve.graphql.schema.generators.introspection_generator import IntrospectionGenerator
 
 
 class IntrospectionHelper:

@@ -6,6 +6,12 @@
 
 ## v3.0
 
+### v3.0.3 (2026-3-1)
+- refactor:
+  - `GraphQLHandler` now creates diagram-specific resolver internally using `config_resolver`, removing `resolver_class` parameter
+  - ensures `LoadBy` annotations work without requiring `config_global_resolver()` to be called
+  - convert all relative imports to absolute imports in `pydantic_resolve/` directory
+
 ### v3.0.2 (2026-3-1)
 - fix:
   - fix introspection for scalar return types (bool, int, float, str) in mutations
