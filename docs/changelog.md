@@ -2,6 +2,10 @@
 
 ## v3.0
 
+### v3.0.2 (2026-3-1)
+- fix:
+  - fix introspection for scalar return types (bool, int, float, str) in mutations
+
 ### v3.0.1 (2026-2-28)
 - refactor:
   - graphql interface

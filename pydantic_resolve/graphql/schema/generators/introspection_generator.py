@@ -522,8 +522,19 @@ class IntrospectionGenerator(SchemaGenerator):
         if return_type == inspect.Parameter.empty:
             return {"kind": "SCALAR", "name": "String", "ofType": None}
 
+        # Handle scalar types (bool, int, str, float, etc.)
+        if return_type is bool:
+            return {"kind": "SCALAR", "name": "Boolean", "ofType": None}
+        elif return_type is int:
+            return {"kind": "SCALAR", "name": "Int", "ofType": None}
+        elif return_type is float:
+            return {"kind": "SCALAR", "name": "Float", "ofType": None}
+        elif return_type is str:
+            return {"kind": "SCALAR", "name": "String", "ofType": None}
+
         return_type_str = str(return_type)
 
+        # Handle list types
         if "list" in return_type_str.lower():
             return {
                 "kind": "LIST",
@@ -535,15 +546,17 @@ class IntrospectionGenerator(SchemaGenerator):
                     "ofType": None
                 }
             }
-        elif hasattr(entity, '__name__'):
+
+        # Handle entity/object types
+        if hasattr(entity, '__name__'):
             return {
                 "kind": "OBJECT",
                 "name": entity.__name__,
                 "description": None,
                 "ofType": None
             }
-        else:
-            return {"kind": "SCALAR", "name": "String", "ofType": None}
+
+        return {"kind": "SCALAR", "name": "String", "ofType": None}
 
     def _build_graphql_type(self, field_type: Any) -> Dict[str, Any]:
         """Build GraphQL type definition for output types."""

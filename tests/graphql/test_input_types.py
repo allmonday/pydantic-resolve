@@ -113,6 +113,11 @@ class PostEntity(BaseModel, BaseEntity):
             return [p for p in posts if p.author_id == author_id]
         return posts
 
+    @mutation
+    async def delete_post(cls, id: int) -> bool:
+        """Delete a post, return success status"""
+        return True
+
 
 # Configure global resolver
 
@@ -360,3 +365,32 @@ class TestInputTypeIntrospection:
         input_arg = next(a for a in create_user_field["args"] if a["name"] == "input")
         assert input_arg["type"]["kind"] == "INPUT_OBJECT"
         assert input_arg["type"]["name"] == "CreateUserInput"
+
+    @pytest.mark.asyncio
+    async def test_mutation_with_bool_return_type(self, handler):
+        """Test that mutation returning bool has correct SCALAR: Boolean type in introspection"""
+        query = """
+        {
+            __type(name: "Mutation") {
+                fields {
+                    name
+                    type {
+                        kind
+                        name
+                    }
+                }
+            }
+        }
+        """
+
+        result = await handler.execute(query)
+
+        assert result["errors"] is None
+
+        # Find deletePost mutation
+        mutation_fields = result["data"]["__type"]["fields"]
+        delete_post_field = next(f for f in mutation_fields if f["name"] == "deletePost")
+
+        # Check the return type is SCALAR Boolean
+        assert delete_post_field["type"]["kind"] == "SCALAR"
+        assert delete_post_field["type"]["name"] == "Boolean"
