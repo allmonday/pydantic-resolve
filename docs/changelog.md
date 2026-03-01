@@ -6,6 +6,13 @@
 
 ## v3.0
 
+### v3.0.4 (2026-3-1)
+- feat:
+  - add LRU cache for GraphQL response model generation in `ResponseBuilder`
+  - `FieldSelection` now implements `__hash__` and `__eq__` to support caching (arguments excluded from comparison)
+  - same query structure with different arguments will hit cache, improving performance
+  - cache size: 256 entries with LRU eviction
+
 ### v3.0.3 (2026-3-1)
 - refactor:
   - `GraphQLHandler` now creates diagram-specific resolver internally using `config_resolver`, removing `resolver_class` parameter

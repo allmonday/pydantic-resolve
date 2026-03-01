@@ -63,6 +63,9 @@ class ResponseBuilder:
         """
         self.er_diagram = er_diagram
         self.entity_map = {cfg.kls: cfg for cfg in er_diagram.configs}
+        # Bind lru_cache to instance method
+        # This provides LRU eviction + thread safety + instance isolation
+        self._build_cached = lru_cache(maxsize=256)(self._build_model_impl)
 
     def build_response_model(
         self,
@@ -71,7 +74,11 @@ class ResponseBuilder:
         parent_path: str = ""
     ) -> type[BaseModel]:
         """
-        Recursively build Pydantic response model
+        Recursively build Pydantic response model (with caching).
+
+        This method checks the cache first and returns cached models when available.
+        The cache key is based on entity identity and field selection structure,
+        excluding arguments (as they don't affect model structure).
 
         Args:
             entity: Base entity class
@@ -81,7 +88,16 @@ class ResponseBuilder:
         Returns:
             Dynamically created Pydantic model class
 
-        Example Transformation:
+        Caching Behavior:
+        ─────────────────────────────────────────────────────────────────
+        - Same query structure with different arguments hits cache:
+          { user(id: 1) { name } } and { user(id: 2) { name } }
+        - Different query structure misses cache:
+          { user { name } } and { user { email } }
+
+
+             Example Transformation:
+
         ─────────────────────────────────────────────────────────────────
         GraphQL Query:
             { users { id name posts { title } } }
@@ -118,6 +134,25 @@ class ResponseBuilder:
            - Allows ErLoaderPreGenerator.prepare() to find entity config
            - Required for LoadBy annotation to resolve correct loader
         ─────────────────────────────────────────────────────────────────
+        """
+        return self._build_cached(entity, field_selection, parent_path)
+
+    def _build_model_impl(
+        self,
+        entity: type,
+        field_selection: FieldSelection,
+        parent_path: str
+    ) -> type[BaseModel]:
+        """
+        Core model building logic (cached by lru_cache).
+
+        Args:
+            entity: Base entity class
+            field_selection: Field selection (must be hashable)
+            parent_path: Parent path
+
+        Returns:
+            Dynamically created Pydantic model class
         """
         field_definitions: Dict[str, Tuple[type, Any]] = {}
         type_hints = self._get_type_hints(entity)
