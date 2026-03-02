@@ -2,10 +2,29 @@
 示例实体定义 - 用于 GraphQL 演示
 """
 
+from enum import Enum
 from typing import List, Optional, Dict
 from pydantic import BaseModel, Field
 from pydantic_resolve import base_entity, query, mutation, MultipleRelationship, Relationship, Link
 from pydantic_resolve.utils.dataloader import build_list, build_object
+
+
+# =====================================
+# Enum Types
+# =====================================
+
+class UserRole(str, Enum):
+    """用户角色枚举"""
+    ADMIN = "admin"
+    USER = "user"
+    GUEST = "guest"
+
+
+class PostStatus(str, Enum):
+    """文章状态枚举"""
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    ARCHIVED = "archived"
 
 
 # =====================================
@@ -16,7 +35,7 @@ class CreateUserInput(BaseModel):
     """创建用户的输入类型"""
     name: str = Field(description="用户名称")
     email: str = Field(description="邮箱地址")
-    role: str = Field(default="user", description="用户角色")
+    role: UserRole = Field(default=UserRole.USER, description="用户角色")
 
 
 class CreatePostInput(BaseModel):
@@ -24,21 +43,21 @@ class CreatePostInput(BaseModel):
     title: str = Field(description="文章标题")
     content: str = Field(description="文章内容")
     author_id: int = Field(description="作者ID")
-    status: str = Field(default="draft", description="文章状态")
+    status: PostStatus = Field(default=PostStatus.DRAFT, description="文章状态")
 
 
 class UpdateUserInput(BaseModel):
     """更新用户的输入类型"""
     name: Optional[str] = Field(default=None, description="用户名称")
     email: Optional[str] = Field(default=None, description="邮箱地址")
-    role: Optional[str] = Field(default=None, description="用户角色")
+    role: Optional[UserRole] = Field(default=None, description="用户角色")
 
 
 class UpdatePostInput(BaseModel):
     """更新文章的输入类型"""
     title: Optional[str] = Field(default=None, description="文章标题")
     content: Optional[str] = Field(default=None, description="文章内容")
-    status: Optional[str] = Field(default=None, description="文章状态")
+    status: Optional[PostStatus] = Field(default=None, description="文章状态")
 
 
 # 模拟数据库（在类定义后初始化）
@@ -97,17 +116,18 @@ class UserEntity(BaseModel, BaseEntity):
     表示系统中的用户信息，包括基本资料和关联的文章数据。
     """
     __relationships__ = [
-        MultipleRelationship(field='id', target_kls=list['PostEntity'], 
+        MultipleRelationship(field='id', target_kls=list['PostEntity'],
                              links= [
                                  Link( biz="mypost", loader=user_posts_loader, default_field_name='myposts'),
-                                 Link( biz="mypost2", loader=user_posts_loader, default_field_name='myposts2') 
+                                 Link( biz="mypost2", loader=user_posts_loader, default_field_name='myposts2')
                                 ])
     ]
     id: int = Field(description="用户唯一标识ID")
     name: str = Field(description="用户姓名")
     email: str = Field(description="用户邮箱地址")
-    role: str = Field(description="用户角色（admin/user）")
+    role: UserRole = Field(description="用户角色")
     something: dict = Field(default={'key': 'value'}, description="额外信息字典")
+    meta: list[UserMetaEntity] = Field(default_factory=list, description="用户元信息列表")
     meta: list[UserMetaEntity] = Field(default_factory=list, description="用户元信息列表")
 
     @query(name='users')
@@ -124,10 +144,10 @@ class UserEntity(BaseModel, BaseEntity):
     @query(name='admins')
     async def get_admins(cls) -> List['UserEntity']:
         """获取所有管理员"""
-        return [u for u in users_db.values() if u.role == 'admin']
+        return [u for u in users_db.values() if u.role == UserRole.ADMIN]
 
     @mutation(name='createUser', description='创建新用户')
-    async def create_user(cls, name: str, email: str, role: str = 'user') -> 'UserEntity':
+    async def create_user(cls, name: str, email: str, role: UserRole = UserRole.USER) -> 'UserEntity':
         """创建新用户并返回创建的用户对象"""
         global user_id_counter
         user_id_counter += 1
@@ -203,10 +223,10 @@ class PostEntity(BaseModel, BaseEntity):
     title: str = Field(description="文章标题")
     content: str = Field(default="", description="文章内容")
     author_id: int = Field(description="作者用户ID")
-    status: str = Field(description="文章状态（published/draft）")
+    status: PostStatus = Field(description="文章状态")
 
     @query(name='posts')
-    async def get_all(cls, limit: int = 10, status: Optional[str] = None) -> List['PostEntity']:
+    async def get_all(cls, limit: int = 10, status: Optional[PostStatus] = None) -> List['PostEntity']:
         """获取所有文章（可按状态筛选）"""
         all_posts = list(posts_db.values())
         if status:
@@ -225,7 +245,7 @@ class PostEntity(BaseModel, BaseEntity):
         return comments[offset:offset + limit]
 
     @mutation(name='createPost', description='创建新文章')
-    async def create_post(cls, title: str, content: str, author_id: int, status: str = 'draft') -> 'PostEntity':
+    async def create_post(cls, title: str, content: str, author_id: int, status: PostStatus = PostStatus.DRAFT) -> 'PostEntity':
         """创建新文章并返回创建的文章对象"""
         global post_id_counter
         post_id_counter += 1
@@ -240,7 +260,7 @@ class PostEntity(BaseModel, BaseEntity):
         return new_post
 
     @mutation(name='updatePost')
-    async def update_post(cls, id: int, title: Optional[str] = None, content: Optional[str] = None, status: Optional[str] = None) -> Optional['PostEntity']:
+    async def update_post(cls, id: int, title: Optional[str] = None, content: Optional[str] = None, status: Optional[PostStatus] = None) -> Optional['PostEntity']:
         """更新文章内容或状态"""
         if id in posts_db:
             post = posts_db[id]
@@ -258,7 +278,7 @@ class PostEntity(BaseModel, BaseEntity):
         """发布文章（将状态改为 published）"""
         if id in posts_db:
             post = posts_db[id]
-            post.status = 'published'
+            post.status = PostStatus.PUBLISHED
             return post
         return None
 
@@ -359,17 +379,17 @@ def init_db():
     global users_db, posts_db, comments_db
 
     users_db = {
-        1: UserEntity(id=1, name="Alice", email="alice@example.com", role="admin"),
-        2: UserEntity(id=2, name="Bob", email="bob@example.com", role="user"),
-        3: UserEntity(id=3, name="Charlie", email="charlie@example.com", role="user"),
-        4: UserEntity(id=4, name="Diana", email="diana@example.com", role="admin"),
+        1: UserEntity(id=1, name="Alice", email="alice@example.com", role=UserRole.ADMIN),
+        2: UserEntity(id=2, name="Bob", email="bob@example.com", role=UserRole.USER),
+        3: UserEntity(id=3, name="Charlie", email="charlie@example.com", role=UserRole.USER),
+        4: UserEntity(id=4, name="Diana", email="diana@example.com", role=UserRole.ADMIN),
     }
 
     posts_db = {
-        1: PostEntity(id=1, title="First Post", content="Hello World!", author_id=1, status="published"),
-        2: PostEntity(id=2, title="Second Post", content="GraphQL is awesome", author_id=2, status="published"),
-        3: PostEntity(id=3, title="Third Post", content="Python tips", author_id=1, status="draft"),
-        4: PostEntity(id=4, title="Fourth Post", content="FastAPI tutorial", author_id=3, status="published"),
+        1: PostEntity(id=1, title="First Post", content="Hello World!", author_id=1, status=PostStatus.PUBLISHED),
+        2: PostEntity(id=2, title="Second Post", content="GraphQL is awesome", author_id=2, status=PostStatus.PUBLISHED),
+        3: PostEntity(id=3, title="Third Post", content="Python tips", author_id=1, status=PostStatus.DRAFT),
+        4: PostEntity(id=4, title="Fourth Post", content="FastAPI tutorial", author_id=3, status=PostStatus.PUBLISHED),
     }
 
     comments_db = {

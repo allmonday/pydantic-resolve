@@ -6,6 +6,18 @@
 
 ## v3.0
 
+### v3.0.5 (2026-3-2)
+- feat:
+  - **Enum support for GraphQL**: Full enum type support across SDL generation, introspection, query execution, and mutation input
+  - Enum fields now serialize to enum name (e.g., `"ADMIN"`) conforming to GraphQL convention
+  - Enum default values in introspection formatted correctly (e.g., `"USER"` instead of `"UserRole.USER"`)
+  - Mutation arguments accept enum names and convert to Python enum members
+- refactor:
+  - **Enum serialization optimization**: Replaced recursive `_convert_enum_to_name` post-processing with Pydantic `PlainSerializer` for better performance
+  - Extracted `_add_enum_definitions()` helper in SDL generator to reduce code duplication
+  - Fixed `_format_default_value()` return type and moved Enum import to module level in introspection generator
+  - Added enum handling in `_map_python_type_to_gql_for_input()` for input types
+
 ### v3.0.4 (2026-3-1)
 - feat:
   - add LRU cache for GraphQL response model generation in `ResponseBuilder`

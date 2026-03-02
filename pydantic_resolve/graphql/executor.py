@@ -10,6 +10,7 @@ import asyncio
 import inspect
 import logging
 import os
+from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel
@@ -285,6 +286,7 @@ class QueryExecutor:
     ) -> Dict[str, Any]:
         """
         Convert method parameters, transforming dict to corresponding Pydantic BaseModel instances
+        and enum names to enum values.
 
         Args:
             method: Method object
@@ -306,12 +308,24 @@ class QueryExecutor:
                 value = arguments[param_name]
                 param_type = param.annotation
 
-                # If parameter type is BaseModel and value is dict, convert
+                # If parameter type is annotated
                 if param_type != inspect.Parameter.empty:
                     core_types = get_core_types(param_type)
                     converted_value = None
+
                     for core_type in core_types:
-                        if safe_issubclass(core_type, BaseModel):
+                        # Handle Enum types - convert string name to enum member
+                        if safe_issubclass(core_type, Enum):
+                            if isinstance(value, str):
+                                # Convert GraphQL enum name to Python enum member
+                                # e.g., "USER" -> UserRole.USER
+                                converted_value = core_type[value]
+                                break
+                            elif isinstance(value, Enum):
+                                converted_value = value
+                                break
+                        # Handle BaseModel types
+                        elif safe_issubclass(core_type, BaseModel):
                             if isinstance(value, dict):
                                 converted_value = self._convert_to_model(value, core_type)
                                 break
@@ -323,6 +337,7 @@ class QueryExecutor:
                                         for item in value
                                     ]
                                 break
+
                     if converted_value is not None:
                         converted[param_name] = converted_value
                     else:

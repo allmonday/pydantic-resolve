@@ -4,9 +4,10 @@ Type mapping utilities for GraphQL.
 Provides centralized type conversion between Python and GraphQL types.
 """
 
-from typing import get_origin, get_args, Union
+from enum import Enum
+from typing import get_origin, get_args, Union, List
 from pydantic_resolve.utils.class_util import safe_issubclass
-from pydantic_resolve.utils.types import get_core_types
+from pydantic_resolve.utils.types import get_core_types, _is_optional
 from pydantic import BaseModel
 
 
@@ -17,6 +18,54 @@ PYTHON_TO_GQL_TYPES = {
     float: 'Float',
     bool: 'Boolean',
 }
+
+
+def is_enum_type(python_type: type) -> bool:
+    """
+    Check if type is an Enum subclass.
+
+    Args:
+        python_type: Python type
+
+    Returns:
+        True if the type is an Enum subclass, False otherwise
+
+    Examples:
+        >>> from enum import Enum
+        >>> class Status(Enum):
+        ...     ACTIVE = "active"
+        >>> is_enum_type(Status)
+        True
+        >>> is_enum_type(str)
+        False
+    """
+    try:
+        return safe_issubclass(python_type, Enum)
+    except TypeError:
+        return False
+
+
+def get_enum_names(enum_class: type) -> List[str]:
+    """
+    Get all enum member names from an Enum class.
+
+    Args:
+        enum_class: An Enum subclass
+
+    Returns:
+        List of enum member names
+
+    Examples:
+        >>> from enum import Enum
+        >>> class Status(Enum):
+        ...     ACTIVE = "active"
+        ...     INACTIVE = "inactive"
+        >>> get_enum_values(Status)
+        ['ACTIVE', 'INACTIVE']
+    """
+    if not is_enum_type(enum_class):
+        return []
+    return [member.name for member in enum_class]
 
 
 def map_python_to_graphql(python_type: type, include_required: bool = True) -> str:
@@ -38,6 +87,13 @@ def map_python_to_graphql(python_type: type, include_required: bool = True) -> s
         >>> map_python_to_graphql(Optional[str])
         "String"
     """
+    # Check if it's Optional type (Union with None)
+    is_optional = _is_optional(python_type)
+
+    # For Optional types, don't include required suffix
+    if is_optional:
+        include_required = False
+
     required_suffix = "!" if include_required else ""
 
     # Use get_core_types to handle all wrapper types
@@ -60,7 +116,10 @@ def map_python_to_graphql(python_type: type, include_required: bool = True) -> s
         return f"[{inner_gql}]{required_suffix}"
     else:
         # T -> T!
-        if safe_issubclass(core_type, BaseModel):
+        # Check if it's an enum type first
+        if is_enum_type(core_type):
+            return f"{core_type.__name__}{required_suffix}"
+        elif safe_issubclass(core_type, BaseModel):
             return f"{core_type.__name__}{required_suffix}"
         else:
             # Scalar type
@@ -76,7 +135,7 @@ def map_scalar_type(python_type: type) -> str:
         python_type: Python type
 
     Returns:
-        GraphQL scalar type name ("Int", "String", "Boolean", "Float")
+        GraphQL scalar type name ("Int", "String", "Boolean", "Float") or enum name
 
     Examples:
         >>> map_scalar_type(int)
@@ -84,6 +143,10 @@ def map_scalar_type(python_type: type) -> str:
         >>> map_scalar_type(str)
         "String"
     """
+    # Check if it's an enum type - return enum class name as GraphQL type
+    if is_enum_type(python_type):
+        return python_type.__name__
+
     # Check direct mapping
     if python_type in PYTHON_TO_GQL_TYPES:
         return PYTHON_TO_GQL_TYPES[python_type]

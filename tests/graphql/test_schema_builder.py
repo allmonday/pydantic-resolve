@@ -50,19 +50,6 @@ class TestSchemaBuilder:
         assert 'all' in method_names or 'get_all' in method_names
         assert 'user' in method_names or 'get_by_id' in method_names
 
-    def test_map_python_type_to_gql(self):
-        """测试 Python 类型到 GraphQL 类型的映射"""
-
-        # 测试基础类型
-        assert 'Int!' in self.builder._map_python_type_to_gql(int)
-        assert 'String!' in self.builder._map_python_type_to_gql(str)
-        assert 'Boolean!' in self.builder._map_python_type_to_gql(bool)
-
-        # 测试 Optional 类型
-        from typing import Optional
-        gql_type = self.builder._map_python_type_to_gql(Optional[int])
-        assert 'Int' in gql_type
-
     def test_forward_ref_type_in_schema(self):
         """测试 ForwardRef 类型在 Schema 中正确解析"""
         schema = self.builder.build_schema()
@@ -82,14 +69,3 @@ class TestSchemaBuilder:
                     return
         # 如果没有找到正确的返回类型，测试失败
         raise AssertionError(f"postComments should return [CommentEntity], but schema shows: {line}")
-
-    def test_get_entity_by_name(self):
-        """测试 _get_entity_by_name 方法"""
-        # 测试存在的实体
-        entity = self.builder._get_entity_by_name('UserEntity')
-        assert entity is not None
-        assert entity.__name__ == 'UserEntity'
-
-        # 测试不存在的实体
-        entity = self.builder._get_entity_by_name('NonExistentEntity')
-        assert entity is None

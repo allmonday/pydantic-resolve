@@ -6,7 +6,7 @@ using the unified type collection and mapping logic.
 """
 
 import inspect
-from typing import Dict, List, get_args, get_origin, get_type_hints
+from typing import Dict, List, Set, get_args, get_origin, get_type_hints
 
 from pydantic import BaseModel
 
@@ -15,7 +15,7 @@ from pydantic_resolve.graphql.schema.type_registry import TypeInfo, FieldInfo
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.er_diagram import Relationship
 from pydantic_resolve.utils.types import get_core_types
-from pydantic_resolve.graphql.type_mapping import map_scalar_type
+from pydantic_resolve.graphql.type_mapping import map_scalar_type, is_enum_type, get_enum_names
 from pydantic_resolve.graphql.exceptions import FieldNameConflictError
 
 
@@ -38,18 +38,23 @@ class SDLGenerator(SchemaGenerator):
         if self.validate_conflicts:
             self._validate_all_entities()
 
+        enum_defs: List[str] = []
         input_defs: List[str] = []
         type_defs: List[str] = []
         query_defs: List[str] = []
         mutation_defs: List[str] = []
         processed_types = set()
         processed_input_types = set()
+        processed_enums = set()
 
         # Generate all entity types
         for entity_cfg in self.er_diagram.configs:
             type_def = self._build_type_definition(entity_cfg)
             type_defs.append(type_def)
             processed_types.add(entity_cfg.kls)
+
+            # Collect enum types from entity
+            self._add_enum_definitions(entity_cfg.kls, enum_defs, processed_enums)
 
             # Extract @query methods
             query_methods = self._extract_query_methods(entity_cfg.kls)
@@ -69,6 +74,9 @@ class SDLGenerator(SchemaGenerator):
                 type_defs.append(type_def)
                 processed_types.add(nested_type)
 
+                # Collect enum types from nested types
+                self._add_enum_definitions(nested_type, enum_defs, processed_enums)
+
         # Collect and generate Input Types
         input_types = self._collect_input_types()
         for input_type in input_types:
@@ -77,8 +85,15 @@ class SDLGenerator(SchemaGenerator):
                 input_defs.append(input_def)
                 processed_input_types.add(input_type)
 
+                # Collect enum types from input types
+                self._add_enum_definitions(input_type, enum_defs, processed_enums)
+
         # Assemble schema
         schema_parts = []
+
+        # Add enum definitions first (before types)
+        if enum_defs:
+            schema_parts.append("\n".join(enum_defs))
 
         if input_defs:
             schema_parts.append("\n".join(input_defs))
@@ -232,7 +247,10 @@ class SDLGenerator(SchemaGenerator):
             inner_gql = self._map_python_type_to_gql(core_type)
             return f"[{inner_gql}]!"
         else:
-            if safe_issubclass(core_type, BaseModel):
+            # Check if it's an enum type first
+            if is_enum_type(core_type):
+                return f"{core_type.__name__}!"
+            elif safe_issubclass(core_type, BaseModel):
                 return f"{core_type.__name__}!"
             else:
                 scalar_name = map_scalar_type(core_type)
@@ -268,7 +286,10 @@ class SDLGenerator(SchemaGenerator):
 
         core_type = core_types[0]
 
-        if safe_issubclass(core_type, BaseModel):
+        # Handle enum types
+        if is_enum_type(core_type):
+            return f"{core_type.__name__}!"
+        elif safe_issubclass(core_type, BaseModel):
             return f"{core_type.__name__}!"
         else:
             scalar_name = map_scalar_type(core_type)
@@ -562,3 +583,56 @@ class SDLGenerator(SchemaGenerator):
                         pass
 
         return input_types
+
+    def _build_enum_definition(self, enum_class: type) -> str:
+        """Generate GraphQL enum definition.
+
+        Args:
+            enum_class: Python Enum class
+
+        Returns:
+            GraphQL enum definition string
+        """
+        values = get_enum_names(enum_class)
+        if not values:
+            return ""
+        values_str = "\n".join(f"  {v}" for v in values)
+        return f"enum {enum_class.__name__} {{\n{values_str}\n}}"
+
+    def _collect_enum_types(self, kls: type) -> set:
+        """Collect all enum types used in entity fields.
+
+        Args:
+            kls: Pydantic BaseModel class
+
+        Returns:
+            Set of enum types found in the class
+        """
+        enums = set()
+        try:
+            type_hints = get_type_hints(kls)
+        except Exception:
+            return enums
+
+        for field_name, field_type in type_hints.items():
+            if field_name.startswith('__'):
+                continue
+            core_types_list = get_core_types(field_type)
+            for core_type in core_types_list:
+                if is_enum_type(core_type):
+                    enums.add(core_type)
+        return enums
+
+    def _add_enum_definitions(self, kls: type, enum_defs: List[str], processed_enums: Set[str]) -> None:
+        """Collect and add enum definitions from a class.
+
+        Args:
+            kls: Pydantic BaseModel class
+            enum_defs: List to append enum definition strings
+            processed_enums: Set of already processed enum names
+        """
+        enum_types = self._collect_enum_types(kls)
+        for enum_type in enum_types:
+            if enum_type.__name__ not in processed_enums:
+                enum_defs.append(self._build_enum_definition(enum_type))
+                processed_enums.add(enum_type.__name__)

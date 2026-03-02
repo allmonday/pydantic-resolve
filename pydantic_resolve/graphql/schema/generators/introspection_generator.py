@@ -7,6 +7,7 @@ using the unified type collection and mapping logic.
 
 import inspect
 import re
+from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, get_type_hints
 
 from pydantic import BaseModel
@@ -16,7 +17,7 @@ from pydantic_resolve.graphql.schema.type_registry import TypeInfo, FieldInfo, A
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.er_diagram import Relationship
 from pydantic_resolve.utils.types import get_core_types
-from pydantic_resolve.graphql.type_mapping import map_scalar_type, is_list_type
+from pydantic_resolve.graphql.type_mapping import map_scalar_type, is_list_type, is_enum_type, get_enum_names
 
 
 class IntrospectionGenerator(SchemaGenerator):
@@ -162,6 +163,11 @@ class IntrospectionGenerator(SchemaGenerator):
         # Collect all entity types
         self._collect_all_types()
 
+        # Add enum types (ENUM)
+        collected_enums = self._collect_all_enum_types()
+        for enum_class in collected_enums:
+            types.append(self._build_enum_type(enum_class))
+
         # Add entity types (OBJECT)
         for type_name, entity in self._collected_types.items():
             types.append(self._build_object_type(entity))
@@ -215,6 +221,12 @@ class IntrospectionGenerator(SchemaGenerator):
 
         # Collect all types
         self._collect_all_types()
+
+        # Check enum types
+        collected_enums = self._collect_all_enum_types()
+        for enum_class in collected_enums:
+            if enum_class.__name__ == type_name:
+                return self._build_enum_type(enum_class)
 
         # Check entity types
         if type_name in self._collected_types:
@@ -474,6 +486,38 @@ class IntrospectionGenerator(SchemaGenerator):
         """Get introspection fields for Mutation type."""
         return self._get_operation_fields(self.mutation_map, "Mutation")
 
+    def _format_default_value(self, default_value: Any) -> str:
+        """Format a Python default value as a GraphQL literal string.
+
+        Handles:
+        - Enum values: UserRole.USER -> "USER"
+        - Strings: "hello" -> "\"hello\""
+        - Numbers: 42 -> "42"
+        - Booleans: True -> "true"
+        - None: None -> "null"
+        """
+        if default_value is None:
+            return "null"
+
+        # Handle enum values - return just the member name
+        if isinstance(default_value, Enum):
+            return default_value.name
+
+        # Handle strings - need to be quoted
+        if isinstance(default_value, str):
+            return f'"{default_value}"'
+
+        # Handle booleans - lowercase
+        if isinstance(default_value, bool):
+            return "true" if default_value else "false"
+
+        # Handle numbers
+        if isinstance(default_value, (int, float)):
+            return str(default_value)
+
+        # Fallback to string representation
+        return str(default_value)
+
     def _get_operation_fields(self, operation_map: Dict, operation_type: str) -> List[Dict]:
         """Get introspection fields for Query or Mutation type."""
         fields = []
@@ -500,7 +544,7 @@ class IntrospectionGenerator(SchemaGenerator):
                     "name": param_name,
                     "description": None,
                     "type": param_type_def,
-                    "defaultValue": None if not has_default else str(param.default)
+                    "defaultValue": None if not has_default else self._format_default_value(param.default)
                 })
 
             # Build return type
@@ -579,6 +623,19 @@ class IntrospectionGenerator(SchemaGenerator):
                         "ofType": None
                     }
                 }
+            # Check if it's an enum type
+            elif is_enum_type(core_type):
+                return {
+                    "kind": "LIST",
+                    "name": None,
+                    "description": None,
+                    "ofType": {
+                        "kind": "ENUM",
+                        "name": core_type.__name__,
+                        "description": None,
+                        "ofType": None
+                    }
+                }
             else:
                 scalar_name = map_scalar_type(core_type)
                 return {
@@ -593,7 +650,15 @@ class IntrospectionGenerator(SchemaGenerator):
                     }
                 }
         else:
-            if safe_issubclass(core_type, BaseModel):
+            # Check if it's an enum type
+            if is_enum_type(core_type):
+                return {
+                    "kind": "ENUM",
+                    "name": core_type.__name__,
+                    "description": None,
+                    "ofType": None
+                }
+            elif safe_issubclass(core_type, BaseModel):
                 return {
                     "kind": "OBJECT",
                     "name": core_type.__name__,
@@ -630,6 +695,19 @@ class IntrospectionGenerator(SchemaGenerator):
                         "ofType": None
                     }
                 }
+            # Check if it's an enum type
+            elif is_enum_type(core_type):
+                return {
+                    "kind": "LIST",
+                    "name": None,
+                    "description": None,
+                    "ofType": {
+                        "kind": "ENUM",
+                        "name": core_type.__name__,
+                        "description": None,
+                        "ofType": None
+                    }
+                }
             else:
                 scalar_name = map_scalar_type(core_type)
                 return {
@@ -644,7 +722,15 @@ class IntrospectionGenerator(SchemaGenerator):
                     }
                 }
         else:
-            if safe_issubclass(core_type, BaseModel):
+            # Check if it's an enum type
+            if is_enum_type(core_type):
+                return {
+                    "kind": "ENUM",
+                    "name": core_type.__name__,
+                    "description": None,
+                    "ofType": None
+                }
+            elif safe_issubclass(core_type, BaseModel):
                 return {
                     "kind": "INPUT_OBJECT",
                     "name": core_type.__name__,
@@ -724,3 +810,75 @@ class IntrospectionGenerator(SchemaGenerator):
             return None
         field = kls.model_fields[field_name]
         return getattr(field, 'description', None)
+
+
+    def _build_enum_type(self, enum_class: type) -> Dict[str, Any]:
+        """Build introspection ENUM type."""
+        enum_values = get_enum_names(enum_class)
+        return {
+            "kind": "ENUM",
+            "name": enum_class.__name__,
+            "description": (enum_class.__doc__ or f"{enum_class.__name__} enum").strip(),
+            "fields": None,
+            "inputFields": None,
+            "interfaces": None,
+            "enumValues": [
+                {"name": v, "description": None, "isDeprecated": False, "deprecationReason": None}
+                for v in enum_values
+            ],
+            "possibleTypes": None
+        }
+
+    def _collect_all_enum_types(self) -> List[type]:
+        """Collect all enum types from entities, input types, and query/mutation maps."""
+        enums: List[type] = []
+        visited: Set[str] = set()
+
+        def collect_from_class(kls: type) -> None:
+            """Collect enum types from a class's type hints."""
+            try:
+                type_hints = get_type_hints(kls)
+            except Exception:
+                return
+
+            for field_type in type_hints.values():
+                core_types_list = get_core_types(field_type)
+                for ct in core_types_list:
+                    if is_enum_type(ct):
+                        type_name = ct.__name__
+                        if type_name not in visited:
+                            visited.add(type_name)
+                            enums.append(ct)
+
+        # Collect from entity types
+        for entity in self._collected_types.values():
+            collect_from_class(entity)
+
+        # Collect from input types
+        for input_type in self._input_types:
+            collect_from_class(input_type)
+
+        # Collect from query/mutation method parameters
+        for _, (_, method) in self.query_map.items():
+            try:
+                sig = inspect.signature(method)
+                for param_name, param in sig.parameters.items():
+                    if param_name in ('self', 'cls'):
+                        continue
+                    if param.annotation != inspect.Parameter.empty:
+                        collect_from_class(param.annotation)
+            except Exception:
+                pass
+
+        for _, (_, method) in self.mutation_map.items():
+            try:
+                sig = inspect.signature(method)
+                for param_name, param in sig.parameters.items():
+                    if param_name in ('self', 'cls'):
+                        continue
+                    if param.annotation != inspect.Parameter.empty:
+                        collect_from_class(param.annotation)
+            except Exception:
+                pass
+
+        return enums

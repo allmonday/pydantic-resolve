@@ -40,7 +40,7 @@ The `pydantic_resolve/graphql/` module implements a GraphQL server that auto-gen
 | **Scalar Types** | Int, Float, String, Boolean, ID | ✅ Supported | Full |
 | **Object Types** | Complex types with fields | ✅ Supported | Full |
 | **Input Types** | Complex input objects | ✅ Supported (via BaseModel) | Full |
-| **Enum Types** | Enumeration values | ❌ Not supported | Missing |
+| **Enum Types** | Enumeration values | ✅ Supported (Enum, IntEnum) | Full |
 | **Union Types** | One of multiple types | ❌ Not supported | Missing |
 | **Interface Types** | Shared field contracts | ❌ Not supported | Missing |
 | **List Types** | `[Type]`, `[Type!]` | ✅ Supported | Full |
@@ -200,18 +200,40 @@ query {
 
 **Impact**: No conditional field inclusion at query time.
 
-### ❌ Enum Types
-Enumeration types not supported.
+### ✅ Enum Types
+Python Enum types are fully supported in entities and responses.
 
+```python
+from enum import Enum
+
+class Status(Enum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+
+class UserEntity(BaseModel, BaseEntity):
+    id: int
+    status: Status
+```
+
+Generated GraphQL schema:
 ```graphql
-# NOT SUPPORTED
 enum Status {
   ACTIVE
   INACTIVE
 }
+
+type UserEntity {
+  id: Int!
+  status: Status!
+}
 ```
 
-**Impact**: Must use string literals without validation.
+**Features**:
+- Support for standard `Enum` (string values)
+- Support for `IntEnum` (integer values)
+- Automatic enum type generation in SDL
+- Introspection support for enum types
+- Values serialized as enum values (not enum objects)
 
 ### ❌ Union Types
 Union types not supported.

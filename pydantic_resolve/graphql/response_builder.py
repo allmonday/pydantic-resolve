@@ -2,9 +2,12 @@
 Dynamic Pydantic model builder based on GraphQL field selection.
 """
 
+from pydantic import ConfigDict
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union, get_type_hints, get_origin, get_args, Annotated
 from pydantic import BaseModel, create_model, Field
+from pydantic.functional_serializers import PlainSerializer
 from functools import lru_cache
 
 from pydantic_resolve.constant import ENSURE_SUBSET_REFERENCE
@@ -12,6 +15,21 @@ from pydantic_resolve.utils.er_diagram import ErDiagram, Relationship, MultipleR
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.types import get_core_types
 from pydantic_resolve.graphql.types import FieldSelection
+
+
+def _enum_name_serializer(v):
+    """
+    Serializer function for enum types to output enum name.
+
+    Args:
+        v: Enum value or any other value
+
+    Returns:
+        Enum name (e.g., "ADMIN") if enum, otherwise the value unchanged
+    """
+    if isinstance(v, Enum):
+        return v.name
+    return v
 
 
 @dataclass
@@ -329,8 +347,22 @@ class ResponseBuilder:
 
         Input:  field_type = str, alias = "id"
         Output: (str, Field(serialization_alias="id"))
+
+        Input:  field_type = UserRole (Enum), alias = None
+        Output: (Annotated[UserRole, PlainSerializer(_enum_name_serializer)], ...)
         ─────────────────────────────────────────────────────────────────
         """
+        # Check if field type is an Enum - use PlainSerializer for GraphQL convention
+        core_types = get_core_types(field_type)
+        for core_type in core_types:
+            if safe_issubclass(core_type, Enum):
+                # Wrap enum type with PlainSerializer to output enum.name
+                serialized_type = Annotated[field_type, PlainSerializer(_enum_name_serializer)]
+                if alias:
+                    return (serialized_type, Field(serialization_alias=alias))
+                return (serialized_type, ...)
+
+        # Non-enum scalar field
         if alias:
             return (field_type, Field(serialization_alias=alias))
         return (field_type, ...)
@@ -558,9 +590,14 @@ class ResponseBuilder:
         ─────────────────────────────────────────────────────────────────
         """
         model_name = f"{entity.__name__}Response_{id(field_selection)}"
+
+        # Create model with config to serialize enums as their names (GraphQL convention)
+        config = ConfigDict(use_enum_values=False)
+
         dynamic_model = create_model(
             model_name,
             __base__=BaseModel,
+            __cls_kwargs__=config,
             **field_definitions
         )
 

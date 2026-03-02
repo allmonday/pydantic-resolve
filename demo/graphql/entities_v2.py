@@ -7,6 +7,7 @@ V2 实体定义 - 使用 QueryConfig/MutationConfig 配置化方式
 - Query/Mutation 方法通过 QueryConfig/MutationConfig 配置，而非装饰器
 """
 
+from enum import Enum
 from typing import List, Optional, Dict
 from pydantic import BaseModel, Field
 from pydantic_resolve import (
@@ -17,6 +18,24 @@ from pydantic_resolve.utils.dataloader import build_list, build_object
 
 
 # =====================================
+# Enum Types
+# =====================================
+
+class UserRole(str, Enum):
+    """用户角色枚举"""
+    ADMIN = "admin"
+    USER = "user"
+    GUEST = "guest"
+
+
+class PostStatus(str, Enum):
+    """文章状态枚举"""
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    ARCHIVED = "archived"
+
+
+# =====================================
 # Input Types for Mutations
 # =====================================
 
@@ -24,7 +43,7 @@ class CreateUserInput(BaseModel):
     """创建用户的输入类型"""
     name: str = Field(description="用户名称")
     email: str = Field(description="邮箱地址")
-    role: str = Field(default="user", description="用户角色")
+    role: UserRole = Field(default=UserRole.USER, description="用户角色")
 
 
 class CreatePostInput(BaseModel):
@@ -32,7 +51,7 @@ class CreatePostInput(BaseModel):
     title: str = Field(description="文章标题")
     content: str = Field(description="文章内容")
     author_id: int = Field(description="作者ID")
-    status: str = Field(default="draft", description="文章状态")
+    status: PostStatus = Field(default=PostStatus.DRAFT, description="文章状态")
 
 
 # 模拟数据库（在类定义后初始化）
@@ -68,7 +87,7 @@ class PostEntityV2(BaseModel):
     title: str = Field(description="文章标题")
     content: str = Field(default="", description="文章内容")
     author_id: int = Field(description="作者用户ID")
-    status: str = Field(description="文章状态（published/draft）")
+    status: PostStatus = Field(description="文章状态")
 
 
 class UserEntityV2(BaseModel):
@@ -79,7 +98,7 @@ class UserEntityV2(BaseModel):
     id: int = Field(description="用户唯一标识ID")
     name: str = Field(description="用户姓名")
     email: str = Field(description="用户邮箱地址")
-    role: str = Field(description="用户角色（admin/user）")
+    role: UserRole = Field(description="用户角色")
 
 
 # =====================================
@@ -119,7 +138,7 @@ async def get_all_comments() -> List[CommentEntityV2]:
     return list(comments_db_v2.values())
 
 
-async def get_all_posts(limit: int = 10, status: Optional[str] = None) -> List[PostEntityV2]:
+async def get_all_posts(limit: int = 10, status: Optional[PostStatus] = None) -> List[PostEntityV2]:
     """获取所有文章（可按状态筛选）"""
     all_posts = list(posts_db_v2.values())
     if status:
@@ -161,7 +180,7 @@ async def create_comment(text: str, author_id: int, post_id: int) -> CommentEnti
     return new_comment
 
 
-async def create_post(title: str, content: str, author_id: int, status: str = 'draft') -> PostEntityV2:
+async def create_post(title: str, content: str, author_id: int, status: PostStatus = PostStatus.DRAFT) -> PostEntityV2:
     """创建新文章并返回创建的文章对象"""
     global post_id_counter_v2
     post_id_counter_v2 += 1
@@ -191,7 +210,7 @@ async def create_post_with_input(input: CreatePostInput) -> PostEntityV2:
     return new_post
 
 
-async def create_user(name: str, email: str, role: str = 'user') -> UserEntityV2:
+async def create_user(name: str, email: str, role: UserRole = UserRole.USER) -> UserEntityV2:
     """创建新用户并返回创建的用户对象"""
     global user_id_counter_v2
     user_id_counter_v2 += 1
@@ -288,17 +307,17 @@ def init_db_v2():
     comment_id_counter_v2 = 4
 
     users_db_v2 = {
-        1: UserEntityV2(id=1, name="Alice", email="alice@example.com", role="admin"),
-        2: UserEntityV2(id=2, name="Bob", email="bob@example.com", role="user"),
-        3: UserEntityV2(id=3, name="Charlie", email="charlie@example.com", role="user"),
-        4: UserEntityV2(id=4, name="Diana", email="diana@example.com", role="admin"),
+        1: UserEntityV2(id=1, name="Alice", email="alice@example.com", role=UserRole.ADMIN),
+        2: UserEntityV2(id=2, name="Bob", email="bob@example.com", role=UserRole.USER),
+        3: UserEntityV2(id=3, name="Charlie", email="charlie@example.com", role=UserRole.USER),
+        4: UserEntityV2(id=4, name="Diana", email="diana@example.com", role=UserRole.ADMIN),
     }
 
     posts_db_v2 = {
-        1: PostEntityV2(id=1, title="First Post", content="Hello World!", author_id=1, status="published"),
-        2: PostEntityV2(id=2, title="Second Post", content="GraphQL is awesome", author_id=2, status="published"),
-        3: PostEntityV2(id=3, title="Third Post", content="Python tips", author_id=1, status="draft"),
-        4: PostEntityV2(id=4, title="Fourth Post", content="FastAPI tutorial", author_id=3, status="published"),
+        1: PostEntityV2(id=1, title="First Post", content="Hello World!", author_id=1, status=PostStatus.PUBLISHED),
+        2: PostEntityV2(id=2, title="Second Post", content="GraphQL is awesome", author_id=2, status=PostStatus.PUBLISHED),
+        3: PostEntityV2(id=3, title="Third Post", content="Python tips", author_id=1, status=PostStatus.DRAFT),
+        4: PostEntityV2(id=4, title="Fourth Post", content="FastAPI tutorial", author_id=3, status=PostStatus.PUBLISHED),
     }
 
     comments_db_v2 = {
