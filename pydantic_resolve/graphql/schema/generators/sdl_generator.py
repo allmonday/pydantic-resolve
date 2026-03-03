@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from pydantic_resolve.graphql.schema.generators.base import SchemaGenerator
 from pydantic_resolve.graphql.schema.type_registry import TypeInfo, FieldInfo
 from pydantic_resolve.utils.class_util import safe_issubclass
-from pydantic_resolve.utils.er_diagram import Relationship
+from pydantic_resolve.utils.er_diagram import Relationship, MultipleRelationship
 from pydantic_resolve.utils.types import get_core_types
 from pydantic_resolve.graphql.type_mapping import map_scalar_type, is_enum_type, get_enum_names
 from pydantic_resolve.graphql.exceptions import FieldNameConflictError
@@ -508,10 +508,23 @@ class SDLGenerator(SchemaGenerator):
             )
 
     def _collect_nested_pydantic_types(self, processed_types: set) -> set:
-        """Recursively collect all nested Pydantic BaseModel types."""
+        """Recursively collect all nested Pydantic BaseModel types,
+        including types from Relationship.target_kls and MultipleRelationship.target_kls."""
         nested_types = set()
         types_to_check = list(processed_types)
 
+        # Add target_kls from relationships to types_to_check
+        for entity_cfg in self.er_diagram.configs:
+            for rel in entity_cfg.relationships:
+                if isinstance(rel, (Relationship, MultipleRelationship)):
+                    # get_core_types handles list[T] and Optional[T] unwrapping
+                    for target_class in get_core_types(rel.target_kls):
+                        if safe_issubclass(target_class, BaseModel):
+                            if target_class not in processed_types and target_class not in nested_types:
+                                nested_types.add(target_class)
+                                types_to_check.append(target_class)
+
+        # Recursively scan all types (existing logic handles nested fields)
         while types_to_check:
             current_type = types_to_check.pop()
 
@@ -521,9 +534,7 @@ class SDLGenerator(SchemaGenerator):
                 continue
 
             for field_type in type_hints.values():
-                core_types = get_core_types(field_type)
-
-                for core_type in core_types:
+                for core_type in get_core_types(field_type):
                     if safe_issubclass(core_type, BaseModel):
                         if core_type not in processed_types and core_type not in nested_types:
                             nested_types.add(core_type)
