@@ -10,8 +10,9 @@
 - perf:
   - **Two-level METADATA_CACHE with resolver_class isolation**: Cache structure changed from `METADATA_CACHE[root_class]` to `METADATA_CACHE[id(resolver_class)][root_class]`, isolating caches for different resolver configurations (created via `config_resolver`)
   - **Pre-analysis in ResponseBuilder**: Dynamic response models are now pre-analyzed immediately after creation in `ResponseBuilder._create_model()`, avoiding repeated analysis in `Resolver.resolve()`
-  - First query with new field selection: O(n) analysis (one-time in ResponseBuilder)
-  - Subsequent queries with same field selection: O(1) cache lookup (in Resolver.resolve())
+  - **Concurrent query execution in GraphQL executor**: Moved `query_method` execution from Phase 1 (serial) to Phase 2 (concurrent), enabling parallel I/O operations for multiple root queries
+  - Before: Phase 1 executes query_methods serially → Phase 2 resolves concurrently
+  - After: Phase 1 builds models only → Phase 2 executes (query_method + transform + resolve) concurrently
 
 ### v3.0.6 (2026-3-3)
 - feat:

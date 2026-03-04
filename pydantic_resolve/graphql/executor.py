@@ -1,9 +1,12 @@
 """
 GraphQL query and mutation execution.
 
-Handles the two-phase execution:
-- Phase 1 (Serial): Method execution, model building, data transformation
-- Phase 2 (Concurrent): Parallel execution of all root query Resolvers
+Handles the two-phase execution for queries:
+- Phase 1 (Serial): Parse query, build response models (no I/O)
+- Phase 2 (Concurrent): Parallel execution of (query_method + transform + resolve)
+
+For mutations:
+- Serial execution of each mutation (mutation_method + transform + resolve)
 """
 
 import asyncio
@@ -29,9 +32,12 @@ class QueryExecutor:
     """
     Handles GraphQL query and mutation execution.
 
-    Implements two-phase execution:
-    - Phase 1 (Serial): Query method execution, model building, data transformation
-    - Phase 2 (Concurrent): Parallel execution of all root query Resolvers
+    For queries - two-phase execution:
+    - Phase 1 (Serial): Parse query, build response models (no I/O)
+    - Phase 2 (Concurrent): Parallel execution of (query_method + transform + resolve)
+
+    For mutations - serial execution:
+    - Each mutation executes sequentially (mutation_method + transform + resolve)
     """
 
     def __init__(
@@ -60,8 +66,8 @@ class QueryExecutor:
     ) -> Dict[str, Any]:
         """
         Execute custom query with optimized two-phase execution:
-        - Phase 1 (Serial): Query method execution, model building, data transformation
-        - Phase 2 (Concurrent): Parallel execution of all root query Resolvers
+        - Phase 1 (Serial): Parse query, build response models (no I/O)
+        - Phase 2 (Concurrent): Parallel execution of (query_method + transform + resolve)
         """
         logger.info("Starting custom query execution with concurrent optimization")
 
@@ -73,10 +79,10 @@ class QueryExecutor:
         errors = []
         data = {}
 
-        # ===== Phase 1: Serial Preparation =====
-        logger.info("[Phase 1] Starting serial preparation phase")
+        # ===== Phase 1: Serial Preparation (Metadata Only) =====
+        logger.info("[Phase 1] Starting serial preparation phase (metadata only)")
 
-        preparation_results = {}  # query_name -> (typed_data, is_list)
+        execution_tasks = []  # List of (query_name, entity, query_method, field_selection, response_model)
 
         for root_query_name, root_field_selection in parsed.field_tree.items():
             try:
@@ -91,20 +97,21 @@ class QueryExecutor:
 
                 entity, query_method = query_map[root_query_name]
 
-                # Prepare query resolution
-                typed_data, error_msg, error_dict = await self._prepare_query_resolution(
-                    root_query_name=root_query_name,
-                    root_field_selection=root_field_selection,
+                # Build response model (no I/O, just type construction)
+                response_model = self.builder.build_response_model(
                     entity=entity,
-                    query_method=query_method
+                    field_selection=root_field_selection
                 )
+                logger.debug(f"[Phase 1] Response model built: {root_query_name}")
 
-                if error_dict:
-                    errors.append(error_dict)
-                else:
-                    # Store for Phase 2
-                    is_list = isinstance(typed_data, list)
-                    preparation_results[root_query_name] = (typed_data, is_list)
+                # Store task info for Phase 2
+                execution_tasks.append((
+                    root_query_name,
+                    entity,
+                    query_method,
+                    root_field_selection,
+                    response_model
+                ))
 
             except GraphQLError as e:
                 errors.append(e.to_dict())
@@ -115,23 +122,17 @@ class QueryExecutor:
                     "extensions": {"code": type(e).__name__}
                 })
 
-        logger.info(f"[Phase 1] Completed: {len(preparation_results)} queries prepared, {len(errors)} errors")
+        logger.info(f"[Phase 1] Completed: {len(execution_tasks)} queries prepared, {len(errors)} errors")
 
-        # ===== Phase 2: Concurrent Resolution =====
-        logger.info("[Phase 2] Starting concurrent resolution phase")
+        # ===== Phase 2: Concurrent Execution (query_method + transform + resolve) =====
+        logger.info("[Phase 2] Starting concurrent execution phase")
 
-        if preparation_results:
-            # Build resolution tasks
-            resolution_tasks = [
-                (name, data, is_list)
-                for name, (data, is_list) in preparation_results.items()
-            ]
-
-            # Execute all resolutions concurrently
-            resolution_map = await self._execute_concurrent_resolutions(resolution_tasks)
+        if execution_tasks:
+            # Execute all (query_method + transform + resolve) concurrently
+            execution_map = await self._execute_concurrent_queries(execution_tasks)
 
             # Collect results and errors
-            for query_name, (result_data, error_dict) in resolution_map.items():
+            for query_name, (result_data, error_dict) in execution_map.items():
                 if error_dict:
                     errors.append(error_dict)
                 else:
@@ -416,43 +417,106 @@ class QueryExecutor:
                 return args[0]
         return None
 
-    async def _prepare_query_resolution(
+    async def _execute_concurrent_queries(
         self,
-        root_query_name: str,
-        root_field_selection: Any,
-        entity: type,
-        query_method: Callable
-    ) -> Tuple[Optional[Any], Optional[str], Optional[Dict]]:
+        execution_tasks: List[Tuple[str, type, Callable, Any, type]]
+    ) -> Dict[str, Tuple[Optional[Any], Optional[Dict]]]:
         """
-        Prepare query resolution (Phase 1: Serial)
+        Execute multiple queries concurrently (query_method + transform + resolve).
 
         Args:
-            root_query_name: Root query field name
-            root_field_selection: Parsed field selection
-            entity: Entity class
-            query_method: @query decorated method
+            execution_tasks: List of (query_name, entity, query_method, field_selection, response_model) tuples
 
         Returns:
-            Tuple of (typed_data, error_message, error_dict)
-            - Success: (typed_data, None, None)
-            - Failure: (None, error_message, error_dict)
+            Dict mapping query_name to (result_data, error_dict)
         """
-        logger.debug(f"[Phase 1] Preparing query: {root_query_name}")
+        if not execution_tasks:
+            return {}
+
+        logger.info(f"[Phase 2] Starting concurrent execution of {len(execution_tasks)} queries")
+
+        # Resource control: Only limit concurrent executions if user explicitly sets environment variable
+        max_concurrency_str = os.getenv("PYDANTIC_RESOLVE_MAX_CONCURRENT_QUERIES")
+        if max_concurrency_str:
+            max_concurrency = int(max_concurrency_str)
+            semaphore = asyncio.Semaphore(max_concurrency) if max_concurrency > 0 else None
+        else:
+            semaphore = None
+
+        async def execute_with_semaphore(
+            query_name: str,
+            entity: type,
+            query_method: Callable,
+            field_selection: Any,
+            response_model: type
+        ):
+            if semaphore:
+                async with semaphore:
+                    return await self._execute_single_query(
+                        query_name, query_method, field_selection, response_model
+                    )
+            else:
+                return await self._execute_single_query(
+                    query_name, query_method, field_selection, response_model
+                )
+
+        # Execute all (query_method + transform + resolve) tasks concurrently
+        results = await asyncio.gather(
+            *[execute_with_semaphore(*task) for task in execution_tasks],
+            return_exceptions=True
+        )
+
+        # Process results and map to query names
+        query_names = [name for name, _, _, _, _ in execution_tasks]
+        execution_map = {}
+
+        for query_name, result in zip(query_names, results):
+            if isinstance(result, Exception):
+                logger.exception(f"[Phase 2] Unexpected exception for {query_name}")
+                error_dict = {
+                    "message": f"Unexpected error: {str(result)}",
+                    "extensions": {"code": type(result).__name__}
+                }
+                execution_map[query_name] = (None, error_dict)
+            else:
+                execution_map[query_name] = result
+
+        logger.info("[Phase 2] Completed concurrent execution")
+        return execution_map
+
+    async def _execute_single_query(
+        self,
+        query_name: str,
+        query_method: Callable,
+        field_selection: Any,
+        response_model: type
+    ) -> Tuple[Optional[Any], Optional[Dict]]:
+        """
+        Execute a single query: query_method -> transform -> resolve.
+
+        This method combines all three steps that were previously split across
+        _prepare_query_resolution and _resolve_query_data.
+
+        Args:
+            query_name: Query name for logging
+            query_method: @query decorated method
+            field_selection: Parsed field selection with arguments
+            response_model: Pre-built response model class
+
+        Returns:
+            Tuple of (result_data, error_dict)
+            - Success: (result_data, None)
+            - Failure: (None, error_dict)
+        """
+        logger.debug(f"[Phase 2] Executing query: {query_name}")
 
         try:
-            # 1. Execute query method
-            args = root_field_selection.arguments or {}
+            # 1. Execute query method (I/O operation)
+            args = field_selection.arguments or {}
             root_data = await self._execute_method(query_method, args, "query")
-            logger.debug(f"[Phase 1] Query method executed: {root_query_name}")
+            logger.debug(f"[Phase 2] Query method executed: {query_name}")
 
-            # 2. Build response model
-            response_model = self.builder.build_response_model(
-                entity=entity,
-                field_selection=root_field_selection
-            )
-            logger.debug(f"[Phase 1] Response model built: {root_query_name}")
-
-            # 3. Transform to response model
+            # 2. Transform to response model
             if isinstance(root_data, list):
                 typed_data = [
                     response_model.model_validate(
@@ -460,53 +524,24 @@ class QueryExecutor:
                     )
                     for d in root_data
                 ]
+                is_list = True
             elif root_data is not None:
                 typed_data = response_model.model_validate(
                     root_data.model_dump() if hasattr(root_data, 'model_dump') else root_data
                 )
+                is_list = False
             else:
                 typed_data = None
+                is_list = False
 
-            logger.debug(f"[Phase 1] Data transformed: {root_query_name}")
-            return typed_data, None, None
+            logger.debug(f"[Phase 2] Data transformed: {query_name}")
 
-        except GraphQLError as e:
-            logger.warning(f"[Phase 1] GraphQL error preparing {root_query_name}: {e.message}")
-            return None, e.message, e.to_dict()
-        except Exception as e:
-            logger.exception(f"[Phase 1] Unexpected error preparing {root_query_name}")
-            error_dict = {
-                "message": str(e),
-                "extensions": {"code": type(e).__name__}
-            }
-            return None, str(e), error_dict
-
-    async def _resolve_query_data(
-        self,
-        root_query_name: str,
-        typed_data: Any,
-        is_list: bool
-    ) -> Tuple[Optional[Any], Optional[Dict]]:
-        """
-        Resolve query data (Phase 2: Concurrent)
-
-        Args:
-            root_query_name: Root query field name
-            typed_data: Typed Pydantic data
-            is_list: Whether data is a list
-
-        Returns:
-            Tuple of (result_data, error_dict)
-            - Success: (result_data, None)
-            - Failure: (None, error_dict)
-        """
-        logger.debug(f"[Phase 2] Resolving query: {root_query_name}")
-
-        try:
+            # 3. Resolve related data
             result_data = None
-
             if typed_data is not None:
-                resolver = self.resolver_class(enable_from_attribute_in_type_adapter=self.enable_from_attribute_in_type_adapter)
+                resolver = self.resolver_class(
+                    enable_from_attribute_in_type_adapter=self.enable_from_attribute_in_type_adapter
+                )
 
                 if is_list:
                     result = await resolver.resolve(typed_data)
@@ -523,70 +558,16 @@ class QueryExecutor:
             else:
                 result_data = [] if is_list else None
 
-            logger.debug(f"[Phase 2] Query resolved: {root_query_name}")
+            logger.debug(f"[Phase 2] Query resolved: {query_name}")
             return result_data, None
 
+        except GraphQLError as e:
+            logger.warning(f"[Phase 2] GraphQL error for {query_name}: {e.message}")
+            return None, e.to_dict()
         except Exception as e:
-            logger.exception(f"[Phase 2] Error resolving {root_query_name}")
+            logger.exception(f"[Phase 2] Error executing {query_name}")
             error_dict = {
-                "message": f"Resolution failed for {root_query_name}: {str(e)}",
+                "message": f"Execution failed for {query_name}: {str(e)}",
                 "extensions": {"code": type(e).__name__}
             }
             return None, error_dict
-
-    async def _execute_concurrent_resolutions(
-        self,
-        resolution_tasks: List[Tuple[str, Any, bool]]
-    ) -> Dict[str, Tuple[Optional[Any], Optional[Dict]]]:
-        """
-        Execute multiple query resolutions concurrently, using semaphore to control concurrency
-
-        Args:
-            resolution_tasks: List of (query_name, typed_data, is_list) tuples
-
-        Returns:
-            Dict mapping query_name to (result_data, error_dict)
-        """
-        if not resolution_tasks:
-            return {}
-
-        logger.info(f"[Phase 2] Starting concurrent resolution of {len(resolution_tasks)} queries")
-
-        # Resource control: Only limit concurrent Resolver instances if user explicitly sets environment variable
-        max_concurrency_str = os.getenv("PYDANTIC_RESOLVE_MAX_CONCURRENT_QUERIES")
-        if max_concurrency_str:
-            max_concurrency = int(max_concurrency_str)
-            semaphore = asyncio.Semaphore(max_concurrency) if max_concurrency > 0 else None
-        else:
-            semaphore = None
-
-        async def resolve_with_semaphore(query_name: str, typed_data: Any, is_list: bool):
-            if semaphore:
-                async with semaphore:
-                    return await self._resolve_query_data(query_name, typed_data, is_list)
-            else:
-                return await self._resolve_query_data(query_name, typed_data, is_list)
-
-        # Execute all resolution tasks concurrently
-        results = await asyncio.gather(
-            *[resolve_with_semaphore(name, data, is_list) for name, data, is_list in resolution_tasks],
-            return_exceptions=True
-        )
-
-        # Process results and map to query names
-        query_names = [name for name, _, _ in resolution_tasks]
-        resolution_map = {}
-
-        for query_name, result in zip(query_names, results):
-            if isinstance(result, Exception):
-                logger.exception(f"[Phase 2] Unexpected exception for {query_name}")
-                error_dict = {
-                    "message": f"Unexpected error: {str(result)}",
-                    "extensions": {"code": type(result).__name__}
-                }
-                resolution_map[query_name] = (None, error_dict)
-            else:
-                resolution_map[query_name] = result
-
-        logger.info("[Phase 2] Completed concurrent resolution")
-        return resolution_map
