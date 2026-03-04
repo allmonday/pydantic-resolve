@@ -15,8 +15,26 @@ import pydantic_resolve.utils.class_util as class_util
 import pydantic_resolve.constant as const
 import pydantic_resolve.utils.profile as profile_util
 
-METADATA_CACHE = {}
+# Two-level cache: id(resolver_class) -> {root_class -> metadata}
+# This isolates caches for different resolver classes (created via config_resolver)
+# since different resolver classes may have different er_pre_generator configurations
+METADATA_CACHE: dict[int, dict[type, any]] = {}
 T = TypeVar("T")
+
+
+def _get_metadata_from_cache(resolver_class_id: int, root_class: type):
+    """Get metadata from two-level cache."""
+    resolver_cache = METADATA_CACHE.get(resolver_class_id)
+    if resolver_cache is None:
+        return None
+    return resolver_cache.get(root_class)
+
+
+def _set_metadata_to_cache(resolver_class_id: int, root_class: type, metadata) -> None:
+    """Set metadata to two-level cache."""
+    if resolver_class_id not in METADATA_CACHE:
+        METADATA_CACHE[resolver_class_id] = {}
+    METADATA_CACHE[resolver_class_id][root_class] = metadata
 
 
 def _safe_reset_contextvar(contextvar: contextvars.ContextVar, token):
@@ -440,16 +458,19 @@ class Resolver:
         # but in some scenario like Union types, it is unable to deduce the root class
         # so user can provide the root class by annotation parameter
         root_class = self.annotation if self.annotation else class_util.get_class_of_object(node)
+        resolver_class_id = id(self.__class__)
 
-        if root_class in METADATA_CACHE:
-            self.metadata = METADATA_CACHE[root_class]
+        # Check cache with resolver_class_id for isolation between different resolver configurations
+        cached_metadata = _get_metadata_from_cache(resolver_class_id, root_class)
+        if cached_metadata:
+            self.metadata = cached_metadata
         else:
             metadata = analysis.convert_metadata_key_as_kls(
                 analysis.Analytic(
                     er_pre_generator=getattr(self, const.ER_DIAGRAM_PRE_GENERATOR)
                 ).scan(root_class)
             )
-            METADATA_CACHE[root_class] = metadata
+            _set_metadata_to_cache(resolver_class_id, root_class, metadata)
             self.metadata = metadata
 
         self.loader_instance_cache = pydantic_resolve.loader_manager.validate_and_create_loader_instance(

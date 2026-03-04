@@ -19,7 +19,11 @@ async def test_cache_of_metadata():
     }
     assert result.model_dump() == expected
 
-    assert Container in METADATA_CACHE.keys()
+    # Check two-level cache structure:
+    # METADATA_CACHE[id(resolver_class)][root_class] = metadata
+    resolver_class_id = id(Resolver)
+    assert resolver_class_id in METADATA_CACHE.keys()
+    assert Container in METADATA_CACHE[resolver_class_id].keys()
 
     c2 = Container()
     result2 = await Resolver().resolve(c2)

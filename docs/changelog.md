@@ -6,6 +6,13 @@
 
 ## v3.0
 
+### v3.0.7 (2026-3-5)
+- perf:
+  - **Two-level METADATA_CACHE with resolver_class isolation**: Cache structure changed from `METADATA_CACHE[root_class]` to `METADATA_CACHE[id(resolver_class)][root_class]`, isolating caches for different resolver configurations (created via `config_resolver`)
+  - **Pre-analysis in ResponseBuilder**: Dynamic response models are now pre-analyzed immediately after creation in `ResponseBuilder._create_model()`, avoiding repeated analysis in `Resolver.resolve()`
+  - First query with new field selection: O(n) analysis (one-time in ResponseBuilder)
+  - Subsequent queries with same field selection: O(1) cache lookup (in Resolver.resolve())
+
 ### v3.0.6 (2026-3-3)
 - feat:
   - **GraphQL schema now includes `Relationship.target_kls` types**: Pydantic types referenced in relationships are automatically collected and generated as GraphQL types, even if not explicitly registered in `er_diagram.configs`

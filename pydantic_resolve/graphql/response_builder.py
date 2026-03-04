@@ -10,11 +10,12 @@ from pydantic import BaseModel, create_model, Field
 from pydantic.functional_serializers import PlainSerializer
 from functools import lru_cache
 
-from pydantic_resolve.constant import ENSURE_SUBSET_REFERENCE
+from pydantic_resolve.constant import ENSURE_SUBSET_REFERENCE, ER_DIAGRAM_PRE_GENERATOR
 from pydantic_resolve.utils.er_diagram import ErDiagram, Relationship, MultipleRelationship, LoadBy
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.types import get_core_types
 from pydantic_resolve.graphql.types import FieldSelection
+from pydantic_resolve import analysis
 
 
 def _enum_name_serializer(v):
@@ -74,13 +75,16 @@ class ResponseBuilder:
     ─────────────────────────────────────────────────────────────────
     """
 
-    def __init__(self, er_diagram: ErDiagram):
+    def __init__(self, er_diagram: ErDiagram, resolver_class: type = None):
         """
         Args:
             er_diagram: Entity relationship diagram
+            resolver_class: Resolver class for cache isolation and pre-analysis.
+                           If provided, response models will be pre-analyzed and cached.
         """
         self.er_diagram = er_diagram
         self.entity_map = {cfg.kls: cfg for cfg in er_diagram.configs}
+        self.resolver_class = resolver_class
         # Bind lru_cache to instance method
         # This provides LRU eviction + thread safety + instance isolation
         self._build_cached = lru_cache(maxsize=256)(self._build_model_impl)
@@ -580,6 +584,7 @@ class ResponseBuilder:
             1. Generate unique name: "UserEntityResponse_123456789"
             2. Call pydantic.create_model() with field definitions
             3. Set __pydantic_resolve_subset__ = UserEntity
+            4. Pre-analyze model if resolver_class is provided
 
         Output:
             class UserEntityResponse_123456789(BaseModel):
@@ -605,7 +610,42 @@ class ResponseBuilder:
         # This allows ErLoaderPreGenerator.prepare() to find original entity config
         setattr(dynamic_model, ENSURE_SUBSET_REFERENCE, entity)
 
+        # Pre-analyze the model if resolver_class is provided
+        # This caches metadata early, avoiding repeated analysis in Resolver.resolve()
+        if self.resolver_class is not None:
+            self._pre_analyze_model(dynamic_model)
+
         return dynamic_model
+
+    def _pre_analyze_model(self, model: type[BaseModel]) -> None:
+        """
+        Pre-analyze a response model and cache its metadata.
+
+        This method is called automatically after model creation in _create_model().
+        It runs the analysis scan once and caches the result, so that subsequent
+        Resolver.resolve() calls can skip the analysis step.
+
+        Args:
+            model: The dynamically built response model to analyze
+        """
+        from pydantic_resolve.resolver import _get_metadata_from_cache, _set_metadata_to_cache
+
+        resolver_class_id = id(self.resolver_class)
+
+        # Skip if already cached (e.g., nested model already analyzed)
+        if _get_metadata_from_cache(resolver_class_id, model) is not None:
+            return
+
+        # Get er_pre_generator from resolver_class
+        er_pre_generator = getattr(self.resolver_class, ER_DIAGRAM_PRE_GENERATOR, None)
+
+        # Run analysis
+        metadata = analysis.convert_metadata_key_as_kls(
+            analysis.Analytic(er_pre_generator=er_pre_generator).scan(model)
+        )
+
+        # Cache the result
+        _set_metadata_to_cache(resolver_class_id, model, metadata)
 
     # ========== FK Field Detection (with caching) ==========
 
