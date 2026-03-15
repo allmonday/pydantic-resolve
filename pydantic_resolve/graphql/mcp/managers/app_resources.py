@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING, Set
 
 if TYPE_CHECKING:
     from pydantic_resolve.graphql.handler import GraphQLHandler
-    from pydantic_resolve.graphql.mcp.builders.type_tracer import TypeTracer
-    from pydantic_resolve.graphql.schema.generators.sdl_generator import SDLGenerator
+    from pydantic_resolve.graphql.mcp.builders.introspection_query_helper import IntrospectionQueryHelper
+    from pydantic_resolve.graphql.schema.generators.sdl_builder import SDLBuilder
 
 
 @dataclass
@@ -15,21 +15,21 @@ class AppResources:
 
     This dataclass holds references to the core components needed for MCP:
     - GraphQLHandler: Executes GraphQL queries and mutations
-    - TypeTracer: Provides progressive disclosure of type information
-    - SDLGenerator: Generates GraphQL Schema Definition Language
+    - IntrospectionQueryHelper: Queries introspection data for progressive disclosure
+    - SDLBuilder: Builds GraphQL Schema Definition Language
 
     Attributes:
         name: Application name
         description: Application description
         handler: GraphQLHandler instance for executing operations
-        tracer: TypeTracer instance for progressive disclosure
-        sdl_generator: SDLGenerator instance for schema generation
+        introspection_helper: IntrospectionQueryHelper instance for progressive disclosure
+        sdl_builder: SDLBuilder instance for schema generation
     """
     name: str
     description: str
     handler: "GraphQLHandler"
-    tracer: "TypeTracer"
-    sdl_generator: "SDLGenerator"
+    introspection_helper: "IntrospectionQueryHelper"
+    sdl_builder: "SDLBuilder"
 
     @property
     def entity_names(self) -> Set[str]:

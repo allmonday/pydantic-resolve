@@ -1,12 +1,11 @@
-"""
-Tests for TypeTracer - analyzes GraphQL introspection data.
+"""Tests for IntrospectionQueryHelper - queries GraphQL introspection data.
 
 Tests are designed based on interface contracts, focusing on input/output behavior.
 """
 
 import pytest
 
-from pydantic_resolve.graphql.mcp.builders.type_tracer import TypeTracer
+from pydantic_resolve.graphql.mcp.builders.introspection_query_helper import IntrospectionQueryHelper
 
 
 # === Fixtures ===
@@ -102,34 +101,34 @@ def entity_names():
 
 
 @pytest.fixture
-def tracer(simple_introspection_data, entity_names):
-    """TypeTracer instance with simple data."""
-    return TypeTracer(simple_introspection_data, entity_names)
+def helper(simple_introspection_data, entity_names):
+    """IntrospectionQueryHelper instance with simple data."""
+    return IntrospectionQueryHelper(simple_introspection_data, entity_names)
 
 
 # === Test __init__ ===
 
 class TestInit:
-    """Tests for TypeTracer initialization."""
+    """Tests for IntrospectionQueryHelper initialization."""
 
     def test_normal_initialization(self, simple_introspection_data, entity_names):
         """Should build type cache from introspection data."""
-        tracer = TypeTracer(simple_introspection_data, entity_names)
+        helper = IntrospectionQueryHelper(simple_introspection_data, entity_names)
         # Verify internal state by using public methods
-        assert tracer.get_operation_field("Query", "userGetAll") is not None
-        assert tracer.get_operation_field("Query", "nonexistent") is None
+        assert helper.get_operation_field("Query", "userGetAll") is not None
+        assert helper.get_operation_field("Query", "nonexistent") is None
 
     def test_empty_types_list(self, entity_names):
         """Should handle empty types list."""
         data = {"types": []}
-        tracer = TypeTracer(data, entity_names)
-        assert tracer.list_operation_fields("Query") == []
+        helper = IntrospectionQueryHelper(data, entity_names)
+        assert helper.list_operation_fields("Query") == []
 
     def test_empty_entity_names(self, simple_introspection_data):
         """Should work with empty entity names (no types will be traced)."""
-        tracer = TypeTracer(simple_introspection_data, set())
+        helper = IntrospectionQueryHelper(simple_introspection_data, set())
         type_ref = {"kind": "OBJECT", "name": "User", "ofType": None}
-        result = tracer.collect_related_types(type_ref)
+        result = helper.collect_related_types(type_ref)
         assert result == set()
 
 
@@ -138,45 +137,45 @@ class TestInit:
 class TestCollectRelatedTypes:
     """Tests for collect_related_types method."""
 
-    def test_none_input(self, tracer):
+    def test_none_input(self, helper):
         """None input should return empty set."""
-        result = tracer.collect_related_types(None)
+        result = helper.collect_related_types(None)
         assert result == set()
 
-    def test_scalar_type(self, tracer):
+    def test_scalar_type(self, helper):
         """SCALAR type should return empty set (scalars are not entities)."""
         type_ref = {"kind": "SCALAR", "name": "String", "ofType": None}
-        result = tracer.collect_related_types(type_ref)
+        result = helper.collect_related_types(type_ref)
         assert result == set()
 
-    def test_object_type_in_entity_names(self, tracer):
+    def test_object_type_in_entity_names(self, helper):
         """OBJECT type in entity_names should return set containing that type and its dependencies."""
         type_ref = {"kind": "OBJECT", "name": "User", "ofType": None}
-        result = tracer.collect_related_types(type_ref)
+        result = helper.collect_related_types(type_ref)
         # User has posts field referencing Post, so both are returned
         assert result == {"User", "Post"}
 
-    def test_object_type_not_in_entity_names(self, tracer):
+    def test_object_type_not_in_entity_names(self, helper):
         """OBJECT type not in entity_names should return empty set."""
         type_ref = {"kind": "OBJECT", "name": "SomeOtherType", "ofType": None}
-        result = tracer.collect_related_types(type_ref)
+        result = helper.collect_related_types(type_ref)
         assert result == set()
 
-    def test_list_wrapper(self, tracer):
+    def test_list_wrapper(self, helper):
         """LIST wrapper should unwrap and continue tracing."""
         type_ref = {"kind": "LIST", "name": None, "ofType": {"kind": "OBJECT", "name": "User", "ofType": None}}
-        result = tracer.collect_related_types(type_ref)
+        result = helper.collect_related_types(type_ref)
         # User has posts field referencing Post
         assert result == {"User", "Post"}
 
-    def test_non_null_wrapper(self, tracer):
+    def test_non_null_wrapper(self, helper):
         """NON_NULL wrapper should unwrap and continue tracing."""
         type_ref = {"kind": "NON_NULL", "name": None, "ofType": {"kind": "OBJECT", "name": "User", "ofType": None}}
-        result = tracer.collect_related_types(type_ref)
+        result = helper.collect_related_types(type_ref)
         # User has posts field referencing Post
         assert result == {"User", "Post"}
 
-    def test_nested_wrappers(self, tracer):
+    def test_nested_wrappers(self, helper):
         """Nested LIST/NON_NULL wrappers should be correctly resolved."""
         # [User!]! -> NON_NULL(LIST(NON_NULL(User)))
         type_ref = {
@@ -188,25 +187,25 @@ class TestCollectRelatedTypes:
                 "ofType": {"kind": "OBJECT", "name": "User", "ofType": None},
             },
         }
-        result = tracer.collect_related_types(type_ref)
+        result = helper.collect_related_types(type_ref)
         # User has posts field referencing Post
         assert result == {"User", "Post"}
 
-    def test_recursive_field_dependencies(self, tracer):
+    def test_recursive_field_dependencies(self, helper):
         """Type with fields referencing other entities should collect all dependencies."""
         # User has posts field referencing Post
         type_ref = {"kind": "OBJECT", "name": "User", "ofType": None}
-        result = tracer.collect_related_types(type_ref)
+        result = helper.collect_related_types(type_ref)
         # User references Post via posts field
         assert "User" in result
         assert "Post" in result
 
-    def test_circular_dependency(self, tracer):
+    def test_circular_dependency(self, helper):
         """Circular dependency (A -> B -> A) should not cause infinite loop."""
         # User -> Post -> User (circular)
         type_ref = {"kind": "OBJECT", "name": "User", "ofType": None}
         # Should complete without hanging
-        result = tracer.collect_related_types(type_ref)
+        result = helper.collect_related_types(type_ref)
         # Each type should appear only once
         assert result == {"User", "Post"}
 
@@ -216,34 +215,34 @@ class TestCollectRelatedTypes:
 class TestGetIntrospectionForTypes:
     """Tests for get_introspection_for_types method."""
 
-    def test_empty_set(self, tracer):
+    def test_empty_set(self, helper):
         """Empty set should return empty list."""
-        result = tracer.get_introspection_for_types(set())
+        result = helper.get_introspection_for_types(set())
         assert result == []
 
-    def test_single_type(self, tracer):
+    def test_single_type(self, helper):
         """Single existing type should return list with one element."""
-        result = tracer.get_introspection_for_types({"User"})
+        result = helper.get_introspection_for_types({"User"})
         assert len(result) == 1
         assert result[0]["name"] == "User"
         assert result[0]["kind"] == "OBJECT"
 
-    def test_multiple_types_sorted(self, tracer):
+    def test_multiple_types_sorted(self, helper):
         """Multiple types should be returned sorted by name."""
-        result = tracer.get_introspection_for_types({"Post", "User"})
+        result = helper.get_introspection_for_types({"Post", "User"})
         assert len(result) == 2
         # Sorted alphabetically
         assert result[0]["name"] == "Post"
         assert result[1]["name"] == "User"
 
-    def test_non_existent_types(self, tracer):
+    def test_non_existent_types(self, helper):
         """Non-existent type names should be skipped."""
-        result = tracer.get_introspection_for_types({"NonExistent"})
+        result = helper.get_introspection_for_types({"NonExistent"})
         assert result == []
 
-    def test_mixed_existing_and_non_existing(self, tracer):
+    def test_mixed_existing_and_non_existing(self, helper):
         """Mix of existing and non-existing should only return existing."""
-        result = tracer.get_introspection_for_types({"User", "NonExistent", "Post"})
+        result = helper.get_introspection_for_types({"User", "NonExistent", "Post"})
         assert len(result) == 2
         names = [t["name"] for t in result]
         assert "User" in names
@@ -256,21 +255,21 @@ class TestGetIntrospectionForTypes:
 class TestGetOperationField:
     """Tests for get_operation_field method."""
 
-    def test_existing_field(self, tracer):
+    def test_existing_field(self, helper):
         """Existing field should return field info."""
-        result = tracer.get_operation_field("Query", "userGetAll")
+        result = helper.get_operation_field("Query", "userGetAll")
         assert result is not None
         assert result["name"] == "userGetAll"
         assert result["description"] == "Get all users"
 
-    def test_non_existent_field_name(self, tracer):
+    def test_non_existent_field_name(self, helper):
         """Non-existent field name should return None."""
-        result = tracer.get_operation_field("Query", "nonexistent")
+        result = helper.get_operation_field("Query", "nonexistent")
         assert result is None
 
-    def test_non_existent_operation_type(self, tracer):
+    def test_non_existent_operation_type(self, helper):
         """Non-existent operation type should return None."""
-        result = tracer.get_operation_field("Subscription", "onUserCreated")
+        result = helper.get_operation_field("Subscription", "onUserCreated")
         assert result is None
 
     def test_operation_type_with_no_fields(self, entity_names):
@@ -280,8 +279,8 @@ class TestGetOperationField:
                 {"name": "Query", "kind": "OBJECT", "fields": None},
             ]
         }
-        tracer = TypeTracer(data, entity_names)
-        result = tracer.get_operation_field("Query", "anyField")
+        helper = IntrospectionQueryHelper(data, entity_names)
+        result = helper.get_operation_field("Query", "anyField")
         assert result is None
 
 
@@ -290,28 +289,28 @@ class TestGetOperationField:
 class TestListOperationFields:
     """Tests for list_operation_fields method."""
 
-    def test_list_query_fields(self, tracer):
+    def test_list_query_fields(self, helper):
         """Should list all Query fields."""
-        result = tracer.list_operation_fields("Query")
+        result = helper.list_operation_fields("Query")
         assert len(result) == 2
         names = [f["name"] for f in result]
         assert "userGetAll" in names
         assert "userGetById" in names
 
-    def test_list_mutation_fields(self, tracer):
+    def test_list_mutation_fields(self, helper):
         """Should list all Mutation fields."""
-        result = tracer.list_operation_fields("Mutation")
+        result = helper.list_operation_fields("Mutation")
         assert len(result) == 1
         assert result[0]["name"] == "createUser"
 
-    def test_non_existent_operation_type(self, tracer):
+    def test_non_existent_operation_type(self, helper):
         """Non-existent operation type should return empty list."""
-        result = tracer.list_operation_fields("Subscription")
+        result = helper.list_operation_fields("Subscription")
         assert result == []
 
-    def test_returns_only_name_and_description(self, tracer):
+    def test_returns_only_name_and_description(self, helper):
         """Return structure should only contain name and description."""
-        result = tracer.list_operation_fields("Query")
+        result = helper.list_operation_fields("Query")
         for field in result:
             assert set(field.keys()) == {"name", "description"}
             assert isinstance(field["name"], str)
@@ -323,23 +322,23 @@ class TestListOperationFields:
 class TestGetOperationWithRelatedTypes:
     """Tests for get_operation_with_related_types method."""
 
-    def test_existing_operation(self, tracer):
+    def test_existing_operation(self, helper):
         """Existing operation should return complete structure."""
-        result = tracer.get_operation_with_related_types("Query", "userGetAll")
+        result = helper.get_operation_with_related_types("Query", "userGetAll")
         assert result is not None
         assert "operation" in result
         assert "related_types" in result
         assert result["operation"]["name"] == "userGetAll"
 
-    def test_non_existent_operation(self, tracer):
+    def test_non_existent_operation(self, helper):
         """Non-existent operation should return None."""
-        result = tracer.get_operation_with_related_types("Query", "nonexistent")
+        result = helper.get_operation_with_related_types("Query", "nonexistent")
         assert result is None
 
-    def test_related_types_collected(self, tracer):
+    def test_related_types_collected(self, helper):
         """Related types should be correctly collected."""
         # userGetAll returns [User], User has posts field referencing Post
-        result = tracer.get_operation_with_related_types("Query", "userGetAll")
+        result = helper.get_operation_with_related_types("Query", "userGetAll")
         assert result is not None
         type_names = [t["name"] for t in result["related_types"]]
         assert "User" in type_names
@@ -366,7 +365,7 @@ class TestGetOperationWithRelatedTypes:
                 {"name": "String", "kind": "SCALAR", "fields": None, "inputFields": None, "interfaces": None, "enumValues": None, "possibleTypes": None},
             ]
         }
-        tracer = TypeTracer(data, entity_names)
-        result = tracer.get_operation_with_related_types("Query", "ping")
+        helper = IntrospectionQueryHelper(data, entity_names)
+        result = helper.get_operation_with_related_types("Query", "ping")
         assert result is not None
         assert result["related_types"] == []

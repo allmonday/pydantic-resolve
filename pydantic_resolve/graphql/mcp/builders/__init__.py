@@ -1,5 +1,5 @@
 """MCP builders module."""
 
-from pydantic_resolve.graphql.mcp.builders.type_tracer import TypeTracer
+from pydantic_resolve.graphql.mcp.builders.introspection_query_helper import IntrospectionQueryHelper
 
-__all__ = ["TypeTracer"]
+__all__ = ["IntrospectionQueryHelper"]

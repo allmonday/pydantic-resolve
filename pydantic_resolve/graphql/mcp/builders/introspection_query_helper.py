@@ -1,9 +1,10 @@
-"""Type tracer for collecting related GraphQL types.
+"""Helper for querying GraphQL introspection data.
 
-This module provides the TypeTracer class which analyzes GraphQL introspection
-data to find all entity types that are reachable from a given operation's return type.
-This is essential for progressive disclosure in MCP - allowing us to return only
-the relevant type information for a specific query or mutation.
+This module provides the IntrospectionQueryHelper class which analyzes GraphQL
+introspection data to find all entity types that are reachable from a given
+operation's return type. This is essential for progressive disclosure in MCP -
+allowing us to return only the relevant type information for a specific query
+or mutation.
 """
 
 from __future__ import annotations
@@ -18,8 +19,8 @@ from pydantic_resolve.graphql.types import (
 )
 
 
-class TypeTracer:
-    """Traces and collects all entity types related to a GraphQL operation.
+class IntrospectionQueryHelper:
+    """Helper for querying introspection data to find related GraphQL types.
 
     This class analyzes GraphQL introspection data to find all entity types
     that are reachable from a given operation's return type. It handles
@@ -30,7 +31,7 @@ class TypeTracer:
     """
 
     def __init__(self, introspection_data: IntrospectionData, entity_names: set[str]):
-        """Initialize the type tracer.
+        """Initialize the helper.
 
         Args:
             introspection_data: Full GraphQL introspection data from
@@ -63,7 +64,7 @@ class TypeTracer:
             Set of entity type names that are reachable from the given type
 
         Example:
-            >>> tracer.collect_related_types({"kind": "OBJECT", "name": "User", "ofType": None})
+            >>> helper.collect_related_types({"kind": "OBJECT", "name": "User", "ofType": None})
             {'User', 'Post', 'Comment'}  # If User has relationships to Post and Comment
         """
         if type_ref is None:
@@ -106,7 +107,7 @@ class TypeTracer:
             List of introspection type info dictionaries, sorted by name
 
         Example:
-            >>> tracer.get_introspection_for_types({'User', 'Post'})
+            >>> helper.get_introspection_for_types({'User', 'Post'})
             [{'name': 'Post', 'kind': 'OBJECT', ...}, {'name': 'User', 'kind': 'OBJECT', ...}]
         """
         result: list[GraphQLType] = []
@@ -129,7 +130,7 @@ class TypeTracer:
             Field introspection data or None if not found
 
         Example:
-            >>> tracer.get_operation_field("Query", "userGetAll")
+            >>> helper.get_operation_field("Query", "userGetAll")
             {'name': 'userGetAll', 'args': [...], 'type': {...}}
         """
         type_info = self._type_cache.get(operation_type)
@@ -156,7 +157,7 @@ class TypeTracer:
             List of dictionaries with 'name' and 'description' keys
 
         Example:
-            >>> tracer.list_operation_fields("Query")
+            >>> helper.list_operation_fields("Query")
             [{'name': 'userGetAll', 'description': 'Get all users'},
              {'name': 'userGetById', 'description': 'Get user by ID'}]
         """
@@ -189,7 +190,7 @@ class TypeTracer:
             Dictionary with 'operation' and 'related_types' keys, or None if not found
 
         Example:
-            >>> tracer.get_operation_with_related_types("Query", "userGetAll")
+            >>> helper.get_operation_with_related_types("Query", "userGetAll")
             {
                 'operation': {'name': 'userGetAll', 'args': [...], 'type': {...}},
                 'related_types': [

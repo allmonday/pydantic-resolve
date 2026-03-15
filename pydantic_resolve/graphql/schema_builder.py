@@ -1,21 +1,19 @@
 """
-GraphQL Schema generator from ERD and @query decorated methods.
+GraphQL Schema builder from ERD and @query decorated methods.
 
-This module provides the SchemaBuilder class that generates GraphQL SDL strings.
-The implementation delegates to SDLGenerator internally.
+This module provides the SchemaBuilder class that builds GraphQL SDL strings.
+The implementation delegates to SDLBuilder internally.
 """
 
-from typing import Dict, List
-
-from pydantic_resolve.graphql.schema.generators.sdl_generator import SDLGenerator
+from pydantic_resolve.graphql.schema.generators.sdl_builder import SDLBuilder
 from pydantic_resolve.utils.er_diagram import ErDiagram
 
 
 class SchemaBuilder:
     """
-    Generate GraphQL Schema from ERD and @query decorated methods.
+    Build GraphQL Schema from ERD and @query decorated methods.
 
-    This class delegates to SDLGenerator internally.
+    This class delegates to SDLBuilder internally.
     """
 
     def __init__(self, er_diagram: ErDiagram, validate_conflicts: bool = True):
@@ -26,21 +24,21 @@ class SchemaBuilder:
         """
         self.er_diagram = er_diagram
         self.validate_conflicts = validate_conflicts
-        self._generator = SDLGenerator(er_diagram, validate_conflicts)
+        self._builder = SDLBuilder(er_diagram, validate_conflicts)
 
     def build_schema(self) -> str:
         """
-        Generate complete GraphQL Schema
+        Build complete GraphQL Schema
 
         Returns:
             GraphQL Schema string
         """
-        return self._generator.generate()
+        return self._builder.generate()
 
-    def _extract_query_methods(self, entity: type) -> List[Dict]:
+    def _extract_query_methods(self, entity: type) -> list[dict]:
         """Extract all @query decorated methods from an Entity."""
-        return self._generator._extract_query_methods(entity)
+        return self._builder._extract_query_methods(entity)
 
-    def _extract_mutation_methods(self, entity: type) -> List[Dict]:
+    def _extract_mutation_methods(self, entity: type) -> list[dict]:
         """Extract all @mutation decorated methods from an Entity."""
-        return self._generator._extract_mutation_methods(entity)
+        return self._builder._extract_mutation_methods(entity)

@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING
 
 from pydantic_resolve.graphql.handler import GraphQLHandler
 from pydantic_resolve.graphql.schema.generators.introspection_generator import IntrospectionGenerator
-from pydantic_resolve.graphql.schema.generators.sdl_generator import SDLGenerator
-from pydantic_resolve.graphql.mcp.builders.type_tracer import TypeTracer
+from pydantic_resolve.graphql.schema.generators.sdl_builder import SDLBuilder
+from pydantic_resolve.graphql.mcp.builders.introspection_query_helper import IntrospectionQueryHelper
 from pydantic_resolve.graphql.mcp.managers.app_resources import AppResources
 from pydantic_resolve.graphql.mcp.types.app_config import AppConfig
 
@@ -23,7 +23,7 @@ class MultiAppManager:
     This manager handles:
     - Registration of multiple apps from AppConfig list
     - App lookup by name (with smart routing)
-    - Resource creation for each app (Handler, TypeTracer, SDLGenerator)
+    - Resource creation for each app (Handler, IntrospectionQueryHelper, SDLBuilder)
 
     Each app is independent and backed by its own ErDiagram.
     """
@@ -54,8 +54,8 @@ class MultiAppManager:
 
         This method:
         1. Creates a GraphQLHandler from the ErDiagram
-        2. Creates a TypeTracer from introspection data
-        3. Creates an SDLGenerator for schema generation
+        2. Creates an IntrospectionQueryHelper from introspection data
+        3. Creates an SDLBuilder for schema generation
 
         Args:
             config: Application configuration
@@ -74,7 +74,7 @@ class MultiAppManager:
             enable_from_attribute_in_type_adapter=enable_from_attribute,
         )
 
-        # Create TypeTracer using IntrospectionGenerator
+        # Create IntrospectionQueryHelper using IntrospectionGenerator
         introspection_generator = IntrospectionGenerator(
             er_diagram=er_diagram,
             query_map=handler.query_map,
@@ -82,10 +82,10 @@ class MultiAppManager:
         )
         introspection_data = introspection_generator.generate()
         entity_names = {cfg.kls.__name__ for cfg in er_diagram.configs}
-        tracer = TypeTracer(introspection_data, entity_names)
+        introspection_helper = IntrospectionQueryHelper(introspection_data, entity_names)
 
-        # Create SDLGenerator
-        sdl_generator = SDLGenerator(
+        # Create SDLBuilder
+        sdl_builder = SDLBuilder(
             er_diagram=er_diagram,
         )
 
@@ -93,8 +93,8 @@ class MultiAppManager:
             name=name,
             description=description,
             handler=handler,
-            tracer=tracer,
-            sdl_generator=sdl_generator,
+            introspection_helper=introspection_helper,
+            sdl_builder=sdl_builder,
         )
 
     def _register_app(self, resources: AppResources) -> None:

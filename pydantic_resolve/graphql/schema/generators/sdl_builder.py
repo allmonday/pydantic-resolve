@@ -1,12 +1,12 @@
 """
-SDL (Schema Definition Language) generator.
+SDL (Schema Definition Language) builder.
 
-This module generates GraphQL SDL strings from ErDiagram,
+This module builds GraphQL SDL strings from ErDiagram,
 using the unified type collection and mapping logic.
 """
 
 import inspect
-from typing import Dict, ForwardRef, List, Set, get_args, get_origin, get_type_hints
+from typing import ForwardRef, get_args, get_origin, get_type_hints
 
 from pydantic import BaseModel
 
@@ -19,9 +19,9 @@ from pydantic_resolve.graphql.type_mapping import map_scalar_type, is_enum_type,
 from pydantic_resolve.graphql.exceptions import FieldNameConflictError
 
 
-class SDLGenerator(SchemaGenerator):
+class SDLBuilder(SchemaGenerator):
     """
-    Generates GraphQL SDL (Schema Definition Language) strings.
+    Builds GraphQL SDL (Schema Definition Language) strings.
 
     This is the refactored implementation that uses the unified
     type collection and mapping logic.
@@ -29,7 +29,7 @@ class SDLGenerator(SchemaGenerator):
 
     def generate(self) -> str:
         """
-        Generate complete GraphQL Schema.
+        Build complete GraphQL Schema.
 
         Returns:
             GraphQL Schema string
@@ -38,16 +38,16 @@ class SDLGenerator(SchemaGenerator):
         if self.validate_conflicts:
             self._validate_all_entities()
 
-        enum_defs: List[str] = []
-        input_defs: List[str] = []
-        type_defs: List[str] = []
-        query_defs: List[str] = []
-        mutation_defs: List[str] = []
+        enum_defs: list[str] = []
+        input_defs: list[str] = []
+        type_defs: list[str] = []
+        query_defs: list[str] = []
+        mutation_defs: list[str] = []
         processed_types = set()
         processed_input_types = set()
         processed_enums = set()
 
-        # Generate all entity types
+        # Build all entity types
         for entity_cfg in self.er_diagram.configs:
             type_def = self._build_type_definition(entity_cfg)
             type_defs.append(type_def)
@@ -302,7 +302,7 @@ class SDLGenerator(SchemaGenerator):
                 return cfg.kls
         return None
 
-    def _extract_query_methods(self, entity: type) -> List[Dict]:
+    def _extract_query_methods(self, entity: type) -> list[dict]:
         """Extract all @query decorated methods."""
         methods = []
 
@@ -368,7 +368,7 @@ class SDLGenerator(SchemaGenerator):
 
         return methods
 
-    def _extract_mutation_methods(self, entity: type) -> List[Dict]:
+    def _extract_mutation_methods(self, entity: type) -> list[dict]:
         """Extract all @mutation decorated methods."""
         methods = []
 
@@ -434,7 +434,7 @@ class SDLGenerator(SchemaGenerator):
 
         return methods
 
-    def _build_query_def(self, method_info: Dict) -> str:
+    def _build_query_def(self, method_info: dict) -> str:
         """Build single query definition."""
         name = method_info['name']
         params_str = ""
@@ -443,7 +443,7 @@ class SDLGenerator(SchemaGenerator):
             params_str = f"({params})"
         return f"{name}{params_str}: {method_info['return_type']}"
 
-    def _build_mutation_def(self, method_info: Dict) -> str:
+    def _build_mutation_def(self, method_info: dict) -> str:
         """Build single mutation definition."""
         name = method_info['name']
         params_str = ""
@@ -634,7 +634,7 @@ class SDLGenerator(SchemaGenerator):
                     enums.add(core_type)
         return enums
 
-    def _add_enum_definitions(self, kls: type, enum_defs: List[str], processed_enums: Set[str]) -> None:
+    def _add_enum_definitions(self, kls: type, enum_defs: list[str], processed_enums: set[str]) -> None:
         """Collect and add enum definitions from a class.
 
         Args:
@@ -706,7 +706,7 @@ class SDLGenerator(SchemaGenerator):
 
     def _find_operation_method(
         self, operation_name: str, operation_type: str
-    ) -> Dict | None:
+    ) -> dict | None:
         """Find method info for a given operation name.
 
         Args:
@@ -727,7 +727,7 @@ class SDLGenerator(SchemaGenerator):
                     return method
         return None
 
-    def _collect_related_entities_from_method(self, method_info: Dict) -> Set[type]:
+    def _collect_related_entities_from_method(self, method_info: dict) -> set[type]:
         """Collect all related entity types from a method's return type and parameters.
 
         Args:

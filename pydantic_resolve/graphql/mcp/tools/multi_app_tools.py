@@ -113,7 +113,7 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
         """
         try:
             app = manager.get_app(app_name)
-            queries = app.tracer.list_operation_fields("Query")
+            queries = app.introspection_helper.list_operation_fields("Query")
 
             result = create_success_response(queries)
             result["hint"] = (
@@ -146,7 +146,7 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
         """
         try:
             app = manager.get_app(app_name)
-            mutations = app.tracer.list_operation_fields("Mutation")
+            mutations = app.introspection_helper.list_operation_fields("Mutation")
 
             result = create_success_response(mutations)
             result["hint"] = (
@@ -187,7 +187,7 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
             app = manager.get_app(app_name)
 
             if response_type == "sdl":
-                sdl = app.sdl_generator.generate_operation_sdl(name, "Query")
+                sdl = app.sdl_builder.generate_operation_sdl(name, "Query")
                 if sdl is None:
                     return create_error_response(
                         f"Query '{name}' not found in app '{app.name}'",
@@ -201,7 +201,7 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
                 return result
 
             # Introspection format
-            operation = app.tracer.get_operation_field("Query", name)
+            operation = app.introspection_helper.get_operation_field("Query", name)
             if operation is None:
                 return create_error_response(
                     f"Query '{name}' not found in app '{app.name}'",
@@ -210,8 +210,8 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
 
             # Collect related types
             return_type = operation.get("type")
-            related_type_names = app.tracer.collect_related_types(return_type)
-            types = app.tracer.get_introspection_for_types(related_type_names)
+            related_type_names = app.introspection_helper.collect_related_types(return_type)
+            types = app.introspection_helper.get_introspection_for_types(related_type_names)
 
             result = create_success_response({
                 "operation": operation,
@@ -252,7 +252,7 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
             app = manager.get_app(app_name)
 
             if response_type == "sdl":
-                sdl = app.sdl_generator.generate_operation_sdl(name, "Mutation")
+                sdl = app.sdl_builder.generate_operation_sdl(name, "Mutation")
                 if sdl is None:
                     return create_error_response(
                         f"Mutation '{name}' not found in app '{app.name}'",
@@ -261,7 +261,7 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
                 return create_success_response({"sdl": sdl})
 
             # Introspection format
-            operation = app.tracer.get_operation_field("Mutation", name)
+            operation = app.introspection_helper.get_operation_field("Mutation", name)
             if operation is None:
                 return create_error_response(
                     f"Mutation '{name}' not found in app '{app.name}'",
@@ -270,14 +270,14 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
 
             # Collect related types from return type
             return_type = operation.get("type")
-            related_type_names = app.tracer.collect_related_types(return_type)
+            related_type_names = app.introspection_helper.collect_related_types(return_type)
 
             # Include argument types
             for arg in operation.get("args", []):
-                arg_types = app.tracer.collect_related_types(arg.get("type"))
+                arg_types = app.introspection_helper.collect_related_types(arg.get("type"))
                 related_type_names.update(arg_types)
 
-            types = app.tracer.get_introspection_for_types(related_type_names)
+            types = app.introspection_helper.get_introspection_for_types(related_type_names)
 
             return create_success_response({
                 "operation": operation,
