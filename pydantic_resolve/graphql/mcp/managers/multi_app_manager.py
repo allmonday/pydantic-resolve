@@ -121,7 +121,6 @@ class MultiAppManager:
         Supports smart routing:
         - Exact match: "MyApp" -> "MyApp"
         - Case-insensitive match: "myapp" -> "MyApp"
-        - Partial match: If only one app exists, any name returns it
 
         Args:
             name: Application name
@@ -140,10 +139,6 @@ class MultiAppManager:
         name_lower = name.lower()
         if name_lower in self._app_names_lower:
             return self.apps[self._app_names_lower[name_lower]]
-
-        # If only one app exists, return it regardless of name
-        if len(self.apps) == 1:
-            return list(self.apps.values())[0]
 
         raise ValueError(f"App '{name}' not found. Available apps: {list(self.apps.keys())}")
 
