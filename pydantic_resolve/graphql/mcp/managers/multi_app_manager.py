@@ -12,7 +12,6 @@ from pydantic_resolve.graphql.schema.generators.sdl_generator import SDLGenerato
 from pydantic_resolve.graphql.mcp.builders.type_tracer import TypeTracer
 from pydantic_resolve.graphql.mcp.managers.app_resources import AppResources
 from pydantic_resolve.graphql.mcp.types.app_config import AppConfig
-from pydantic_resolve.graphql.mcp.types.errors import MCPErrors
 
 if TYPE_CHECKING:
     pass

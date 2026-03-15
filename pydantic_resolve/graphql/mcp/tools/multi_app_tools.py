@@ -10,7 +10,7 @@ The tools are organized in 4 layers:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict
 
 from pydantic_resolve.graphql.mcp.types.errors import (
     MCPErrors,

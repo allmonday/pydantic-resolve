@@ -2,7 +2,6 @@
 Test that Relationship.target_kls types are collected and generated in GraphQL schema.
 """
 
-from typing import List
 from pydantic import BaseModel
 from pydantic_resolve import Relationship, Entity, ErDiagram, MultipleRelationship, Link
 from pydantic_resolve.graphql import SchemaBuilder
