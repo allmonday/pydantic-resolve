@@ -1,33 +1,30 @@
 """
 Decorators for marking Entity methods as GraphQL root queries and mutations.
+
+The GraphQL operation name is automatically generated from entity name + method name
+using camelCase style: entityPrefix + MethodCamel
+(e.g., UserEntity.get_all -> userEntityGetAll)
 """
 
-from typing import Callable, Optional, Union, overload
+from typing import Callable, Optional
 
 
 # ============================================================================
 # Query Decorator
 # ============================================================================
 
-@overload
-def query(func: Callable) -> classmethod: ...
-
-
-@overload
-def query(*, name: Optional[str] = None, description: Optional[str] = None) -> Callable: ...
-
-
-def query(name_or_func: Union[str, Callable, None] = None, *, description: Optional[str] = None, name: Optional[str] = None):
+def query(*, description: Optional[str] = None):
     """
     Mark Entity methods as GraphQL root queries.
 
     This decorator automatically implements classmethod functionality,
     so you don't need to add @staticmethod or @classmethod.
 
+    The GraphQL query name is automatically generated as: entityPrefix + MethodCamel
+    (e.g., User.get_all -> userGetAll, PostEntity.find_by_id -> postEntityFindById)
+
     Args:
-        func: Function object (when called without parameters)
-        name: GraphQL query name (defaults to camelCase conversion of method name)
-        description: Description text in GraphQL Schema
+        description: Optional description text in GraphQL Schema
 
     Usage Examples:
         ```python
@@ -39,7 +36,7 @@ def query(name_or_func: Union[str, Callable, None] = None, *, description: Optio
             id: int
             name: str
 
-            @query(name='users', description='Get all users')
+            @query(description='Get all users')
             async def get_all(cls, limit: int = 10):
                 return await fetch_users(limit)
 
@@ -51,8 +48,8 @@ def query(name_or_func: Union[str, Callable, None] = None, *, description: Optio
     This generates the following GraphQL Schema:
         ```graphql
         type Query {
-            users(limit: Int): [User!]!
-            findByEmail(email: String!): User
+            userEntityGetAll(limit: Int): [UserEntity!]!
+            userEntityFindByEmail(email: String!): UserEntity
         }
         ```
 
@@ -60,26 +57,11 @@ def query(name_or_func: Union[str, Callable, None] = None, *, description: Optio
         - Method signature should include `cls` parameter (even if unused)
         - Method is automatically converted to classmethod
         - No need to add @staticmethod or @classmethod decorator
+        - Query name is auto-generated from EntityName + method_name
     """
-    # Handle decorator without positional arguments: @query or @query(name='...')
-    # If first parameter is callable, it's the decorator without parameters: @query
-    if callable(name_or_func):
-        func = name_or_func
-        # Set metadata on function
-        func._pydantic_resolve_query = True
-        func._pydantic_resolve_query_name = name
-        func._pydantic_resolve_query_description = description
-        # Return classmethod
-        return classmethod(func)
-
-    # Handle decorator with keyword arguments: @query(name='...', description='...')
-    # name_or_func is None or string (deprecated usage)
-    query_name = name or name_or_func
-
     def decorator(func: Callable) -> classmethod:
         # Set metadata on function
         func._pydantic_resolve_query = True
-        func._pydantic_resolve_query_name = query_name
         func._pydantic_resolve_query_description = description
         # Return classmethod
         return classmethod(func)
@@ -91,25 +73,18 @@ def query(name_or_func: Union[str, Callable, None] = None, *, description: Optio
 # Mutation Decorator
 # ============================================================================
 
-@overload
-def mutation(func: Callable) -> classmethod: ...
-
-
-@overload
-def mutation(*, name: Optional[str] = None, description: Optional[str] = None) -> Callable: ...
-
-
-def mutation(name_or_func: Union[str, Callable, None] = None, *, description: Optional[str] = None, name: Optional[str] = None):
+def mutation(*, description: Optional[str] = None):
     """
     Mark Entity methods as GraphQL root mutations.
 
     This decorator automatically implements classmethod functionality,
     so you don't need to add @staticmethod or @classmethod.
 
+    The GraphQL mutation name is automatically generated as: entityPrefix + MethodCamel
+    (e.g., User.create_user -> userCreateUser. PostEntity.delete -> postEntityDelete)
+
     Args:
-        func: Function object (when called without parameters)
-        name: GraphQL mutation name (defaults to camelCase conversion of method name)
-        description: Description text in GraphQL Schema
+        description: Optional description text in GraphQL Schema
 
     Usage Examples:
         ```python
@@ -122,7 +97,7 @@ def mutation(name_or_func: Union[str, Callable, None] = None, *, description: Op
             name: str
             email: str
 
-            @mutation(name='createUser', description='Create a new user')
+            @mutation(description='Create a new user')
             async def create_user(cls, name: str, email: str) -> 'UserEntity':
                 return await create_user_in_db(name, email)
 
@@ -134,8 +109,8 @@ def mutation(name_or_func: Union[str, Callable, None] = None, *, description: Op
     This generates the following GraphQL Schema:
         ```graphql
         type Mutation {
-            createUser(name: String!, email: String!): User!
-            deleteUser(id: Int!): Boolean!
+            userEntityCreateUser(name: String!, email: String!): UserEntity!
+            userEntityDeleteUser(id: Int!): Boolean!
         }
         ```
 
@@ -147,26 +122,11 @@ def mutation(name_or_func: Union[str, Callable, None] = None, *, description: Op
             - `T` -> `T!` (non-null)
             - `Optional[T]` -> `T` (nullable)
             - `list[T]` -> `[T!]!` (non-null list of non-null items)
+        - Mutation name is auto-generated from EntityName + method_name
     """
-    # Handle decorator without parameters: @mutation
-    # If first parameter is callable, it's the decorator without parameters: @mutation
-    if callable(name_or_func):
-        func = name_or_func
-        # Set metadata on function
-        func._pydantic_resolve_mutation = True
-        func._pydantic_resolve_mutation_name = name
-        func._pydantic_resolve_mutation_description = description
-        # Return classmethod
-        return classmethod(func)
-
-    # Handle decorator with parameters: @mutation(name='...', description='...')
-    # name_or_func is None or string (deprecated usage)
-    mutation_name = name or name_or_func
-
     def decorator(func: Callable) -> classmethod:
         # Set metadata on function
         func._pydantic_resolve_mutation = True
-        func._pydantic_resolve_mutation_name = mutation_name
         func._pydantic_resolve_mutation_description = description
         # Return classmethod
         return classmethod(func)
