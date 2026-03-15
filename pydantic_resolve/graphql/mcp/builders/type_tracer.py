@@ -10,6 +10,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic_resolve.graphql.types import (
+    GraphQLField,
+    GraphQLType,
+    GraphQLTypeRef,
+    IntrospectionData,
+)
+
 
 class TypeTracer:
     """Traces and collects all entity types related to a GraphQL operation.
@@ -22,7 +29,7 @@ class TypeTracer:
     in MCP progressive disclosure, rather than returning the entire schema.
     """
 
-    def __init__(self, introspection_data: dict[str, Any], entity_names: set[str]):
+    def __init__(self, introspection_data: IntrospectionData, entity_names: set[str]):
         """Initialize the type tracer.
 
         Args:
@@ -31,9 +38,9 @@ class TypeTracer:
             entity_names: Set of entity type names to consider when tracing.
                 These are the types defined in the ErDiagram.
         """
-        self._introspection = introspection_data
-        self._entity_names = entity_names
-        self._type_cache: dict[str, dict[str, Any]] = {}
+        self._introspection: IntrospectionData = introspection_data
+        self._entity_names: set[str] = entity_names
+        self._type_cache: dict[str, GraphQLType] = {}
         self._build_type_cache()
 
     def _build_type_cache(self) -> None:
@@ -43,7 +50,7 @@ class TypeTracer:
             if name:
                 self._type_cache[name] = type_info
 
-    def collect_related_types(self, type_ref: dict[str, Any] | None) -> set[str]:
+    def collect_related_types(self, type_ref: GraphQLTypeRef | None) -> set[str]:
         """Collect all entity types reachable from the given type reference.
 
         Recursively traces through LIST and NON_NULL wrappers and follows
@@ -64,7 +71,7 @@ class TypeTracer:
 
         visited: set[str] = set()
 
-        def trace(ref: dict[str, Any] | None) -> None:
+        def trace(ref: GraphQLTypeRef | None) -> None:
             if ref is None:
                 return
 
@@ -77,7 +84,7 @@ class TypeTracer:
                     visited.add(name)
                     type_info = self._type_cache.get(name)
                     if type_info:
-                        for field in type_info.get("fields", []):
+                        for field in type_info.get("fields", []) or []:
                             trace(field.get("type"))
 
             elif kind == "LIST":
@@ -89,7 +96,7 @@ class TypeTracer:
         trace(type_ref)
         return visited
 
-    def get_introspection_for_types(self, type_names: set[str]) -> list[dict[str, Any]]:
+    def get_introspection_for_types(self, type_names: set[str]) -> list[GraphQLType]:
         """Get introspection data for the specified type names.
 
         Args:
@@ -102,7 +109,7 @@ class TypeTracer:
             >>> tracer.get_introspection_for_types({'User', 'Post'})
             [{'name': 'Post', 'kind': 'OBJECT', ...}, {'name': 'User', 'kind': 'OBJECT', ...}]
         """
-        result: list[dict[str, Any]] = []
+        result: list[GraphQLType] = []
         for name in sorted(type_names):
             type_info = self._type_cache.get(name)
             if type_info:
@@ -111,7 +118,7 @@ class TypeTracer:
 
     def get_operation_field(
         self, operation_type: str, field_name: str
-    ) -> dict[str, Any] | None:
+    ) -> GraphQLField | None:
         """Get a specific field from Query or Mutation type.
 
         Args:
@@ -129,7 +136,7 @@ class TypeTracer:
         if not type_info:
             return None
 
-        for field in type_info.get("fields", []):
+        for field in type_info.get("fields", []) or []:
             if field.get("name") == field_name:
                 return field
 
@@ -158,7 +165,7 @@ class TypeTracer:
             return []
 
         result: list[dict[str, str | None]] = []
-        for field in type_info.get("fields", []):
+        for field in type_info.get("fields", []) or []:
             result.append({
                 "name": field.get("name"),
                 "description": field.get("description"),

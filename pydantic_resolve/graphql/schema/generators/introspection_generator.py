@@ -8,12 +8,19 @@ using the unified type collection and mapping logic.
 import inspect
 import re
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, get_type_hints
+from typing import Any, Callable, Optional, get_type_hints
 
 from pydantic import BaseModel
 
 from pydantic_resolve.graphql.schema.generators.base import SchemaGenerator
 from pydantic_resolve.graphql.schema.type_registry import TypeInfo, FieldInfo, ArgumentInfo, SCALAR_TYPES
+from pydantic_resolve.graphql.types import (
+    GraphQLArgument,
+    GraphQLField,
+    GraphQLType,
+    GraphQLTypeRef,
+    IntrospectionData,
+)
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.er_diagram import Relationship
 from pydantic_resolve.utils.types import get_core_types
@@ -31,8 +38,8 @@ class IntrospectionGenerator(SchemaGenerator):
     def __init__(
         self,
         er_diagram,
-        query_map: Optional[Dict[str, Tuple[type, Callable]]] = None,
-        mutation_map: Optional[Dict[str, Tuple[type, Callable]]] = None
+        query_map: Optional[dict[str, tuple[type, Callable]]] = None,
+        mutation_map: Optional[dict[str, tuple[type, Callable]]] = None
     ):
         """
         Initialize the introspection generator.
@@ -45,10 +52,10 @@ class IntrospectionGenerator(SchemaGenerator):
         super().__init__(er_diagram)
         self.query_map = query_map or {}
         self.mutation_map = mutation_map or {}
-        self._collected_types: Dict[str, type] = {}
-        self._input_types: Set[type] = set()
+        self._collected_types: dict[str, type] = {}
+        self._input_types: set[type] = set()
 
-    def generate(self) -> Dict[str, Any]:
+    def generate(self) -> IntrospectionData:
         """
         Generate full introspection schema.
 
@@ -63,9 +70,9 @@ class IntrospectionGenerator(SchemaGenerator):
             "directives": []
         }
 
-    def format_type(self, type_info: TypeInfo) -> Dict[str, Any]:
+    def format_type(self, type_info: TypeInfo) -> GraphQLType:
         """Format a type definition as introspection dict."""
-        result = {
+        result: GraphQLType = {
             "kind": type_info.kind,
             "name": type_info.name,
             "description": type_info.description,
@@ -77,7 +84,7 @@ class IntrospectionGenerator(SchemaGenerator):
         }
         return result
 
-    def format_field(self, field_info: FieldInfo) -> Dict[str, Any]:
+    def format_field(self, field_info: FieldInfo) -> GraphQLField:
         """Format a field definition as introspection dict."""
         return {
             "name": field_info.name,
@@ -90,7 +97,7 @@ class IntrospectionGenerator(SchemaGenerator):
 
     # --- Main introspection methods ---
 
-    async def execute(self, query: str) -> Dict[str, Any]:
+    async def execute(self, query: str) -> dict[str, Any]:
         """
         Execute an introspection query.
 
@@ -101,7 +108,7 @@ class IntrospectionGenerator(SchemaGenerator):
             Introspection response with data and errors
         """
         query_info = self._parse_introspection_query(query)
-        data = {}
+        data: dict[str, Any] = {}
 
         if query_info["requests_schema"]:
             data["__schema"] = self.generate()
@@ -121,7 +128,7 @@ class IntrospectionGenerator(SchemaGenerator):
 
     # --- Internal implementation ---
 
-    def _parse_introspection_query(self, query: str) -> Dict[str, bool]:
+    def _parse_introspection_query(self, query: str) -> dict[str, bool]:
         """Parse introspection query and extract requested fields."""
         try:
             requests_type = "__type(" in query or '__type (' in query.replace('"', "'")
@@ -142,7 +149,7 @@ class IntrospectionGenerator(SchemaGenerator):
             return match.group(1)
         return None
 
-    def _get_all_introspection_types(self) -> List[Dict]:
+    def _get_all_introspection_types(self) -> list[GraphQLType]:
         """Get all types for introspection."""
         types = []
 
@@ -203,7 +210,7 @@ class IntrospectionGenerator(SchemaGenerator):
 
         return types
 
-    def _get_introspection_type(self, type_name: str) -> Optional[Dict[str, Any]]:
+    def _get_introspection_type(self, type_name: str) -> Optional[GraphQLType]:
         """Get introspection info for a specific type."""
         # Check scalar types (convert TypeInfo to dict format)
         if type_name in SCALAR_TYPES:
@@ -285,14 +292,14 @@ class IntrospectionGenerator(SchemaGenerator):
 
     def _collect_nested_pydantic_types(
         self,
-        entities: List[type],
-        visited: Optional[Set[str]] = None
-    ) -> Dict[str, type]:
+        entities: list[type],
+        visited: Optional[set[str]] = None
+    ) -> dict[str, type]:
         """Recursively collect all Pydantic BaseModel types."""
         if visited is None:
             visited = set()
 
-        collected: Dict[str, type] = {}
+        collected: dict[str, type] = {}
 
         for entity in entities:
             type_name = entity.__name__
@@ -321,10 +328,10 @@ class IntrospectionGenerator(SchemaGenerator):
 
         return collected
 
-    def _collect_input_types_from_maps(self) -> Set[type]:
+    def _collect_input_types_from_maps(self) -> set[type]:
         """Collect input types from query/mutation maps."""
-        input_types: Set[type] = set()
-        visited: Set[str] = set()
+        input_types: set[type] = set()
+        visited: set[str] = set()
 
         def collect_from_type(param_type: Any) -> None:
             core_types = get_core_types(param_type)
@@ -361,7 +368,7 @@ class IntrospectionGenerator(SchemaGenerator):
         except Exception:
             pass
 
-    def _build_object_type(self, entity: type) -> Dict[str, Any]:
+    def _build_object_type(self, entity: type) -> GraphQLType:
         """Build introspection OBJECT type."""
         return {
             "kind": "OBJECT",
@@ -374,7 +381,7 @@ class IntrospectionGenerator(SchemaGenerator):
             "possibleTypes": None
         }
 
-    def _build_input_type(self, kls: type) -> Dict[str, Any]:
+    def _build_input_type(self, kls: type) -> GraphQLType:
         """Build introspection INPUT_OBJECT type."""
         return {
             "kind": "INPUT_OBJECT",
@@ -387,7 +394,7 @@ class IntrospectionGenerator(SchemaGenerator):
             "possibleTypes": None
         }
 
-    def _get_entity_fields(self, entity: type) -> List[Dict]:
+    def _get_entity_fields(self, entity: type) -> list[dict]:
         """Get introspection fields for an entity."""
         fields = []
 
@@ -453,7 +460,7 @@ class IntrospectionGenerator(SchemaGenerator):
                     return True
         return False
 
-    def _get_input_fields(self, kls: type) -> List[Dict]:
+    def _get_input_fields(self, kls: type) -> list[dict]:
         """Get introspection inputFields for an input type."""
         fields = []
 
@@ -478,11 +485,11 @@ class IntrospectionGenerator(SchemaGenerator):
 
         return fields
 
-    def _get_query_fields(self) -> List[Dict]:
+    def _get_query_fields(self) -> list[dict]:
         """Get introspection fields for Query type."""
         return self._get_operation_fields(self.query_map, "Query")
 
-    def _get_mutation_fields(self) -> List[Dict]:
+    def _get_mutation_fields(self) -> list[dict]:
         """Get introspection fields for Mutation type."""
         return self._get_operation_fields(self.mutation_map, "Mutation")
 
@@ -518,7 +525,7 @@ class IntrospectionGenerator(SchemaGenerator):
         # Fallback to string representation
         return str(default_value)
 
-    def _get_operation_fields(self, operation_map: Dict, operation_type: str) -> List[Dict]:
+    def _get_operation_fields(self, operation_map: dict, operation_type: str) -> list[dict]:
         """Get introspection fields for Query or Mutation type."""
         fields = []
 
@@ -561,7 +568,7 @@ class IntrospectionGenerator(SchemaGenerator):
 
         return fields
 
-    def _build_return_type(self, return_type: type, entity: type) -> Dict[str, Any]:
+    def _build_return_type(self, return_type: type, entity: type) -> GraphQLTypeRef:
         """Build return type for operation fields."""
         if return_type == inspect.Parameter.empty:
             return {"kind": "SCALAR", "name": "String", "ofType": None}
@@ -602,7 +609,7 @@ class IntrospectionGenerator(SchemaGenerator):
 
         return {"kind": "SCALAR", "name": "String", "ofType": None}
 
-    def _build_graphql_type(self, field_type: Any) -> Dict[str, Any]:
+    def _build_graphql_type(self, field_type: Any) -> GraphQLTypeRef:
         """Build GraphQL type definition for output types."""
         core_types = get_core_types(field_type)
         if not core_types:
@@ -674,7 +681,7 @@ class IntrospectionGenerator(SchemaGenerator):
                     "ofType": None
                 }
 
-    def _build_input_graphql_type(self, field_type: Any) -> Dict[str, Any]:
+    def _build_input_graphql_type(self, field_type: Any) -> GraphQLTypeRef:
         """Build GraphQL type definition for input types."""
         core_types = get_core_types(field_type)
         if not core_types:
@@ -746,7 +753,7 @@ class IntrospectionGenerator(SchemaGenerator):
                     "ofType": None
                 }
 
-    def _format_arg(self, arg: ArgumentInfo) -> Dict[str, Any]:
+    def _format_arg(self, arg: ArgumentInfo) -> GraphQLArgument:
         """Format an argument for introspection."""
         return {
             "name": arg.name,
@@ -755,7 +762,7 @@ class IntrospectionGenerator(SchemaGenerator):
             "defaultValue": arg.default_value
         }
 
-    def _format_input_field(self, field_info: FieldInfo) -> Dict[str, Any]:
+    def _format_input_field(self, field_info: FieldInfo) -> GraphQLField:
         """Format an input field for introspection."""
         return {
             "name": field_info.name,
@@ -764,7 +771,7 @@ class IntrospectionGenerator(SchemaGenerator):
             "defaultValue": None
         }
 
-    def _build_type_ref(self, field_info: FieldInfo) -> Dict[str, Any]:
+    def _build_type_ref(self, field_info: FieldInfo) -> GraphQLTypeRef:
         """Build type reference for field."""
         if field_info.is_list:
             return {
@@ -812,7 +819,7 @@ class IntrospectionGenerator(SchemaGenerator):
         return getattr(field, 'description', None)
 
 
-    def _build_enum_type(self, enum_class: type) -> Dict[str, Any]:
+    def _build_enum_type(self, enum_class: type) -> GraphQLType:
         """Build introspection ENUM type."""
         enum_values = get_enum_names(enum_class)
         return {
@@ -829,10 +836,10 @@ class IntrospectionGenerator(SchemaGenerator):
             "possibleTypes": None
         }
 
-    def _collect_all_enum_types(self) -> List[type]:
+    def _collect_all_enum_types(self) -> list[type]:
         """Collect all enum types from entities, input types, and query/mutation maps."""
-        enums: List[type] = []
-        visited: Set[str] = set()
+        enums: list[type] = []
+        visited: set[str] = set()
 
         def collect_from_class(kls: type) -> None:
             """Collect enum types from a class's type hints."""
