@@ -24,8 +24,9 @@ class TestGraphQLIntegration:
             id: int
             name: str
 
-            @query(name='simple')
+            @query
             async def get_all(cls, limit: int = 10) -> List['SimpleEntity']:
+                """获取所有简单实体"""
                 return [
                     SimpleEntity(id=1, name='Alice'),
                     SimpleEntity(id=2, name='Bob'),
@@ -38,7 +39,7 @@ class TestGraphQLIntegration:
     @pytest.mark.asyncio
     async def test_simple_query_execution(self):
         """测试简单查询执行"""
-        query_str = "{ simple { id name } }"
+        query_str = "{ simpleEntityGetAll { id name } }"
         result = await self.handler.execute(query_str)
 
         # 验证响应格式
@@ -49,20 +50,20 @@ class TestGraphQLIntegration:
         assert result["errors"] is None or len(result["errors"]) == 0
 
         # 验证数据
-        assert "simple" in result["data"]
-        users = result["data"]["simple"]
+        assert "simpleEntityGetAll" in result["data"]
+        users = result["data"]["simpleEntityGetAll"]
         assert len(users) <= 2
 
     @pytest.mark.asyncio
     async def test_query_with_arguments(self):
         """测试带参数的查询"""
-        query_str = "{ simple(limit: 1) { id } }"
+        query_str = "{ simpleEntityGetAll(limit: 1) { id } }"
         result = await self.handler.execute(query_str)
 
         # 验证响应
         assert "data" in result
-        assert "simple" in result["data"]
-        assert len(result["data"]["simple"]) == 1
+        assert "simpleEntityGetAll" in result["data"]
+        assert len(result["data"]["simpleEntityGetAll"]) == 1
 
     @pytest.mark.asyncio
     async def test_invalid_query(self):

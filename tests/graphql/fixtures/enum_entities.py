@@ -43,7 +43,7 @@ class UserWithRoleEntity(BaseModel, BaseEntity):
     name: str
     role: UserRole
 
-    @query(name='usersWithRole')
+    @query
     async def get_all(cls) -> List['UserWithRoleEntity']:
         """Get all users with roles."""
         return [
@@ -60,7 +60,7 @@ class PostWithStatusEntity(BaseModel, BaseEntity):
     title: str
     status: PostStatus
 
-    @query(name='postsWithStatus')
+    @query
     async def get_all(cls) -> List['PostWithStatusEntity']:
         """Get all posts with status."""
         return [
@@ -77,7 +77,7 @@ class TaskWithPriorityEntity(BaseModel, BaseEntity):
     name: str
     priority: Priority
 
-    @query(name='tasksWithPriority')
+    @query
     async def get_all(cls) -> List['TaskWithPriorityEntity']:
         """Get all tasks with priority."""
         return [
@@ -93,7 +93,7 @@ class ItemWithOptionalStatusEntity(BaseModel, BaseEntity):
     id: int
     status: Optional[PostStatus] = None
 
-    @query(name='itemsWithOptionalStatus')
+    @query
     async def get_all(cls) -> List['ItemWithOptionalStatusEntity']:
         """Get all items with optional status."""
         return [

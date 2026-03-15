@@ -196,8 +196,9 @@ class UserWithDecorator(BaseModel):
     id: int
     name: str
 
-    @query(name='allUsers')
+    @query
     async def get_all(cls, limit: int = 10) -> List['UserWithDecorator']:
+        """获取所有用户"""
         return []
 
 
@@ -232,12 +233,12 @@ class TestSchemaBuilderCompatibility:
         builder = SchemaBuilder(diagram)
         schema = builder.build_schema()
 
-        # 验证 Query 类型包含配置的方法
-        assert 'users(limit: Int): [UserEntityForConfig!]' in schema
-        assert 'all_posts: [PostEntityForConfig!]' in schema
+        # 验证 Query 类型包含配置的方法 (新命名风格)
+        assert 'userEntityForConfigGetAllUsers(limit: Int): [UserEntityForConfig!]' in schema
+        assert 'postEntityForConfigGetAllPosts: [PostEntityForConfig!]' in schema
 
         # 验证 Mutation 类型包含配置的方法
-        assert 'createPost(input: CreatePostInput!): PostEntityForConfig!' in schema
+        assert 'postEntityForConfigCreatePost(input: CreatePostInput!): PostEntityForConfig!' in schema
 
     def test_mixed_decorator_and_config(self):
         """测试装饰器和配置混合使用"""
@@ -253,9 +254,9 @@ class TestSchemaBuilderCompatibility:
         builder = SchemaBuilder(diagram)
         schema = builder.build_schema()
 
-        # 验证两种方式都能被正确识别
-        assert 'allUsers(limit: Int): [UserWithDecorator!]' in schema
-        assert 'posts: [PostWithConfig!]' in schema
+        # 验证两种方式都能被正确识别 (新命名风格)
+        assert 'userWithDecoratorGetAll(limit: Int): [UserWithDecorator!]' in schema
+        assert 'postWithConfigGetPostsForMixedTest: [PostWithConfig!]' in schema
 
 
 # ========== 循环引用测试用的实体（模块级别，避免动态类导致的 teardown 问题）==========
@@ -307,8 +308,9 @@ class TestCircularReferenceScenario:
 
         assert 'type AuthorEntity' in schema
         assert 'type BookEntity' in schema
-        assert 'authors: [AuthorEntity!]' in schema
-        assert 'booksByAuthor(author_id: Int!): [BookEntity!]' in schema
+        # 新命名风格
+        assert 'authorEntityGetAuthors: [AuthorEntity!]' in schema
+        assert 'bookEntityGetBooksByAuthor(author_id: Int!): [BookEntity!]' in schema
 
 
 class TestEntityDefaultValues:
@@ -338,8 +340,9 @@ class UserWithDecoratorForConflict(BaseModel):
     id: int
     name: str
 
-    @query(name='allUsers')
+    @query
     async def get_all(cls, limit: int = 10) -> List['UserWithDecoratorForConflict']:
+        """获取所有用户"""
         return []
 
 
@@ -347,8 +350,9 @@ class EntityWithMutationForConflict(BaseModel):
     """用于测试冲突检测的实体，带装饰器方法"""
     id: int
 
-    @mutation(name='delete')
+    @mutation
     async def delete_entity(cls, id: int) -> bool:
+        """删除实体"""
         return True
 
 
@@ -377,6 +381,7 @@ class TestMethodConflictDetection:
         """测试 MutationConfig 与装饰器定义的方法冲突时抛出异常"""
         # 方法名必须与现有方法名相同才能触发冲突检测
         async def delete_entity(cls, id: int) -> bool:
+            """删除实体"""
             return False
 
         with pytest.raises(ValueError, match="Method 'delete_entity' already exists in EntityWithMutationForConflict"):

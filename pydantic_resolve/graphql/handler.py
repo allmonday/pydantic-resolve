@@ -49,7 +49,11 @@ class GraphQLHandler:
 
         # Initialize components
         self.parser = QueryParser()
-        self.builder = ResponseBuilder(er_diagram, resolver_class=self.resolver_class)
+        self.builder = ResponseBuilder(
+            er_diagram,
+            resolver_class=self.resolver_class,
+            enable_from_attribute_in_type_adapter=enable_from_attribute_in_type_adapter
+        )
         self.schema_builder = SchemaBuilder(er_diagram)
 
         # Build query and mutation maps

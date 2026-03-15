@@ -70,7 +70,7 @@ class UserEntity(BaseModel, BaseEntity):
             UserEntity(id=2, name="Bob", email="bob@example.com"),
         ][:limit]
 
-    @query(name='user')
+    @query
     @staticmethod
     async def get_by_id(id: int) -> Optional['UserEntity']:
         """根据 ID 获取用户"""
@@ -111,7 +111,7 @@ class PostEntity(BaseModel, BaseEntity):
             PostEntity(id=2, title="Second Post", author_id=2),
         ]
 
-    @query(name='postComments')
+    @query
     @staticmethod
     async def get_comments(post_id: int, limit: int = 10) -> List['CommentEntity']:
         """获取指定文章的评论（分页）- 测试跨实体返回类型"""

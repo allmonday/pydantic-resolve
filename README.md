@@ -15,6 +15,10 @@
 
 **pydantic-resolve** is a Pydantic-based declarative data assembly tool that enables you to build complex data structures with concise code, without writing tedious data fetching and assembly logic.
 
+Beyond data assembly, it also provides:
+- **GraphQL Support**: Auto-generate GraphQL schemas from ERD definitions and execute queries with dynamic Pydantic model creation
+- **MCP Integration**: Expose GraphQL APIs to AI agents via Model Context Protocol with progressive disclosure support
+
 It solves three core problems:
 
 1. **Eliminate N+1 queries**: Built-in DataLoader automatically batches related data loading, no manual batch query management needed
@@ -439,7 +443,52 @@ See [demo/graphql/README.md](demo/graphql/README.md) for complete documentation.
 
 ---
 
-## 6. Why Not GraphQL?
+## 6. MCP Support - AI Agent Integration
+
+### What is MCP?
+
+**MCP (Model Context Protocol)** enables AI agents (like Claude) to discover and interact with your GraphQL APIs through a standardized protocol. Instead of overwhelming AI with the entire schema, MCP uses **progressive disclosure** - a layered approach where agents gradually explore API capabilities.
+
+### Progressive Disclosure Layers
+
+| Layer | Tool | Purpose |
+|-------|------|---------|
+| 0 | `list_apps` | Discover available applications |
+| 1 | `list_queries` / `list_mutations` | List available operations |
+| 2 | `get_query_schema` / `get_mutation_schema` | Get detailed schema for an operation |
+| 3 | `graphql_query` / `graphql_mutation` | Execute operations and get data |
+
+### Quick Start
+
+```python
+from pydantic_resolve import base_entity, config_global_resolver
+from pydantic_resolve.graphql.mcp import create_mcp_server
+
+# Define entities and configure ERD
+BaseEntity = base_entity()
+config_global_resolver(BaseEntity.get_diagram())
+
+# Create MCP server with your GraphQL apps
+apps = [{
+    "name": "blog",
+    "er_diagram": BaseEntity.get_diagram(),
+    "description": "Blog system with users and posts",
+}]
+
+mcp = create_mcp_server(apps=apps, name="Blog API")
+mcp.run()  # AI agents can now discover and use your API
+```
+
+### Key Features
+
+- **Multiple App Support**: Serve multiple GraphQL applications from one MCP server
+- **Type-Aware Schema**: Only returns relevant types for each operation
+- **Smart Hints**: Responses include context-aware guidance for next steps
+- **Error Handling**: Standardized error responses with helpful messages
+
+---
+
+## 7. Why Not GraphQL?
 
 Although pydantic-resolve is inspired by GraphQL, it's better suited as a BFF (Backend For Frontend) layer solution:
 

@@ -25,9 +25,9 @@ class TestSchemaBuilder:
         # 验证 Schema 包含 Query 定义
         assert 'type Query' in schema
 
-        # 验证 Schema 包含查询方法
-        assert 'users' in schema or 'all' in schema
-        assert 'posts' in schema or 'all' in schema
+        # 验证 Schema 包含查询方法 (新命名风格: entityPrefix + MethodCamel)
+        assert 'userEntityGetAll' in schema
+        assert 'postEntityGetAll' in schema
 
     def test_extract_query_methods(self):
         """测试提取 @query 方法"""
@@ -45,10 +45,10 @@ class TestSchemaBuilder:
         # 验证提取到的方法
         assert len(methods) > 0
 
-        # 验证方法属性
+        # 验证方法属性 (新命名风格)
         method_names = [m['name'] for m in methods]
-        assert 'all' in method_names or 'get_all' in method_names
-        assert 'user' in method_names or 'get_by_id' in method_names
+        assert 'userEntityGetAll' in method_names
+        assert 'userEntityGetById' in method_names
 
     def test_forward_ref_type_in_schema(self):
         """测试 ForwardRef 类型在 Schema 中正确解析"""
@@ -57,15 +57,15 @@ class TestSchemaBuilder:
         # 验证 CommentEntity 类型被正确生成
         assert 'type CommentEntity' in schema
 
-        # 验证 postComments 查询返回正确的类型
-        assert 'postComments' in schema
+        # 验证 postEntityGetComments 查询返回正确的类型
+        assert 'postEntityGetComments' in schema
         # 验证返回类型是 [CommentEntity] 而不是 [String] 或 [PostEntity]
-        # 查找 postComments 行并检查返回类型
+        # 查找 postEntityGetComments 行并检查返回类型
         lines = schema.split('\n')
         for line in lines:
-            if 'postComments' in line:
+            if 'postEntityGetComments' in line:
                 # 提取返回类型部分
                 if ': [CommentEntity]' in line or ': [CommentEntity!]' in line:
                     return
         # 如果没有找到正确的返回类型，测试失败
-        raise AssertionError(f"postComments should return [CommentEntity], but schema shows: {line}")
+        raise AssertionError(f"postEntityGetComments should return [CommentEntity], but schema shows: {line}")
