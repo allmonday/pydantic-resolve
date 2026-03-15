@@ -66,10 +66,12 @@ class MultiAppManager:
         er_diagram = config["er_diagram"]
         name = config["name"]
         description = config.get("description", "")
+        enable_from_attribute = config.get("enable_from_attribute_in_type_adapter", False)
 
         # Create GraphQLHandler
         handler = GraphQLHandler(
             er_diagram=er_diagram,
+            enable_from_attribute_in_type_adapter=enable_from_attribute,
         )
 
         # Create TypeTracer using IntrospectionGenerator

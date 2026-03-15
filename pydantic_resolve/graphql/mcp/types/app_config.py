@@ -15,9 +15,13 @@ class AppConfig(TypedDict, total=False):
         description: Optional application description
         query_description: Optional description for Query type
         mutation_description: Optional description for Mutation type
+        enable_from_attribute_in_type_adapter: Enable Pydantic from_attributes mode.
+            Allows loaders to return Pydantic instances instead of dictionaries.
+            Default is False.
     """
     name: str
     er_diagram: "ErDiagram"
     description: Optional[str]
     query_description: Optional[str]
     mutation_description: Optional[str]
+    enable_from_attribute_in_type_adapter: bool

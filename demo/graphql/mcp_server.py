@@ -27,6 +27,7 @@ apps = [
         "er_diagram": BaseEntity.get_diagram(),
         "description": "Blog system with users, posts, and comments. "
                       "Supports CRUD operations for all entities with relationship loading.",
+        "enable_from_attribute_in_type_adapter": True,  # Enable from_attributes mode for type adapter validation
     }
 ]
 

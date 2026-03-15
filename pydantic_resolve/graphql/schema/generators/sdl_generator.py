@@ -6,7 +6,7 @@ using the unified type collection and mapping logic.
 """
 
 import inspect
-from typing import Dict, List, Set, get_args, get_origin, get_type_hints
+from typing import Dict, ForwardRef, List, Set, get_args, get_origin, get_type_hints
 
 from pydantic import BaseModel
 
@@ -744,6 +744,15 @@ class SDLGenerator(SchemaGenerator):
             core_types = get_core_types(python_type)
 
             for core_type in core_types:
+                # Handle ForwardRef by resolving to actual class
+                if isinstance(core_type, ForwardRef):
+                    type_name = core_type.__forward_arg__
+                    resolved = self._get_entity_by_name(type_name)
+                    if resolved:
+                        core_type = resolved
+                    else:
+                        continue
+
                 if safe_issubclass(core_type, BaseModel):
                     type_name = core_type.__name__
                     if type_name not in visited:
@@ -760,7 +769,18 @@ class SDLGenerator(SchemaGenerator):
                                         collect_from_type(field_type)
                                 except Exception:
                                     pass
-                                break
+
+                                # Collect from relationships with default_field_name
+                                for rel in entity_cfg.relationships:
+                                    if isinstance(rel, Relationship):
+                                        if rel.default_field_name:
+                                            collect_from_type(rel.target_kls)
+                                    elif isinstance(rel, MultipleRelationship):
+                                        for link in rel.links:
+                                            if link.default_field_name:
+                                                collect_from_type(rel.target_kls)
+                                                break  # target_kls is the same for all links
+                                break  # Found the entity, no need to check other configs
 
         # Collect from return type
         method = method_info.get('method')
@@ -829,6 +849,12 @@ class SDLGenerator(SchemaGenerator):
                         field_name = rel.default_field_name
                         gql_type = self._map_python_type_to_gql(rel.target_kls)
                         fields.append(f"  {field_name}: {gql_type}")
+                elif isinstance(rel, MultipleRelationship):
+                    for link in rel.links:
+                        if link.default_field_name:
+                            field_name = link.default_field_name
+                            gql_type = self._map_python_type_to_gql(rel.target_kls)
+                            fields.append(f"  {field_name}: {gql_type}")
 
         # Build type definition
         type_def = f"type {entity.__name__} {{\n" + "\n".join(fields) + "\n}"
@@ -848,4 +874,8 @@ class SDLGenerator(SchemaGenerator):
             if isinstance(rel, Relationship):
                 if hasattr(rel, 'default_field_name') and rel.default_field_name == field_name:
                     return True
+            elif isinstance(rel, MultipleRelationship):
+                for link in rel.links:
+                    if link.default_field_name == field_name:
+                        return True
         return False
