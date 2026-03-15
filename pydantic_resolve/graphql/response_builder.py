@@ -75,16 +75,19 @@ class ResponseBuilder:
     ─────────────────────────────────────────────────────────────────
     """
 
-    def __init__(self, er_diagram: ErDiagram, resolver_class: type = None):
+    def __init__(self, er_diagram: ErDiagram, resolver_class: type = None, enable_from_attribute_in_type_adapter: bool = False):
         """
         Args:
             er_diagram: Entity relationship diagram
             resolver_class: Resolver class for cache isolation and pre-analysis.
                            If provided, response models will be pre-analyzed and cached.
+            enable_from_attribute_in_type_adapter: Enable Pydantic from_attributes mode.
+                           Allows loaders to return Pydantic instances instead of dictionaries.
         """
         self.er_diagram = er_diagram
         self.entity_map = {cfg.kls: cfg for cfg in er_diagram.configs}
         self.resolver_class = resolver_class
+        self.enable_from_attribute_in_type_adapter = enable_from_attribute_in_type_adapter
         # Bind lru_cache to instance method
         # This provides LRU eviction + thread safety + instance isolation
         self._build_cached = lru_cache(maxsize=256)(self._build_model_impl)
@@ -597,7 +600,11 @@ class ResponseBuilder:
         model_name = f"{entity.__name__}Response_{id(field_selection)}"
 
         # Create model with config to serialize enums as their names (GraphQL convention)
-        config = ConfigDict(use_enum_values=False)
+        # Enable from_attributes to allow Pydantic instances as input (for nested relationships)
+        config = ConfigDict(
+            use_enum_values=False,
+            from_attributes=self.enable_from_attribute_in_type_adapter
+        )
 
         dynamic_model = create_model(
             model_name,
