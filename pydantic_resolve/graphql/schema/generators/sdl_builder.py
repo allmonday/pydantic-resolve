@@ -237,6 +237,12 @@ class SDLBuilder(SchemaGenerator):
             if entity_kls:
                 core_type = entity_kls
 
+        # Handle string type names that correspond to entity types
+        if isinstance(core_type, str):
+            entity_kls = self._get_entity_by_name(core_type)
+            if entity_kls:
+                core_type = entity_kls
+
         # Check if it's list[T]
         is_list = origin is list or (
             hasattr(python_type, '__origin__') and
@@ -748,6 +754,14 @@ class SDLBuilder(SchemaGenerator):
                 if isinstance(core_type, ForwardRef):
                     type_name = core_type.__forward_arg__
                     resolved = self._get_entity_by_name(type_name)
+                    if resolved:
+                        core_type = resolved
+                    else:
+                        continue
+
+                # Handle string type names that correspond to entity types
+                if isinstance(core_type, str):
+                    resolved = self._get_entity_by_name(core_type)
                     if resolved:
                         core_type = resolved
                     else:

@@ -118,8 +118,9 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
             result = create_success_response(queries)
             result["hint"] = (
                 f"Working with app '{app_name}'. "
-                f"Use get_query_schema(name='<query_name>', app_name='{app_name}') "
-                f"to get detailed schema, or graphql_query to execute."
+                f"Use get_query_schema(name='<query_name>', app_name='{app_name}', response_type='sdl|introspection') "
+                f"for detailed schema. response_type: 'sdl' (default, compact) or 'introspection' (detailed types). "
+                f"Or use graphql_query to execute."
             )
             return result
         except ValueError as e:
@@ -151,8 +152,9 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
             result = create_success_response(mutations)
             result["hint"] = (
                 f"Working with app '{app_name}'. "
-                f"Use get_mutation_schema(name='<mutation_name>', app_name='{app_name}') "
-                f"to get detailed schema, or graphql_mutation to execute."
+                f"Use get_mutation_schema(name='<mutation_name>', app_name='{app_name}', response_type='sdl|introspection') "
+                f"for detailed schema. response_type: 'sdl' (default, compact) or 'introspection' (detailed types). "
+                f"Or use graphql_mutation to execute."
             )
             return result
         except ValueError as e:
