@@ -130,23 +130,23 @@ class UserEntity(BaseModel, BaseEntity):
     meta: list[UserMetaEntity] = Field(default_factory=list, description="用户元信息列表")
     meta: list[UserMetaEntity] = Field(default_factory=list, description="用户元信息列表")
 
-    @query(description='获取所有用户（分页）')
+    @query
     async def get_all(cls, limit: int = 10, offset: int = 0) -> List['UserEntity']:
         """获取所有用户（分页）"""
         all_users = list(users_db.values())
         return all_users[offset:offset + limit]
 
-    @query(description='根据 ID 获取用户')
+    @query
     async def get_by_id(cls, id: int) -> Optional['UserEntity']:
         """根据 ID 获取用户"""
         return users_db.get(id)
 
-    @query(description='获取所有管理员')
+    @query
     async def get_admins(cls) -> List['UserEntity']:
         """获取所有管理员"""
         return [u for u in users_db.values() if u.role == UserRole.ADMIN]
 
-    @mutation(description='创建新用户')
+    @mutation
     async def create_user(cls, name: str, email: str, role: UserRole = UserRole.USER) -> 'UserEntity':
         """创建新用户并返回创建的用户对象"""
         global user_id_counter
@@ -160,7 +160,7 @@ class UserEntity(BaseModel, BaseEntity):
         users_db[user_id_counter] = new_user
         return new_user
 
-    @mutation(description='更新用户信息')
+    @mutation
     async def update_user(cls, id: int, name: Optional[str] = None, email: Optional[str] = None) -> Optional['UserEntity']:
         """更新用户信息"""
         if id in users_db:
@@ -172,7 +172,7 @@ class UserEntity(BaseModel, BaseEntity):
             return user
         return None
 
-    @mutation(description='删除用户，返回是否成功')
+    @mutation
     async def delete_user(cls, id: int) -> bool:
         """删除用户，返回是否成功"""
         if id in users_db:
@@ -180,7 +180,7 @@ class UserEntity(BaseModel, BaseEntity):
             return True
         return False
 
-    @mutation(description='使用 Input Type 创建新用户')
+    @mutation
     async def create_user_with_input(cls, input: CreateUserInput) -> 'UserEntity':
         """使用 Input Type 创建新用户"""
         global user_id_counter
@@ -194,7 +194,7 @@ class UserEntity(BaseModel, BaseEntity):
         users_db[user_id_counter] = new_user
         return new_user
 
-    @mutation(description='使用 Input Type 更新用户')
+    @mutation
     async def update_user_with_input(cls, id: int, input: UpdateUserInput) -> Optional['UserEntity']:
         """使用 Input Type 更新用户信息"""
         if id in users_db:
@@ -225,7 +225,7 @@ class PostEntity(BaseModel, BaseEntity):
     author_id: int = Field(description="作者用户ID")
     status: PostStatus = Field(description="文章状态")
 
-    @query(description='获取所有文章（可按状态筛选）')
+    @query
     async def get_all(cls, limit: int = 10, status: Optional[PostStatus] = None) -> List['PostEntity']:
         """获取所有文章（可按状态筛选）"""
         all_posts = list(posts_db.values())
@@ -233,18 +233,18 @@ class PostEntity(BaseModel, BaseEntity):
             return [p for p in all_posts if p.status == status][:limit]
         return all_posts[:limit]
 
-    @query(description='根据 ID 获取文章')
+    @query
     async def get_by_id(cls, id: int) -> Optional['PostEntity']:
         """根据 ID 获取文章"""
         return posts_db.get(id)
 
-    @query(description='获取指定文章的评论（分页）')
+    @query
     async def get_comments(cls, post_id: int, limit: int = 10, offset: int = 0) -> List['CommentEntity']:
         """获取指定文章的评论（分页）"""
         comments = [c for c in comments_db.values() if c.post_id == post_id]
         return comments[offset:offset + limit]
 
-    @mutation(description='创建新文章')
+    @mutation
     async def create_post(cls, title: str, content: str, author_id: int, status: PostStatus = PostStatus.DRAFT) -> 'PostEntity':
         """创建新文章并返回创建的文章对象"""
         global post_id_counter
@@ -259,7 +259,7 @@ class PostEntity(BaseModel, BaseEntity):
         posts_db[post_id_counter] = new_post
         return new_post
 
-    @mutation(description='更新文章内容或状态')
+    @mutation
     async def update_post(cls, id: int, title: Optional[str] = None, content: Optional[str] = None, status: Optional[PostStatus] = None) -> Optional['PostEntity']:
         """更新文章内容或状态"""
         if id in posts_db:
@@ -273,7 +273,7 @@ class PostEntity(BaseModel, BaseEntity):
             return post
         return None
 
-    @mutation(description='发布文章（将状态改为 published）')
+    @mutation
     async def publish_post(cls, id: int) -> Optional['PostEntity']:
         """发布文章（将状态改为 published）"""
         if id in posts_db:
@@ -282,7 +282,7 @@ class PostEntity(BaseModel, BaseEntity):
             return post
         return None
 
-    @mutation(description='删除文章，返回是否成功')
+    @mutation
     async def delete_post(cls, id: int) -> bool:
         """删除文章，返回是否成功"""
         if id in posts_db:
@@ -290,7 +290,7 @@ class PostEntity(BaseModel, BaseEntity):
             return True
         return False
 
-    @mutation(description='使用 Input Type 创建新文章')
+    @mutation
     async def create_post_with_input(cls, input: CreatePostInput) -> 'PostEntity':
         """使用 Input Type 创建新文章"""
         global post_id_counter
@@ -305,7 +305,7 @@ class PostEntity(BaseModel, BaseEntity):
         posts_db[post_id_counter] = new_post
         return new_post
 
-    @mutation(description='使用 Input Type 更新文章')
+    @mutation
     async def update_post_with_input(cls, id: int, input: UpdatePostInput) -> Optional['PostEntity']:
         """使用 Input Type 更新文章内容或状态"""
         if id in posts_db:
@@ -335,12 +335,12 @@ class CommentEntity(BaseModel, BaseEntity):
     author_id: int = Field(description="评论者用户ID")
     post_id: int = Field(description="被评论的文章ID")
 
-    @query(description='获取所有评论')
+    @query
     async def get_all(cls) -> List['CommentEntity']:
         """获取所有评论"""
         return list(comments_db.values())
 
-    @mutation(description='创建新评论')
+    @mutation
     async def create_comment(cls, text: str, author_id: int, post_id: int) -> 'CommentEntity':
         """创建新评论并返回创建的评论对象"""
         global comment_id_counter
@@ -354,7 +354,7 @@ class CommentEntity(BaseModel, BaseEntity):
         comments_db[comment_id_counter] = new_comment
         return new_comment
 
-    @mutation(description='更新评论内容')
+    @mutation
     async def update_comment(cls, id: int, text: Optional[str] = None) -> Optional['CommentEntity']:
         """更新评论内容"""
         if id in comments_db:
@@ -364,7 +364,7 @@ class CommentEntity(BaseModel, BaseEntity):
             return comment
         return None
 
-    @mutation(description='删除评论，返回是否成功')
+    @mutation
     async def delete_comment(cls, id: int) -> bool:
         """删除评论，返回是否成功"""
         if id in comments_db:
