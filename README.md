@@ -461,19 +461,22 @@ See [demo/graphql/README.md](demo/graphql/README.md) for complete documentation.
 ### Quick Start
 
 ```python
-from pydantic_resolve import base_entity, config_global_resolver
+from pydantic_resolve import base_entity, config_global_resolver, AppConfig
 from pydantic_resolve.graphql.mcp import create_mcp_server
 
-# Define entities and configure ERD
+# Define entities and configure ERD (in other files)
 BaseEntity = base_entity()
-config_global_resolver(BaseEntity.get_diagram())
+diagram = BaseEntity.get_diagram()
 
 # Create MCP server with your GraphQL apps
-apps = [{
-    "name": "blog",
-    "er_diagram": BaseEntity.get_diagram(),
-    "description": "Blog system with users and posts",
-}]
+apps: list[AppConfig] = [
+    AppConfig(
+        name="blog",
+        er_diagram=diagram,
+        description="Blog system with users and posts",
+        enable_from_attribute_in_type_adapter=True  # set if you need this.
+    )
+]
 
 mcp = create_mcp_server(apps=apps, name="Blog API")
 mcp.run()  # AI agents can now discover and use your API

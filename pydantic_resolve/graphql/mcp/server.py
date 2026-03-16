@@ -73,13 +73,6 @@ def create_mcp_server(
     if not apps:
         raise ValueError("apps list cannot be empty")
 
-    # Validate app configs
-    for i, app in enumerate(apps):
-        if "name" not in app:
-            raise ValueError(f"App config at index {i} missing required field: name")
-        if "er_diagram" not in app:
-            raise ValueError(f"App config at index {i} missing required field: er_diagram")
-
     # Create manager with all app resources
     manager = MultiAppManager(apps)
 

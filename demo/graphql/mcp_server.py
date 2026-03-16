@@ -21,20 +21,20 @@ diagram = BaseEntity.get_diagram()
 
 # Define app configuration
 apps: list[AppConfig] = [
-    {
-        "name": "blog_v1",
-        "er_diagram": diagram,
-        "description": "Blog system with users, posts, and comments. "
-                      "Supports CRUD operations for all entities with relationship loading.",
-        "enable_from_attribute_in_type_adapter": True,  # Enable from_attributes mode for type adapter validation
-    },
-    {
-        "name": "blog_v2",
-        "er_diagram": diagram_v2,
-        "description": "Blog system with users, posts, and comments. "
-                      "Supports CRUD operations for all entities with relationship loading. schema is different from blog_v1.",
-        "enable_from_attribute_in_type_adapter": True,  # Enable from_attributes mode for type adapter validation
-    }
+    AppConfig(
+        name="blog_v1",
+        er_diagram=diagram,
+        description="Blog system with users, posts, and comments. "
+                    "Supports CRUD operations for all entities with relationship loading.",
+        enable_from_attribute_in_type_adapter=True,  # Enable from_attributes mode for type adapter validation
+    ),
+    AppConfig(
+        name="blog_v2",
+        er_diagram=diagram_v2,
+        description="Blog system with users, posts, and comments. "
+                    "Supports CRUD operations for all entities with relationship loading. schema is different from blog_v1.",
+        enable_from_attribute_in_type_adapter=True,  # Enable from_attributes mode for type adapter validation
+    )
 ]
 
 # Create MCP server

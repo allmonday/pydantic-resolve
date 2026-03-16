@@ -63,10 +63,10 @@ class MultiAppManager:
         Returns:
             AppResources instance with all components initialized
         """
-        er_diagram = config["er_diagram"]
-        name = config["name"]
-        description = config.get("description", "")
-        enable_from_attribute = config.get("enable_from_attribute_in_type_adapter", False)
+        er_diagram = config.er_diagram
+        name = config.name
+        description = config.description or ""
+        enable_from_attribute = config.enable_from_attribute_in_type_adapter
 
         # Create GraphQLHandler
         handler = GraphQLHandler(

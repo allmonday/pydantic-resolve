@@ -1,12 +1,11 @@
 """App configuration for MCP server."""
 
-from typing import TypedDict, Optional, TYPE_CHECKING
+from pydantic import BaseModel
 
-if TYPE_CHECKING:
-    from pydantic_resolve.utils.er_diagram import ErDiagram
+from pydantic_resolve.utils.er_diagram import ErDiagram
 
 
-class AppConfig(TypedDict, total=False):
+class AppConfig(BaseModel):
     """Configuration for a GraphQL application in MCP server.
 
     Attributes:
@@ -19,9 +18,10 @@ class AppConfig(TypedDict, total=False):
             Allows loaders to return Pydantic instances instead of dictionaries.
             Default is False.
     """
+
     name: str
-    er_diagram: "ErDiagram"
-    description: Optional[str]
-    query_description: Optional[str]
-    mutation_description: Optional[str]
-    enable_from_attribute_in_type_adapter: bool
+    er_diagram: ErDiagram
+    description: str | None = None
+    query_description: str | None = None
+    mutation_description: str | None = None
+    enable_from_attribute_in_type_adapter: bool = False
