@@ -4,6 +4,12 @@
 - **Minor (x.Y.0)**: New features, backward compatible
 - **Patch (x.y.Z)**: Bug fixes and minor improvements
 
+## v3.1
+
+### v3.1.0 (2026-3-16)
+- feature:
+    - add MCP support based on ER diagram, add query/mutation decorator
+
 ## v3.0
 
 ### v3.0.7 (2026-3-5)

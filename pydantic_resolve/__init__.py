@@ -24,6 +24,11 @@ from pydantic_resolve.graphql.decorator import query, mutation
 from pydantic_resolve.graphql.schema_builder import SchemaBuilder
 from pydantic_resolve.graphql.handler import GraphQLHandler
 
+# MCP
+from pydantic_resolve.graphql.mcp.server import create_mcp_server, MultiAppManager, register_multi_app_tools
+from pydantic_resolve.graphql.mcp.types.app_config import AppConfig
+
+
 setup_library_logger()
 
 __all__ = [
@@ -70,4 +75,10 @@ __all__ = [
     'mutation',
     'GraphQLHandler',
     'SchemaBuilder',
+
+    # MCP
+    'create_mcp_server',  # lightweight MCP server wrapper
+    'AppConfig',
+    'MultiAppManager',
+    'register_multi_app_tools',
 ]
