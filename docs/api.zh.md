@@ -1025,9 +1025,145 @@ class Data(BaseModel):
 NewLoader = copy_dataloader_kls('NewLoader', OriginLoader)
 ```
 
+## MCP Server
+
+pydantic-resolve 提供 MCP (Model Context Protocol) 服务器支持，允许 AI 代理通过渐进式披露机制发现和交互 GraphQL API。
+
+### create_mcp_server
+
+创建一个 MCP 服务器，将多个 ErDiagram 应用暴露为独立的 GraphQL 端点。
+
+```python
+from pydantic_resolve import create_mcp_server, AppConfig
+
+mcp = create_mcp_server(
+    apps: List[AppConfig],
+    name: str = "Pydantic-Resolve GraphQL API",
+) -> "FastMCP"
+```
+
+**参数：**
+
+- `apps` (list[AppConfig]): 应用配置列表。每个配置包括：
+  - `name`: 应用名称（必填）
+  - `er_diagram`: ErDiagram 实例（必填）
+  - `description`: 应用描述（可选）
+  - `query_description`: Query 类型描述（可选）
+  - `mutation_description`: Mutation 类型描述（可选）
+  - `enable_from_attribute_in_type_adapter`: 启用 Pydantic from_attributes 模式（默认：False）
+- `name` (str): MCP 服务器名称（默认："Pydantic-Resolve GraphQL API"）
+
+**返回：**
+
+一个配置好的 FastMCP 服务器实例，可直接运行。
+
+**示例：**
+
+```python
+from pydantic_resolve import base_entity, config_global_resolver, create_mcp_server, AppConfig
+
+# 定义实体
+BaseEntity = base_entity()
+
+class User(BaseModel, BaseEntity):
+    id: int
+    name: str
+
+class Comment(BaseModel, BaseEntity):
+    id: int
+    user_id: int
+    __relationships__ = [
+        Relationship(field='user_id', target_kls=User, loader=user_loader)
+    ]
+
+config_global_resolver(BaseEntity.get_diagram())
+
+# 创建包含多个应用的 MCP 服务器
+apps = [
+    AppConfig(
+        name="blog",
+        er_diagram=BaseEntity.get_diagram(),
+        description="博客系统，包含用户和文章",
+    ),
+    AppConfig(
+        name="shop",
+        er_diagram=shop_diagram,
+        description="电商系统",
+    )
+]
+
+mcp = create_mcp_server(apps=apps, name="My API")
+
+# 运行服务器
+mcp.run(transport="streamable-http", port=8080)
+```
+
+### AppConfig
+
+MCP 服务器中 GraphQL 应用的配置类。
+
+```python
+from pydantic_resolve import AppConfig
+
+AppConfig(
+    name: str,                    # 应用名称（必填）
+    er_diagram: ErDiagram,        # ErDiagram 实例（必填）
+    description: str | None = None,
+    query_description: str | None = None,
+    mutation_description: str | None = None,
+    enable_from_attribute_in_type_adapter: bool = False,
+)
+```
+
+**参数：**
+
+| 参数 | 类型 | 描述 |
+|------|------|------|
+| `name` | str | 应用名称，用于标识 GraphQL 端点 |
+| `er_diagram` | ErDiagram | 包含实体定义的 ErDiagram 实例 |
+| `description` | str \| None | 可选的应用描述 |
+| `query_description` | str \| None | Query 类型的可选描述 |
+| `mutation_description` | str \| None | Mutation 类型的可选描述 |
+| `enable_from_attribute_in_type_adapter` | bool | 启用 Pydantic from_attributes 模式，允许 loader 返回 Pydantic 实例而不是字典 |
+
+### 运行 MCP 服务器
+
+FastMCP 的 `mcp.run()` 方法支持多种传输模式：
+
+```python
+# HTTP 传输，自定义端口
+mcp.run(transport="streamable-http", host="0.0.0.0", port=8080)
+
+# SSE (Server-Sent Events) 传输
+mcp.run(transport="sse", port=8080)
+
+# stdio 传输（用于 Claude Desktop，无需端口）
+mcp.run(transport="stdio")
+```
+
+**常用参数：**
+
+| 参数 | 描述 | 默认值 |
+|------|------|--------|
+| `transport` | 传输模式：`"stdio"`、`"streamable-http"`、`"sse"` | `"stdio"` |
+| `host` | 绑定的主机地址 | `"127.0.0.1"` |
+| `port` | 端口号 | `8000` |
+
+### 渐进式披露层级
+
+MCP 服务器为 AI 代理实现了渐进式披露机制：
+
+- **Layer 0**: `list_apps` - 发现可用的应用
+- **Layer 1**: `list_queries`、`list_mutations` - 列出可用的操作
+- **Layer 2**: `get_query_schema`、`get_mutation_schema` - 获取详细的 schema 信息
+- **Layer 3**: `graphql_query`、`graphql_mutation` - 执行 GraphQL 操作
+
+这让 AI 代理可以逐步探索和交互 GraphQL API，而不会被完整的 schema 信息淹没。
+
 ## 异常
 
 - `ResolverTargetAttrNotFound`: 目标 field 不存在
 - `LoaderFieldNotProvidedError`: Resolve 中没有提供 Loader 所需的参数
 - `GlobalLoaderFieldOverlappedError`: `global_loader_params` 和 `loader_params` 参数出现重复
 - `MissingCollector`: 找不到目标 collector, 祖先节点方法中未定义
+- `MissingAnnotationError`: 使用 `LoadBy` 或其他需要类型信息的注解时缺少类型注解

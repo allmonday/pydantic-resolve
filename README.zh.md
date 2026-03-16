@@ -437,7 +437,79 @@ curl -X POST http://localhost:8000/graphql \
 
 ---
 
-## 六、为什么不用 GraphQL？
+## 六、MCP 支持
+
+pydantic-resolve 现在支持 MCP (Model Context Protocol) 服务器，可以将你的 GraphQL API 暴露给 AI 代理，实现渐进式发现和交互。
+
+### 基本使用
+
+```python
+from pydantic_resolve import create_mcp_server, AppConfig, base_entity, config_global_resolver
+
+# 1. 定义 BaseEntity
+BaseEntity = base_entity()
+
+class UserEntity(BaseModel, BaseEntity):
+    __relationships__ = [
+        Relationship(field='id', target_kls=list['Post'], loader=post_loader)
+    ]
+    id: int
+    name: str
+    email: str
+
+# 2. 配置全局 resolver
+config_global_resolver(BaseEntity.get_diagram())
+
+# 3. 创建 MCP 服务器
+apps = [
+    AppConfig(
+        name="blog",
+        er_diagram=BaseEntity.get_diagram(),
+        description="博客系统 API",
+    )
+]
+
+mcp = create_mcp_server(apps=apps, name="Blog GraphQL MCP Server")
+
+# 4. 运行服务器
+mcp.run(transport="streamable-http", port=8080)
+```
+
+### 运行配置
+
+```python
+# HTTP 模式，自定义端口
+mcp.run(transport="streamable-http", host="0.0.0.0", port=8080)
+
+# SSE (Server-Sent Events) 模式
+mcp.run(transport="sse", port=8080)
+
+# stdio 模式（用于 Claude Desktop，无需端口）
+mcp.run(transport="stdio")
+```
+
+### 渐进式披露层级
+
+MCP 服务器实现了渐进式披露，让 AI 代理可以逐步探索 API：
+
+- **Layer 0**: `list_apps` - 发现可用的应用
+- **Layer 1**: `list_queries`, `list_mutations` - 列出可用的操作
+- **Layer 2**: `get_query_schema`, `get_mutation_schema` - 获取详细的 schema 信息
+- **Layer 3**: `graphql_query`, `graphql_mutation` - 执行 GraphQL 操作
+
+### 尝试 Demo
+
+```bash
+# 安装依赖
+pip install mcp
+
+# 启动 MCP 服务器
+uv run python -m demo.graphql.mcp_server
+```
+
+---
+
+## 七、为什么不用 GraphQL？
 
 虽然 pydantic-resolve 的灵感来自 GraphQL，但它更适合作为 BFF（Backend For Frontend）层的解决方案：
 

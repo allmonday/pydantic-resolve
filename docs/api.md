@@ -1031,6 +1031,141 @@ Copy a DataLoader class. Useful when you need multiple parameterized DataLoaders
 NewLoader = copy_dataloader_kls('NewLoader', OriginLoader)
 ```
 
+## MCP Server
+
+pydantic-resolve provides MCP (Model Context Protocol) server support, allowing AI agents to discover and interact with GraphQL APIs through progressive disclosure.
+
+### create_mcp_server
+
+Creates an MCP server that exposes multiple ErDiagram applications as independent GraphQL endpoints.
+
+```python
+from pydantic_resolve import create_mcp_server, AppConfig
+
+mcp = create_mcp_server(
+    apps: List[AppConfig],
+    name: str = "Pydantic-Resolve GraphQL API",
+) -> "FastMCP"
+```
+
+**Parameters:**
+
+- `apps` (list[AppConfig]): List of application configurations. Each config includes:
+  - `name`: Application name (required)
+  - `er_diagram`: ErDiagram instance (required)
+  - `description`: Application description (optional)
+  - `query_description`: Query type description (optional)
+  - `mutation_description`: Mutation type description (optional)
+  - `enable_from_attribute_in_type_adapter`: Enable Pydantic from_attributes mode (default: False)
+- `name` (str): MCP server name (default: "Pydantic-Resolve GraphQL API")
+
+**Returns:**
+
+A configured FastMCP server instance ready to run.
+
+**Example:**
+
+```python
+from pydantic_resolve import base_entity, config_global_resolver, create_mcp_server, AppConfig
+
+# Define entities
+BaseEntity = base_entity()
+
+class User(BaseModel, BaseEntity):
+    id: int
+    name: str
+
+class Comment(BaseModel, BaseEntity):
+    id: int
+    user_id: int
+    __relationships__ = [
+        Relationship(field='user_id', target_kls=User, loader=user_loader)
+    ]
+
+config_global_resolver(BaseEntity.get_diagram())
+
+# Create MCP server with multiple apps
+apps = [
+    AppConfig(
+        name="blog",
+        er_diagram=BaseEntity.get_diagram(),
+        description="Blog system with users and posts",
+    ),
+    AppConfig(
+        name="shop",
+        er_diagram=shop_diagram,
+        description="E-commerce system",
+    )
+]
+
+mcp = create_mcp_server(apps=apps, name="My API")
+
+# Run the server
+mcp.run(transport="streamable-http", port=8080)
+```
+
+### AppConfig
+
+Configuration class for a GraphQL application in MCP server.
+
+```python
+from pydantic_resolve import AppConfig
+
+AppConfig(
+    name: str,                    # Application name (required)
+    er_diagram: ErDiagram,        # ErDiagram instance (required)
+    description: str | None = None,
+    query_description: str | None = None,
+    mutation_description: str | None = None,
+    enable_from_attribute_in_type_adapter: bool = False,
+)
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | str | Application name used to identify the GraphQL endpoint |
+| `er_diagram` | ErDiagram | ErDiagram instance containing entity definitions |
+| `description` | str \| None | Optional application description |
+| `query_description` | str \| None | Optional description for the Query type |
+| `mutation_description` | str \| None | Optional description for the Mutation type |
+| `enable_from_attribute_in_type_adapter` | bool | Enable Pydantic from_attributes mode, allows loaders to return Pydantic instances instead of dictionaries |
+
+### Running the MCP Server
+
+The `mcp.run()` method from FastMCP supports multiple transport modes:
+
+```python
+# HTTP transport with custom port
+mcp.run(transport="streamable-http", host="0.0.0.0", port=8080)
+
+# SSE (Server-Sent Events) transport
+mcp.run(transport="sse", port=8080)
+
+# stdio transport (for Claude Desktop, no port needed)
+mcp.run(transport="stdio")
+```
+
+**Common Parameters:**
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `transport` | Transport mode: `"stdio"`, `"streamable-http"`, `"sse"` | `"stdio"` |
+| `host` | Host address to bind | `"127.0.0.1"` |
+| `port` | Port number | `8000` |
+
+### Progressive Disclosure Layers
+
+The MCP server implements progressive disclosure for AI agents:
+
+- **Layer 0**: `list_apps` - Discover available applications
+- **Layer 1**: `list_queries`, `list_mutations` - List available operations
+- **Layer 2**: `get_query_schema`, `get_mutation_schema` - Get detailed schema information
+- **Layer 3**: `graphql_query`, `graphql_mutation` - Execute GraphQL operations
+
+This allows AI agents to incrementally explore and interact with the GraphQL API without being overwhelmed by the full schema at once.
+
 ## Exceptions
 
 - `ResolverTargetAttrNotFound`: target field does not exist
