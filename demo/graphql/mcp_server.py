@@ -12,21 +12,27 @@ Usage:
     mcp.run(transport="streamable-http")
 """
 
-from pydantic_resolve import config_global_resolver
-from pydantic_resolve.graphql.mcp import create_mcp_server
+from pydantic_resolve.graphql.mcp import create_mcp_server, AppConfig
 
 from demo.graphql.entities import BaseEntity
+from demo.graphql.entities_v2 import diagram_v2
 
-# Configure global resolver with ER diagram
-config_global_resolver(BaseEntity.get_diagram())
+diagram = BaseEntity.get_diagram()
 
 # Define app configuration
-apps = [
+apps: list[AppConfig] = [
     {
-        "name": "blog",
-        "er_diagram": BaseEntity.get_diagram(),
+        "name": "blog_v1",
+        "er_diagram": diagram,
         "description": "Blog system with users, posts, and comments. "
                       "Supports CRUD operations for all entities with relationship loading.",
+        "enable_from_attribute_in_type_adapter": True,  # Enable from_attributes mode for type adapter validation
+    },
+    {
+        "name": "blog_v2",
+        "er_diagram": diagram_v2,
+        "description": "Blog system with users, posts, and comments. "
+                      "Supports CRUD operations for all entities with relationship loading. schema is different from blog_v1.",
         "enable_from_attribute_in_type_adapter": True,  # Enable from_attributes mode for type adapter validation
     }
 ]
