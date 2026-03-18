@@ -913,6 +913,37 @@ class ClassRoom(BaseModel):
 		return loader.load(self.id)
 ```
 
+#### self._context
+
+DataLoaders can access the global context from Resolver by declaring a `_context` attribute. This is useful for scenarios like permission filtering where you need to pass user information.
+
+```python
+from aiodataloader import DataLoader
+
+class UserLoader(DataLoader):
+    _context: dict  # Declare _context to receive Resolver's context
+
+    async def batch_load_fn(self, keys):
+        user_id = self._context.get('user_id')
+        # Use user_id for permission filtering
+        users = await query_users_with_permission(keys, user_id)
+        return users
+
+class TaskResponse(BaseModel):
+    id: int
+    owner_id: int
+    owner: Optional[User] = None
+
+    def resolve_owner(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.owner_id)
+
+# Provide context to Resolver
+resolver = Resolver(context={'user_id': 123})
+result = await resolver.resolve(tasks)
+```
+
+If a DataLoader declares `_context` but Resolver doesn't provide context, a `LoaderContextNotProvidedError` will be raised.
+
 ## Helper Utilities
 
 ### build_list, build_object

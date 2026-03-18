@@ -60,7 +60,8 @@ def test_scan_resolve_method_3():
                 'param': 'loader',
                 'kls': Loader,
                 'path': 'test_scan_resolve_method.test_scan_resolve_method_3.<locals>.Loader',
-                'request_type': None
+                'request_type': None,
+                'requires_context': False
             }
         ]
     }

@@ -12,3 +12,7 @@ class GlobalLoaderFieldOverlappedError(Exception):
 
 class MissingCollector(Exception):
     pass
+
+class LoaderContextNotProvidedError(Exception):
+    """Raised when a DataLoader requires context but Resolver doesn't provide one."""
+    pass

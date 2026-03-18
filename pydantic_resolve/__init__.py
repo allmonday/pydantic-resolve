@@ -9,7 +9,8 @@ from pydantic_resolve.exceptions import (
     LoaderFieldNotProvidedError,
     MissingAnnotationError,
     GlobalLoaderFieldOverlappedError,
-    MissingCollector)
+    MissingCollector,
+    LoaderContextNotProvidedError)
 from pydantic_resolve.resolver import Resolver
 from pydantic_resolve.utils.depend import LoaderDepend, Loader
 from pydantic_resolve.utils.subset import DefineSubset, SubsetConfig
@@ -40,12 +41,15 @@ __all__ = [
     'ExposeAs',
     'SendTo',
 
+    # errors
     'ResolverTargetAttrNotFound',
     'LoaderFieldNotProvidedError',
     'MissingAnnotationError',
     'GlobalLoaderFieldOverlappedError',
     'MissingCollector',
+    'LoaderContextNotProvidedError',
 
+    # utils
     'build_list',
     'build_object',
     'mapper',
@@ -53,9 +57,12 @@ __all__ = [
     'model_config',
     'serialization',
     'copy_dataloader_kls',
+
+    # subset
     'DefineSubset',
     'SubsetConfig',
 
+    # ER diagram
     'Entity',
     'Relationship',
     'MultipleRelationship',

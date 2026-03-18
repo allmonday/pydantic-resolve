@@ -907,6 +907,36 @@ class ClassRoom(BaseModel):
         return loader.load(self.id)
 ```
 
+#### self._context
+
+DataLoader 可以通过声明 `_context` 属性来访问 Resolver 的全局上下文。这对于权限过滤等场景非常有用（如传递 `user_id`）。
+
+```python
+class UserLoader(DataLoader):
+    _context: dict  # 声明需要 context
+
+    async def batch_load_fn(self, keys):
+        user_id = self._context.get('user_id')
+        # 使用 user_id 进行权限过滤
+        users = await query_users_with_permission(keys, user_id)
+        return users
+
+
+class TaskResponse(BaseModel):
+    id: int
+    owner_id: int
+    owner: Optional[User] = None
+
+    def resolve_owner(self, loader=LoaderDepend(UserLoader)):
+        return loader.load(self.owner_id)
+
+# 提供 context 给 Resolver
+resolver = Resolver(context={'user_id': 123})
+result = await resolver.resolve(tasks)
+```
+
+如果 DataLoader 声明了 `_context` 但 Resolver 没有提供 context，将抛出 `LoaderContextNotProvidedError` 异常。
+
 ## 辅助方法
 
 ### build_list, build_object
