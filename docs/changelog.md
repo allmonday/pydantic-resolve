@@ -4,6 +4,27 @@
 - **Minor (x.Y.0)**: New features, backward compatible
 - **Patch (x.y.Z)**: Bug fixes and minor improvements
 
+## v3.2
+
+### v3.2.0 (2026-3-19)
+- feat:
+  - **DataLoader context injection**: Class-type DataLoaders can now declare a `_context` attribute to access Resolver's global context
+  - Early validation: Raises `LoaderContextNotProvidedError` if a DataLoader requires context but Resolver doesn't provide one
+  - Useful for permission filtering scenarios where `user_id` needs to be passed to loaders
+  - Example:
+    ```python
+    class UserLoader(DataLoader):
+        _context: dict  # Declare context requirement
+
+        async def batch_load_fn(self, keys):
+            user_id = self._context.get('user_id')
+            # Use user_id for permission filtering
+            ...
+
+    # Resolver automatically injects context
+    resolver = Resolver(context={'user_id': 123})
+    ```
+
 ## v3.1
 
 ### v3.1.1 (2026-3-18)
