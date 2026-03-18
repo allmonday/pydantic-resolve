@@ -1,7 +1,7 @@
 import copy
 import inspect
 from typing import TypedDict
-from inspect import isfunction
+from inspect import isfunction, isclass
 from collections import defaultdict
 from pydantic import BaseModel
 import pydantic_resolve.constant as const
@@ -84,6 +84,7 @@ class DataLoaderType(TypedDict):
     kls: type
     path: str
     request_type: list[type]
+    requires_context: bool
 
 class CollectorType(TypedDict):
     field: str 
@@ -338,6 +339,28 @@ def _validate_resolve_and_post_fields(resolve_fields: list, post_fields: list, a
 # Method scanning functions
 # ====================
 
+def _loader_requires_context(loader_kls: type) -> bool:
+    """Check if a class-type DataLoader has a '_context' attribute declared.
+
+    Note: This function does NOT verify that loader_kls is a DataLoader subclass.
+    The reason is that in pydantic-resolve's usage pattern, loaders are always
+    passed via LoaderDepend, and the design assumes they are DataLoader classes.
+    If a non-DataLoader class is passed, it will fail during instance creation
+    in loader_manager._create_loader_instance(), which is an appropriate place
+    for such errors to surface.
+
+    Args:
+        loader_kls: The DataLoader class to check
+
+    Returns:
+        True if the class has '_context' in its annotations
+    """
+    if not isclass(loader_kls):
+        return False
+    annotations = loader_kls.__dict__.get('__annotations__', {})
+    return '_context' in annotations
+
+
 def _scan_resolve_method(method, field: str, request_types: list[type]) -> ResolveMethodType:
     result: ResolveMethodType = {
         'trim_field': field.replace(const.RESOLVE_PREFIX, ''),
@@ -359,11 +382,13 @@ def _scan_resolve_method(method, field: str, request_types: list[type]) -> Resol
 
     for name, param in signature.parameters.items():
         if isinstance(param.default, Depends):
-            info: DataLoaderType = { 
+            loader_kls = param.default.dependency
+            info: DataLoaderType = {
                 'param': name,
-                'kls': param.default.dependency,  # for later initialization
-                'path': class_util.get_kls_full_name(param.default.dependency),
-                'request_type': request_types
+                'kls': loader_kls,  # for later initialization
+                'path': class_util.get_kls_full_name(loader_kls),
+                'request_type': request_types,
+                'requires_context': _loader_requires_context(loader_kls)
             }
             result['dataloaders'].append(info)
 
@@ -394,14 +419,16 @@ def _scan_post_method(method, field: str, request_types: list[type]) -> PostMeth
     if signature.parameters.get('parent'):
         result['parent'] = True
 
-    
+
     for name, param in signature.parameters.items():
         if isinstance(param.default, Depends):
-            loader_info: DataLoaderType = { 
+            loader_kls = param.default.dependency
+            loader_info: DataLoaderType = {
                 'param': name,
-                'kls': param.default.dependency,  # for later initialization
-                'path': class_util.get_kls_full_name(param.default.dependency),
-                'request_type': request_types
+                'kls': loader_kls,  # for later initialization
+                'path': class_util.get_kls_full_name(loader_kls),
+                'request_type': request_types,
+                'requires_context': _loader_requires_context(loader_kls)
             }
             result['dataloaders'].append(loader_info)
 

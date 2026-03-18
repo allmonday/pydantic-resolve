@@ -477,7 +477,8 @@ class Resolver:
             self.loader_params,
             self.global_loader_param,
             self.loader_instances,
-            self.metadata)
+            self.metadata,
+            self.context)
         
         has_context = analysis.has_context(self.metadata)
         if has_context and self.context is None:

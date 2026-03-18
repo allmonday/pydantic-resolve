@@ -4,7 +4,7 @@ from typing import Any, Generator
 import pydantic_resolve.utils.class_util as class_util
 import pydantic_resolve.utils.params as params_util
 from pydantic_resolve.analysis import LoaderQueryMeta, MappedMetaType
-from pydantic_resolve.exceptions import LoaderFieldNotProvidedError
+from pydantic_resolve.exceptions import LoaderFieldNotProvidedError, LoaderContextNotProvidedError
 
 from aiodataloader import DataLoader
 from pydantic import BaseModel
@@ -12,6 +12,35 @@ from pydantic import BaseModel
 
 # Type definitions
 LoaderType = dict[str, Any]
+
+
+def _validate_loader_context_requirements(
+    metadata: MappedMetaType,
+    has_resolver_context: bool
+) -> None:
+    """Validate that all DataLoaders requiring context will receive it.
+
+    Args:
+        metadata: The scanned metadata
+        has_resolver_context: Whether Resolver has context provided
+
+    Raises:
+        LoaderContextNotProvidedError: If a loader needs context but none is provided
+    """
+    loaders_needing_context = []
+
+    for loader in _get_all_loaders_from_meta(metadata):
+        if loader.get('requires_context', False) and not has_resolver_context:
+            loader_kls = loader['kls']
+            path = loader['path']
+            loaders_needing_context.append((path, loader_kls.__name__))
+
+    if loaders_needing_context:
+        paths = ', '.join([f"{name} ({path})" for path, name in loaders_needing_context])
+        raise LoaderContextNotProvidedError(
+            f"DataLoader(s) require context but Resolver doesn't provide one: {paths}. "
+            f"Please provide context to Resolver, e.g., Resolver(context={{'user_id': 123}})"
+        )
 
 
 
@@ -30,13 +59,15 @@ def _get_all_loaders_from_meta(metadata: MappedMetaType) -> Generator[LoaderType
 def _create_loader_instance(
     loader: LoaderType,
     loader_params: dict,
-    global_loader_param: dict
+    global_loader_param: dict,
+    context: dict | None = None
 ) -> DataLoader:
     """
     Create a loader instance.
 
     1. is class?
         - validate params
+        - set context if required
     2. is func
     """
     loader_kls = loader['kls']
@@ -49,6 +80,10 @@ def _create_loader_instance(
             loader_params.get(loader_kls, {}))
 
         for field, has_default in class_util.get_fields_default_value_not_provided(loader_kls):
+            # Skip _context field - it will be set separately
+            if field == '_context':
+                continue
+
             try:
                 if has_default and field not in param_config:
                     continue
@@ -57,6 +92,11 @@ def _create_loader_instance(
                 setattr(loader_instance, field, value)
             except KeyError:
                 raise LoaderFieldNotProvidedError(f'{path}.{field} not found in Resolver()')
+
+        # Set _context if loader requires it and context is provided
+        if loader.get('requires_context', False) and context is not None:
+            setattr(loader_instance, '_context', context)
+
         return loader_instance
     else:
         return DataLoader(batch_load_fn=loader_kls)  # type:ignore
@@ -91,18 +131,22 @@ def validate_and_create_loader_instance(
     loader_params: dict,
     global_loader_param: dict,
     loader_instances: dict,
-    metadata: MappedMetaType
+    metadata: MappedMetaType,
+    context: dict | None = None
 ) -> dict[str, DataLoader]:
     """
     Validate and create loader instances.
 
-    validate: whether loader params are missing
+    validate: whether loader params are missing, and whether context is required but not provided
     create:
         - func
         - loader class
             - no param
             - has param
     """
+    # Validate context requirements first
+    _validate_loader_context_requirements(metadata, context is not None)
+
     cache: dict[str, DataLoader] = {}
     request_info: dict[str, list[type]] = {}
 
@@ -118,7 +162,7 @@ def validate_and_create_loader_instance(
             cache[path] = loader_instances.get(loader_kls)
             continue
 
-        cache[path] = _create_loader_instance(loader, loader_params, global_loader_param)
+        cache[path] = _create_loader_instance(loader, loader_params, global_loader_param, context)
 
     # prepare query meta
     for loader in _get_all_loaders_from_meta(metadata):

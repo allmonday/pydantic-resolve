@@ -145,10 +145,11 @@ def test_resolve_params():
                             'param': 'loader',
                             'kls': loader_fn,
                             'path': 'test_field_pydantic.loader_fn',
-                            'request_type': None
+                            'request_type': None,
+                            'requires_context': False
                         }
                     ],
-                }, 
+                },
                 'resolve_zeta': {
                     'trim_field': 'zeta',
                     'context': False,
