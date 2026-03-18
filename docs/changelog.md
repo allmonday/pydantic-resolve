@@ -6,6 +6,11 @@
 
 ## v3.1
 
+### v3.1.1 (2026-3-18)
+- feat:
+    - **Auto-add missing LoadBy FK fields in DefineSubset**: When using `LoadBy` annotation in `DefineSubset`, the referenced FK field (e.g., `user_id` in `LoadBy('user_id')`) is now automatically added with `exclude=True` if not explicitly defined in the subset
+    - **Early validation for invalid FK references**: If `LoadBy` references a field that doesn't exist in the parent class, a `ValueError` is raised at class definition time instead of during `resolve()`
+
 ### v3.1.0 (2026-3-16)
 - feature:
     - add MCP support based on ER diagram, add query/mutation decorator
