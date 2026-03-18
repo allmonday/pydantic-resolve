@@ -206,11 +206,31 @@ class BizCase4(DefineSubset):
     user: Annotated[Optional[User], LoadBy('user_id')] = None
 
 @pytest.mark.asyncio
-async def test_resolver_factory_of_er_config_not_found():
+async def test_resolver_factory_of_er_config_auto_add_fk_field():
+    """Test that missing LoadBy FK fields are auto-added with exclude=True."""
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
+
+    # user_id is not in subset but should be auto-added
     d = BizCase4(id=1, user_id=1)
-    with pytest.raises(AttributeError):
-        await MyResolver().resolve(d)
+
+    # Verify user_id field exists and has correct value
+    assert hasattr(d, 'user_id')
+    assert d.user_id == 1
+
+    # Verify user_id is excluded from serialization
+    dumped = d.model_dump()
+    assert 'user_id' not in dumped
+    assert dumped == {'id': 1, 'user': None}
+
+    # Resolve should work correctly
+    d = await MyResolver().resolve(d)
+    assert d.user is not None
+    assert d.user.name == "a"
+
+    # After resolve, user_id should still be excluded
+    dumped = d.model_dump()
+    assert 'user_id' not in dumped
+    assert 'user' in dumped
 
 @ensure_subset(Biz)
 class BizCase5(BaseModel):
@@ -230,19 +250,13 @@ async def test_resolver_factory_with_permitive_annotation():
     # assert d.foos_in_str_x == ["foo1", "foo2"]
 
 
-class BizCase6(DefineSubset):
-    __pydantic_resolve_subset__ = (Biz, ['id', 'user_id'])
+def test_loadby_references_nonexistent_field():
+    """Test that LoadBy referencing a non-existent field raises ValueError at class definition time."""
+    with pytest.raises(ValueError) as excinfo:
+        class BizCase6(DefineSubset):
+            __pydantic_resolve_subset__ = (Biz, ['id', 'user_id'])
 
-    user: Annotated[Optional[User], LoadBy('user_id_0')] = None
+            user: Annotated[Optional[User], LoadBy('user_id_0')] = None
 
-@pytest.mark.asyncio
-async def test_resolver_factory_of_er_relationship_not_found():
-    MyResolver = config_resolver('MyResolver', er_diagram=diagram)
-    d = BizCase6(id=1, user_id=1)
-    expected = (
-        'Relationship from "<class \'tests.er_diagram.test_er_diagram.Biz\'>" to '
-        '"typing.Optional[tests.er_diagram.test_er_diagram.User]" using "user_id_0", biz: "None", not found'
-    )
-    with pytest.raises(AttributeError) as excinfo:
-        await MyResolver().resolve(d)
-    assert str(excinfo.value) == expected
+    assert 'LoadBy references field "user_id_0" which does not exist in parent class "Biz"' in str(excinfo.value)
+    assert 'Available fields:' in str(excinfo.value)

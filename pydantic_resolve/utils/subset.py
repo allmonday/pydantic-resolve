@@ -1,9 +1,34 @@
-from typing import Any, Literal
-from pydantic import BaseModel, create_model, model_validator
+from typing import Any, Literal, get_origin, get_args
+from pydantic import BaseModel, create_model, model_validator, Field
 import copy
 import pydantic_resolve.constant as const
 from pydantic_resolve.utils.expose import ExposeAs
 from pydantic_resolve.utils.collector import SendTo
+
+
+def _extract_loadby_fk_fields(namespace: dict[str, Any]) -> set[str]:
+    """
+    Extract FK field names referenced by LoadBy annotations.
+
+    This function scans the namespace's annotations for fields that use LoadBy
+    and extracts the FK field names they reference.
+
+    Returns:
+        Set of field names (e.g., {'user_id', 'order_id'}) that LoadBy references
+    """
+    from typing import Annotated
+    from pydantic_resolve.utils.er_diagram import LoaderInfo
+
+    annotations = namespace.get('__annotations__', {})
+    fk_fields = set()
+
+    for attr_name, attr_type in annotations.items():
+        if get_origin(attr_type) is Annotated:
+            for arg in get_args(attr_type):
+                if isinstance(arg, LoaderInfo):
+                    fk_fields.add(arg.field)
+
+    return fk_fields
 
 
 class SubsetConfig(BaseModel):
@@ -222,6 +247,25 @@ class SubsetMeta(type):
         field_definitions = {}
         field_definitions.update(field_infos)
         field_definitions.update(extra_fields)
+
+        # Auto-add missing LoadBy FK fields with exclude=True
+        # Only add fields that exist in the parent class
+        loadby_fk_fields = _extract_loadby_fk_fields(namespace)
+        all_defined_fields = set(subset_fields) | set(extra_fields.keys())
+        parent_field_names = set(parent_kls.model_fields.keys())
+
+        for fk_field in loadby_fk_fields:
+            if fk_field not in all_defined_fields:
+                if fk_field in parent_field_names:
+                    # Get field info from parent to preserve type
+                    parent_field = parent_kls.model_fields[fk_field]
+                    field_definitions[fk_field] = (parent_field.annotation, Field(default=None, exclude=True))
+                else:
+                    # FK field doesn't exist in parent class - raise error early
+                    raise ValueError(
+                        f'LoadBy references field "{fk_field}" which does not exist in parent class "{parent_kls.__name__}". '
+                        f'Available fields: {list(parent_field_names)}'
+                    )
 
         subset_class = create_model(
             name,
