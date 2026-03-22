@@ -53,12 +53,12 @@ __all__ = [
     'build_list',
     'build_object',
     'mapper',
-    'ensure_subset',
     'model_config',
     'serialization',
     'copy_dataloader_kls',
 
     # subset
+    'ensure_subset',
     'DefineSubset',
     'SubsetConfig',
 

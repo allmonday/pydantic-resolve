@@ -1,6 +1,6 @@
 # Pydantic Resolve
 
-> A tool for building Domain layer modeling and use case assembly.
+> Declarative data assembly for Pydantic — eliminate N+1 queries with minimal code.
 
 [![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
 [![PyPI Downloads](https://static.pepy.tech/badge/pydantic-resolve/month)](https://pepy.tech/projects/pydantic-resolve)
@@ -11,498 +11,273 @@
 
 ![](./docs/images/features.png)
 
-## What is this?
+---
 
-**pydantic-resolve** is a Pydantic-based declarative data assembly tool that enables you to build complex data structures with concise code, without writing tedious data fetching and assembly logic.
+**pydantic-resolve** is inspired by GraphQL. It builds database-independent application-layer Entity Relationship Diagrams using DataLoader, providing rich data assembly and post-processing capabilities. It can also auto-generate GraphQL queries and MCP services.
 
-Beyond data assembly, it also provides:
-- **GraphQL Support**: Auto-generate GraphQL schemas from ERD definitions and execute queries with dynamic Pydantic model creation
-- **MCP Integration**: Expose GraphQL APIs to AI agents via Model Context Protocol with progressive disclosure support
+## Why pydantic-resolve?
 
-It solves three core problems:
+**Core capabilities:**
 
-1. **Eliminate N+1 queries**: Built-in DataLoader automatically batches related data loading, no manual batch query management needed
-2. **Clear layered architecture**: Entity-First design keeps business concepts independent of data storage, database changes no longer affect API contracts
-3. **Elegant data composition**: Handle cross-layer data passing and aggregation effortlessly with declarative methods like `resolve`, `post`, `Expose`, `Collect`
+| Feature | What it does |
+|---------|--------------|
+| **Automatic Batching** | DataLoader eliminates N+1 queries automatically |
+| **Declarative Assembly** | Declare dependencies, framework handles the rest |
+| **Entity-First Architecture** | ER Diagram defines relationships, `LoadBy` auto-resolves |
+| **GraphQL Support** | Generate schema from ERD, query with dynamic models |
+| **MCP Integration** | Expose GraphQL APIs to AI agents with progressive disclosure |
 
-## Installation
+**One line to fetch nested data:**
+
+```python
+class Task(BaseModel):
+    owner_id: int
+    owner: Optional[User] = None
+
+    def resolve_owner(self, loader=Loader(user_loader)):
+        return loader.load(self.owner_id)  # That's it!
+
+# Resolver automatically batches all owner lookups into one query
+result = await Resolver().resolve(tasks)
+```
+
+---
+
+## Quick Start
+
+### Install
 
 ```bash
 pip install pydantic-resolve
 ```
 
-> Note: pydantic-resolve v2+ only supports Pydantic v2
+### The N+1 Problem
 
-**More resources**: [Full Documentation](https://allmonday.github.io/pydantic-resolve/) | [Example Project](https://github.com/allmonday/composition-oriented-development-pattern) | [Live Demo](https://www.fastapi-voyager.top/voyager/) | [API Reference](https://allmonday.github.io/pydantic-resolve/api/)
+```python
+# Traditional: 1 + N queries
+for task in tasks:
+    task.owner = await get_user(task.owner_id)  # N queries!
+```
 
----
-
-## 1. Basic Features - Resolve, Post, and DataLoader
-
-### The Problem
-
-In daily development, we often need to assemble complex data structures from multiple data sources. Consider a task management system where you need to return a team list containing Sprints, each Sprint containing Stories, each Story containing Tasks, and each Task needing owner information. The traditional approach traps you in a loop: query main data, collect related IDs, batch query related data, manually build mapping dictionaries, then loop to assemble results. This process is not only verbose and error-prone but also leads to the classic N+1 query problem—forgetting to batch load results in performance disasters.
-
-Even when you carefully implement batch loading, this data assembly logic scatters across every corner of the project. Every API endpoint that needs related data has similar code, violating the DRY principle and making optimization difficult. Worse yet, this imperative data fetching approach mixes technical details of "how to fetch data" with business logic of "what data is needed," increasing cognitive load.
-
-### pydantic-resolve's Declarative Solution
-
-pydantic-resolve lets you describe data dependencies declaratively, and the framework automatically handles data fetching and assembly details. You just need to define "this task needs an owner," and the framework automatically collects all required owner IDs, batches queries, then populates results into the right places. This not only eliminates N+1 query risks but also makes code clearer and more maintainable.
-
-The core of declarative data assembly is two methods: `resolve_` and `post_`. `resolve_` methods declare how to fetch related data, while `post_` methods perform post-processing and computation after all data loading completes. Combined with DataLoader's automatic batch loading, you can implement complex data assembly logic with concise code.
+### The pydantic-resolve Solution
 
 ```python
 from pydantic import BaseModel
 from typing import Optional, List
 from pydantic_resolve import Resolver, Loader, build_list
 
-# Define batch data loader
-async def user_batch_loader(user_ids: list[int]):
-    async with get_db_session() as session:
-        result = await session.execute(select(User).where(User.id.in_(user_ids)))
-        users = result.scalars().all()
-        return build_list(users, user_ids, lambda u: u.id)
+# 1. Define your loaders (batch queries)
+async def user_loader(ids: list[int]):
+    users = await db.query(User).filter(User.id.in_(ids)).all()
+    return build_list(users, ids, lambda u: u.id)
 
-# Define response models
-class UserResponse(BaseModel):
-    id: int
-    name: str
-    email: str
+async def task_loader(sprint_ids: list[int]):
+    tasks = await db.query(Task).filter(Task.sprint_id.in_(sprint_ids)).all()
+    return build_list(tasks, sprint_ids, lambda t: t.sprint_id)
 
+# 2. Define your schema with resolve methods
 class TaskResponse(BaseModel):
     id: int
     name: str
     owner_id: int
 
-    # Declare: fetch owner via owner_id
-    owner: Optional[UserResponse] = None
-    def resolve_owner(self, loader=Loader(user_batch_loader)):
+    owner: Optional[dict] = None
+    def resolve_owner(self, loader=Loader(user_loader)):
         return loader.load(self.owner_id)
 
 class SprintResponse(BaseModel):
     id: int
     name: str
 
-    # Declare: fetch all tasks for this sprint via sprint_id
     tasks: List[TaskResponse] = []
-    def resolve_tasks(self, loader=Loader(sprint_to_tasks_loader)):
+    def resolve_tasks(self, loader=Loader(task_loader)):
         return loader.load(self.id)
 
-    # Post-process: calculate total task count after tasks are loaded
-    total_tasks: int = 0
-    def post_total_tasks(self):
-        return len(self.tasks)
-
-# Use Resolver to resolve data
-@app.get("/sprints", response_model=List[SprintResponse])
+# 3. Resolve - framework handles batching automatically
+@app.get("/sprints")
 async def get_sprints():
-    # 1. Fetch base data from database
-    sprints_data = await get_sprints_from_db()
-
-    # 2. Convert to Pydantic models
-    sprints = [SprintResponse.model_validate(s) for s in sprints_data]
-
-    # 3. Resolver automatically resolves all related data
-    return await Resolver().resolve(sprints)
+    sprints = await get_sprint_data()
+    return await Resolver().resolve([SprintResponse.model_validate(s) for s in sprints])
 ```
 
-This simple example demonstrates the core power of pydantic-resolve. When you have multiple Sprints, each with multiple Tasks, and each Task needs to load an owner, the traditional approach requires nested loops and is prone to N+1 queries. With pydantic-resolve, you simply declare data dependencies, and the framework automatically collects all required IDs, merges them into batch queries, then correctly populates results into each object.
-
-DataLoader's batch loading capability is the "hidden magic" behind it all. Suppose you have 3 Sprints, each with 10 Tasks, and these Tasks belong to 5 different users. The traditional approach might execute 1 Sprint query + 3 Task queries + 30 User queries (if you forget to batch). DataLoader automatically merges these requests into 1 Sprint query + 3 Task queries + 1 User query (via `WHERE id IN (...)`). This significantly reduces database round trips and eliminates the need to manually manage batch query complexity.
+**Result:** 1 query per loader, regardless of data depth.
 
 ---
 
-## 2. Complex Data Structures - Expose and Collector
+## Core Concepts
 
-### The Cross-Layer Data Passing Challenge
+### Resolve: Declarative Data Loading
 
-In real business scenarios, data often needs to flow bidirectionally between parent and child nodes. For example, a Story might need to pass its name to all child Tasks, so Tasks can display a full path like "StoryName - TaskName". Or conversely, a Story might need to collect all Task owners to generate a "related developers" list. In traditional code, this cross-layer data passing creates tight coupling—parents need to know children's requirements, children need to know parents' structure, and changes to either side can affect the other.
-
-pydantic-resolve provides an elegant solution through `ExposeAs` and `Collector`. `ExposeAs` lets parent nodes expose data to descendant nodes without explicitly passing parameters. `Collector` lets parent nodes collect data from all child nodes without manually traversing and aggregating. These two mechanisms make data flow more natural and significantly reduce coupling between parent and child nodes.
-
-### ExposeAs: Parent Nodes Expose Data to Child Nodes
-
-`ExposeAs` lets you expose parent node fields to descendant nodes, which child nodes' `resolve_` or `post_` methods can access through `ancestor_context`. This is very useful for scenarios where parent context needs to be passed to child nodes.
+Instead of imperative data fetching, declare what you need:
 
 ```python
-from pydantic_resolve import ExposeAs
-from typing import Annotated
-
-class StoryResponse(BaseModel):
-    id: int
-    # Expose name to child nodes, aliased as story_name
-    name: Annotated[str, ExposeAs('story_name')]
-
-    tasks: List[TaskResponse] = []
-
-class TaskResponse(BaseModel):
-    id: int
-    name: str
-
-    # post method can access data exposed by ancestor nodes
-    full_name: str = ""
-    def post_full_name(self, ancestor_context):
-        # Get story_name exposed by parent (Story)
-        story_name = ancestor_context.get('story_name')
-        return f"{story_name} - {self.name}"
-```
-
-In this example, Story's name field is exposed as `story_name`, and all child Tasks can access this value in their `post_full_name` method. This eliminates the need to explicitly pass story_name when creating Tasks, reducing parameter passing complexity.
-
-### Collector: Parent Nodes Collect Data from Child Nodes
-
-`Collector` lets parent nodes collect data from all child nodes, commonly used to aggregate child node information. Combined with the `SendTo` annotation, specific fields of child nodes can be automatically sent to parent node collectors.
-
-```python
-from pydantic_resolve import Collector, SendTo
-from typing import Annotated
-
-class TaskResponse(BaseModel):
-    id: int
+class Task(BaseModel):
     owner_id: int
+    owner: Optional[User] = None
 
-    # Load owner and send to parent's related_users collector
-    owner: Annotated[Optional[UserResponse], SendTo('related_users')] = None
-    def resolve_owner(self, loader=Loader(user_batch_loader)):
+    def resolve_owner(self, loader=Loader(user_loader)):
         return loader.load(self.owner_id)
-
-class StoryResponse(BaseModel):
-    id: int
-    name: str
-
-    tasks: List[TaskResponse] = []
-    def resolve_tasks(self, loader=Loader(story_to_tasks_loader)):
-        return loader.load(self.id)
-
-    # Collect all child node owners
-    related_users: List[UserResponse] = []
-    def post_related_users(self, collector=Collector(alias='related_users')):
-        # collector.values() returns all deduplicated UserResponse objects
-        return collector.values()
 ```
 
-In this example, each Task's owner is automatically sent to the parent Story's `related_users` collector. Story's `post_related_users` method receives all deduplicated user lists. This is very useful for business scenarios like "show all related developers" and doesn't require manually writing traversal and deduplication logic.
+The framework:
+1. Collects all `owner_id` values
+2. Batches them into one query
+3. Maps results back to correct objects
+
+### DataLoader: Automatic Batching
+
+DataLoader batches multiple requests within the same event loop tick:
+
+```python
+# Without DataLoader: 100 tasks = 100 user queries
+# With DataLoader: 100 tasks = 1 user query (WHERE id IN (...))
+
+async def user_loader(user_ids: list[int]):
+    return await db.query(User).filter(User.id.in_(user_ids)).all()
+```
+
+### Expose & Collect: Cross-layer Data Flow
+
+In nested data structures, parent and child nodes often need to share data. Traditional approaches require explicit parameter passing or tight coupling. pydantic-resolve provides two declarative mechanisms:
+
+- **ExposeAs**: Parent nodes expose data to all descendants (downward flow)
+- **SendTo + Collector**: Child nodes send data to parent collectors (upward flow)
+
+This creates a clean separation — parent doesn't need to know child's structure, and child doesn't need explicit parent references.
+
+```python
+from pydantic_resolve import ExposeAs, Collector, SendTo
+from typing import Annotated
+
+# 1. Parent EXPOSES data to descendants (downward flow)
+class Story(BaseModel):
+    name: Annotated[str, ExposeAs('story_name')]
+    tasks: List[Task] = []
+
+# 2. Child ACCESSES ancestor context (no explicit parent reference needed)
+class Task(BaseModel):
+    def post_full_path(self, ancestor_context):
+        return f"{ancestor_context['story_name']} / {self.name}"
+
+# 3. Child SENDS data to parent collector (upward flow)
+class Task(BaseModel):
+    owner: Annotated[User, SendTo('contributors')] = None
+
+class Story(BaseModel):
+    contributors: List[User] = []
+    def post_contributors(self, collector=Collector('contributors')):
+        return collector.values()  # Auto-deduplicated list of all task owners
+```
+
+**Use cases:**
+- Pass configuration/context down to nested objects (e.g., user permissions, locale)
+- Aggregate results up from nested objects (e.g., collect all unique tags from posts)
 
 ---
 
-## 3. Advanced Features - Application Layer Business Models (Entity-First)
+## Advanced Features
 
-### The ORM-First Architectural Dilemma
+### Entity-First Architecture
 
-Most FastAPI projects follow a similar pattern: define SQLAlchemy ORM models first, then create Pydantic schemas based on these models. This "ORM-first, Pydantic-follows" pattern is so prevalent that few developers question its rationality. But when we deeply analyze its practical application, some deep problems emerge.
+Define business entities independent of database schema.
 
-Pydantic schemas passively duplicate ORM model field definitions, causing type definitions to be repeated in two places. When the database adds new fields or modifies field types, you need to update both ORM models and Pydantic schemas, easily leading to omissions or inconsistencies. Even worse, business concepts become deeply polluted by database structure—APIs expose database foreign keys like `owner_id` and `reporter_id` instead of business roles like "owner" and "reporter." Frontend developers need to understand database design to use APIs, violating the Law of Demeter.
+**Why Entity-First vs DB-based relationships?**
 
-When data comes from multiple sources, this architecture's problems become even more obvious. User info might be in PostgreSQL, order data in MongoDB, inventory status fetched from RPC services, recommendation lists read from Redis cache. Lack of a unified abstraction layer makes the system difficult to adapt to data source changes—every migration or upgrade ripples through the entire codebase.
-
-### Entity-First: Business Concepts as Architecture Core
-
-The core idea of Entity-First architecture is: **domain models are the architecture's core, data layer is just an implementation detail**. Business entities (Entity) should express pure domain concepts like "user," "task," "project," not database tables. These entities define business object structures and their relationships, independent of any technical implementation. API contracts should be designed based on specific use cases, selecting required fields from domain models and adding use-case-specific computed fields and validation logic.
-
-pydantic-resolve provides complete tool support for Entity-First architecture. Through ERD (Entity Relationship Diagram) for unified entity relationship management, DataLoader pattern for automatic data fetching optimization and N+1 query avoidance, and DefineSubset mechanism for type definition reuse and composition. More importantly, it provides an automatic data assembly execution layer—developers only need to declare "what data is needed" without caring about "how to fetch and assemble data."
+| Aspect | DB-based (ORM) | Entity-First (pydantic-resolve) |
+|--------|----------------|--------------------------------|
+| **Flexibility** | Tied to database schema | Define relationships at application layer |
+| **Data Sources** | Single database | Cross multiple sources (PostgreSQL, MongoDB, Redis, RPC) |
+| **Encapsulation** | Exposes FK fields (`owner_id`) | Loader implementation hidden from API |
+| **API Contract** | Changes when DB changes | Stable, decoupled from storage |
 
 ```python
-from pydantic_resolve import base_entity, Relationship, LoadBy, config_global_resolver, DefineSubset
+from pydantic_resolve import base_entity, Relationship, LoadBy
 
-# 1. Define business entities (not dependent on ORM)
 BaseEntity = base_entity()
 
-class UserEntity(BaseModel):
-    """User entity: express business concepts"""
-    id: int
-    name: str
-    email: str
-
+# Entity defines business relationship, not database FK
 class TaskEntity(BaseModel, BaseEntity):
-    """Task entity: define business relationships"""
     __relationships__ = [
-        Relationship(
-            field='owner_id',
-            target_kls=UserEntity,
-            loader=user_batch_loader  # don't care where it loads from
-        )
+        # Loader can query Postgres, call RPC, or fetch from Redis
+        # API consumers don't need to know where data comes from
+        Relationship(field='owner_id', target_kls=UserEntity, loader=user_loader)
     ]
     id: int
     name: str
-    owner_id: int
-    estimate: int
+    description: Optional[str] = None
+    status: str  # todo, in_progress, done
+    owner_id: int  # Internal FK, can be hidden from API
 
-class StoryEntity(BaseModel, BaseEntity):
-    """Story entity"""
-    __relationships__ = [
-        Relationship(field='id', target_kls=list[TaskEntity], loader=story_to_tasks_loader)
-    ]
-    id: int
-    name: str
-
-# 2. Register ERD (centralized relationship management)
-config_global_resolver(BaseEntity.get_diagram())
-
-# 3. Define API Response from Entity (select fields + extend)
-class UserSummary(DefineSubset):
-    __subset__ = (UserEntity, ('id', 'name'))
-
+# Response schema: choose what to expose
 class TaskResponse(DefineSubset):
-    __subset__ = (TaskEntity, ('id', 'name', 'estimate'))
-
-    # LoadBy auto-resolves owner, no need to write resolve method
-    owner: Annotated[Optional[UserSummary], LoadBy('owner_id')] = None
-
-class StoryResponse(DefineSubset):
-    __subset__ = (StoryEntity, ('id', 'name'))
-
-    # LoadBy auto-resolves tasks
-    tasks: Annotated[List[TaskResponse], LoadBy('id')] = []
-
-# 4. Use (completely shield database details)
-@app.get("/stories")
-async def get_stories():
-    # Fetch main data
-    stories = await get_stories_from_db()
-
-    # Convert and auto-resolve all related data
-    stories = [StoryResponse.model_validate(s) for s in stories]
-    return await Resolver().resolve(stories)
+    __subset__ = (TaskEntity, ('id', 'name'))  # owner_id excluded
+    owner: Annotated[User, LoadBy('owner_id')] = None  # Auto-resolved!
 ```
 
-The introduction of `LoadBy` brings significant code simplification. In the traditional resolve pattern, you need to write `resolve_owner`, `resolve_tasks`, and other methods in each Response class—mostly repetitive boilerplate code: get loader, call load method, return result. With `LoadBy`, this logic completely disappears.
+**Key benefits:**
+- Change loader implementation (SQL → RPC) without touching Response code
+- Mix data from multiple sources in single entity graph
+- Hide internal IDs from API, expose only business concepts
 
-The simple `LoadBy('owner_id')` annotation automatically finds relationships defined in the ERD: `TaskEntity` has an `owner_id` field that connects to `UserEntity` via `user_batch_loader`. Resolver automatically uses this loader to fetch data—you don't need to write any resolve methods. This not only reduces code volume but also makes Response definitions clearer—you just declare "this field needs to load via owner_id" without caring about "how to load."
+[→ Full Entity-First Guide](https://allmonday.github.io/pydantic-resolve/erd_driven/)
 
-More importantly, when relationship definitions change, you only need to modify the `Relationship` configuration in the ERD, and all places using `LoadBy` automatically adapt. For example, replacing `user_batch_loader` with `user_from_rpc_loader` requires no changes to Response code. This centralized configuration management makes relationship maintenance exceptionally simple.
+### GraphQL Support
 
-The core value of this layered architecture lies in **stability and evolvability**. When database structures need optimization (like splitting large tables, adjusting indexes), you only modify Loader implementations, while Entities and Responses remain completely unaffected. When business requirements change and API contracts need adjustment, you only modify Response definitions, while Entities and Loaders stay unchanged. When business logic evolves and requires new entity relationships, you only update ERD definitions, and existing data access logic remains stable.
-
----
-
-## 4. Visualization - FastAPI Voyager Integration
-
-### Why Visualization?
-
-pydantic-resolve's declarative approach makes code concise, but it also brings a challenge: the logic of data flow becomes "invisible." When you see a `LoadBy('owner_id')` annotation, you know it will auto-resolve, but you might not be clear about the underlying loading chain, dependencies, and data flow direction. When debugging complex data structures, this invisibility increases understanding cost.
-
-fastapi-voyager is a visualization tool designed specifically for pydantic-resolve that turns declarative data dependencies into visible, interactive charts. Like putting "X-ray glasses" on your code, you can see at a glance which fields are loaded via resolve, which are computed via post, which data is exposed from parents, and which is collected from children. Click any node to highlight its upstream dependencies and downstream consumers, making data flow crystal clear.
-
-### Quick Start
-
-```bash
-pip install fastapi-voyager
-```
+Generate GraphQL schema from ERD:
 
 ```python
-from fastapi import FastAPI
-from fastapi_voyager import create_voyager
+from pydantic_resolve.graphql import GraphQLHandler
 
-app = FastAPI()
-
-# Mount voyager to visualize your API
-app.mount('/voyager', create_voyager(
-    app,
-    enable_pydantic_resolve_meta=True,  # Show pydantic-resolve metadata
-    er_diagram=BaseEntity.get_diagram()  # Show entity relationship diagram (optional)
-))
-```
-
-Visit `http://localhost:8000/voyager` to see interactive visualization.
-
-### Understanding the Visualization
-
-When you enable `enable_pydantic_resolve_meta=True`, fastapi-voyager uses color-coded markers to display pydantic-resolve operations:
-
-- 🟢 **resolve** - Field loaded via `resolve_{field}` method or `LoadBy`
-- 🔵 **post** - Field computed via `post_{field}` method
-- 🟣 **expose as** - Field exposed to descendant nodes via `ExposeAs`
-- 🔴 **send to** - Field data sent to parent collectors via `SendTo`
-- ⚫ **collectors** - Field collects data from child nodes via `Collector`
-
-This color coding lets you quickly understand the direction and method of data flow. When you see a Task model's `owner` field marked with green resolve, you know it will auto-load via DataLoader. When you see a Story model's `related_users` field marked with black collectors, you know it will collect owner data from all child Tasks.
-
-fastapi-voyager's interactive features make debugging much easier. Click any model to view its upstream dependencies (what data it needs) and downstream consumers (what depends on it). Double-click nodes to jump to source code definitions for quick location. Search functionality lets you quickly find specific models and trace their relationships. Combined with ERD view, you can also see entity-level definition relationships, understanding your system's data architecture from a higher level.
-
-**Live Demo**: [https://www.fastapi-voyager.top/voyager/?tag=sample_1](https://www.fastapi-voyager.top/voyager/?tag=sample_1)
-
-**Project**: [github.com/allmonday/fastapi-voyager](https://github.com/allmonday/fastapi-voyager)
-
----
-
-## 5. GraphQL Support
-
-pydantic-resolve now supports GraphQL query interface, leveraging the existing ERD system to automatically generate Schema and dynamically create Pydantic models based on GraphQL queries.
-
-### Basic Usage
-
-`pydantic-resolve` provides a framework-agnostic `GraphQLHandler` that you can easily integrate into any web framework.
-
-#### FastAPI Integration Example
-
-```python
-from fastapi import FastAPI, APIRouter
-from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel
-from typing import Optional, Dict, Any
-from pydantic_resolve import base_entity, config_global_resolver, query
-from pydantic_resolve.graphql import GraphQLHandler, SchemaBuilder
-
-app = FastAPI()
-
-# 1. Define BaseEntity
-BaseEntity = base_entity()
-
-# 2. Define Entity with @query methods
-class UserEntity(BaseModel, BaseEntity):
-    __relationships__ = [
-        Relationship(field='id', target_kls=list['Post'], loader=post_loader)
-    ]
-    id: int
-    name: str
-    email: str
-
-    @query(name='users')
-    async def get_all(cls, limit: int = 10) -> list['UserEntity']:
-        return await fetch_users(limit=limit)
-
-    @query(name='user')
-    async def get_by_id(cls, id: int) -> Optional['UserEntity']:
-        return await fetch_user(id=id)
-
-# 3. Configure global resolver
-config_global_resolver(BaseEntity.get_diagram())
-
-# 4. Create GraphQL handler and schema builder
 handler = GraphQLHandler(BaseEntity.get_diagram())
-schema_builder = SchemaBuilder(BaseEntity.get_diagram())
-
-# 5. Define request model
-class GraphQLRequest(BaseModel):
-    query: str
-    operationName: Optional[str] = None
-
-# 6. Create routes
-router = APIRouter()
-
-@router.post("/graphql")
-async def graphql_endpoint(req: GraphQLRequest):
-    result = await handler.execute(
-        query=req.query,
-    )
-    return result
-
-@router.get("/schema")
-async def graphql_schema():
-    schema_sdl = schema_builder.build_schema()
-    return PlainTextResponse(schema_sdl)
-
-app.include_router(router)
+result = await handler.execute("{ users { id name posts { title } } }")
 ```
 
-**Other Framework Integration Guides** (Flask, Starlette, Django, etc.): [GraphQL Framework Integration Guide](./graphql-integration.md)
+[→ GraphQL Documentation](./demo/graphql/README.md)
 
-### Query Examples
+### MCP Integration
 
-```graphql
-# Get all users
-query {
-  users {
-    id
-    name
-    email
-  }
-}
-
-# Get single user with posts
-query {
-  user(id: 1) {
-    id
-    name
-    posts {
-      title
-      content
-    }
-  }
-}
-```
-
-### Try the Demo
-
-The project includes a complete GraphQL demo application:
-
-```bash
-# Install dependencies
-pip install fastapi uvicorn graphql-core
-
-# Start server
-uv run uvicorn demo.graphql.app:app --reload
-
-# Test query
-curl -X POST http://localhost:8000/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query": "{ users { id name email } }"}'
-```
-
-See [demo/graphql/README.md](demo/graphql/README.md) for complete documentation.
-
----
-
-## 6. MCP Support - AI Agent Integration
-
-### What is MCP?
-
-**MCP (Model Context Protocol)** enables AI agents (like Claude) to discover and interact with your GraphQL APIs through a standardized protocol. Instead of overwhelming AI with the entire schema, MCP uses **progressive disclosure** - a layered approach where agents gradually explore API capabilities.
-
-### Progressive Disclosure Layers
-
-| Layer | Tool | Purpose |
-|-------|------|---------|
-| 0 | `list_apps` | Discover available applications |
-| 1 | `list_queries` / `list_mutations` | List available operations |
-| 2 | `get_query_schema` / `get_mutation_schema` | Get detailed schema for an operation |
-| 3 | `graphql_query` / `graphql_mutation` | Execute operations and get data |
-
-### Quick Start
+Expose GraphQL APIs to AI agents with progressive disclosure:
 
 ```python
-from pydantic_resolve import base_entity, config_global_resolver, AppConfig
 from pydantic_resolve.graphql.mcp import create_mcp_server
 
-# Define entities and configure ERD (in other files)
-BaseEntity = base_entity()
-diagram = BaseEntity.get_diagram()
-
-# Create MCP server with your GraphQL apps
-apps: list[AppConfig] = [
-    AppConfig(
-        name="blog",
-        er_diagram=diagram,
-        description="Blog system with users and posts",
-        enable_from_attribute_in_type_adapter=True  # set if you need this.
-    )
-]
-
-mcp = create_mcp_server(apps=apps, name="Blog API")
-mcp.run()  # AI agents can now discover and use your API
+mcp = create_mcp_server(apps=[AppConfig(name="blog", er_diagram=diagram)])
+mcp.run()  # AI agents can now discover and query your API
 ```
 
-### Key Features
+[→ MCP Documentation](https://allmonday.github.io/pydantic-resolve/api/)
 
-- **Multiple App Support**: Serve multiple GraphQL applications from one MCP server
-- **Type-Aware Schema**: Only returns relevant types for each operation
-- **Smart Hints**: Responses include context-aware guidance for next steps
-- **Error Handling**: Standardized error responses with helpful messages
+### Visualization
+
+Interactive schema exploration with [fastapi-voyager](https://github.com/allmonday/fastapi-voyager):
+
+```python
+from fastapi_voyager import create_voyager
+
+app.mount('/voyager', create_voyager(app, er_diagram=BaseEntity.get_diagram()))
+```
 
 ---
 
-## 7. Why Not GraphQL?
-
-Although pydantic-resolve is inspired by GraphQL, it's better suited as a BFF (Backend For Frontend) layer solution:
+## pydantic-resolve vs GraphQL
 
 | Feature | GraphQL | pydantic-resolve |
-|----------|---------|------------------|
-| Performance | Requires complex DataLoader configuration | Built-in batch loading |
-| Type Safety | Requires additional toolchain | Native Pydantic type support |
-| Learning Curve | Steep (Schema, Resolver, Loader...) | Gentle (only need Pydantic) |
-| Debugging | Difficult | Simple (standard Python code) |
-| Integration | Requires additional server | Seamless integration with existing frameworks |
-| Flexibility | Queries too flexible, hard to optimize | Explicit API contracts |
+|---------|---------|------------------|
+| **N+1 Prevention** | Manual DataLoader setup | Built-in automatic batching |
+| **Type Safety** | Separate schema files | Native Pydantic types |
+| **Learning Curve** | Steep (Schema, Resolvers, Loaders) | Gentle (just Pydantic) |
+| **Debugging** | Complex introspection | Standard Python debugging |
+| **Integration** | Requires dedicated server | Works with any framework |
+| **Query Flexibility** | Any client can query anything | Explicit API contracts |
+
+---
+
+## Resources
+
+- 📖 [Full Documentation](https://allmonday.github.io/pydantic-resolve/)
+- 🚀 [Example Project](https://github.com/allmonday/composition-oriented-development-pattern)
+- 🎮 [Live Demo](https://www.fastapi-voyager.top/voyager/)
+- 📚 [API Reference](https://allmonday.github.io/pydantic-resolve/api/)
 
 ---
 

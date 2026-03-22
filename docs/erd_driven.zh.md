@@ -22,107 +22,23 @@ erDiagram
 
 ```
 
-## 从 SQL，ORM，到 GraphQL
+## 从 SQL，ORM，到应用层 ERD
 
-### SQL
+### 关系型数据库的约束
 
-关系型数据库可以存储有相关性的数据， 但是通过 SQL 获取对象和关联对象并不方便。
+关系型数据库为存储关联数据而设计，但在获取嵌套对象结构时存在固有限制：
 
-使用 SQL 做 join 查询的时候， 如果关联的是一对多的表，那么就会引起笛卡尔积数量增加的情况。
+- **SQL JOIN 产生二维表**，而非嵌套对象。一对多关系会导致笛卡尔积膨胀。
+- **ORM 关系绑定于数据库 schema**。当数据来自 API、缓存或文件时，ORM 式的自动关联加载无法工作。
+- **N+1 查询问题**需要精心调整懒加载策略。
 
-简单的查询无法生成嵌套的关联数据 （ 虽然有拼装 json 的奇技淫巧， 但那个的可维护性比较糟糕 ）， 或者通过应用层做父节点去重。
+### 应用层 ERD 的价值
 
-```sql
-select * from user join post on user.id = post.user_id
-```
+应用层的 ERD 独立于存储实现：
 
-所以 SQL 的结果是一张二维表， 关联的数据只能转换成聚合计算的结果来展示。
-
-```sql
-select user.name, count(*) as post_count from user join post on user.id = post.user_id groupby user.id
-```
-
-### ORM
-
-如果需要获取关联信息的话， 就会使用到 ORM， 在 ORM 中定义 relationship 之后， 就能获取到关联的对象。
-
-以常用的 sqlalchemy 为例。
-
-```python
-from sqlalchemy import Column, Integer, String, ForeignKey
-from sqlalchemy.orm import relationship
-from sqlalchemy.ext.declarative import declarative_base
-
-Base = declarative_base()
-
-class User(Base):
-    __tablename__ = 'users'
-
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-
-    # 定义 relationship
-    posts = relationship("Post", back_populates="user")
-
-class Post(Base):
-    __tablename__ = 'posts'
-
-    id = Column(Integer, primary_key=True)
-    title = Column(String)
-    user_id = Column(Integer, ForeignKey('users.id'))
-
-    # 定义 relationship
-    user = relationship("User", back_populates="posts")
-
-rows = session.query(User).options(joinedload(User.posts)).all()
-```
-
-对于关联数据的获取， 可以通过多种 lazy 选项来调整， select 在对 User 循环时会引起 N+1 查询， joined， subquery 则会提前将数据查询加载好。 这些选项的调整是需要开发去关注来避免性能问题的。
-
-但同时 **ORM 也伴随了一些局限**， 如果有些数据不是在数据库中，比如需要从某个第三方 API， 或者本地文件中获取，就没法享受到自动关联的便利了。
-
-### GraphQL
-
-GraphQL 的出现提供了一种 “新的” 思路， **它的 schema 就是一种容易贴近 ERD 描述的方式**。
-
-此外它抽象了 DataLoader 的概念， 使用 `async def batch_loadn_fn(keys)` 的通用格式来定义输入参数和返回数据， 用户可以自己决定实现方式。
-
-以数据库为例， 可以使用 `where ..in ..` 来批量查找。
-
-```sql
-select * from post where user_id in (1, 2, 3)
-```
-
-然后将获取的数据在代码中 groupby `post.user_id` 的逻辑做聚合。
-
-如果是第三方 API 的话， 只要简单发起一次异步调用。
-
-```python
-async def batch_load_fn(user_ids):
-    posts = await get_posts_by_user_ids(user_ids)
-    return build_list(posts, user_ids, lambda x: x.user_id)
-```
-
-GraphQL 的这个机制实现了这样一种和具体实现无关的通用接口， 这也为内部优化预留了充足的空间。
-
-但 DataLoader 的威力在 GraphQL 体系下是被限制了的。
-
-最常见的场景是 DataLoader 默认只能通过 keys， 也就是单一的外键来关联数据， 如果要对资源做额外过滤， 会很难做。
-
-用查询来举例， `(1, 2, 3, 4)` 是传入的 keys， `where` 条件则没有合适的手段来设置。
-
-```sql
-select * from post where post.user_id in (1,2,3,4)
-    where post.created_at > '2021-12-12'
-```
-
-从设置参数的角度来看， keys 是一个个 User 对象通过 `loader.load(key)` 提供的， 而 `where` 条件是则是直接针对 loader 做的配置。
-
-GraphQL 本身没有方便的手段来提供通用的 `where` 参数， 这点比较遗憾。
-
-GraphQL 对数据的描述已经非常贴近 ERD 了，可惜这个架构比较庞大， 存在太多框架的约束， 提供灵活的查询接口也是一把双刃剑。
-
-我们希望找到一个更加简洁的方式。
+- **DataLoader 模式抽象了数据获取**——无论是 PostgreSQL、MongoDB、Redis 还是第三方 API，关系定义保持不变。
+- **业务逻辑与数据源解耦**。从 SQL 切换到 RPC 无需修改关系定义。
+- **pydantic-resolve 带来这种能力，却无需 GraphQL 的复杂性**——无需独立服务器，学习曲线平缓。
 
 ## 使用 Pydantic 来定义 ERD
 
@@ -165,7 +81,7 @@ erDiagram
 
 使用虚线来表示他们之间 “可以” 发生的关联。
 
-从 Pydantic resolve v2 开始， 这样的 ERD 可以被更加显式的申明出来，对于 User -> Post 只有一只关系的时候可以使用 Relationship：
+从 Pydantic resolve v2 开始， 这样的 ERD 可以被更加显式的申明出来，对于 User -> Post 只有一种 loader 的时候可以使用 Relationship：
 
 ```python
 from pydantic_resolve import Relationship, base_entity, config_global_resolver
@@ -185,28 +101,29 @@ class Post(BaseModel):
 config_global_resolver(BaseEntity.get_diagram())
 ```
 
-如果 User -> Post 之间有多种可能的路径， 则可以使用 MultipleRelationship 来定义：
+如果 User -> Post 有多种 loader 实现， 则可以使用 MultipleRelationship 来定义：
 
 ```python
 from pydantic_resolve import MultipleRelationship, Link, base_entity, config_global_resolver
 
 BaseEntity = base_entity()
 
-class User(BaseModel):
+class User(BaseModel, BaseEntity):
+    __pydantic_resolve_relationships__ = [
+        MultipleRelationship(
+            field='id',
+            target_kls=list[Post],
+            links=[
+                Link(biz='default', loader=PostLoader),
+                Link(biz='latest_three', loader=LatestThreePostLoader)
+            ]
+        )
+    ]
     id: int
     name: str
 
 class Post(BaseModel, BaseEntity):
-    __pydantic_resolve_relationships__ = [
-        MultipleRelationship(
-            field='id', 
-            target_kls=list[User],
-            links=[
-                Link(biz='default', loader=PostLoader),
-                Link(biz='another', loader=AnotherLoader)
-            ]
-        )
-    ]
+    __pydantic_resolve_relationships__ = []
     id: int
     user_id: int
     title: str
@@ -214,36 +131,52 @@ class Post(BaseModel, BaseEntity):
 config_global_resolver(BaseEntity.get_diagram())
 ```
 
+### 使用 ErDiagram 外部声明
+
+如果不想修改实体类，可以使用 `ErDiagram` 在外部定义关系：
+
+```python
+from pydantic_resolve import ErDiagram, Entity, Relationship, config_global_resolver
+
+# 定义纯 Pydantic 实体，无需混入任何关系
+class User(BaseModel):
+    id: int
+    name: str
+
+class Post(BaseModel):
+    id: int
+    user_id: int
+    title: str
+
+# 在外部定义关系 —— 实体类无需修改
+diagram = ErDiagram(configs=[
+    Entity(
+        kls=User,
+        relationships=[
+            Relationship(field='id', target_kls=list[Post], loader=PostLoader)
+        ]
+    ),
+    Entity(
+        kls=Post,
+        relationships=[]  # Post 没有对外关系
+    )
+])
+
+config_global_resolver(diagram)
+```
+
+**优势：**
+- **无侵入**：实体保持纯 Pydantic 模型
+- **集中管理**：所有关系定义在一处
+- **灵活**：可以为第三方或共享模型定义关系
+
 如果是 FastAPI 用户， 这样的 ERD 还可以在 FastAPI Voyager 中被可视化出来。
 
 
 
 ### 建立关联
 
-现在我们假设有个业务需求， 要给 User 和 Post 建立关联。
-
-可以通过继承 User 来复用 User 字段， 通过定义 `posts` 来联系数据。
-
-```mermaid
----
-title: UserWithPostsForSpecificBusiness
----
-
-erDiagram
-    User ||--o{ Post : "PostLoader"
-
-```
-
-```python
-class UserWithPostsForSpecificBusiness(User):
-    posts: List[Post] = []
-    def resolve_posts(self, loader=LoaderDepend(PostLoader)):
-        return loader.load(self.id)
-```
-
-这样 `UserWithPostsForSpecificBusiness` 就是面向特定业务需求所建立的 User 和 Post 关联固定组合体。
-
-如果定义了 `ErDiagram` 的话， 这个代码可以直接简化掉显式调用 dataloder 的过程。
+定义好 `ErDiagram` 后，使用 `LoadBy` 连接实体：
 
 ```python
 from pydantic_resolve import LoadBy
@@ -252,6 +185,7 @@ class UserWithPostsForSpecificBusiness(User):
     posts: Annotated[List[Post], LoadBy('id')] = []
 ```
 
+`LoadBy('id')` 会从 ERD 中查找关系定义，自动解析数据。
 
 ### 可维护代码的诀窍： 使业务 ERD 和代码中的结构定义维持一致
 
@@ -263,14 +197,10 @@ class UserWithPostsForSpecificBusiness(User):
 
 ```python
 class UserWithPostsForSpecificBusinessA(User):
-    posts: List[Post] = []
-    def resolve_posts(self, loader=LoaderDepend(PostLoader)):
-        return loader.load(self.id)
+    posts: Annotated[List[Post], LoadBy('id')] = []
 
 class UserWithPostsForSpecificBusinessB(User):
-    posts: List[Post] = []
-    def resolve_posts(self, loader=LoaderDepend(PostLoader)):
-        return loader.load(self.id)
+    posts: Annotated[List[Post], LoadBy('id')] = []
 ```
 
 假设 `UserWithPostsForSpecificBusinessA` 的需求发生了变更， 需要只加载每个 user 最近的 3 条 posts
@@ -279,9 +209,7 @@ class UserWithPostsForSpecificBusinessB(User):
 
 ```python
 class UserWithPostsForSpecificBusinessA(User):
-    posts: List[Post] = []
-    def resolve_posts(self, loader=LoaderDepend(LatestThreePostLoader)):
-        return loader.load(self.id)
+    posts: Annotated[List[Post], LoadBy('id', biz='latest_three')] = []
 ```
 
 最终， 我们实现了目标， 让代码侧的结构与产品设计侧的 ERD 结构保持高度的一致， 这使得后续的变更和调整变得更容易。
@@ -306,16 +234,9 @@ erDiagram
 
 ```python
 class BizAPost(Post):
-    comments: List[Comment] = []
-    def resolve_comments(self, loader=LoaderDepend(CommentLoader)):
-        return loader.load(self.id)
-
-    likes: List[Like] = []
-    def resolve_likes(self, loader=LoaderDepend(LikeLoader)):
-        return loader.load(self.id)
+    comments: Annotated[List[Comment], LoadBy('id')] = []
+    likes: Annotated[List[Like], LoadBy('id')] = []
 
 class BizAUser(User):
-    posts: List[BizAPost] = []
-    def resolve_posts(self, loader=LoaderDepend(PostLoader)):
-        return loader.load(self.id)
+    posts: Annotated[List[BizAPost], LoadBy('id')] = []
 ```
