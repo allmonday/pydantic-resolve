@@ -11,6 +11,9 @@
   - **GraphQL introspection now includes `Relationship.target_kls` types**: `IntrospectionGenerator._collect_all_types` now collects types from `Relationship.target_kls` when the target type is not explicitly registered in `er_diagram.configs`, ensuring consistency with SDL generation
   - Before: Introspection types list was missing types referenced in relationships, causing field type references to point to undefined types
   - After: Both SDL and introspection include the same types, field type references are always valid
+- test:
+  - Add `tests/graphql/test_missing_target_type.py` for introspection/SDL consistency
+  - Add `tests/graphql/test_forward_ref_resolution.py` for string reference resolution in `__relationships__`
 
 
 ### v3.2.0 (2026-3-19)

@@ -9,7 +9,6 @@ This test file verifies:
 4. Both ErDiagram manual config and base_entity() + __relationships__ patterns
 """
 
-import pytest
 from pydantic import BaseModel
 from typing import Optional, List
 
@@ -259,47 +258,6 @@ class TestBaseEntityRelationships:
         assert 'ProfileEntityTest' in config_class_names, \
             f"ProfileEntityTest not in diagram configs: {config_class_names}"
 
-    @pytest.mark.xfail(reason="ISSUE: _resolve_ref in base_entity() doesn't resolve forward refs correctly in some cases")
-    def test_forward_ref_resolution_in_relationships(self):
-        """
-        Verify that string type references in __relationships__ are resolved correctly.
-        """
-        BaseEntity = base_entity()
-
-        class ProfileEntityForwardRef(BaseModel, BaseEntity):
-            __relationships__ = []
-            id: int
-            bio: str
-
-        class UserEntityForwardRef(BaseModel, BaseEntity):
-            __relationships__ = [
-                Relationship(
-                    field='profile_id',
-                    target_kls='ProfileEntityForwardRef',  # String reference
-                    default_field_name='profile'
-                )
-            ]
-            id: int
-            name: str
-            profile_id: int
-
-        diagram = BaseEntity.get_diagram()
-
-        # Verify that the relationship target_kls is resolved to the actual class
-        user_config = None
-        for cfg in diagram.configs:
-            if cfg.kls.__name__ == 'UserEntityForwardRef':
-                user_config = cfg
-                break
-
-        assert user_config is not None
-        assert len(user_config.relationships) == 1
-
-        rel = user_config.relationships[0]
-        # After resolution, target_kls should be the actual class, not a string
-        assert rel.target_kls == ProfileEntityForwardRef or \
-               (isinstance(rel.target_kls, str) and rel.target_kls == 'ProfileEntityForwardRef')
-
     def test_introspection_with_base_entity_config(self):
         """
         Verify introspection works correctly with base_entity() configuration.
@@ -489,7 +447,6 @@ class TestEdgeCases:
 
         introspection_generator = IntrospectionGenerator(diagram)
         introspection = introspection_generator.generate()
-        type_names = {t['name'] for t in introspection['types']}
 
         # ProfileInfo should appear only once
         profile_count = sum(1 for t in introspection['types'] if t['name'] == 'ProfileInfo')

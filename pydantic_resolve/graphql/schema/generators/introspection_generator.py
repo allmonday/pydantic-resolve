@@ -25,7 +25,7 @@ from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.er_diagram import Relationship
 from pydantic_resolve.utils.types import get_core_types
 from pydantic_resolve.graphql.type_mapping import map_scalar_type, is_list_type, is_enum_type, get_enum_names
-from pydantic_resolve.utils.er_diagram import Relationship, MultipleRelationship
+from pydantic_resolve.utils.er_diagram import MultipleRelationship
 
 
 class IntrospectionGenerator(SchemaGenerator):
