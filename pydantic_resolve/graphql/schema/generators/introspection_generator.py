@@ -25,6 +25,7 @@ from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.er_diagram import Relationship
 from pydantic_resolve.utils.types import get_core_types
 from pydantic_resolve.graphql.type_mapping import map_scalar_type, is_list_type, is_enum_type, get_enum_names
+from pydantic_resolve.utils.er_diagram import Relationship, MultipleRelationship
 
 
 class IntrospectionGenerator(SchemaGenerator):
@@ -281,7 +282,17 @@ class IntrospectionGenerator(SchemaGenerator):
         for entity_cfg in self.er_diagram.configs:
             self._collected_types[entity_cfg.kls.__name__] = entity_cfg.kls
 
-        # Collect nested types
+        # Collect types from Relationship.target_kls (similar to SDLBuilder)
+        for entity_cfg in self.er_diagram.configs:
+            for rel in entity_cfg.relationships:
+                if isinstance(rel, (Relationship, MultipleRelationship)):
+                    # get_core_types handles list[T] and Optional[T] unwrapping
+                    for target_class in get_core_types(rel.target_kls):
+                        if safe_issubclass(target_class, BaseModel):
+                            if target_class.__name__ not in self._collected_types:
+                                self._collected_types[target_class.__name__] = target_class
+
+        # Collect nested types from entity fields
         nested = self._collect_nested_pydantic_types(list(self._collected_types.values()))
         for name, cls in nested.items():
             if name not in self._collected_types:

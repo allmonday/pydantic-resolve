@@ -1,11 +1,9 @@
 from __future__ import annotations
 import pytest
-from typing import Optional
 from pydantic import BaseModel
 from aiodataloader import DataLoader
-from pydantic_resolve.analysis import Analytic, _loader_requires_context
+from pydantic_resolve.analysis import _loader_requires_context
 from pydantic_resolve import Resolver, LoaderDepend, LoaderContextNotProvidedError
-from pydantic_resolve.loader_manager import validate_and_create_loader_instance
 
 
 # Test 1: Loader with _context attribute
