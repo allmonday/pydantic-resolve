@@ -2,6 +2,7 @@
 示例实体定义 - 用于 GraphQL 演示
 """
 
+from datetime import datetime
 from enum import Enum
 from typing import List, Optional, Dict
 from pydantic import BaseModel, Field
@@ -126,6 +127,7 @@ class UserEntity(BaseModel, BaseEntity):
     name: str = Field(description="用户姓名")
     email: str = Field(description="用户邮箱地址")
     role: UserRole = Field(description="用户角色")
+    created_at: datetime = Field(description="创建时间")
     something: dict = Field(default={'key': 'value'}, description="额外信息字典")
     meta: list[UserMetaEntity] = Field(default_factory=list, description="用户元信息列表")
     meta: list[UserMetaEntity] = Field(default_factory=list, description="用户元信息列表")
@@ -224,6 +226,7 @@ class PostEntity(BaseModel, BaseEntity):
     content: str = Field(default="", description="文章内容")
     author_id: int = Field(description="作者用户ID")
     status: PostStatus = Field(description="文章状态")
+    created_at: datetime = Field(description="创建时间")
 
     @query
     async def get_all(cls, limit: int = 10, status: Optional[PostStatus] = None) -> List['PostEntity']:
@@ -334,6 +337,7 @@ class CommentEntity(BaseModel, BaseEntity):
     text: str = Field(description="评论内容")
     author_id: int = Field(description="评论者用户ID")
     post_id: int = Field(description="被评论的文章ID")
+    created_at: datetime = Field(description="创建时间")
 
     @query
     async def get_all(cls) -> List['CommentEntity']:
@@ -379,24 +383,24 @@ def init_db():
     global users_db, posts_db, comments_db
 
     users_db = {
-        1: UserEntity(id=1, name="Alice", email="alice@example.com", role=UserRole.ADMIN),
-        2: UserEntity(id=2, name="Bob", email="bob@example.com", role=UserRole.USER),
-        3: UserEntity(id=3, name="Charlie", email="charlie@example.com", role=UserRole.USER),
-        4: UserEntity(id=4, name="Diana", email="diana@example.com", role=UserRole.ADMIN),
+        1: UserEntity(id=1, name="Alice", email="alice@example.com", role=UserRole.ADMIN, created_at=datetime(2024, 1, 1, 10, 0, 0)),
+        2: UserEntity(id=2, name="Bob", email="bob@example.com", role=UserRole.USER, created_at=datetime(2024, 1, 2, 11, 0, 0)),
+        3: UserEntity(id=3, name="Charlie", email="charlie@example.com", role=UserRole.USER, created_at=datetime(2024, 1, 3, 12, 0, 0)),
+        4: UserEntity(id=4, name="Diana", email="diana@example.com", role=UserRole.ADMIN, created_at=datetime(2024, 1, 4, 13, 0, 0)),
     }
 
     posts_db = {
-        1: PostEntity(id=1, title="First Post", content="Hello World!", author_id=1, status=PostStatus.PUBLISHED),
-        2: PostEntity(id=2, title="Second Post", content="GraphQL is awesome", author_id=2, status=PostStatus.PUBLISHED),
-        3: PostEntity(id=3, title="Third Post", content="Python tips", author_id=1, status=PostStatus.DRAFT),
-        4: PostEntity(id=4, title="Fourth Post", content="FastAPI tutorial", author_id=3, status=PostStatus.PUBLISHED),
+        1: PostEntity(id=1, title="First Post", content="Hello World!", author_id=1, status=PostStatus.PUBLISHED, created_at=datetime(2024, 1, 10, 9, 0, 0)),
+        2: PostEntity(id=2, title="Second Post", content="GraphQL is awesome", author_id=2, status=PostStatus.PUBLISHED, created_at=datetime(2024, 1, 12, 14, 30, 0)),
+        3: PostEntity(id=3, title="Third Post", content="Python tips", author_id=1, status=PostStatus.DRAFT, created_at=datetime(2024, 1, 15, 8, 0, 0)),
+        4: PostEntity(id=4, title="Fourth Post", content="FastAPI tutorial", author_id=3, status=PostStatus.PUBLISHED, created_at=datetime(2024, 1, 20, 16, 0, 0)),
     }
 
     comments_db = {
-        1: CommentEntity(id=1, text="Great post!", author_id=2, post_id=1),
-        2: CommentEntity(id=2, text="Thanks!", author_id=1, post_id=1),
-        3: CommentEntity(id=3, text="Very helpful", author_id=3, post_id=2),
-        4: CommentEntity(id=4, text="Nice tutorial", author_id=4, post_id=4),
+        1: CommentEntity(id=1, text="Great post!", author_id=2, post_id=1, created_at=datetime(2024, 1, 11, 10, 0, 0)),
+        2: CommentEntity(id=2, text="Thanks!", author_id=1, post_id=1, created_at=datetime(2024, 1, 11, 11, 0, 0)),
+        3: CommentEntity(id=3, text="Very helpful", author_id=3, post_id=2, created_at=datetime(2024, 1, 13, 15, 0, 0)),
+        4: CommentEntity(id=4, text="Nice tutorial", author_id=4, post_id=4, created_at=datetime(2024, 1, 21, 9, 0, 0)),
     }
 
 

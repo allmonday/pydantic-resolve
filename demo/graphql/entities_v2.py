@@ -7,6 +7,7 @@ V2 实体定义 - 使用 QueryConfig/MutationConfig 配置化方式
 - Query/Mutation 方法通过 QueryConfig/MutationConfig 配置，而非装饰器
 """
 
+from datetime import datetime
 from enum import Enum
 from typing import List, Optional, Dict
 from pydantic import BaseModel, Field
@@ -76,6 +77,7 @@ class CommentEntityV2(BaseModel):
     text: str = Field(description="评论内容")
     author_id: int = Field(description="评论者用户ID")
     post_id: int = Field(description="被评论的文章ID")
+    created_at: datetime = Field(description="创建时间")
 
 
 class PostEntityV2(BaseModel):
@@ -88,6 +90,7 @@ class PostEntityV2(BaseModel):
     content: str = Field(default="", description="文章内容")
     author_id: int = Field(description="作者用户ID")
     status: PostStatus = Field(description="文章状态")
+    created_at: datetime = Field(description="创建时间")
 
 
 class UserEntityV2(BaseModel):
@@ -99,6 +102,7 @@ class UserEntityV2(BaseModel):
     name: str = Field(description="用户姓名")
     email: str = Field(description="用户邮箱地址")
     role: UserRole = Field(description="用户角色")
+    created_at: datetime = Field(description="创建时间")
 
 
 # =====================================
@@ -307,24 +311,24 @@ def init_db_v2():
     comment_id_counter_v2 = 4
 
     users_db_v2 = {
-        1: UserEntityV2(id=1, name="Alice", email="alice@example.com", role=UserRole.ADMIN),
-        2: UserEntityV2(id=2, name="Bob", email="bob@example.com", role=UserRole.USER),
-        3: UserEntityV2(id=3, name="Charlie", email="charlie@example.com", role=UserRole.USER),
-        4: UserEntityV2(id=4, name="Diana", email="diana@example.com", role=UserRole.ADMIN),
+        1: UserEntityV2(id=1, name="Alice", email="alice@example.com", role=UserRole.ADMIN, created_at=datetime(2024, 1, 1, 10, 0, 0)),
+        2: UserEntityV2(id=2, name="Bob", email="bob@example.com", role=UserRole.USER, created_at=datetime(2024, 1, 2, 11, 0, 0)),
+        3: UserEntityV2(id=3, name="Charlie", email="charlie@example.com", role=UserRole.USER, created_at=datetime(2024, 1, 3, 12, 0, 0)),
+        4: UserEntityV2(id=4, name="Diana", email="diana@example.com", role=UserRole.ADMIN, created_at=datetime(2024, 1, 4, 13, 0, 0)),
     }
 
     posts_db_v2 = {
-        1: PostEntityV2(id=1, title="First Post", content="Hello World!", author_id=1, status=PostStatus.PUBLISHED),
-        2: PostEntityV2(id=2, title="Second Post", content="GraphQL is awesome", author_id=2, status=PostStatus.PUBLISHED),
-        3: PostEntityV2(id=3, title="Third Post", content="Python tips", author_id=1, status=PostStatus.DRAFT),
-        4: PostEntityV2(id=4, title="Fourth Post", content="FastAPI tutorial", author_id=3, status=PostStatus.PUBLISHED),
+        1: PostEntityV2(id=1, title="First Post", content="Hello World!", author_id=1, status=PostStatus.PUBLISHED, created_at=datetime(2024, 1, 10, 9, 0, 0)),
+        2: PostEntityV2(id=2, title="Second Post", content="GraphQL is awesome", author_id=2, status=PostStatus.PUBLISHED, created_at=datetime(2024, 1, 12, 14, 30, 0)),
+        3: PostEntityV2(id=3, title="Third Post", content="Python tips", author_id=1, status=PostStatus.DRAFT, created_at=datetime(2024, 1, 15, 8, 0, 0)),
+        4: PostEntityV2(id=4, title="Fourth Post", content="FastAPI tutorial", author_id=3, status=PostStatus.PUBLISHED, created_at=datetime(2024, 1, 20, 16, 0, 0)),
     }
 
     comments_db_v2 = {
-        1: CommentEntityV2(id=1, text="Great post!", author_id=2, post_id=1),
-        2: CommentEntityV2(id=2, text="Thanks!", author_id=1, post_id=1),
-        3: CommentEntityV2(id=3, text="Very helpful", author_id=3, post_id=2),
-        4: CommentEntityV2(id=4, text="Nice tutorial", author_id=4, post_id=4),
+        1: CommentEntityV2(id=1, text="Great post!", author_id=2, post_id=1, created_at=datetime(2024, 1, 11, 10, 0, 0)),
+        2: CommentEntityV2(id=2, text="Thanks!", author_id=1, post_id=1, created_at=datetime(2024, 1, 11, 11, 0, 0)),
+        3: CommentEntityV2(id=3, text="Very helpful", author_id=3, post_id=2, created_at=datetime(2024, 1, 13, 15, 0, 0)),
+        4: CommentEntityV2(id=4, text="Nice tutorial", author_id=4, post_id=4, created_at=datetime(2024, 1, 21, 9, 0, 0)),
     }
 
 
