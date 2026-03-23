@@ -220,10 +220,10 @@ class QueryExecutor:
 
                     if isinstance(typed_data, list):
                         resolved = await resolver.resolve(typed_data)
-                        data[root_mutation_name] = [r.model_dump(by_alias=True) for r in resolved] if resolved else []
+                        data[root_mutation_name] = [r.model_dump(mode='json', by_alias=True) for r in resolved] if resolved else []
                     else:
                         resolved = await resolver.resolve(typed_data)
-                        data[root_mutation_name] = resolved.model_dump(by_alias=True) if resolved else None
+                        data[root_mutation_name] = resolved.model_dump(mode='json', by_alias=True) if resolved else None
                 else:
                     data[root_mutation_name] = None
 
@@ -546,13 +546,13 @@ class QueryExecutor:
                 if is_list:
                     result = await resolver.resolve(typed_data)
                     if result is not None:
-                        result_data = [r.model_dump(by_alias=True) for r in result]
+                        result_data = [r.model_dump(mode='json', by_alias=True) for r in result]
                     else:
                         result_data = []
                 else:
                     result = await resolver.resolve(typed_data)
                     if result is not None:
-                        result_data = result.model_dump(by_alias=True)
+                        result_data = result.model_dump(mode='json', by_alias=True)
                     else:
                         result_data = None
             else:

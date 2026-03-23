@@ -6,6 +6,14 @@
 
 ## v3.2
 
+### v3.2.2 (2026-3-23)
+- fix:
+  - **GraphQL datetime serialization**: Changed `model_dump(by_alias=True)` to `model_dump(mode='json', by_alias=True)` in executor to ensure datetime, date, time, Decimal, and other non-JSON types are properly serialized to JSON-compatible formats
+  - Before: `TypeError: Object of type datetime is not JSON serializable`
+  - After: datetime fields are automatically serialized to ISO-8601 strings
+- test:
+  - Add `tests/graphql/test_datetime_support.py` for datetime, date, time, Decimal serialization
+
 ### v3.2.1 (2026-3-22)
 - fix:
   - **GraphQL introspection now includes `Relationship.target_kls` types**: `IntrospectionGenerator._collect_all_types` now collects types from `Relationship.target_kls` when the target type is not explicitly registered in `er_diagram.configs`, ensuring consistency with SDL generation
