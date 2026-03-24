@@ -6,6 +6,13 @@
 
 ## v3.2
 
+### v3.2.3 (2026-3-24)
+- feat:
+  - **GraphQL hides relationship fields without loaders**: `Relationship` fields with `loader=None` are now hidden from GraphQL SDL and introspection, preventing runtime errors when querying unresolvable fields
+  - Applies to both `SDLBuilder` and `IntrospectionGenerator`
+- test:
+  - Add `TestHideRelationshipsWithoutLoader` test class in `tests/graphql/test_sdl_builder.py`
+
 ### v3.2.2 (2026-3-23)
 - fix:
   - **GraphQL datetime serialization**: Changed `model_dump(by_alias=True)` to `model_dump(mode='json', by_alias=True)` in executor to ensure datetime, date, time, Decimal, and other non-JSON types are properly serialized to JSON-compatible formats
