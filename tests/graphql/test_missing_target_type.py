@@ -109,7 +109,8 @@ class TestErDiagramMissingTargetType:
                     Relationship(
                         field='profile_id',
                         target_kls=ProfileInfo,
-                        default_field_name='profile'
+                        default_field_name='profile',
+                        loader=lambda x: []  # Required for field to appear in SDL
                     )
                 ]
             )
@@ -142,7 +143,8 @@ class TestErDiagramMissingTargetType:
                     Relationship(
                         field='id',  # Using id as a dummy field
                         target_kls=ContactInfo,
-                        default_field_name='contact'
+                        default_field_name='contact',
+                        loader=lambda x: []  # Required for field to appear in introspection
                     )
                 ]
             )
@@ -172,7 +174,8 @@ class TestErDiagramMissingTargetType:
                     Relationship(
                         field='profile_id',
                         target_kls=ProfileInfo,
-                        default_field_name='profile'
+                        default_field_name='profile',
+                        loader=lambda x: []  # Required for field to appear in introspection
                     )
                 ]
             )

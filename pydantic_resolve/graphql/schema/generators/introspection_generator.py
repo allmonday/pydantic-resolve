@@ -443,10 +443,13 @@ class IntrospectionGenerator(SchemaGenerator):
             })
 
         # Process relationships
+        # Note: relationships without loaders are hidden from introspection
         if entity_cfg:
             for rel in entity_cfg.relationships:
                 if isinstance(rel, Relationship):
                     if not hasattr(rel, 'default_field_name') or not rel.default_field_name:
+                        continue
+                    if rel.loader is None:
                         continue
 
                     field_name = rel.default_field_name

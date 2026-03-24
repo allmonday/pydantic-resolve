@@ -282,3 +282,74 @@ class TestCollectRelatedEntitiesFromMethod:
                         assert SampleUser in entities
                         return
         assert False, "Method not found"
+
+
+class TestHideRelationshipsWithoutLoader:
+    """Tests for hiding relationship fields without loaders in GraphQL SDL."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        # Create a separate ERD for this test class
+        self.TestBaseEntity = base_entity()
+
+        class TestUser(BaseModel, self.TestBaseEntity):
+            """User entity."""
+            __relationships__ = []
+            id: int
+            name: str
+
+        class TestPost(BaseModel, self.TestBaseEntity):
+            """Post entity with mixed loader configurations."""
+            __relationships__ = [
+                # Has loader - should appear in SDL
+                Relationship(
+                    field='author_id',
+                    target_kls=TestUser,
+                    loader=lambda x: [],
+                    default_field_name='author'
+                ),
+                # No loader - should be hidden from SDL
+                Relationship(
+                    field='reviewer_id',
+                    target_kls=TestUser,
+                    loader=None,
+                    default_field_name='reviewer'
+                ),
+            ]
+            id: int
+            title: str
+            author_id: int
+            reviewer_id: Optional[int] = None
+
+        self.TestUser = TestUser
+        self.TestPost = TestPost
+        self.er_diagram = self.TestBaseEntity.get_diagram()
+        self.builder = SDLBuilder(self.er_diagram)
+
+    def test_relationship_with_loader_included_in_sdl(self):
+        """Relationship with loader should appear in SDL."""
+        result = self.builder._build_entity_type(self.TestPost)
+
+        assert "type TestPost {" in result
+        assert "author: TestUser!" in result
+
+    def test_relationship_without_loader_hidden_in_sdl(self):
+        """Relationship without loader should NOT appear in SDL."""
+        result = self.builder._build_entity_type(self.TestPost)
+
+        assert "type TestPost {" in result
+        # reviewer field should NOT be in the SDL
+        assert "reviewer:" not in result
+
+    def test_mixed_relationships_with_and_without_loaders(self):
+        """Entity with mixed relationships should only show queryable fields in SDL."""
+        result = self.builder._build_entity_type(self.TestPost)
+
+        assert "type TestPost {" in result
+        assert "id: Int!" in result
+        assert "title: String!" in result
+        assert "author_id: Int!" in result
+        # author has loader - should be visible
+        assert "author: TestUser!" in result
+        # reviewer has no loader - should be hidden
+        assert "reviewer:" not in result

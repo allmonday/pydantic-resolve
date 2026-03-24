@@ -171,15 +171,20 @@ class SDLBuilder(SchemaGenerator):
             fields.append(f"  {field_name}: {gql_type}")
 
         # Process relationships using unified type mapping
+        # Note: relationships without loaders are hidden from GraphQL schema
         for rel in entity_cfg.relationships:
             if isinstance(rel, Relationship):
                 if hasattr(rel, 'default_field_name') and rel.default_field_name:
+                    if rel.loader is None:
+                        continue
                     field_name = rel.default_field_name
                     gql_type = self._map_python_type_to_gql(rel.target_kls)
                     fields.append(f"  {field_name}: {gql_type}")
             elif isinstance(rel, MultipleRelationship):
                 for link in rel.links:
                     if link.default_field_name:
+                        if link.loader is None:
+                            continue
                         field_name = link.default_field_name
                         gql_type = self._map_python_type_to_gql(rel.target_kls)
                         fields.append(f"  {field_name}: {gql_type}")
@@ -833,16 +838,21 @@ class SDLBuilder(SchemaGenerator):
             fields.append(f"  {field_name}: {gql_type}")
 
         # Process relationship fields
+        # Note: relationships without loaders are hidden from GraphQL schema
         if entity_cfg:
             for rel in entity_cfg.relationships:
                 if isinstance(rel, Relationship):
                     if hasattr(rel, 'default_field_name') and rel.default_field_name:
+                        if rel.loader is None:
+                            continue
                         field_name = rel.default_field_name
                         gql_type = self._map_python_type_to_gql(rel.target_kls)
                         fields.append(f"  {field_name}: {gql_type}")
                 elif isinstance(rel, MultipleRelationship):
                     for link in rel.links:
                         if link.default_field_name:
+                            if link.loader is None:
+                                continue
                             field_name = link.default_field_name
                             gql_type = self._map_python_type_to_gql(rel.target_kls)
                             fields.append(f"  {field_name}: {gql_type}")
