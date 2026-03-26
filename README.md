@@ -277,6 +277,7 @@ app.mount('/voyager', create_voyager(app, er_diagram=BaseEntity.get_diagram()))
 - 📖 [Full Documentation](https://allmonday.github.io/pydantic-resolve/)
 - 🚀 [Example Project](https://github.com/allmonday/composition-oriented-development-pattern)
 - 🎮 [Live Demo](https://www.fastapi-voyager.top/voyager/)
+- 🎮 [Live Demo - GraphQL](https://www.fastapi-voyager.top/graphql)
 - 📚 [API Reference](https://allmonday.github.io/pydantic-resolve/api/)
 
 ---
