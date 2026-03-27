@@ -19,7 +19,7 @@ from pydantic_resolve.graphql.mcp.types.errors import (
 )
 
 if TYPE_CHECKING:
-    from mcp.server.fastmcp import FastMCP
+    from fastmcp import FastMCP
     from pydantic_resolve.graphql.mcp.managers.multi_app_manager import MultiAppManager
 
 

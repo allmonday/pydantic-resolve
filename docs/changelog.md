@@ -4,6 +4,13 @@
 - **Minor (x.Y.0)**: New features, backward compatible
 - **Patch (x.y.Z)**: Bug fixes and minor improvements
 
+## v3.3
+
+### 3.3.0 (2026-3-27)
+- feat:
+  - migrate from mcp to fastmcp ver 3
+
+
 ## v3.2
 
 ### v3.2.3 (2026-3-24)

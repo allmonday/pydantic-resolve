@@ -13,7 +13,7 @@ from pydantic_resolve.graphql.mcp.tools.multi_app_tools import register_multi_ap
 from pydantic_resolve.graphql.mcp.types.app_config import AppConfig
 
 if TYPE_CHECKING:
-    from mcp.server.fastmcp import FastMCP
+    from fastmcp import FastMCP
 
 
 def create_mcp_server(
@@ -68,7 +68,7 @@ def create_mcp_server(
     Raises:
         ValueError: If apps list is empty or contains invalid configurations
     """
-    from mcp.server.fastmcp import FastMCP
+    from fastmcp import FastMCP
 
     if not apps:
         raise ValueError("apps list cannot be empty")

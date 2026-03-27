@@ -1,6 +1,6 @@
 [project]
 name = "pydantic-resolve"
-version = "3.2.3"
+version = "3.3.0"
 description = "pydantic-resolve turns pydantic from a static data container into a powerful composable component."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -12,7 +12,7 @@ keywords = ["pydantic", "dataloader", "resolver"]
 dependencies = [
     "aiodataloader >= 0.4.0,<0.5.0",
     "graphql-core >= 3.2,<4.0",
-    "mcp >= 1.0.0"
+    "fastmcp >= 3.0.0"
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
