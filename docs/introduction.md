@@ -136,14 +136,14 @@ class Sample1TeamDetail(tms.Team):
 
 ```python
 # new
-from pydantic_resolve import LoadBy
+from pydantic_resolve import AutoLoad
 
 class Sample1TeamDetail(tms.Team):
-	sprints: Annotated[list[Sample1SprintDetail], LoadBy('id')] = []
-	members: Annotated[list[us.User], LoadBy('id')] = []
+	sprints: Annotated[list[Sample1SprintDetail], AutoLoad('id')] = []
+	members: Annotated[list[us.User], AutoLoad('id')] = []
 ```
 
-It determines the unique `Relationship` and its loader based on the inheritance source, the `LoadBy` argument, and the annotated return type.
+It determines the unique `Relationship` and its loader based on the inheritance source, the `AutoLoad` argument, and the annotated return type.
 
 ## Define subsets and inheritance
 
@@ -155,19 +155,19 @@ from pydantic_resolve import DefineSubset
 class MyStory(DefineSubset):
 	__subset__ = (Story, ('id'))
 
-	tasks: Annotated[list[Task], LoadBy('id')] = []
+	tasks: Annotated[list[Task], AutoLoad('id')] = []
 
 ```
 
 With this, `MyStory` is a class that selects only the `id` field from `Story`. Internally, it keeps private metadata to track the source type.
 
-So the `LoadBy` declared in `MyStory` will eventually trace back to `Story`, then find the corresponding `Relationship` defined under `Story`.
+So the `AutoLoad` declared in `MyStory` will eventually trace back to `Story`, then find the corresponding `Relationship` defined under `Story`.
 
 If you want the full set of fields, you can simply inherit from the base model:
 
 ```python
 class MyStory(Story):
-	tasks: Annotated[list[Task], LoadBy('id')] = []
+	tasks: Annotated[list[Task], AutoLoad('id')] = []
 ```
 
 ## Build complex data in three steps
@@ -270,7 +270,7 @@ Now the setup is complete.
 
 By the way, dataloader is just the default implementation. Under the hood, your loader can be an RPC call, a local file lookup, or a database query—callers don't need to care.
 
-Also, if you are using ORM relationships, you can remove the `loader` config in `Relationship`, and remove `LoadBy` (or your `resolve_*` methods), then use ORM-provided composed data instead.
+Also, if you are using ORM relationships, you can remove the `loader` config in `Relationship`, and remove `AutoLoad` (or your `resolve_*` methods), then use ORM-provided composed data instead.
 
 ### 2. Build data for business needs
 
@@ -298,11 +298,11 @@ If `ErDiagram` is available, the code can be further simplified:
 
 ```python
 class Task(BaseTask):
-	user: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+	user: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
 
 class Story(BaseStory):
-	tasks: Annotated[list[Task], LoadBy('id')] = []
-	assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None        
+	tasks: Annotated[list[Task], AutoLoad('id')] = []
+	assignee: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None        
 ```
 
 The `DefineSubset` metaclass can quickly create subset types by listing the fields you want:
@@ -312,8 +312,8 @@ class Story1(DefineSubset):
 	# define the base class and fields wanted
 	__subset__ = (BaseStory, ('id', 'name', 'owner_id'))
 
-	tasks: Annotated[list[Task1], LoadBy('id')] = []
-	assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+	tasks: Annotated[list[Task1], AutoLoad('id')] = []
+	assignee: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
 ```
 
 ### 3. Adjust data for UI details
@@ -352,7 +352,7 @@ Descendants can read the value via `ancestor_context['story_name']`.
 
 # post case 1
 class Task3(BaseTask):
-	user: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+	user: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
 
 	fullname: str = ''
 	def post_fullname(self, ancestor_context):  # Access story.name from parent context
@@ -362,8 +362,8 @@ class Story3(DefineSubset):
 	__subset__ = (BaseStory, ('id', 'name', 'owner_id'))
 	__pydantic_resolve_expose__ = {'name': 'story_name'}
 
-	tasks: Annotated[list[Task3], LoadBy('id')] = []
-	assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+	tasks: Annotated[list[Task3], AutoLoad('id')] = []
+	assignee: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
 ```
 
 
@@ -377,13 +377,13 @@ Because `post_*` runs after `resolve_*`, this is straightforward—just `sum` it
 
 ```python
 class Task2(BaseTask):
-	user: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+	user: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
 
 class Story2(DefineSubset):
 	__subset__ = (BaseStory, ('id', 'name', 'owner_id'))
 
-	tasks: Annotated[list[Task2], LoadBy('id')] = []
-	assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+	tasks: Annotated[list[Task2], AutoLoad('id')] = []
+	assignee: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
 
 	total_estimate: int = 0
 	def post_total_estimate(self):
@@ -422,13 +422,13 @@ Here is the complete code. `related_users` will collect all `user` values. (Note
 class Task1(BaseTask):
 	__pydantic_resolve_collect__ = {'user': 'related_users'}  # Propagate user to collector: 'related_users'
 
-	user: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+	user: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
 
 class Story1(DefineSubset):
 	__subset__ = (BaseStory, ('id', 'name', 'owner_id'))
 
-	tasks: Annotated[list[Task1], LoadBy('id')] = []
-	assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+	tasks: Annotated[list[Task1], AutoLoad('id')] = []
+	assignee: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
 
 	related_users: list[BaseUser] = []
 	def post_related_users(self, collector=Collector(alias='related_users')):

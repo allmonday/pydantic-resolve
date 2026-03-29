@@ -176,16 +176,16 @@ config_global_resolver(diagram)
 
 ### 建立关联
 
-定义好 `ErDiagram` 后，使用 `LoadBy` 连接实体：
+定义好 `ErDiagram` 后，使用 `AutoLoad` 连接实体：
 
 ```python
-from pydantic_resolve import LoadBy
+from pydantic_resolve import AutoLoad
 
 class UserWithPostsForSpecificBusiness(User):
-    posts: Annotated[List[Post], LoadBy('id')] = []
+    posts: Annotated[List[Post], AutoLoad('id')] = []
 ```
 
-`LoadBy('id')` 会从 ERD 中查找关系定义，自动解析数据。
+`AutoLoad('id')` 会从 ERD 中查找关系定义，自动解析数据。
 
 ### 可维护代码的诀窍： 使业务 ERD 和代码中的结构定义维持一致
 
@@ -197,10 +197,10 @@ class UserWithPostsForSpecificBusiness(User):
 
 ```python
 class UserWithPostsForSpecificBusinessA(User):
-    posts: Annotated[List[Post], LoadBy('id')] = []
+    posts: Annotated[List[Post], AutoLoad('id')] = []
 
 class UserWithPostsForSpecificBusinessB(User):
-    posts: Annotated[List[Post], LoadBy('id')] = []
+    posts: Annotated[List[Post], AutoLoad('id')] = []
 ```
 
 假设 `UserWithPostsForSpecificBusinessA` 的需求发生了变更， 需要只加载每个 user 最近的 3 条 posts
@@ -209,7 +209,7 @@ class UserWithPostsForSpecificBusinessB(User):
 
 ```python
 class UserWithPostsForSpecificBusinessA(User):
-    posts: Annotated[List[Post], LoadBy('id', biz='latest_three')] = []
+    posts: Annotated[List[Post], AutoLoad('id', biz='latest_three')] = []
 ```
 
 最终， 我们实现了目标， 让代码侧的结构与产品设计侧的 ERD 结构保持高度的一致， 这使得后续的变更和调整变得更容易。
@@ -234,9 +234,9 @@ erDiagram
 
 ```python
 class BizAPost(Post):
-    comments: Annotated[List[Comment], LoadBy('id')] = []
-    likes: Annotated[List[Like], LoadBy('id')] = []
+    comments: Annotated[List[Comment], AutoLoad('id')] = []
+    likes: Annotated[List[Like], AutoLoad('id')] = []
 
 class BizAUser(User):
-    posts: Annotated[List[BizAPost], LoadBy('id')] = []
+    posts: Annotated[List[BizAPost], AutoLoad('id')] = []
 ```

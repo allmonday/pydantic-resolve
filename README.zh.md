@@ -23,7 +23,7 @@
 |------|------|
 | **自动批量加载** | DataLoader 自动消除 N+1 查询 |
 | **声明式组装** | 声明依赖关系，框架自动处理 |
-| **Entity-First 架构** | ER Diagram 定义关系，`LoadBy` 自动解析 |
+| **Entity-First 架构** | ER Diagram 定义关系，`AutoLoad` 自动解析 |
 | **GraphQL 支持** | 从 ERD 生成 Schema，动态模型查询 |
 | **MCP 集成** | 将 GraphQL API 暴露给 AI 代理，支持渐进式披露 |
 
@@ -191,7 +191,7 @@ class Story(BaseModel):
 | **API 契约** | DB 变化时 API 跟着变 | 稳定，与存储解耦 |
 
 ```python
-from pydantic_resolve import base_entity, Relationship, LoadBy
+from pydantic_resolve import base_entity, Relationship, AutoLoad
 
 BaseEntity = base_entity()
 
@@ -211,7 +211,7 @@ class TaskEntity(BaseModel, BaseEntity):
 # Response schema：选择要暴露的内容
 class TaskResponse(DefineSubset):
     __subset__ = (TaskEntity, ('id', 'name'))  # owner_id 被排除
-    owner: Annotated[User, LoadBy('owner_id')] = None  # 自动解析！
+    owner: Annotated[User, AutoLoad('owner_id')] = None  # 自动解析！
 ```
 
 **核心优势：**

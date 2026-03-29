@@ -23,7 +23,7 @@
 |---------|--------------|
 | **Automatic Batching** | DataLoader eliminates N+1 queries automatically |
 | **Declarative Assembly** | Declare dependencies, framework handles the rest |
-| **Entity-First Architecture** | ER Diagram defines relationships, `LoadBy` auto-resolves |
+| **Entity-First Architecture** | ER Diagram defines relationships, `AutoLoad` auto-resolves |
 | **GraphQL Support** | Generate schema from ERD, query with dynamic models |
 | **MCP Integration** | Expose GraphQL APIs to AI agents with progressive disclosure |
 
@@ -191,7 +191,7 @@ Define business entities independent of database schema.
 | **API Contract** | Changes when DB changes | Stable, decoupled from storage |
 
 ```python
-from pydantic_resolve import base_entity, Relationship, LoadBy
+from pydantic_resolve import base_entity, Relationship, AutoLoad
 
 BaseEntity = base_entity()
 
@@ -211,7 +211,7 @@ class TaskEntity(BaseModel, BaseEntity):
 # Response schema: choose what to expose
 class TaskResponse(DefineSubset):
     __subset__ = (TaskEntity, ('id', 'name'))  # owner_id excluded
-    owner: Annotated[User, LoadBy('owner_id')] = None  # Auto-resolved!
+    owner: Annotated[User, AutoLoad('owner_id')] = None  # Auto-resolved!
 ```
 
 **Key benefits:**

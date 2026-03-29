@@ -171,16 +171,16 @@ If you are a FastAPI user, this ERD can also be visualized in FastAPI Voyager.
 
 ### Build relationships
 
-Once you have an `ErDiagram` defined, use `LoadBy` to connect entities:
+Once you have an `ErDiagram` defined, use `AutoLoad` to connect entities:
 
 ```python
-from pydantic_resolve import LoadBy
+from pydantic_resolve import AutoLoad
 
 class UserWithPostsForSpecificBusiness(User):
-	posts: Annotated[List[Post], LoadBy('id')] = []
+	posts: Annotated[List[Post], AutoLoad('id')] = []
 ```
 
-`LoadBy('id')` looks up the relationship from the ERD and automatically resolves the data.
+`AutoLoad('id')` looks up the relationship from the ERD and automatically resolves the data.
 
 ### The key to maintainable code: keep business ERD consistent with your code structure
 
@@ -192,10 +192,10 @@ Two classes with the same structure can have different names, representing diffe
 
 ```python
 class UserWithPostsForSpecificBusinessA(User):
-	posts: Annotated[List[Post], LoadBy('id')] = []
+	posts: Annotated[List[Post], AutoLoad('id')] = []
 
 class UserWithPostsForSpecificBusinessB(User):
-	posts: Annotated[List[Post], LoadBy('id')] = []
+	posts: Annotated[List[Post], AutoLoad('id')] = []
 ```
 
 Suppose the requirement for `UserWithPostsForSpecificBusinessA` changes: it should only load the latest 3 posts for each user.
@@ -204,7 +204,7 @@ You just create a new DataLoader and reference it by field name. (`UserWithPosts
 
 ```python
 class UserWithPostsForSpecificBusinessA(User):
-	latest_three_posts: Annotated[List[Post], LoadBy('id')] = []
+	latest_three_posts: Annotated[List[Post], AutoLoad('id')] = []
 ```
 
 In the end, we achieve the goal: the structure in code stays highly consistent with the ERD structure in product design, making future changes and iterations much easier.
@@ -229,10 +229,10 @@ erDiagram
 
 ```python
 class BizAPost(Post):
-	comments: Annotated[List[Comment], LoadBy('id')] = []
-	likes: Annotated[List[Like], LoadBy('id')] = []
+	comments: Annotated[List[Comment], AutoLoad('id')] = []
+	likes: Annotated[List[Like], AutoLoad('id')] = []
 
 class BizAUser(User):
-	posts: Annotated[List[BizAPost], LoadBy('id')] = []
+	posts: Annotated[List[BizAPost], AutoLoad('id')] = []
 ```
 

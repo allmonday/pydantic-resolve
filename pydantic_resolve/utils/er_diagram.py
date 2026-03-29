@@ -236,7 +236,7 @@ class LoaderInfo:
     pass
 
 
-def LoadBy() -> LoaderInfo:
+def AutoLoad() -> LoaderInfo:
     return LoaderInfo()
 
 
@@ -364,9 +364,9 @@ class ErLoaderPreGenerator:
         )
 
     def prepare(self, kls: type):
-        """Auto-generate resolve_XXX methods for fields annotated with LoadBy metadata.
+        """Auto-generate resolve_XXX methods for fields annotated with AutoLoad metadata.
 
-        For each pydantic field carrying LoadBy, create a resolve method that uses the
+        For each pydantic field carrying AutoLoad, create a resolve method that uses the
         corresponding relationship's loader via LoaderDepend.
         """
         auto_loader_fields = list(_get_pydantic_field_items_with_load_by(kls))
@@ -436,15 +436,15 @@ class ErLoaderPreGenerator:
 
 def _get_pydantic_field_items_with_load_by(kls) -> Iterator[tuple[str, type]]:
     """
-    Find fields which have LoadBy metadata.
+    Find fields which have AutoLoad metadata.
 
     example:
 
     class A(Base):
-        posts: Annotated[List[PostEntity], LoadBy()] = []
+        posts: Annotated[List[PostEntity], AutoLoad()] = []
         extra: str = ''
 
-    return ('posts', LoadBy())
+    return ('posts', AutoLoad())
     """
     items = kls.model_fields.items()
 
@@ -453,25 +453,3 @@ def _get_pydantic_field_items_with_load_by(kls) -> Iterator[tuple[str, type]]:
         for meta in metadata:
             if isinstance(meta, LoaderInfo):
                 yield name, v.annotation
-
-
-def get_global_er_diagram() -> ErDiagram:
-    """
-    Get the globally configured ER diagram from Resolver class.
-
-    Returns:
-        ErDiagram: The globally configured ER diagram
-
-    Raises:
-        ValueError: If no global ER diagram is configured
-    """
-    from pydantic_resolve.resolver import Resolver
-
-    er_diagram = getattr(Resolver, const.ER_DIAGRAM, None)
-    if er_diagram is None:
-        raise ValueError(
-            "No global ER diagram configured. "
-            "Use config_global_resolver(er_diagram=...) to configure a global ER diagram."
-        )
-    return er_diagram
-

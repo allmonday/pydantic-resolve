@@ -347,12 +347,12 @@ diagram = BaseEntity.get_diagram()
 - 模块路径语法：`'app.models.user:User'`（从任何模块懒加载）
 - 列表泛型：`list['User']` 或 `list['app.models.user:User']`
 
-#### LoadBy
+#### AutoLoad
 
 基于 ERD 关系自动解析字段的注解。
 
 ```python
-from pydantic_resolve import LoadBy, base_entity, config_global_resolver
+from pydantic_resolve import AutoLoad, base_entity, config_global_resolver
 
 # 1. 使用 BaseEntity 定义实体
 BaseEntity = base_entity()
@@ -367,13 +367,13 @@ class User(BaseModel, BaseEntity):
 # 2. 全局注册 ERD
 config_global_resolver(BaseEntity.get_diagram())
 
-# 3. 在响应模型中使用 LoadBy
+# 3. 在响应模型中使用 AutoLoad
 class UserResponse(BaseModel):
     id: int
     name: str
 
     # 通过 ERD 关系自动解析
-    organization: Annotated[Optional[Organization], LoadBy('org_id')] = None
+    organization: Annotated[Optional[Organization], AutoLoad('org_id')] = None
 ```
 
 **参数：**
@@ -381,7 +381,7 @@ class UserResponse(BaseModel):
 - `key` (str): 外键字段名
 - `field_name` (str | None): Relationship 的字段标识符（当同一字段有多个关系时使用）
 
-**注意：** `LoadBy` 需要与 `config_global_resolver()` 配合，将 ERD 注入到默认 Resolver。
+**注意：** `AutoLoad` 需要与 `config_global_resolver()` 配合，将 ERD 注入到默认 Resolver。
 
 #### config_resolver()
 
@@ -456,8 +456,8 @@ class CommentResponse(BaseModel):
     id: int
 
     # 通过 'field_name' 参数指定使用哪个关系
-    author: Annotated[Optional[User], LoadBy('user_id', field_name='author')] = None
-    moderator: Annotated[Optional[User], LoadBy('user_id', field_name='moderator')] = None
+    author: Annotated[Optional[User], AutoLoad('user_id', field_name='author')] = None
+    moderator: Annotated[Optional[User], AutoLoad('user_id', field_name='moderator')] = None
 ```
 
 
@@ -552,12 +552,12 @@ class Blog(BaseModel):
 你可以组合多个注解：
 
 ```python
-from pydantic_resolve import ExposeAs, SendTo, LoadBy
+from pydantic_resolve import ExposeAs, SendTo, AutoLoad
 
 class Comment(BaseModel):
     owner: Annotated[
         Optional[User],
-        LoadBy('user_id'),      # 通过 ERD 自动解析
+        AutoLoad('user_id'),      # 通过 ERD 自动解析
         SendTo('related_users') # 发送到父节点的收集器
     ] = None
 
@@ -1110,4 +1110,4 @@ MCP 服务器为 AI 代理实现了渐进式披露机制：
 - `LoaderFieldNotProvidedError`: Resolve 中没有提供 Loader 所需的参数
 - `GlobalLoaderFieldOverlappedError`: `global_loader_params` 和 `loader_params` 参数出现重复
 - `MissingCollector`: 找不到目标 collector, 祖先节点方法中未定义
-- `MissingAnnotationError`: 使用 `LoadBy` 或其他需要类型信息的注解时缺少类型注解
+- `MissingAnnotationError`: 使用 `AutoLoad` 或其他需要类型信息的注解时缺少类型注解

@@ -2,7 +2,7 @@ import pytest
 from typing import Optional, Annotated, List
 from pydantic import BaseModel
 from pydantic_resolve.utils.resolver_configurator import config_global_resolver
-from pydantic_resolve import Entity, Relationship, LoadBy, DefineSubset, ErDiagram, Resolver
+from pydantic_resolve import Entity, Relationship, AutoLoad, DefineSubset, ErDiagram, Resolver
 from aiodataloader import DataLoader
 
 
@@ -93,10 +93,10 @@ def setup_global_resolver():
 class BizCase1(DefineSubset):
     __pydantic_resolve_subset__ = (Biz, ('id', 'name', 'user_id'))
 
-    user: Annotated[Optional[User], LoadBy()] = None
-    foos: Annotated[List[Foo], LoadBy()] = []
-    bars: Annotated[List[Bar], LoadBy()] = []
-    special_bars: Annotated[list[Bar], LoadBy()] = []
+    user: Annotated[Optional[User], AutoLoad()] = None
+    foos: Annotated[List[Foo], AutoLoad()] = []
+    bars: Annotated[List[Bar], AutoLoad()] = []
+    special_bars: Annotated[list[Bar], AutoLoad()] = []
     
 
 @pytest.mark.asyncio

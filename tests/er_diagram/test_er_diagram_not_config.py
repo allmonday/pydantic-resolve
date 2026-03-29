@@ -2,7 +2,7 @@ import pytest
 from typing import Optional, Annotated
 from pydantic import BaseModel
 from pydantic_resolve import config_resolver
-from pydantic_resolve import LoadBy
+from pydantic_resolve import AutoLoad
 from aiodataloader import DataLoader
 
 
@@ -27,7 +27,7 @@ class UserLoader(DataLoader):
 
 
 class BizCase1(Biz):
-    user: Annotated[Optional[User], LoadBy()] = None
+    user: Annotated[Optional[User], AutoLoad()] = None
     
 @pytest.mark.asyncio
 async def test_resolver_factory_with_er_configs_inherit():

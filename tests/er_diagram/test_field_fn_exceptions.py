@@ -12,7 +12,7 @@ from pydantic_resolve import (
     config_resolver,
     Entity,
     Relationship,
-    LoadBy,
+    AutoLoad,
     ErDiagram
 )
 from aiodataloader import DataLoader
@@ -77,7 +77,7 @@ async def test_field_fn_raises_value_error():
 
     # OrderResponse must inherit from Order to be compatible with the Entity config
     class OrderResponse(Order):
-        user: Annotated[Optional[User], LoadBy()] = None
+        user: Annotated[Optional[User], AutoLoad()] = None
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -110,7 +110,7 @@ async def test_field_fn_with_none_value():
     )
 
     class OrderResponse(Order):
-        user: Annotated[Optional[User], LoadBy()] = None
+        user: Annotated[Optional[User], AutoLoad()] = None
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -145,7 +145,7 @@ async def test_field_fn_returns_none():
     )
 
     class OrderResponse(Order):
-        user: Annotated[Optional[User], LoadBy()] = None
+        user: Annotated[Optional[User], AutoLoad()] = None
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -177,7 +177,7 @@ async def test_field_fn_returns_incompatible_type():
     )
 
     class OrderResponse(Order):
-        user: Annotated[Optional[User], LoadBy()] = None
+        user: Annotated[Optional[User], AutoLoad()] = None
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -208,7 +208,7 @@ async def test_load_many_fn_with_none_field_value():
     )
 
     class OrderResponse(Order):
-        users: Annotated[List[User], LoadBy()] = []
+        users: Annotated[List[User], AutoLoad()] = []
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -242,7 +242,7 @@ async def test_load_many_fn_returns_none():
     )
 
     class OrderResponse(Order):
-        users: Annotated[List[User], LoadBy()] = []
+        users: Annotated[List[User], AutoLoad()] = []
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -274,7 +274,7 @@ async def test_load_many_fn_returns_non_iterable():
     )
 
     class OrderResponse(Order):
-        users: Annotated[List[User], LoadBy()] = []
+        users: Annotated[List[User], AutoLoad()] = []
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -305,7 +305,7 @@ async def test_field_fn_with_valid_transformation():
     )
 
     class OrderResponse(Order):
-        user: Annotated[Optional[User], LoadBy()] = None
+        user: Annotated[Optional[User], AutoLoad()] = None
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -337,7 +337,7 @@ async def test_load_many_fn_with_valid_transformation():
     )
 
     class OrderResponse(Order):
-        users: Annotated[List[User], LoadBy()] = []
+        users: Annotated[List[User], AutoLoad()] = []
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 

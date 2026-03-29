@@ -250,9 +250,9 @@ class SubsetMeta(type):
             **create_model_kwargs
         )
 
-        # Apply excluded_fields to auto-generated LoadBy fields after create_model,
+        # Apply excluded_fields to auto-generated AutoLoad fields after create_model,
         # since create_model does not preserve exclude=True when processing
-        # Annotated[..., LoadBy()] annotations.
+        # Annotated[..., AutoLoad()] annotations.
         if isinstance(subset_info, SubsetConfig) and subset_info.excluded_fields:
             for fname in subset_info.excluded_fields:
                 if fname in subset_class.model_fields:

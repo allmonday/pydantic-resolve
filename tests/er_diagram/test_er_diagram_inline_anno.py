@@ -2,7 +2,7 @@ import pytest
 from typing import Optional, Annotated, List
 from pydantic import BaseModel
 from pydantic_resolve import config_resolver
-from pydantic_resolve import Relationship, LoadBy, DefineSubset, ensure_subset, base_entity
+from pydantic_resolve import Relationship, AutoLoad, DefineSubset, ensure_subset, base_entity
 from aiodataloader import DataLoader
 
 
@@ -109,13 +109,13 @@ class User(BaseModel):
 
 
 class BizCase1(Biz):
-    user: Annotated[Optional[User], LoadBy()] = None
-    foos: Annotated[List[Foo], LoadBy()] = []
-    foos_in_str: Annotated[List[str], LoadBy()] = []
-    bars: Annotated[List[Bar], LoadBy()] = []
-    special_bars: Annotated[list[Bar], LoadBy()] = []
-    users_a: Annotated[list[User], LoadBy()] = []
-    users_b: Annotated[list[User], LoadBy()] = []
+    user: Annotated[Optional[User], AutoLoad()] = None
+    foos: Annotated[List[Foo], AutoLoad()] = []
+    foos_in_str: Annotated[List[str], AutoLoad()] = []
+    bars: Annotated[List[Bar], AutoLoad()] = []
+    special_bars: Annotated[list[Bar], AutoLoad()] = []
+    users_a: Annotated[list[User], AutoLoad()] = []
+    users_b: Annotated[list[User], AutoLoad()] = []
     
 
 @pytest.mark.asyncio
@@ -142,7 +142,7 @@ class SubUser(DefineSubset):
     __pydantic_resolve_subset__ = (User, ['id'])
 
 class BizCase2(Biz):
-    user: Annotated[Optional[SubUser], LoadBy()] = None
+    user: Annotated[Optional[SubUser], AutoLoad()] = None
 
 @pytest.mark.asyncio
 async def test_resolver_factory_with_er_configs_inherit_2():
@@ -155,7 +155,7 @@ async def test_resolver_factory_with_er_configs_inherit_2():
 class BizCase3(DefineSubset):
     __pydantic_resolve_subset__ = (Biz, ['id', 'user_id'])
 
-    user: Annotated[Optional[User], LoadBy()] = None
+    user: Annotated[Optional[User], AutoLoad()] = None
 
 
 @pytest.mark.asyncio
@@ -170,8 +170,8 @@ class BizCase5(BaseModel):
     id: int
     user_id: int
 
-    user: Annotated[Optional[User], LoadBy()] = None
-    # foos_in_str_x: Annotated[List[str], LoadBy()] = []
+    user: Annotated[Optional[User], AutoLoad()] = None
+    # foos_in_str_x: Annotated[List[str], AutoLoad()] = []
 
 
 @pytest.mark.asyncio
@@ -201,7 +201,7 @@ def test_validate_unique_field_name_in_relationships():
 
 
 def test_field_name_matches_loadby_field():
-    """Test that LoadBy field names match the field_name in Relationship definitions."""
+    """Test that AutoLoad field names match the field_name in Relationship definitions."""
     diagram = BASE_ENTITY.get_diagram()
 
     # Get the Biz entity config
@@ -214,6 +214,6 @@ def test_field_name_matches_loadby_field():
     expected_fields = {'user', 'users_a', 'users_b', 'foos', 'foos_in_str', 'bars', 'special_bars'}
 
     assert relationship_field_names == expected_fields, (
-        f"Field names in relationships don't match LoadBy annotations. "
+        f"Field names in relationships don't match AutoLoad annotations. "
         f"Expected: {expected_fields}, Got: {relationship_field_names}"
     )

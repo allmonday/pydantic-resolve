@@ -61,8 +61,8 @@
 
 ### v3.1.1 (2026-3-18)
 - feat:
-    - **Auto-add missing LoadBy FK fields in DefineSubset**: When using `LoadBy` annotation in `DefineSubset`, the referenced FK field (e.g., `user_id` in `LoadBy('user_id')`) is now automatically added with `exclude=True` if not explicitly defined in the subset
-    - **Early validation for invalid FK references**: If `LoadBy` references a field that doesn't exist in the parent class, a `ValueError` is raised at class definition time instead of during `resolve()`
+    - **Auto-add missing AutoLoad FK fields in DefineSubset**: When using `AutoLoad` annotation in `DefineSubset`, the referenced FK field (e.g., `user_id` in `AutoLoad('user_id')`) is now automatically added with `exclude=True` if not explicitly defined in the subset
+    - **Early validation for invalid FK references**: If `AutoLoad` references a field that doesn't exist in the parent class, a `ValueError` is raised at class definition time instead of during `resolve()`
 
 ### v3.1.0 (2026-3-16)
 - feature:
@@ -105,7 +105,7 @@
 ### v3.0.3 (2026-3-1)
 - refactor:
   - `GraphQLHandler` now creates diagram-specific resolver internally using `config_resolver`, removing `resolver_class` parameter
-  - ensures `LoadBy` annotations work without requiring `config_global_resolver()` to be called
+  - ensures `AutoLoad` annotations work without requiring `config_global_resolver()` to be called
   - convert all relative imports to absolute imports in `pydantic_resolve/` directory
 
 ### v3.0.2 (2026-3-1)
@@ -333,7 +333,7 @@ Only use this in inline mode.
 
 ### v2.2.2 (2025.12.5)
 
-feat: add origin_kls in LoadBy to avoid blurring during matching loader
+feat: add origin_kls in AutoLoad to avoid blurring during matching loader
 
 ### v2.2.1 (2025.12.5)
 
@@ -387,8 +387,8 @@ MyResolver = config_resolver('MyResolver', er_diagram=BaseEntity.get_diagram())
 
 ### v2.0.0a2 (2025.11.17)
 - fix:
-    - raise ValueError if er_diagram are not provided when LoadBy are used in somewhere
-    - relationship.loader is optional, but required if used in LoadBy 
+    - raise ValueError if er_diagram are not provided when AutoLoad are used in somewhere
+    - relationship.loader is optional, but required if used in AutoLoad 
 
 ### v2.0.0a1 (2025.11.16)
 - features:

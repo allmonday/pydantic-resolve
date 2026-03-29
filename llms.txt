@@ -272,7 +272,7 @@ resolved = await Resolver().resolve(tree)
 # resolved.children[0].children[0].depth = 2
 ```
 
-## ErDiagram with LoadBy for Automatic Loader Inference
+## ErDiagram with AutoLoad for Automatic Loader Inference
 
 Declare entity relationships once, use everywhere
 
@@ -281,7 +281,7 @@ from typing import Annotated
 from pydantic import BaseModel
 from pydantic_resolve import (
     Resolver, Entity, Relationship, ErDiagram,
-    LoadBy, config_global_resolver
+    AutoLoad, config_global_resolver
 )
 
 # Define base entities
@@ -318,10 +318,10 @@ diagram = ErDiagram(configs=[
 # Apply diagram globally
 config_global_resolver(diagram)
 
-# Use LoadBy annotation - loaders auto-inferred from diagram
+# Use AutoLoad annotation - loaders auto-inferred from diagram
 class StoryDetail(Story):
-    tasks: Annotated[list[Task], LoadBy('id')] = []
-    owner: Annotated[User, LoadBy('owner_id')] = None
+    tasks: Annotated[list[Task], AutoLoad('id')] = []
+    owner: Annotated[User, AutoLoad('owner_id')] = None
 
 stories = [StoryDetail(id=1, owner_id=10)]
 resolved = await Resolver().resolve(stories)
@@ -448,7 +448,7 @@ Dynamically create subsets of base models
 
 ```python
 from pydantic import BaseModel
-from pydantic_resolve import DefineSubset, LoadBy
+from pydantic_resolve import DefineSubset, AutoLoad
 from typing import Annotated
 
 class FullStory(BaseModel):
@@ -464,7 +464,7 @@ class FullStory(BaseModel):
 class StoryListItem(DefineSubset):
     __pydantic_resolve_subset__ = (FullStory, ('id', 'name', 'owner_id'))
 
-    owner: Annotated[User, LoadBy('owner_id')] = None
+    owner: Annotated[User, AutoLoad('owner_id')] = None
 
 class StoryDetail(DefineSubset):
     __pydantic_resolve_subset__ = (
@@ -472,8 +472,8 @@ class StoryDetail(DefineSubset):
         ('id', 'name', 'description', 'owner_id', 'sprint_id')
     )
 
-    owner: Annotated[User, LoadBy('owner_id')] = None
-    tasks: Annotated[list[Task], LoadBy('id')] = []
+    owner: Annotated[User, AutoLoad('owner_id')] = None
+    tasks: Annotated[list[Task], AutoLoad('id')] = []
 
 # Use different views for different endpoints
 stories = await fetch_stories()
@@ -531,7 +531,7 @@ Complete FastAPI endpoint with pydantic-resolve
 from fastapi import FastAPI, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
-from pydantic_resolve import Resolver, Loader, LoadBy
+from pydantic_resolve import Resolver, Loader, AutoLoad
 from typing import Annotated
 
 app = FastAPI()
@@ -539,12 +539,12 @@ app = FastAPI()
 class TaskDetail(BaseModel):
     id: int
     name: str
-    assignee: Annotated[User | None, LoadBy('assignee_id')] = None
+    assignee: Annotated[User | None, AutoLoad('assignee_id')] = None
 
 class StoryResponse(BaseModel):
     id: int
     name: str
-    tasks: Annotated[list[TaskDetail], LoadBy('id')] = []
+    tasks: Annotated[list[TaskDetail], AutoLoad('id')] = []
 
     total_estimate: int = 0
     def post_total_estimate(self):

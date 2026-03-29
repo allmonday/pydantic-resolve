@@ -138,11 +138,11 @@ class Sample1TeamDetail(tms.Team):
 
 ```python
 # new
-from pydantic_resolve import LoadBy
+from pydantic_resolve import AutoLoad
 
 class Sample1TeamDetail(tms.Team):
-    sprints: Annotated[list[Sample1SprintDetail], LoadBy('id')] = []
-    members: Annotated[list[us.User], LoadBy('id')] = []
+    sprints: Annotated[list[Sample1SprintDetail], AutoLoad('id')] = []
+    members: Annotated[list[us.User], AutoLoad('id')] = []
 ```
 
 它会根据继承源头， loadby 参数， 以及返回值类型， 来确定唯一的 Relationship 以及其 loder 定义。
@@ -157,19 +157,19 @@ from pydantic_resolve import DefineSubset
 class MyStory(DefineSubset):
     __subset__ = (Story, ('id'))
 
-    tasks: Annotated[list[Task], LoadBy('id')] = []
+    tasks: Annotated[list[Task], AutoLoad('id')] = []
 
 ```
 
 通过这样的方式， MyStory 是一个只挑选了 Story id 字段的类。 在类的内部， 会有私有属性追踪 MyStory 的源头类型。
 
-因此 MyStory 中申明的 LoadBy， 也会向上最终追溯到 Story， 然后找到 Story 下相关的 Relationship。
+因此 MyStory 中申明的 AutoLoad， 也会向上最终追溯到 Story， 然后找到 Story 下相关的 Relationship。
 
 而使用全集则只需要简单继承即可
 
 ```python
 class MyStory(Story):
-    tasks: Annotated[list[Task], LoadBy('id')] = []
+    tasks: Annotated[list[Task], AutoLoad('id')] = []
 ```
 
 
@@ -273,7 +273,7 @@ config_global_resolver(diagram)  # 重要： 将 ER diagram 信息注入到 Reso
 
 顺带一提 dataloader 是默认的一种实现方式， 内部的实现可以是 RPC 调用， 本地文件查询， 抑或 DB 查询， 对调用者都是无需感知的。
 
-另外如果使用 ORM relationship 的话， 可以将 Relationship 中的 loader 配置移除， 并且删除 LoadBy （或者 resolve 方法）， 使用 ORM 获取到的组合数据来替换。
+另外如果使用 ORM relationship 的话， 可以将 Relationship 中的 loader 配置移除， 并且删除 AutoLoad （或者 resolve 方法）， 使用 ORM 获取到的组合数据来替换。
 
 
 
@@ -303,11 +303,11 @@ class Story(BaseStory):
 
 ```python
 class Task(BaseTask):
-    user: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+    user: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
 
 class Story(BaseStory):
-    tasks: Annotated[list[Task], LoadBy('id')] = []
-    assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None        
+    tasks: Annotated[list[Task], AutoLoad('id')] = []
+    assignee: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None        
 ```
 
 元类 `DefineSubset` 可以用来快速创建子集类型， 仅需提供需要的字段列表。
@@ -317,8 +317,8 @@ class Story1(DefineSubset):
     # define the base class and fields wanted
     __subset__ = (BaseStory, ('id', 'name', 'owner_id'))
 
-    tasks: Annotated[list[Task1], LoadBy('id')] = []
-    assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+    tasks: Annotated[list[Task1], AutoLoad('id')] = []
+    assignee: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
 ```
 
 
@@ -358,7 +358,7 @@ class Story1(DefineSubset):
 
 # post case 1
 class Task3(BaseTask):
-    user: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+    user: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
 
     fullname: str = ''
     def post_fullname(self, ancestor_context):  # Access story.name from parent context
@@ -368,8 +368,8 @@ class Story3(DefineSubset):
     __subset__ = (BaseStory, ('id', 'name', 'owner_id'))
     __pydantic_resolve_expose__ = {'name': 'story_name'}
 
-    tasks: Annotated[list[Task3], LoadBy('id')] = []
-    assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+    tasks: Annotated[list[Task3], AutoLoad('id')] = []
+    assignee: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
 ```
 
 
@@ -383,13 +383,13 @@ class Story3(DefineSubset):
 
 ```python
 class Task2(BaseTask):
-    user: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+    user: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
 
 class Story2(DefineSubset):
     __subset__ = (BaseStory, ('id', 'name', 'owner_id'))
 
-    tasks: Annotated[list[Task2], LoadBy('id')] = []
-    assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+    tasks: Annotated[list[Task2], AutoLoad('id')] = []
+    assignee: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
 
     total_estimate: int = 0
     def post_total_estimate(self):
@@ -428,13 +428,13 @@ Pydantic resolve 提供的默认 `Collector` 会把数据收集到列表中， �
 class Task1(BaseTask):
     __pydantic_resolve_collect__ = {'user': 'related_users'}  # Propagate user to collector: 'related_users'
 
-    user: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+    user: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
 
 class Story1(DefineSubset):
     __subset__ = (BaseStory, ('id', 'name', 'owner_id'))
 
-    tasks: Annotated[list[Task1], LoadBy('id')] = []
-    assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+    tasks: Annotated[list[Task1], AutoLoad('id')] = []
+    assignee: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
 
     related_users: list[BaseUser] = []
     def post_related_users(self, collector=Collector(alias='related_users')):

@@ -10,7 +10,7 @@ from pydantic.functional_serializers import PlainSerializer
 from functools import lru_cache
 
 from pydantic_resolve.constant import ENSURE_SUBSET_REFERENCE, ER_DIAGRAM_PRE_GENERATOR
-from pydantic_resolve.utils.er_diagram import ErDiagram, Relationship, LoadBy
+from pydantic_resolve.utils.er_diagram import ErDiagram, Relationship, AutoLoad
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.types import get_core_types
 from pydantic_resolve.graphql.types import FieldSelection
@@ -50,7 +50,7 @@ class ResponseBuilder:
     ├── [FK & Relationships]
     │   ├── _add_fk_fields()                # Add foreign key fields
     │   ├── _add_relationship_fields()      # Add relationship fields from ERD
-    │   ├── _build_relationship_field()     # Build field with LoadBy annotation
+    │   ├── _build_relationship_field()     # Build field with AutoLoad annotation
     │   └── _extract_entity_type()          # Extract entity from list[Entity]
     │
     ├── [Utilities]
@@ -124,7 +124,7 @@ class ResponseBuilder:
             1. UserEntity → UserResponse (id, name, posts)
             2. posts field triggers recursive call
             3. PostEntity → PostResponse (title)
-            4. Inject LoadBy annotation for relationship resolution
+            4. Inject AutoLoad annotation for relationship resolution
 
         Output (dynamic models):
             class PostResponse(BaseModel):
@@ -133,7 +133,7 @@ class ResponseBuilder:
             class UserResponse(BaseModel):
                 id: int
                 name: str
-                posts: Annotated[List[PostResponse], LoadBy()] = []
+                posts: Annotated[List[PostResponse], AutoLoad()] = []
 
         Key Implementation Details:
         ─────────────────────────────────────────────────────────────────
@@ -146,7 +146,7 @@ class ResponseBuilder:
         2. ENSURE_SUBSET_REFERENCE:
            - Dynamic model sets __pydantic_resolve_subset__ = original entity
            - Allows ErLoaderPreGenerator.prepare() to find entity config
-           - Required for LoadBy annotation to resolve correct loader
+           - Required for AutoLoad annotation to resolve correct loader
         ─────────────────────────────────────────────────────────────────
         """
         return self._build_cached(entity, field_selection, parent_path)
@@ -189,7 +189,7 @@ class ResponseBuilder:
                 if field_def:
                     field_definitions[field_name] = field_def
 
-        # Step 2: Auto-include foreign key fields (for LoadBy)
+        # Step 2: Auto-include foreign key fields (for AutoLoad)
         if is_registered:
             self._add_fk_fields(entity, field_selection, type_hints, field_definitions)
 
@@ -378,7 +378,7 @@ class ResponseBuilder:
         Example:
         ─────────────────────────────────────────────────────────────────
         Scenario: UserEntity has Relationship(field='id', target_kls=PostEntity, field_name='posts')
-                  Query selects 'posts' field which needs 'id' for LoadBy
+                  Query selects 'posts' field which needs 'id' for AutoLoad
 
         Before:
             field_definitions = {'name': (str, ...)}
@@ -386,7 +386,7 @@ class ResponseBuilder:
         After:
             field_definitions = {'name': (str, ...), 'id': (int, ...)}
 
-        Why: LoadBy() needs the FK field to fetch related posts
+        Why: AutoLoad() needs the FK field to fetch related posts
         ─────────────────────────────────────────────────────────────────
         """
         selected_fields = set(field_selection.sub_fields.keys()) if field_selection.sub_fields else set()
@@ -416,11 +416,11 @@ class ResponseBuilder:
         Process:
             1. 'posts' not in field_definitions (not a direct field)
             2. _find_relationship('posts') finds the Relationship
-            3. _build_relationship_field() creates LoadBy annotation
+            3. _build_relationship_field() creates AutoLoad annotation
 
         Result:
             field_definitions['posts'] = (
-                Annotated[List[PostResponse], LoadBy()],
+                Annotated[List[PostResponse], AutoLoad()],
                 []
             )
         ─────────────────────────────────────────────────────────────────
@@ -462,10 +462,10 @@ class ResponseBuilder:
         Process:
             1. Extract PostEntity from list[PostEntity]
             2. Recursively build PostResponse model
-            3. Wrap with Annotated[..., LoadBy()]
+            3. Wrap with Annotated[..., AutoLoad()]
 
         Output:
-            (Annotated[List[PostResponse], LoadBy()], [])
+            (Annotated[List[PostResponse], AutoLoad()], [])
         ─────────────────────────────────────────────────────────────────
         """
         target_kls = relationship.target_kls
@@ -481,12 +481,12 @@ class ResponseBuilder:
             actual_entity, selection, parent_path
         )
 
-        # Build annotated type with LoadBy
+        # Build annotated type with AutoLoad
         if origin is list:
-            base_type = Annotated[List[nested_model], LoadBy()]
+            base_type = Annotated[List[nested_model], AutoLoad()]
             default = []
         else:
-            base_type = Annotated[Optional[nested_model], LoadBy()]
+            base_type = Annotated[Optional[nested_model], AutoLoad()]
             default = None
 
         return self._apply_alias((base_type, default), selection.alias)
@@ -552,7 +552,7 @@ class ResponseBuilder:
             field_definitions = {
                 'id': (int, ...),
                 'name': (str, ...),
-                'posts': (Annotated[List[PostResponse], LoadBy()], [])
+                'posts': (Annotated[List[PostResponse], AutoLoad()], [])
             }
 
         Process:
@@ -565,7 +565,7 @@ class ResponseBuilder:
             class UserEntityResponse_123456789(BaseModel):
                 id: int
                 name: str
-                posts: Annotated[List[PostResponse], LoadBy()] = []
+                posts: Annotated[List[PostResponse], AutoLoad()] = []
                 __pydantic_resolve_subset__ = UserEntity
         ─────────────────────────────────────────────────────────────────
         """
@@ -630,7 +630,7 @@ class ResponseBuilder:
 
     def _get_required_fk_fields(self, entity: type, selected_fields: Set[str]) -> Set[str]:
         """
-        Determine foreign key fields required by LoadBy (with caching)
+        Determine foreign key fields required by AutoLoad (with caching)
 
         Args:
             entity: Entity class
@@ -650,7 +650,7 @@ class ResponseBuilder:
         Process:
             1. Look up relationships for 'posts' field
             2. Find Relationship with field_name='posts'
-            3. Extract field='id' (the FK needed for LoadBy)
+            3. Extract field='id' (the FK needed for AutoLoad)
 
         Output: {'id'}
         ─────────────────────────────────────────────────────────────────
@@ -660,7 +660,7 @@ class ResponseBuilder:
     @lru_cache(maxsize=128)
     def _get_required_fk_fields_cached(self, entity: type, selected_fields: frozenset) -> Set[str]:
         """
-        Determine foreign key fields required by LoadBy (cached version)
+        Determine foreign key fields required by AutoLoad (cached version)
 
         Args:
             entity: Entity class

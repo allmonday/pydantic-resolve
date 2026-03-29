@@ -381,12 +381,12 @@ The `_resolve_ref` function supports:
 - Module path syntax: `'app.models.user:User'` (lazy import from any module)
 - List generics: `list['User']` or `list['app.models.user:User']`
 
-#### LoadBy
+#### AutoLoad
 
 1. Annotation to automatically resolve fields based on ERD relationships.
 
 ```python
-from pydantic_resolve import LoadBy, base_entity, config_global_resolver
+from pydantic_resolve import AutoLoad, base_entity, config_global_resolver
 
 # 1. Define entities with BaseEntity
 BaseEntity = base_entity()
@@ -405,7 +405,7 @@ class User(BaseModel, BaseEntity):
 config_global_resolver(BaseEntity.get_diagram())
 ```
 
-3. Use LoadBy in response models
+3. Use AutoLoad in response models
 
 ```python
 class UserResponse(BaseModel):
@@ -413,14 +413,14 @@ class UserResponse(BaseModel):
     name: str
 
     # Automatically resolves via ERD relationship
-    organization: Annotated[Optional[Organization], LoadBy('org_id')] = None
+    organization: Annotated[Optional[Organization], AutoLoad('org_id')] = None
 ```
 
 **Parameters:**
 
 - `key` (str): The foreign key field name
 
-**Note:** `LoadBy` works with `config_global_resolver()` to inject the ERD into the default Resolver.
+**Note:** `AutoLoad` works with `config_global_resolver()` to inject the ERD into the default Resolver.
 
 #### config_resolver()
 
@@ -507,8 +507,8 @@ class Comment(BaseModel, BaseEntity):
 
 class CommentResponse(BaseModel):
     id: int
-    author: Annotated[Optional[User], LoadBy('user_id')] = None
-    moderator: Annotated[Optional[User], LoadBy('user_id')] = None
+    author: Annotated[Optional[User], AutoLoad('user_id')] = None
+    moderator: Annotated[Optional[User], AutoLoad('user_id')] = None
 ```
 
 #### config_global_resolver()
@@ -619,12 +619,12 @@ class Blog(BaseModel):
 You can combine multiple annotations:
 
 ```python
-from pydantic_resolve import ExposeAs, SendTo, LoadBy
+from pydantic_resolve import ExposeAs, SendTo, AutoLoad
 
 class Comment(BaseModel):
     owner: Annotated[
         Optional[User],
-        LoadBy('user_id'),      # Auto-resolve via ERD
+        AutoLoad('user_id'),      # Auto-resolve via ERD
         SendTo('related_users') # Send to parent's collector
     ] = None
 
@@ -1178,4 +1178,4 @@ This allows AI agents to incrementally explore and interact with the GraphQL API
 - `LoaderFieldNotProvidedError`: required Loader parameters are not provided in `resolve`
 - `GlobalLoaderFieldOverlappedError`: duplicated params between `global_loader_params` and `loader_params`
 - `MissingCollector`: the collector cannot be found; not defined on ancestor nodes
-- `MissingAnnotationError`: type annotation is missing when using `LoadBy` or other annotations that require type information
+- `MissingAnnotationError`: type annotation is missing when using `AutoLoad` or other annotations that require type information

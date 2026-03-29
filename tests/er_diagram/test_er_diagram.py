@@ -6,7 +6,7 @@ from pydantic_resolve import (
     config_resolver,
     Entity,
     Relationship,
-    LoadBy,
+    AutoLoad,
     DefineSubset,
     ErDiagram,
     ensure_subset,
@@ -117,7 +117,7 @@ diagram = ErDiagram(
 )
 
 class BizCase0(Biz):
-    user: Annotated[Optional[User], LoadBy()] = None
+    user: Annotated[Optional[User], AutoLoad()] = None
     def resolve_user(self, loader=Loader(UserLoader)):
         return loader.load(self.user_id)
 
@@ -131,15 +131,15 @@ async def test_resolver_factory_warning(caplog):
     assert any('resolve_user already exists' in record.message for record in caplog.records)
 
 class BizCase1(Biz):
-    user: Annotated[Optional[User], LoadBy()] = None
-    user_2: Annotated[Optional[User], LoadBy()] = None
-    # user_3: Annotated[User | None, LoadBy()] = None  # Removed - no corresponding relationship
-    # foos: Annotated[List[Foo], LoadBy()] = []  # MultipleRelationship removed
-    # foos_in_str: Annotated[List[str], LoadBy()] = []  # MultipleRelationship removed
-    # bars: Annotated[List[Bar], LoadBy()] = []  # MultipleRelationship removed
-    # special_bars: Annotated[list[Bar], LoadBy()] = []  # MultipleRelationship removed
-    users_a: Annotated[list[User], LoadBy()] = []
-    users_b: Annotated[list[User], LoadBy()] = []
+    user: Annotated[Optional[User], AutoLoad()] = None
+    user_2: Annotated[Optional[User], AutoLoad()] = None
+    # user_3: Annotated[User | None, AutoLoad()] = None  # Removed - no corresponding relationship
+    # foos: Annotated[List[Foo], AutoLoad()] = []  # MultipleRelationship removed
+    # foos_in_str: Annotated[List[str], AutoLoad()] = []  # MultipleRelationship removed
+    # bars: Annotated[List[Bar], AutoLoad()] = []  # MultipleRelationship removed
+    # special_bars: Annotated[list[Bar], AutoLoad()] = []  # MultipleRelationship removed
+    users_a: Annotated[list[User], AutoLoad()] = []
+    users_b: Annotated[list[User], AutoLoad()] = []
     
 
 @pytest.mark.asyncio
@@ -170,7 +170,7 @@ class SubUser(DefineSubset):
     __pydantic_resolve_subset__ = (User, ['id'])
 
 class BizCase2(Biz):
-    user: Annotated[Optional[SubUser], LoadBy()] = None
+    user: Annotated[Optional[SubUser], AutoLoad()] = None
 
 @pytest.mark.asyncio
 async def test_resolver_factory_with_er_configs_inherit_2():
@@ -183,7 +183,7 @@ async def test_resolver_factory_with_er_configs_inherit_2():
 class BizCase3(DefineSubset):
     __pydantic_resolve_subset__ = (Biz, ['id', 'user_id'])
 
-    user: Annotated[Optional[User], LoadBy()] = None
+    user: Annotated[Optional[User], AutoLoad()] = None
 
 
 @pytest.mark.asyncio
@@ -198,8 +198,8 @@ class BizCase5(BaseModel):
     id: int
     user_id: int
 
-    user: Annotated[Optional[User], LoadBy()] = None
-    # foos_in_str_x: Annotated[List[str], LoadBy('id', biz='foo_name')] = []
+    user: Annotated[Optional[User], AutoLoad()] = None
+    # foos_in_str_x: Annotated[List[str], AutoLoad('id', biz='foo_name')] = []
 
 
 @pytest.mark.asyncio
@@ -213,14 +213,14 @@ async def test_resolver_factory_with_permitive_annotation():
 
 @pytest.mark.asyncio
 async def test_loadby_references_nonexistent_field():
-    """Test that LoadBy referencing a non-existent field raises ValueError when resolver is used."""
-    # With the new LoadBy() API, validation is deferred until resolver time
+    """Test that AutoLoad referencing a non-existent field raises ValueError when resolver is used."""
+    # With the new AutoLoad() API, validation is deferred until resolver time
     # when there's no global ER diagram configured at class definition time.
     class BizCase6(DefineSubset):
         __pydantic_resolve_subset__ = (Biz, ['id', 'user_id'])
 
         # This field name 'user_xyz' doesn't match any relationship field_name
-        user_xyz: Annotated[Optional[User], LoadBy()] = None
+        user_xyz: Annotated[Optional[User], AutoLoad()] = None
 
     # Class definition succeeds (validation deferred)
     # But when we try to use it with a resolver, it should fail
