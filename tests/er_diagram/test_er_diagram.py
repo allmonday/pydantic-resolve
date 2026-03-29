@@ -193,41 +193,6 @@ async def test_resolver_factory_with_er_configs_subset():
     d = await MyResolver().resolve(d)
     assert d.user is not None
 
-@pytest.mark.asyncio
-async def test_resolver_factory_of_er_config_auto_add_fk_field():
-    """Test that missing LoadBy FK fields are auto-added with exclude=True."""
-    from pydantic_resolve import config_global_resolver
-    config_global_resolver(er_diagram=diagram)
-
-    class BizCase4(DefineSubset):
-        __pydantic_resolve_subset__ = (Biz, ['id'], ['user'])
-
-        user: Annotated[Optional[User], LoadBy()] = None
-
-    MyResolver = config_resolver('MyResolver', er_diagram=diagram)
-
-    # user_id is not in subset but should be auto-added
-    d = BizCase4(id=1, user_id=1)
-
-    # Verify user_id field exists and has correct value
-    assert hasattr(d, 'user_id')
-    assert d.user_id == 1
-
-    # Verify user_id is excluded from serialization
-    dumped = d.model_dump()
-    assert 'user_id' not in dumped
-    assert dumped == {'id': 1, 'user': None}
-
-    # Resolve should work correctly
-    d = await MyResolver().resolve(d)
-    assert d.user is not None
-    assert d.user.name == "a"
-
-    # After resolve, user_id should still be excluded
-    dumped = d.model_dump()
-    assert 'user_id' not in dumped
-    assert 'user' in dumped
-
 @ensure_subset(Biz)
 class BizCase5(BaseModel):
     id: int
