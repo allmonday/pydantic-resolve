@@ -4,6 +4,28 @@
 - **Minor (x.Y.0)**: New features, backward compatible
 - **Patch (x.y.Z)**: Bug fixes and minor improvements
 
+## v4.0
+
+### v4.0.0a1 (2026-3-29)
+
+**BREAKING CHANGES** — ER Diagram API overhaul, simplified Relationship definition. See [Migration Guide](./migration.md) for details.
+
+- feat:
+  - **`Relationship` parameter renames**: `field` → `fk`, `target_kls` → `target`
+  - **`Relationship.name` replaces `default_field_name`**: each Relationship must declare a unique `name`, used as GraphQL field name and AutoLoad lookup key
+  - **`Relationship.fk_fn` replaces `field_fn`**
+  - **`Relationship.fk_none_default` / `fk_none_default_factory` replace `field_none_default` / `field_none_default_factory`**
+  - **`AutoLoad` replaces `LoadBy`**: AutoLoad no longer requires FK field name; uses `origin` parameter to match by relationship name, defaults to field name
+  - **Remove `MultipleRelationship` and `Link`**: multiple relationships to the same target are now separate `Relationship` entries with independent `name`
+  - **Remove deprecated `Resolver` parameters**: `loader_filters` and `global_loader_filter` (deprecated since v1.9.3) are removed; use `loader_params` and `global_loader_param`
+  - **`_resolve_ref` searches registered entities**: when module attribute lookup fails, falls back to searching registered entity list, resolving same-module class ordering issues
+
+- refactor:
+  - `ResponseBuilder` removes `RelationshipInfo` wrapper, uses `Relationship` directly
+  - `DefineSubset` modifier logic extracted into `_apply_config_modifiers_to_field`
+  - `DefineSubset` applies `exclude=True` after `create_model` for AutoLoad FK fields
+  - SDL / Introspection generators unified on `rel.name` and `rel.target`, all `MultipleRelationship` branches removed
+
 ## v3.3
 
 ### 3.3.0 (2026-3-27)
