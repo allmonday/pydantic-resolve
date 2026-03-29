@@ -387,13 +387,13 @@ class TaskResponse(DefineSubset):
     __subset__ = (TaskEntity, ('id', 'name', 'estimate'))
 
     # 自动解析 owner，无需写 resolve 方法
-    owner: Annotated[Optional[UserSummary], AutoLoad('owner_id')] = None
+    owner: Annotated[Optional[UserSummary], AutoLoad()] = None
 
 # 场景 3：任务详情（包含更多字段）
 class TaskDetailResponse(DefineSubset):
     __subset__ = (TaskEntity, ('id', 'name', 'estimate', 'created_at'))
 
-    owner: Annotated[Optional[UserDetail], AutoLoad('owner_id')] = None
+    owner: Annotated[Optional[UserDetail], AutoLoad()] = None
 ```
 
 ### Step 4: 获取主数据， 自动加载所有子数据
@@ -522,7 +522,7 @@ class PostResponse(BaseModel):
     id: int
     title: str
     user_id: int
-    user: Annotated[Optional[UserResponse], AutoLoad('user_id')] = None
+    user: Annotated[Optional[UserResponse], AutoLoad()] = None
 
 
 # 3. 使用 Resolver 自动组装
@@ -567,20 +567,20 @@ async def get_sprints_with_full_detail(session):
 class SprintResponse(BaseModel):
     id: int
     name: str
-    stories: Annotated[List[StoryResponse], AutoLoad('id')] = []
+    stories: Annotated[List[StoryResponse], AutoLoad()] = []
 
 class StoryResponse(BaseModel):
     id: int
     name: str
 
-    tasks: Annotated[List[TaskResponse], AutoLoad('id')] = []
+    tasks: Annotated[List[TaskResponse], AutoLoad()] = []
 
 class TaskResponse(BaseModel):
     id: int
     name: str
     owner_id: int
 
-    owner: Annotated[Optional[UserResponse], AutoLoad('owner_id')] = None
+    owner: Annotated[Optional[UserResponse], AutoLoad()] = None
 
 # 使用
 sprints = await query_sprints_from_db()
@@ -662,8 +662,8 @@ config_global_resolver(er_diagram)
 class TaskResponse(DefineSubset):
     __subset__ = (TaskEntity, ('id', 'name', 'owner_id', 'project_id'))
 
-    owner: Annotated[Optional[UserResponse], AutoLoad('owner_id')] = None
-    project: Annotated[Optional[ProjectSummary], AutoLoad('project_id')] = None
+    owner: Annotated[Optional[UserResponse], AutoLoad()] = None
+    project: Annotated[Optional[ProjectSummary], AutoLoad()] = None
 
 # routes/task.py
 @router.get("/tasks", response_model=List[TaskResponse])
@@ -683,7 +683,7 @@ async def get_tasks():
 - ❌ 不需要思考加载策略（会不会 N+1？用 selectinload 还是 joinedload？）
 - ❌ 不需要手动写循环组装代码
 
-只需要声明业务语义："这个任务需要一个 owner" → `AutoLoad('owner_id')`。数据库层面的批量查询、映射构建、性能优化全部由 `Resolver` 自动处理。
+只需要声明业务语义："这个任务需要一个 owner" → `AutoLoad()`。数据库层面的批量查询、映射构建、性能优化全部由 `Resolver` 自动处理。
 
 ### 4.3 对比分析
 
@@ -726,7 +726,7 @@ class TaskEntity(BaseModel, BaseEntity):
 # 从 Entity 派生，而不是从 ORM
 class TaskResponse(DefineSubset):
     __subset__ = (TaskEntity, ('id', 'name'))
-    owner: Annotated[Optional[UserSummary], AutoLoad('owner_id')] = None
+    owner: Annotated[Optional[UserSummary], AutoLoad()] = None
 ```
 
 #### Step 4: 逐步替换

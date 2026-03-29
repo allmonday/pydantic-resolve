@@ -360,6 +360,7 @@ BaseEntity = base_entity()
 class User(BaseModel, BaseEntity):
     id: int
     name: str
+    org_id: int
     __relationships__ = [
         Relationship(field='org_id', field_name='organization', target_kls=Organization, loader=org_loader)
     ]
@@ -371,15 +372,15 @@ config_global_resolver(BaseEntity.get_diagram())
 class UserResponse(BaseModel):
     id: int
     name: str
+    org_id: int
 
-    # 通过 ERD 关系自动解析
-    organization: Annotated[Optional[Organization], AutoLoad('org_id')] = None
+    # 字段名匹配 Relationship.field_name，通过 ERD 关系自动解析
+    organization: Annotated[Optional[Organization], AutoLoad()] = None
 ```
 
 **参数：**
 
-- `key` (str): 外键字段名
-- `field_name` (str | None): Relationship 的字段标识符（当同一字段有多个关系时使用）
+- `origin` (str | None): 目标 Relationship 的 `field_name` 查找键。默认为 `None`，此时使用注解字段名作为查找键。当字段名与 Relationship 的 `field_name` 不一致时，可通过此参数指定。
 
 **注意：** `AutoLoad` 需要与 `config_global_resolver()` 配合，将 ERD 注入到默认 Resolver。
 
@@ -454,10 +455,11 @@ class Comment(BaseModel, BaseEntity):
 
 class CommentResponse(BaseModel):
     id: int
+    user_id: int
 
-    # 通过 'field_name' 参数指定使用哪个关系
-    author: Annotated[Optional[User], AutoLoad('user_id', field_name='author')] = None
-    moderator: Annotated[Optional[User], AutoLoad('user_id', field_name='moderator')] = None
+    # 字段名匹配 Relationship.field_name
+    author: Annotated[Optional[User], AutoLoad()] = None
+    moderator: Annotated[Optional[User], AutoLoad()] = None
 ```
 
 

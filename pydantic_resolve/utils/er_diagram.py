@@ -233,11 +233,11 @@ class BaseEntity:  # just type (TODO: optimize)
 @dataclass
 class LoaderInfo:
     """Marker annotation - field name from annotation identifies the relationship."""
-    pass
+    origin: str | None = None
 
 
-def AutoLoad() -> LoaderInfo:
-    return LoaderInfo()
+def AutoLoad(origin: str | None = None) -> LoaderInfo:
+    return LoaderInfo(origin=origin)
 
 
 def base_entity() -> type[BaseEntity]:
@@ -379,7 +379,7 @@ class ErLoaderPreGenerator:
 
         config = self._identify_entity(kls)
 
-        for field_name, annotation in auto_loader_fields:
+        for field_name, annotation, loader_info in auto_loader_fields:
             method_name = f'{const.RESOLVE_PREFIX}{field_name}'
             if hasattr(kls, method_name):
                 logger.warning(
@@ -387,9 +387,10 @@ class ErLoaderPreGenerator:
                 )
                 continue
 
+            lookup_key = loader_info.origin if loader_info.origin else field_name
             relationship = self._identify_relationship(
                 config=config,
-                field_name=field_name,
+                field_name=lookup_key,
             )
 
             if relationship.loader is None:
@@ -434,7 +435,7 @@ class ErLoaderPreGenerator:
                 setattr(kls, method_name, create_resolve_method(relationship.field, relationship))
 
 
-def _get_pydantic_field_items_with_load_by(kls) -> Iterator[tuple[str, type]]:
+def _get_pydantic_field_items_with_load_by(kls) -> Iterator[tuple[str, type, LoaderInfo]]:
     """
     Find fields which have AutoLoad metadata.
 
@@ -452,4 +453,4 @@ def _get_pydantic_field_items_with_load_by(kls) -> Iterator[tuple[str, type]]:
         metadata = v.metadata
         for meta in metadata:
             if isinstance(meta, LoaderInfo):
-                yield name, v.annotation
+                yield name, v.annotation, meta

@@ -387,13 +387,13 @@ class TaskResponse(DefineSubset):
     __subset__ = (TaskEntity, ('id', 'name', 'estimate'))
 
     # Automatically resolve owner, no need to write resolve method
-    owner: Annotated[Optional[UserSummary], AutoLoad('owner_id')] = None
+    owner: Annotated[Optional[UserSummary], AutoLoad()] = None
 
 # Scenario 3: Task detail (including more fields)
 class TaskDetailResponse(DefineSubset):
     __subset__ = (TaskEntity, ('id', 'name', 'estimate', 'created_at'))
 
-    owner: Annotated[Optional[UserDetail], AutoLoad('owner_id')] = None
+    owner: Annotated[Optional[UserDetail], AutoLoad()] = None
 ```
 
 #### Step 4: Fetch Main Data, Automatically Load All Sub-Data
@@ -522,7 +522,7 @@ class PostResponse(BaseModel):
     id: int
     title: str
     user_id: int
-    user: Annotated[Optional[UserResponse], AutoLoad('user_id')] = None
+    user: Annotated[Optional[UserResponse], AutoLoad()] = None
 
 
 # 3. Use Resolver to automatically assemble
@@ -567,20 +567,20 @@ async def get_sprints_with_full_detail(session):
 class SprintResponse(BaseModel):
     id: int
     name: str
-    stories: Annotated[List[StoryResponse], AutoLoad('id')] = []
+    stories: Annotated[List[StoryResponse], AutoLoad()] = []
 
 class StoryResponse(BaseModel):
     id: int
     name: str
 
-    tasks: Annotated[List[TaskResponse], AutoLoad('id')] = []
+    tasks: Annotated[List[TaskResponse], AutoLoad()] = []
 
 class TaskResponse(BaseModel):
     id: int
     name: str
     owner_id: int
 
-    owner: Annotated[Optional[UserResponse], AutoLoad('owner_id')] = None
+    owner: Annotated[Optional[UserResponse], AutoLoad()] = None
 
 # Use
 sprints = await query_sprints_from_db()
@@ -662,8 +662,8 @@ config_global_resolver(er_diagram)
 class TaskResponse(DefineSubset):
     __subset__ = (TaskEntity, ('id', 'name', 'owner_id', 'project_id'))
 
-    owner: Annotated[Optional[UserResponse], AutoLoad('owner_id')] = None
-    project: Annotated[Optional[ProjectSummary], AutoLoad('project_id')] = None
+    owner: Annotated[Optional[UserResponse], AutoLoad()] = None
+    project: Annotated[Optional[ProjectSummary], AutoLoad()] = None
 
 # routes/task.py
 @router.get("/tasks", response_model=List[TaskResponse])
@@ -683,7 +683,7 @@ Compared to 4.1, Entity-First approach in the entire data assembly process **com
 - ❌ No need to think about loading strategies (will it N+1? use selectinload or joinedload?)
 - ❌ No need to manually write loop assembly code
 
-Only need to declare business semantics: "this task needs an owner" → `AutoLoad('owner_id')`. Batch queries, mapping building, performance optimization at the database level are all automatically handled by `Resolver`.
+Only need to declare business semantics: "this task needs an owner" → `AutoLoad()`. Batch queries, mapping building, performance optimization at the database level are all automatically handled by `Resolver`.
 
 ### 4.3 Comparison Analysis
 
@@ -726,7 +726,7 @@ class TaskEntity(BaseModel, BaseEntity):
 # Derive from Entity, not from ORM
 class TaskResponse(DefineSubset):
     __subset__ = (TaskEntity, ('id', 'name'))
-    owner: Annotated[Optional[UserSummary], AutoLoad('owner_id')] = None
+    owner: Annotated[Optional[UserSummary], AutoLoad()] = None
 ```
 
 #### Step 4: Gradual Replacement

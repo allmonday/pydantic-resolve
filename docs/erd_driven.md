@@ -177,10 +177,10 @@ Once you have an `ErDiagram` defined, use `AutoLoad` to connect entities:
 from pydantic_resolve import AutoLoad
 
 class UserWithPostsForSpecificBusiness(User):
-	posts: Annotated[List[Post], AutoLoad('id')] = []
+	posts: Annotated[List[Post], AutoLoad()] = []
 ```
 
-`AutoLoad('id')` looks up the relationship from the ERD and automatically resolves the data.
+`AutoLoad()` looks up the relationship by matching the field name (`posts`) to `Relationship.field_name` from the ERD and automatically resolves the data. If the field name differs from `field_name`, use `AutoLoad(origin='posts')` to specify the lookup key explicitly.
 
 ### The key to maintainable code: keep business ERD consistent with your code structure
 
@@ -192,10 +192,10 @@ Two classes with the same structure can have different names, representing diffe
 
 ```python
 class UserWithPostsForSpecificBusinessA(User):
-	posts: Annotated[List[Post], AutoLoad('id')] = []
+	posts: Annotated[List[Post], AutoLoad()] = []
 
 class UserWithPostsForSpecificBusinessB(User):
-	posts: Annotated[List[Post], AutoLoad('id')] = []
+	posts: Annotated[List[Post], AutoLoad()] = []
 ```
 
 Suppose the requirement for `UserWithPostsForSpecificBusinessA` changes: it should only load the latest 3 posts for each user.
@@ -204,7 +204,7 @@ You just create a new DataLoader and reference it by field name. (`UserWithPosts
 
 ```python
 class UserWithPostsForSpecificBusinessA(User):
-	latest_three_posts: Annotated[List[Post], AutoLoad('id')] = []
+	latest_three_posts: Annotated[List[Post], AutoLoad()] = []
 ```
 
 In the end, we achieve the goal: the structure in code stays highly consistent with the ERD structure in product design, making future changes and iterations much easier.
@@ -229,10 +229,10 @@ erDiagram
 
 ```python
 class BizAPost(Post):
-	comments: Annotated[List[Comment], AutoLoad('id')] = []
-	likes: Annotated[List[Like], AutoLoad('id')] = []
+	comments: Annotated[List[Comment], AutoLoad()] = []
+	likes: Annotated[List[Like], AutoLoad()] = []
 
 class BizAUser(User):
-	posts: Annotated[List[BizAPost], AutoLoad('id')] = []
+	posts: Annotated[List[BizAPost], AutoLoad()] = []
 ```
 

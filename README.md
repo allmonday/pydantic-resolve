@@ -200,7 +200,7 @@ class TaskEntity(BaseModel, BaseEntity):
     __relationships__ = [
         # Loader can query Postgres, call RPC, or fetch from Redis
         # API consumers don't need to know where data comes from
-        Relationship(field='owner_id', target_kls=UserEntity, loader=user_loader)
+        Relationship(field='owner_id', field_name='owner', target_kls=UserEntity, loader=user_loader)
     ]
     id: int
     name: str
@@ -211,7 +211,7 @@ class TaskEntity(BaseModel, BaseEntity):
 # Response schema: choose what to expose
 class TaskResponse(DefineSubset):
     __subset__ = (TaskEntity, ('id', 'name'))  # owner_id excluded
-    owner: Annotated[User, AutoLoad('owner_id')] = None  # Auto-resolved!
+    owner: Annotated[User, AutoLoad()] = None  # Auto-resolved!
 ```
 
 **Key benefits:**

@@ -139,8 +139,8 @@ class Sample1TeamDetail(tms.Team):
 from pydantic_resolve import AutoLoad
 
 class Sample1TeamDetail(tms.Team):
-	sprints: Annotated[list[Sample1SprintDetail], AutoLoad('id')] = []
-	members: Annotated[list[us.User], AutoLoad('id')] = []
+	sprints: Annotated[list[Sample1SprintDetail], AutoLoad()] = []
+	members: Annotated[list[us.User], AutoLoad()] = []
 ```
 
 It determines the unique `Relationship` and its loader based on the inheritance source, the `AutoLoad` argument, and the annotated return type.
@@ -155,7 +155,7 @@ from pydantic_resolve import DefineSubset
 class MyStory(DefineSubset):
 	__subset__ = (Story, ('id'))
 
-	tasks: Annotated[list[Task], AutoLoad('id')] = []
+	tasks: Annotated[list[Task], AutoLoad()] = []
 
 ```
 
@@ -167,7 +167,7 @@ If you want the full set of fields, you can simply inherit from the base model:
 
 ```python
 class MyStory(Story):
-	tasks: Annotated[list[Task], AutoLoad('id')] = []
+	tasks: Annotated[list[Task], AutoLoad()] = []
 ```
 
 ## Build complex data in three steps
@@ -298,11 +298,11 @@ If `ErDiagram` is available, the code can be further simplified:
 
 ```python
 class Task(BaseTask):
-	user: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
+	user: Annotated[Optional[BaseUser], AutoLoad()] = None
 
 class Story(BaseStory):
-	tasks: Annotated[list[Task], AutoLoad('id')] = []
-	assignee: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None        
+	tasks: Annotated[list[Task], AutoLoad()] = []
+	assignee: Annotated[Optional[BaseUser], AutoLoad()] = None        
 ```
 
 The `DefineSubset` metaclass can quickly create subset types by listing the fields you want:
@@ -312,8 +312,8 @@ class Story1(DefineSubset):
 	# define the base class and fields wanted
 	__subset__ = (BaseStory, ('id', 'name', 'owner_id'))
 
-	tasks: Annotated[list[Task1], AutoLoad('id')] = []
-	assignee: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
+	tasks: Annotated[list[Task1], AutoLoad()] = []
+	assignee: Annotated[Optional[BaseUser], AutoLoad()] = None
 ```
 
 ### 3. Adjust data for UI details
@@ -352,7 +352,7 @@ Descendants can read the value via `ancestor_context['story_name']`.
 
 # post case 1
 class Task3(BaseTask):
-	user: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
+	user: Annotated[Optional[BaseUser], AutoLoad()] = None
 
 	fullname: str = ''
 	def post_fullname(self, ancestor_context):  # Access story.name from parent context
@@ -362,8 +362,8 @@ class Story3(DefineSubset):
 	__subset__ = (BaseStory, ('id', 'name', 'owner_id'))
 	__pydantic_resolve_expose__ = {'name': 'story_name'}
 
-	tasks: Annotated[list[Task3], AutoLoad('id')] = []
-	assignee: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
+	tasks: Annotated[list[Task3], AutoLoad()] = []
+	assignee: Annotated[Optional[BaseUser], AutoLoad()] = None
 ```
 
 
@@ -377,13 +377,13 @@ Because `post_*` runs after `resolve_*`, this is straightforward—just `sum` it
 
 ```python
 class Task2(BaseTask):
-	user: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
+	user: Annotated[Optional[BaseUser], AutoLoad()] = None
 
 class Story2(DefineSubset):
 	__subset__ = (BaseStory, ('id', 'name', 'owner_id'))
 
-	tasks: Annotated[list[Task2], AutoLoad('id')] = []
-	assignee: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
+	tasks: Annotated[list[Task2], AutoLoad()] = []
+	assignee: Annotated[Optional[BaseUser], AutoLoad()] = None
 
 	total_estimate: int = 0
 	def post_total_estimate(self):
@@ -422,13 +422,13 @@ Here is the complete code. `related_users` will collect all `user` values. (Note
 class Task1(BaseTask):
 	__pydantic_resolve_collect__ = {'user': 'related_users'}  # Propagate user to collector: 'related_users'
 
-	user: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
+	user: Annotated[Optional[BaseUser], AutoLoad()] = None
 
 class Story1(DefineSubset):
 	__subset__ = (BaseStory, ('id', 'name', 'owner_id'))
 
-	tasks: Annotated[list[Task1], AutoLoad('id')] = []
-	assignee: Annotated[Optional[BaseUser], AutoLoad('owner_id')] = None
+	tasks: Annotated[list[Task1], AutoLoad()] = []
+	assignee: Annotated[Optional[BaseUser], AutoLoad()] = None
 
 	related_users: list[BaseUser] = []
 	def post_related_users(self, collector=Collector(alias='related_users')):

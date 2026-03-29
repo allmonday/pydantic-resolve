@@ -182,10 +182,10 @@ config_global_resolver(diagram)
 from pydantic_resolve import AutoLoad
 
 class UserWithPostsForSpecificBusiness(User):
-    posts: Annotated[List[Post], AutoLoad('id')] = []
+    posts: Annotated[List[Post], AutoLoad()] = []
 ```
 
-`AutoLoad('id')` 会从 ERD 中查找关系定义，自动解析数据。
+`AutoLoad()` 通过字段名（`posts`）匹配 ERD 中 `Relationship.field_name`，自动解析数据。当字段名与 `field_name` 不一致时，可通过 `AutoLoad(origin='posts')` 显式指定查找键。
 
 ### 可维护代码的诀窍： 使业务 ERD 和代码中的结构定义维持一致
 
@@ -197,10 +197,10 @@ class UserWithPostsForSpecificBusiness(User):
 
 ```python
 class UserWithPostsForSpecificBusinessA(User):
-    posts: Annotated[List[Post], AutoLoad('id')] = []
+    posts: Annotated[List[Post], AutoLoad()] = []
 
 class UserWithPostsForSpecificBusinessB(User):
-    posts: Annotated[List[Post], AutoLoad('id')] = []
+    posts: Annotated[List[Post], AutoLoad()] = []
 ```
 
 假设 `UserWithPostsForSpecificBusinessA` 的需求发生了变更， 需要只加载每个 user 最近的 3 条 posts
@@ -209,7 +209,7 @@ class UserWithPostsForSpecificBusinessB(User):
 
 ```python
 class UserWithPostsForSpecificBusinessA(User):
-    posts: Annotated[List[Post], AutoLoad('id', biz='latest_three')] = []
+    latest_three_posts: Annotated[List[Post], AutoLoad()] = []
 ```
 
 最终， 我们实现了目标， 让代码侧的结构与产品设计侧的 ERD 结构保持高度的一致， 这使得后续的变更和调整变得更容易。
@@ -234,9 +234,9 @@ erDiagram
 
 ```python
 class BizAPost(Post):
-    comments: Annotated[List[Comment], AutoLoad('id')] = []
-    likes: Annotated[List[Like], AutoLoad('id')] = []
+    comments: Annotated[List[Comment], AutoLoad()] = []
+    likes: Annotated[List[Like], AutoLoad()] = []
 
 class BizAUser(User):
-    posts: Annotated[List[BizAPost], AutoLoad('id')] = []
+    posts: Annotated[List[BizAPost], AutoLoad()] = []
 ```

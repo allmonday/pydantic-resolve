@@ -228,3 +228,16 @@ async def test_loadby_references_nonexistent_field():
     with pytest.raises(AttributeError, match='Relationship with field_name "user_xyz" not found'):
         d = BizCase6(id=1, user_id=1)
         await MyResolver().resolve(d)
+
+
+class BizCaseOrigin(Biz):
+    my_user: Annotated[Optional[User], AutoLoad(origin='user')] = None
+
+
+@pytest.mark.asyncio
+async def test_autoload_with_origin():
+    """Test that AutoLoad(origin=...) uses origin as the lookup key for Relationship.field_name."""
+    MyResolver = config_resolver('MyResolver', er_diagram=diagram)
+    d = BizCaseOrigin(id=1, name="qq", user_id=1, user_id_str='1')
+    d = await MyResolver().resolve(d)
+    assert d.my_user.name == "a"

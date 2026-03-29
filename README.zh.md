@@ -200,7 +200,7 @@ class TaskEntity(BaseModel, BaseEntity):
     __relationships__ = [
         # Loader 可以查询 Postgres、调用 RPC、或从 Redis 获取
         # API 消费者不需要知道数据从哪来
-        Relationship(field='owner_id', target_kls=UserEntity, loader=user_loader)
+        Relationship(field='owner_id', field_name='owner', target_kls=UserEntity, loader=user_loader)
     ]
     id: int
     name: str
@@ -211,7 +211,7 @@ class TaskEntity(BaseModel, BaseEntity):
 # Response schema：选择要暴露的内容
 class TaskResponse(DefineSubset):
     __subset__ = (TaskEntity, ('id', 'name'))  # owner_id 被排除
-    owner: Annotated[User, AutoLoad('owner_id')] = None  # 自动解析！
+    owner: Annotated[User, AutoLoad()] = None  # 自动解析！
 ```
 
 **核心优势：**

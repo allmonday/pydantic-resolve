@@ -394,6 +394,7 @@ BaseEntity = base_entity()
 class User(BaseModel, BaseEntity):
     id: int
     name: str
+    org_id: int
     __relationships__ = [
         Relationship(field='org_id', target_kls=Organization, field_name='organization', loader=org_loader)
     ]
@@ -411,14 +412,15 @@ config_global_resolver(BaseEntity.get_diagram())
 class UserResponse(BaseModel):
     id: int
     name: str
+    org_id: int
 
-    # Automatically resolves via ERD relationship
-    organization: Annotated[Optional[Organization], AutoLoad('org_id')] = None
+    # Field name matches Relationship.field_name, auto-resolves via ERD
+    organization: Annotated[Optional[Organization], AutoLoad()] = None
 ```
 
 **Parameters:**
 
-- `key` (str): The foreign key field name
+- `origin` (str | None): The `field_name` of the target Relationship to look up. Defaults to `None`, in which case the annotated field name is used as the lookup key.
 
 **Note:** `AutoLoad` works with `config_global_resolver()` to inject the ERD into the default Resolver.
 
@@ -507,8 +509,10 @@ class Comment(BaseModel, BaseEntity):
 
 class CommentResponse(BaseModel):
     id: int
-    author: Annotated[Optional[User], AutoLoad('user_id')] = None
-    moderator: Annotated[Optional[User], AutoLoad('user_id')] = None
+    user_id: int
+
+    author: Annotated[Optional[User], AutoLoad()] = None
+    moderator: Annotated[Optional[User], AutoLoad()] = None
 ```
 
 #### config_global_resolver()
