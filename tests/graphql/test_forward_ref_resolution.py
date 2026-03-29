@@ -33,9 +33,9 @@ class UserEntityForwardRef(BaseModel, BaseEntityForForwardRef):
     """User entity with string reference to ProfileEntityForwardRef."""
     __relationships__ = [
         Relationship(
-            field='profile_id',
-            target_kls='ProfileEntityForwardRef',  # String reference
-            field_name='profile'
+            fk='profile_id',
+            target='ProfileEntityForwardRef',  # String reference
+            name='profile'
         )
     ]
     id: int
@@ -63,6 +63,6 @@ class TestForwardRefResolution:
         assert len(user_config.relationships) == 1
 
         rel = user_config.relationships[0]
-        # After resolution, target_kls should be the actual class, not a string
-        assert rel.target_kls == ProfileEntityForwardRef, \
-            f"Expected target_kls to be ProfileEntityForwardRef, got {rel.target_kls}"
+        # After resolution, target should be the actual class, not a string
+        assert rel.target == ProfileEntityForwardRef, \
+            f"Expected target to be ProfileEntityForwardRef, got {rel.target}"

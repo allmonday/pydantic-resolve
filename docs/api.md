@@ -206,9 +206,9 @@ class Comment(BaseModel):
     # Define relationship: load User via user_id
     __relationships__ = [
         Relationship(
-            field='user_id',
-            target_kls=User,
-            field_name='user',
+            fk='user_id',
+            target=User,
+            name='user',
             loader=user_loader
         )
     ]
@@ -216,21 +216,21 @@ class Comment(BaseModel):
 
 **Parameters:**
 
-- `field` (str): The foreign key field name
-- `target_kls` (type): The target Pydantic model class
-- `field_name` (str): **REQUIRED**. Unique identifier for this relationship, becomes the GraphQL field name
+- `fk` (str): The foreign key field name
+- `target` (type): The target Pydantic model class
+- `name` (str): **REQUIRED**. Unique identifier for this relationship, becomes the GraphQL field name
 - `loader` (Callable | None): DataLoader function to fetch the target entity
-- `field_fn` (Callable | None): Optional function to transform the FK value before passing to loader
-- `field_none_default` (Any | None): Default value to return if FK is None
-- `field_none_default_factory` (Callable | None): Factory function to create default value if FK is None
+- `fk_fn` (Callable | None): Optional function to transform the FK value before passing to loader
+- `fk_none_default` (Any | None): Default value to return if FK is None
+- `fk_none_default_factory` (Callable | None): Factory function to create default value if FK is None
 - `load_many` (bool): Whether the FK field itself contains multiple values (e.g., `user_ids: list[int]`), causing `loader.load_many()` to be called instead of `loader.load()` (default: False)
 - `load_many_fn` (Callable | None): Optional function to transform the FK field value into an iterable for `load_many`
 
-**Note:** `MultipleRelationship` and `Link` have been removed in favor of a simplified flat `Relationship` model. To define multiple relationships from the same field, simply define multiple `Relationship` objects with unique `field_name` values.
+**Note:** `MultipleRelationship` and `Link` have been removed in favor of a simplified flat `Relationship` model. To define multiple relationships from the same field, simply define multiple `Relationship` objects with unique `name` values.
 
 #### Multiple Relationships from Same Field
 
-To define multiple relationships from the same foreign key field, create multiple `Relationship` objects with different `field_name` values:
+To define multiple relationships from the same foreign key field, create multiple `Relationship` objects with different `name` values:
 
 ```python
 from pydantic_resolve import Relationship
@@ -243,15 +243,15 @@ class Comment(BaseModel, BaseEntity):
     # Define two relationships via user_id: author and moderator
     __relationships__ = [
         Relationship(
-            field='user_id',
-            target_kls=User,
-            field_name='author',  # GraphQL field name for this relationship
+            fk='user_id',
+            target=User,
+            name='author',  # GraphQL field name for this relationship
             loader=user_loader
         ),
         Relationship(
-            field='user_id',
-            target_kls=User,
-            field_name='moderator',  # Different GraphQL field name
+            fk='user_id',
+            target=User,
+            name='moderator',  # Different GraphQL field name
             loader=moderator_loader
         )
     ]
@@ -267,7 +267,7 @@ from pydantic_resolve import Entity
 Entity(
     kls=Comment,
     relationships=[
-        Relationship(field='user_id', target_kls=User, field_name='user', loader=user_loader)
+        Relationship(fk='user_id', target=User, name='user', loader=user_loader)
     ]
 )
 ```
@@ -325,7 +325,7 @@ class User(BaseModel, BaseEntity):
     name: str
 
     __relationships__ = [
-        Relationship(field='org_id', target_kls=Organization, field_name='organization', loader=org_loader)
+        Relationship(fk='org_id', target=Organization, name='organization', loader=org_loader)
     ]
 
 class Comment(BaseModel, BaseEntity):
@@ -333,7 +333,7 @@ class Comment(BaseModel, BaseEntity):
     user_id: int
 
     __relationships__ = [
-        Relationship(field='user_id', target_kls=User, field_name='user', loader=user_loader)
+        Relationship(fk='user_id', target=User, name='user', loader=user_loader)
     ]
 
 # Get the ER diagram
@@ -352,7 +352,7 @@ Because entities reference each other through `target_kls`, you may encounter ci
 
        __relationships__ = [
            # String 'User' will be resolved automatically
-           Relationship(field='user_id', target_kls='User', field_name='user', loader=user_loader)
+           Relationship(fk='user_id', target='User', name='user', loader=user_loader)
        ]
    ```
 
@@ -367,9 +367,9 @@ Because entities reference each other through `target_kls`, you may encounter ci
        __relationships__ = [
            # Reference User from another module
            Relationship(
-               field='user_id',
-               target_kls='app.models.user:User',  # module.path:ClassName
-               field_name='user',
+               fk='user_id',
+               target='app.models.user:User',  # module.path:ClassName
+               name='user',
                loader=user_loader
            )
        ]
@@ -396,7 +396,7 @@ class User(BaseModel, BaseEntity):
     name: str
     org_id: int
     __relationships__ = [
-        Relationship(field='org_id', target_kls=Organization, field_name='organization', loader=org_loader)
+        Relationship(fk='org_id', target=Organization, name='organization', loader=org_loader)
     ]
 ```
 
@@ -414,13 +414,13 @@ class UserResponse(BaseModel):
     name: str
     org_id: int
 
-    # Field name matches Relationship.field_name, auto-resolves via ERD
+    # Field name matches Relationship.name, auto-resolves via ERD
     organization: Annotated[Optional[Organization], AutoLoad()] = None
 ```
 
 **Parameters:**
 
-- `origin` (str | None): The `field_name` of the target Relationship to look up. Defaults to `None`, in which case the annotated field name is used as the lookup key.
+- `origin` (str | None): The `name` of the target Relationship to look up. Defaults to `None`, in which case the annotated field name is used as the lookup key.
 
 **Note:** `AutoLoad` works with `config_global_resolver()` to inject the ERD into the default Resolver.
 
@@ -443,9 +443,9 @@ result = await CustomResolver().resolve(data)
 
 ```python
 Relationship(
-    field='user_id',
-    target_kls=User,
-    field_name='user',
+    fk='user_id',
+    target=User,
+    name='user',
     loader=user_loader
 )
 ```
@@ -454,9 +454,9 @@ Relationship(
 
 ```python
 Relationship(
-    field='tag_ids',
-    target_kls=Tag,
-    field_name='tags',
+    fk='tag_ids',
+    target=Tag,
+    name='tags',
     loader=tag_loader,
     load_many=True,
     load_many_fn=lambda ids: ids.split(',') if ids else []
@@ -468,20 +468,20 @@ Relationship(
 ```python
 # Return None when FK is None
 Relationship(
-    field='user_id',
-    target_kls=User,
-    field_name='user',
+    fk='user_id',
+    target=User,
+    name='user',
     loader=user_loader,
-    field_none_default=None
+    fk_none_default=None
 )
 
 # Or use a factory to return a default object
 Relationship(
-    field='user_id',
-    target_kls=User,
-    field_name='user',
+    fk='user_id',
+    target=User,
+    name='user',
     loader=user_loader,
-    field_none_default_factory=lambda: AnonymousUser()
+    fk_none_default_factory=lambda: AnonymousUser()
 )
 ```
 
@@ -494,15 +494,15 @@ class Comment(BaseModel, BaseEntity):
 
     __relationships__ = [
         Relationship(
-            field='user_id',
-            target_kls=User,
-            field_name='author',
+            fk='user_id',
+            target=User,
+            name='author',
             loader=user_loader
         ),
         Relationship(
-            field='user_id',
-            target_kls=User,
-            field_name='moderator',
+            fk='user_id',
+            target=User,
+            name='moderator',
             loader=moderator_loader
         )
     ]
@@ -1089,7 +1089,7 @@ class Comment(BaseModel, BaseEntity):
     id: int
     user_id: int
     __relationships__ = [
-        Relationship(field='user_id', target_kls=User, field_name='user', loader=user_loader)
+        Relationship(fk='user_id', target=User, name='user', loader=user_loader)
     ]
 
 config_global_resolver(BaseEntity.get_diagram())

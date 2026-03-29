@@ -45,8 +45,8 @@ class BarLoader(DataLoader):
 diagram = ErDiagram(
     configs=[
         Entity(kls=Biz, relationships=[
-            Relationship(field='user_id', field_name='user', target_kls=User, loader=UserLoader),
-            Relationship(field='id', field_name='bars', target_kls=list[Bar], field_none_default_factory=list, loader=BarLoader),
+            Relationship(fk='user_id', name='user', target=User, loader=UserLoader),
+            Relationship(fk='id', name='bars', target=list[Bar], fk_none_default_factory=list, loader=BarLoader),
         ])
     ]
 )

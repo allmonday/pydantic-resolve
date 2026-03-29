@@ -281,12 +281,12 @@ class IntrospectionGenerator(SchemaGenerator):
         for entity_cfg in self.er_diagram.configs:
             self._collected_types[entity_cfg.kls.__name__] = entity_cfg.kls
 
-        # Collect types from Relationship.target_kls (similar to SDLBuilder)
+        # Collect types from Relationship.target (similar to SDLBuilder)
         for entity_cfg in self.er_diagram.configs:
             for rel in entity_cfg.relationships:
                 if isinstance(rel, Relationship):
                     # get_core_types handles list[T] and Optional[T] unwrapping
-                    for target_class in get_core_types(rel.target_kls):
+                    for target_class in get_core_types(rel.target):
                         if safe_issubclass(target_class, BaseModel):
                             if target_class.__name__ not in self._collected_types:
                                 self._collected_types[target_class.__name__] = target_class
@@ -446,13 +446,13 @@ class IntrospectionGenerator(SchemaGenerator):
         if entity_cfg:
             for rel in entity_cfg.relationships:
                 if isinstance(rel, Relationship):
-                    if not rel.field_name:
+                    if not rel.name:
                         continue
                     if rel.loader is None:
                         continue
 
-                    field_name = rel.field_name
-                    type_def = self._build_graphql_type(rel.target_kls)
+                    field_name = rel.name
+                    type_def = self._build_graphql_type(rel.target)
 
                     fields.append({
                         "name": field_name,
@@ -469,7 +469,7 @@ class IntrospectionGenerator(SchemaGenerator):
         """Check if field is a relationship field."""
         for rel in entity_cfg.relationships:
             if isinstance(rel, Relationship):
-                if rel.field_name == field_name:
+                if rel.name == field_name:
                     return True
         return False
 

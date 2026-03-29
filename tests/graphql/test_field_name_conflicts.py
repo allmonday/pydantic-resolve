@@ -20,9 +20,9 @@ def test_scalar_field_conflict():
 
         __relationships__ = [
             Relationship(
-                field='id',
-                target_kls=list[PostEntity],  # 使用类引用，不是字符串
-                field_name='posts'  # 冲突！
+                fk='id',
+                target=list[PostEntity],  # 使用类引用，不是字符串
+                name='posts'  # 冲突！
             )
         ]
 
@@ -31,7 +31,7 @@ def test_scalar_field_conflict():
         BaseEntity.get_diagram()
 
     error_msg = str(exc_info.value)
-    assert "Field name conflict" in error_msg
+    assert "Name conflict" in error_msg
     assert "posts" in error_msg
     assert "conflicts with scalar field" in error_msg
     assert "UserEntity" in error_msg
@@ -48,14 +48,14 @@ def test_duplicate_relationship_field():
     class PostEntity(BaseModel, BaseEntity):
         __relationships__ = [
             Relationship(
-                field='author_id',
-                target_kls=UserEntity,
-                field_name='author'
+                fk='author_id',
+                target=UserEntity,
+                name='author'
             ),
             Relationship(
-                field='reviewer_id',
-                target_kls=UserEntity,
-                field_name='author'  # 重复！
+                fk='reviewer_id',
+                target=UserEntity,
+                name='author'  # 重复！
             )
         ]
 
@@ -64,7 +64,7 @@ def test_duplicate_relationship_field():
         BaseEntity.get_diagram()
 
     error_msg = str(exc_info.value)
-    assert "Duplicate field_name" in error_msg
+    assert "Duplicate name" in error_msg
     assert "author" in error_msg
     assert "PostEntity" in error_msg
 
@@ -83,9 +83,9 @@ def test_inheritance_conflict():
 
         __relationships__ = [
             Relationship(
-                field='id',
-                target_kls=OwnerEntity,
-                field_name='owner'  # 与自己的标量字段冲突！
+                fk='id',
+                target=OwnerEntity,
+                name='owner'  # 与自己的标量字段冲突！
             )
         ]
 
@@ -94,7 +94,7 @@ def test_inheritance_conflict():
         BaseEntity.get_diagram()
 
     error_msg = str(exc_info.value)
-    assert "Field name conflict" in error_msg
+    assert "Name conflict" in error_msg
     assert "owner" in error_msg
     assert "conflicts with scalar field" in error_msg
     assert "UserEntity" in error_msg
@@ -113,9 +113,9 @@ def test_no_conflict_works():
 
         __relationships__ = [
             Relationship(
-                field='id',
-                target_kls=list[PostEntity],
-                field_name='posts'  # 不冲突
+                fk='id',
+                target=list[PostEntity],
+                name='posts'  # 不冲突
             )
         ]
 
@@ -145,9 +145,9 @@ def test_schema_builder_validation():
 
         __relationships__ = [
             Relationship(
-                field='id',
-                target_kls=list[RelatedEntity],
-                field_name='related_items'  # 不冲突
+                fk='id',
+                target=list[RelatedEntity],
+                name='related_items'  # 不冲突
             )
         ]
 
@@ -176,14 +176,14 @@ def test_multiple_relationships_different_names():
     class PostEntity(BaseModel, BaseEntity):
         __relationships__ = [
             Relationship(
-                field='author_id',
-                target_kls=UserEntity,
-                field_name='author'
+                fk='author_id',
+                target=UserEntity,
+                name='author'
             ),
             Relationship(
-                field='reviewer_id',
-                target_kls=UserEntity,
-                field_name='reviewer'  # 不同的名字，不冲突
+                fk='reviewer_id',
+                target=UserEntity,
+                name='reviewer'  # 不同的名字，不冲突
             )
         ]
 
@@ -207,13 +207,13 @@ def test_no_field_name_validation_skipped():
 
             __relationships__ = [
                 Relationship(
-                    field='id',
-                    # field_name is intentionally missing to test validation
-                    target_kls=list[PostEntity]
+                    fk='id',
+                    # name is intentionally missing to test validation
+                    target=list[PostEntity]
                 )
             ]
 
-    assert "field_name" in str(exc_info.value).lower() or "required" in str(exc_info.value).lower()
+    assert "name" in str(exc_info.value).lower() or "required" in str(exc_info.value).lower()
 
 
 def test_error_message_quality():
@@ -229,9 +229,9 @@ def test_error_message_quality():
 
         __relationships__ = [
             Relationship(
-                field='status_id',
-                target_kls=StatusEntity,
-                field_name='status'
+                fk='status_id',
+                target=StatusEntity,
+                name='status'
             )
         ]
 

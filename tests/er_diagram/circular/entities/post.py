@@ -11,7 +11,7 @@ from pydantic_resolve.utils.er_diagram import Relationship
 class PostEntity(BaseModel, BaseEntity):
     __relationships__ = [
         # Direct class reference causes circular import
-        Relationship(field='user_id', field_name='user', target_kls='tests.er_diagram.circular.entities.user:UserEntity', loader=None),
+        Relationship(fk='user_id', name='user', target='tests.er_diagram.circular.entities.user:UserEntity', loader=None),
     ]
 
     id: int

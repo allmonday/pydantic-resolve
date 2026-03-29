@@ -71,18 +71,18 @@ class FooNameLoader(DataLoader):
 
 class Biz(BaseModel, BASE_ENTITY):
     __pydantic_resolve_relationships__ = [
-        Relationship(field='user_id', field_name='user', target_kls='User', loader=UserLoader),
-        Relationship(field='user_ids', field_name='users_a', target_kls=list['User'], load_many=True, loader=UserLoader),
-        Relationship(field='user_ids_str',
-                        field_name='users_b',
-                        target_kls=list['User'],
+        Relationship(fk='user_id', name='user', target='User', loader=UserLoader),
+        Relationship(fk='user_ids', name='users_a', target=list['User'], load_many=True, loader=UserLoader),
+        Relationship(fk='user_ids_str',
+                        name='users_b',
+                        target=list['User'],
                         load_many=True,
                         load_many_fn=lambda x: [int(xx) for xx in x.split(',')] if x else [],
                         loader=UserLoader),
-        Relationship(field='id', field_name='foos', target_kls=list['Foo'], loader=FooLoader),
-        Relationship(field='id', field_name='foos_in_str', target_kls=list[str], loader=FooNameLoader),
-        Relationship(field='id', field_name='bars', target_kls=list['Bar'], loader=BarLoader),
-        Relationship(field='id', field_name='special_bars', target_kls=list['Bar'], loader=SpecialBarLoader),
+        Relationship(fk='id', name='foos', target=list['Foo'], loader=FooLoader),
+        Relationship(fk='id', name='foos_in_str', target=list[str], loader=FooNameLoader),
+        Relationship(fk='id', name='bars', target=list['Bar'], loader=BarLoader),
+        Relationship(fk='id', name='special_bars', target=list['Bar'], loader=SpecialBarLoader),
     ]
 
     id: int
@@ -189,7 +189,7 @@ def test_validate_unique_field_name_in_relationships():
 
     # Check each entity config for unique field_name
     for entity_cfg in diagram.configs:
-        field_names = [rel.field_name for rel in entity_cfg.relationships]
+        field_names = [rel.name for rel in entity_cfg.relationships]
 
         # Check for duplicates
         duplicates = [fn for fn in set(field_names) if field_names.count(fn) > 1]
@@ -208,7 +208,7 @@ def test_field_name_matches_loadby_field():
     biz_config = next(cfg for cfg in diagram.configs if cfg.kls.__name__ == 'Biz')
 
     # Extract field_names from relationships
-    relationship_field_names = {rel.field_name for rel in biz_config.relationships}
+    relationship_field_names = {rel.name for rel in biz_config.relationships}
 
     # Expected field names based on BizCase1 annotations
     expected_fields = {'user', 'users_a', 'users_b', 'foos', 'foos_in_str', 'bars', 'special_bars'}

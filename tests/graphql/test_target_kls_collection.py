@@ -46,9 +46,9 @@ class TestTargetKlsCollection:
                 kls=UserEntity,
                 relationships=[
                     Relationship(
-                        field='profile_id',
-                        target_kls=ProfileInfo,  # Not registered!
-                        field_name='profile'
+                        fk='profile_id',
+                        target=ProfileInfo,  # Not registered!
+                        name='profile'
                     )
                 ]
             )
@@ -69,9 +69,9 @@ class TestTargetKlsCollection:
                 kls=UserEntity,
                 relationships=[
                     Relationship(
-                        field='id',
-                        target_kls=list[PostEntity],  # Not registered!
-                        field_name='posts'
+                        fk='id',
+                        target=list[PostEntity],  # Not registered!
+                        name='posts'
                     )
                 ]
             )
@@ -91,9 +91,9 @@ class TestTargetKlsCollection:
                 kls=PostEntity,
                 relationships=[
                     Relationship(
-                        field='author_id',
-                        target_kls=UserEntity,  # Already registered
-                        field_name='author'
+                        fk='author_id',
+                        target=UserEntity,  # Already registered
+                        name='author'
                     )
                 ]
             )

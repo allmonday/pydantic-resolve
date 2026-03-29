@@ -201,7 +201,7 @@
 
 - feat:
     - `_resolve_ref` now supports module path syntax `'module.path:ClassName'` for lazy import, solving circular import issues in ER diagrams
-    - Use `target_kls='path.to.module:ClassName'` or `list['path.to.module:ClassName']` to reference classes across modules without direct imports
+    - Use `target='path.to.module:ClassName'` or `list['path.to.module:ClassName']` to reference classes across modules without direct imports
 - chore:
     - add pytest-benchmark
 
@@ -313,13 +313,13 @@ more details in test case: `tests/er_diagram/test_er_diagram_base.py`
 
 feat: for ininline relationships str are allowed to represent the class name
 
-for example, use `target_kls='User'` if User is defined after current class
+for example, use `target='User'` if User is defined after current class
 
 ```python
 class Biz(BaseModel, BaseEntity):
     __pydantic_resolve_relationships__ = [
-        Relationship(field='user_id', target_kls='User', loader=UserLoader),
-        Relationship(field='id', target_kls=list[Bar], field_none_default_factory=list, loader=BarLoader),
+        Relationship(fk='user_id', target='User', loader=UserLoader),
+        Relationship(fk='id', target=list[Bar], fk_none_default_factory=list, loader=BarLoader),
     ]
     id: Optional[int]
     name: str
@@ -345,8 +345,8 @@ feat: relationship can be defined inside class
 ```python
 class Biz(BaseModel, BaseEntity):
     __pydantic_resolve_relationships__ = [
-        Relationship(field='user_id', target_kls=User, loader=UserLoader),
-        Relationship(field='id', target_kls=list[Bar], field_none_default_factory=list, loader=BarLoader),
+        Relationship(fk='user_id', target=User, loader=UserLoader),
+        Relationship(fk='id', target=list[Bar], fk_none_default_factory=list, loader=BarLoader),
     ]
     id: Optional[int]
     name: str

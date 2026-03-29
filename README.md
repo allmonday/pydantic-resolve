@@ -200,7 +200,7 @@ class TaskEntity(BaseModel, BaseEntity):
     __relationships__ = [
         # Loader can query Postgres, call RPC, or fetch from Redis
         # API consumers don't need to know where data comes from
-        Relationship(field='owner_id', field_name='owner', target_kls=UserEntity, loader=user_loader)
+        Relationship(fk='owner_id', name='owner', target=UserEntity, loader=user_loader)
     ]
     id: int
     name: str

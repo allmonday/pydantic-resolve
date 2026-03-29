@@ -84,18 +84,18 @@ class FooNameLoader(DataLoader):
 
 class Biz(BaseModel, BASE_ENTITY):
     __relationships__ = [
-        Relationship(field='user_id', field_name='user', target_kls=User, loader=UserLoader),
-        Relationship(field='user_ids', field_name='users_a', target_kls=list[User], load_many=True, loader=UserLoader),
-        Relationship(field='user_ids_str',
-                        field_name='users_b',
-                        target_kls=list[User],
+        Relationship(fk='user_id', name='user', target=User, loader=UserLoader),
+        Relationship(fk='user_ids', name='users_a', target=list[User], load_many=True, loader=UserLoader),
+        Relationship(fk='user_ids_str',
+                        name='users_b',
+                        target=list[User],
                         load_many=True,
                         load_many_fn=lambda x: [int(xx) for xx in x.split(',')] if x else [],
                         loader=UserLoader),
-        Relationship(field='id', field_name='foos', target_kls=list[Foo], loader=FooLoader),
-        Relationship(field='id', field_name='bars', target_kls=list[Bar], loader=BarLoader),
-        Relationship(field='id', field_name='special_bars', target_kls=list[Bar], loader=SpecialBarLoader),
-        Relationship(field='id', field_name='foos_in_str', target_kls=list[str], loader=FooNameLoader),
+        Relationship(fk='id', name='foos', target=list[Foo], loader=FooLoader),
+        Relationship(fk='id', name='bars', target=list[Bar], loader=BarLoader),
+        Relationship(fk='id', name='special_bars', target=list[Bar], loader=SpecialBarLoader),
+        Relationship(fk='id', name='foos_in_str', target=list[str], loader=FooNameLoader),
     ]
 
     id: int

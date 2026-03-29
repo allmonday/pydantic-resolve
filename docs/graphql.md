@@ -21,8 +21,8 @@ BaseEntity = base_entity()
 
 class UserEntity(BaseModel, BaseEntity):
     __relationships__ = [
-        Relationship(field='id', target_kls=list['PostEntity'],
-                     loader=user_posts_loader, field_name='myposts')
+        Relationship(fk='id', target=list['PostEntity'],
+                     loader=user_posts_loader, name='myposts')
     ]
     id: int
     name: str
@@ -63,8 +63,8 @@ diagram = ErDiagram(configs=[
     Entity(
         kls=UserEntity,
         relationships=[
-            Relationship(field='id', target_kls=list[PostEntity],
-                         loader=user_posts_loader, field_name='myposts')
+            Relationship(fk='id', target=list[PostEntity],
+                         loader=user_posts_loader, name='myposts')
         ],
         queries=[
             QueryConfig(method=get_all_users, name='users', description='Get all users'),
@@ -96,10 +96,10 @@ Defines the GraphQL field name for nested queries:
 
 ```python
 Relationship(
-    field='author_id',           # FK field in entity
-    target_kls=UserEntity,       # Target entity
+    fk='author_id',           # FK field in entity
+    target=UserEntity,       # Target entity
     loader=user_loader,          # DataLoader function
-    field_name='author'          # GraphQL field name
+    name='author'          # GraphQL field name
 )
 ```
 

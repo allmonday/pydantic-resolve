@@ -75,10 +75,10 @@ class FooLoader(DataLoader):
 diagram = ErDiagram(
     configs=[
         Entity(kls=Biz, relationships=[
-            Relationship(field='user_id', field_name='user', target_kls=User, loader=UserLoader),
-            Relationship(field='id', field_name='foos', target_kls=List[Foo], loader=FooLoader),
-            Relationship(field='id', field_name='bars', target_kls=list[Bar], loader=BarLoader),
-            Relationship(field='id', field_name='special_bars', target_kls=list[Bar], loader=SpecialBarLoader),
+            Relationship(fk='user_id', name='user', target=User, loader=UserLoader),
+            Relationship(fk='id', name='foos', target=List[Foo], loader=FooLoader),
+            Relationship(fk='id', name='bars', target=list[Bar], loader=BarLoader),
+            Relationship(fk='id', name='special_bars', target=list[Bar], loader=SpecialBarLoader),
         ])
     ]
 )

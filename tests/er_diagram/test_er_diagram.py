@@ -100,18 +100,18 @@ class FooNameLoader(DataLoader):
 diagram = ErDiagram(
     configs=[
         Entity(kls=Biz, relationships=[
-            Relationship(field='user_id', field_name='user', target_kls=User, loader=UserLoader),
-            Relationship(field='user_id_str', field_name='user_2', field_fn=int, target_kls=User, loader=UserLoader),
-            Relationship(field='user_ids', field_name='users_a', target_kls=list[User], load_many=True, loader=UserLoader),
-            Relationship(field='user_ids_str',
-                         field_name='users_b',
-                         target_kls=list[User],
+            Relationship(fk='user_id', name='user', target=User, loader=UserLoader),
+            Relationship(fk='user_id_str', name='user_2', fk_fn=int, target=User, loader=UserLoader),
+            Relationship(fk='user_ids', name='users_a', target=list[User], load_many=True, loader=UserLoader),
+            Relationship(fk='user_ids_str',
+                         name='users_b',
+                         target=list[User],
                          load_many=True,
                          load_many_fn=lambda x: [int(xx) for xx in x.split(',')] if x else [],
                          loader=UserLoader),
             # MultipleRelationship feature removed
-            # Relationship(field='id', field_name='foos', target_kls=list[Foo], loader=FooLoader),
-            # Relationship(field='id', field_name='bars', target_kls=list[Bar], loader=BarLoader),
+            # Relationship(fk='id', name='foos', target=list[Foo], loader=FooLoader),
+            # Relationship(fk='id', name='bars', target=list[Bar], loader=BarLoader),
         ])
     ]
 )
@@ -225,7 +225,7 @@ async def test_loadby_references_nonexistent_field():
     # Class definition succeeds (validation deferred)
     # But when we try to use it with a resolver, it should fail
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
-    with pytest.raises(AttributeError, match='Relationship with field_name "user_xyz" not found'):
+    with pytest.raises(AttributeError, match='Relationship with name "user_xyz" not found'):
         d = BizCase6(id=1, user_id=1)
         await MyResolver().resolve(d)
 

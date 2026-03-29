@@ -28,7 +28,7 @@ def test_relationship_single_target_no_field_name_required():
 	cfg = Entity(
 		kls=A,
 		relationships=[
-			Relationship(field="fk", field_name="t1", target_kls=T1, loader=dummy_loader),
+			Relationship(fk="fk", name="t1", target=T1, loader=dummy_loader),
 		],
 	)
 	assert isinstance(cfg, Entity)
@@ -37,12 +37,12 @@ def test_relationship_single_target_no_field_name_required():
 def test_relationship_none_default_conflict_raises():
 	with pytest.raises(ValidationError):
 		Relationship(
-			field="fk",
-			field_name="t1",
-			target_kls=T1,
+			fk="fk",
+			name="t1",
+			target=T1,
 			loader=dummy_loader,
-			field_none_default=None,
-			field_none_default_factory=list,
+			fk_none_default=None,
+			fk_none_default_factory=list,
 		)
 
 
@@ -52,8 +52,8 @@ def test_entity_duplicate_field_name_raises():
 		Entity(
 			kls=A,
 			relationships=[
-				Relationship(field="fk", field_name="t1", target_kls=T1, loader=dummy_loader),
-				Relationship(field="fk", field_name="t1", target_kls=T1, loader=dummy_loader),
+				Relationship(fk="fk", name="t1", target=T1, loader=dummy_loader),
+				Relationship(fk="fk", name="t1", target=T1, loader=dummy_loader),
 			],
 		)
 
@@ -63,8 +63,8 @@ def test_entity_distinct_field_names_allowed():
 	entity = Entity(
 		kls=A,
 		relationships=[
-			Relationship(field="fk", field_name="t1", target_kls=T1, loader=dummy_loader),
-			Relationship(field="fk", field_name="t1_alt", target_kls=T1, loader=dummy_loader),
+			Relationship(fk="fk", name="t1", target=T1, loader=dummy_loader),
+			Relationship(fk="fk", name="t1_alt", target=T1, loader=dummy_loader),
 		],
 	)
 	assert isinstance(entity, Entity)
@@ -73,8 +73,8 @@ def test_entity_allows_distinct_targets_per_field():
 	entity = Entity(
 		kls=A,
 		relationships=[
-			Relationship(field="fk", field_name="t1", target_kls=T1, loader=dummy_loader),
-			Relationship(field="fk", field_name="t2", target_kls=T2, loader=dummy_loader),
+			Relationship(fk="fk", name="t1", target=T1, loader=dummy_loader),
+			Relationship(fk="fk", name="t2", target=T2, loader=dummy_loader),
 		],
 	)
 	assert isinstance(entity, Entity)
@@ -83,7 +83,7 @@ def test_entity_allows_distinct_targets_per_field():
 def test_erdiagram_duplicate_entity_kls_raises():
 	cfg = Entity(
 		kls=A,
-		relationships=[Relationship(field="fk", field_name="t1", target_kls=T1, loader=dummy_loader)],
+		relationships=[Relationship(fk="fk", name="t1", target=T1, loader=dummy_loader)],
 	)
 	with pytest.raises(ValidationError):
 		ErDiagram(configs=[cfg, cfg])

@@ -65,9 +65,9 @@ async def test_field_fn_raises_value_error():
             Entity(
                 kls=Order,
                 relationships=[
-                    Relationship(field='user_id_str', field_name='user',
-                        target_kls=User,
-                        field_fn=int,  # Will raise ValueError if user_id_str is not numeric
+                    Relationship(fk='user_id_str', name='user',
+                        target=User,
+                        fk_fn=int,  # Will raise ValueError if user_id_str is not numeric
                         loader=ErrorOnNonNumericLoader
                     )
                 ]
@@ -98,10 +98,10 @@ async def test_field_fn_with_none_value():
             Entity(
                 kls=Order,
                 relationships=[
-                    Relationship(field='user_id_str', field_name='user',
-                        target_kls=User,
-                        field_fn=int,
-                        field_none_default=None,  # Return None when field is None
+                    Relationship(fk='user_id_str', name='user',
+                        target=User,
+                        fk_fn=int,
+                        fk_none_default=None,  # Return None when field is None
                         loader=UserLoader
                     )
                 ]
@@ -133,10 +133,10 @@ async def test_field_fn_returns_none():
             Entity(
                 kls=Order,
                 relationships=[
-                    Relationship(field='user_id', field_name='user',
-                        target_kls=User,
-                        field_fn=return_none,  # Always returns None
-                        field_none_default=None,
+                    Relationship(fk='user_id', name='user',
+                        target=User,
+                        fk_fn=return_none,  # Always returns None
+                        fk_none_default=None,
                         loader=UserLoader
                     )
                 ]
@@ -166,9 +166,9 @@ async def test_field_fn_returns_incompatible_type():
             Entity(
                 kls=Order,
                 relationships=[
-                    Relationship(field='user_id', field_name='user',
-                        target_kls=User,
-                        field_fn=lambda x: "string_instead_of_int",  # Returns str instead of int
+                    Relationship(fk='user_id', name='user',
+                        target=User,
+                        fk_fn=lambda x: "string_instead_of_int",  # Returns str instead of int
                         loader=ErrorOnNonNumericLoader
                     )
                 ]
@@ -196,8 +196,8 @@ async def test_load_many_fn_with_none_field_value():
             Entity(
                 kls=Order,
                 relationships=[
-                    Relationship(field='user_ids_str', field_name='users',
-                        target_kls=list[User],
+                    Relationship(fk='user_ids_str', name='users',
+                        target=list[User],
                         load_many=True,
                         load_many_fn=lambda x: x.split(','),  # Would fail if called with None
                         loader=UserLoader
@@ -229,11 +229,11 @@ async def test_load_many_fn_returns_none():
             Entity(
                 kls=Order,
                 relationships=[
-                    Relationship(field='user_ids', field_name='users',
-                        target_kls=list[User],
+                    Relationship(fk='user_ids', name='users',
+                        target=list[User],
                         load_many=True,
                         load_many_fn=lambda x: None,  # Returns None
-                        field_none_default_factory=list,
+                        fk_none_default_factory=list,
                         loader=UserLoader
                     )
                 ]
@@ -262,8 +262,8 @@ async def test_load_many_fn_returns_non_iterable():
             Entity(
                 kls=Order,
                 relationships=[
-                    Relationship(field='user_ids', field_name='users',
-                        target_kls=list[User],
+                    Relationship(fk='user_ids', name='users',
+                        target=list[User],
                         load_many=True,
                         load_many_fn=lambda x: 42,  # Returns int instead of iterable
                         loader=UserLoader
@@ -294,9 +294,9 @@ async def test_field_fn_with_valid_transformation():
             Entity(
                 kls=Order,
                 relationships=[
-                    Relationship(field='user_id_str', field_name='user',
-                        target_kls=User,
-                        field_fn=int,  # Valid: converts string to int
+                    Relationship(fk='user_id_str', name='user',
+                        target=User,
+                        fk_fn=int,  # Valid: converts string to int
                         loader=UserLoader
                     )
                 ]
@@ -325,8 +325,8 @@ async def test_load_many_fn_with_valid_transformation():
             Entity(
                 kls=Order,
                 relationships=[
-                    Relationship(field='user_ids_str', field_name='users',
-                        target_kls=list[User],
+                    Relationship(fk='user_ids_str', name='users',
+                        target=list[User],
                         load_many=True,
                         load_many_fn=lambda x: [int(i) for i in x.split(',')],  # Valid: CSV to list of ints
                         loader=UserLoader

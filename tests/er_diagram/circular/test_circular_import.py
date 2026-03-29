@@ -35,16 +35,16 @@ def test_circular_import_error():
     # Verify UserEntity has a relationship to list[PostEntity]
     assert len(user_cfg.relationships) == 1
     user_rel = user_cfg.relationships[0]
-    assert user_rel.field == 'id'
+    assert user_rel.fk == 'id'
     # Should be resolved to list[PostEntity], not a string
-    assert user_rel.target_kls == list[PostEntity]
+    assert user_rel.target == list[PostEntity]
 
     # Verify PostEntity has a relationship to UserEntity
     assert len(post_cfg.relationships) == 1
     post_rel = post_cfg.relationships[0]
-    assert post_rel.field == 'user_id'
+    assert post_rel.fk == 'user_id'
     # Should be resolved to UserEntity, not a string
-    assert post_rel.target_kls == UserEntity
+    assert post_rel.target == UserEntity
 
 
 def test_module_path_syntax_with_list():
@@ -64,9 +64,9 @@ def test_module_path_syntax_with_list():
     rel = user_cfg.relationships[0]
 
     # Verify it's a list type with correct target
-    assert rel.target_kls == list[PostEntity]
-    assert get_origin(rel.target_kls) is list
-    assert rel.target_kls.__args__[0] == PostEntity
+    assert rel.target == list[PostEntity]
+    assert get_origin(rel.target) is list
+    assert rel.target.__args__[0] == PostEntity
 
 
 def test_module_path_syntax_with_simple_class():
@@ -86,6 +86,6 @@ def test_module_path_syntax_with_simple_class():
     rel = post_cfg.relationships[0]
 
     # Verify it's the UserEntity class (not a string)
-    assert rel.target_kls == UserEntity
-    assert isinstance(rel.target_kls, type)
-    assert rel.target_kls.__name__ == 'UserEntity'
+    assert rel.target == UserEntity
+    assert isinstance(rel.target, type)
+    assert rel.target.__name__ == 'UserEntity'

@@ -334,8 +334,8 @@ class TaskEntity(BaseModel, BaseEntity):
     """Task entity: define business relationships"""
     __relationships__ = [
         Relationship(
-            field='owner_id',
-            target_kls=UserEntity,
+            fk='owner_id',
+            target=UserEntity,
             loader=user_loader  # don't care where it loads from
         )
     ]
@@ -446,18 +446,18 @@ class UserDetail(DefineSubset):
 class TaskEntity(BaseModel, BaseEntity):
     __relationships__ = [
         Relationship(
-            field='owner_id',
-            target_kls=UserEntity,
+            fk='owner_id',
+            target=UserEntity,
             loader=user_from_db_loader  # Load from DB
         ),
         Relationship(
-            field='project_id',
-            target_kls=ProjectEntity,
+            fk='project_id',
+            target=ProjectEntity,
             loader=project_from_rpc_loader  # Load from RPC
         ),
         Relationship(
-            field='status_id',
-            target_kls=StatusEntity,
+            fk='status_id',
+            target=StatusEntity,
             loader=status_from_cache_loader  # Load from cache
         ),
     ]
@@ -646,8 +646,8 @@ async def get_tasks(session: AsyncSession = Depends(get_session)):
 # entities/task.py (business entity)
 class TaskEntity(BaseModel, BaseEntity):
     __relationships__ = [
-        Relationship(field='owner_id', target_kls=UserEntity, loader=user_loader),
-        Relationship(field='project_id', target_kls=ProjectEntity, loader=project_loader),
+        Relationship(fk='owner_id', target=UserEntity, loader=user_loader),
+        Relationship(fk='project_id', target=ProjectEntity, loader=project_loader),
     ]
     id: int
     name: str
@@ -717,7 +717,7 @@ class UserEntity(BaseModel):
 # Centrally define entity relationships
 class TaskEntity(BaseModel, BaseEntity):
     __relationships__ = [
-        Relationship(field='owner_id', target_kls=UserEntity, loader=user_loader),
+        Relationship(fk='owner_id', target=UserEntity, loader=user_loader),
     ]
 ```
 

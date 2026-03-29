@@ -377,7 +377,7 @@ class ResponseBuilder:
 
         Example:
         ─────────────────────────────────────────────────────────────────
-        Scenario: UserEntity has Relationship(field='id', target_kls=PostEntity, field_name='posts')
+        Scenario: UserEntity has Relationship(fk='id', target=PostEntity, name='posts')
                   Query selects 'posts' field which needs 'id' for AutoLoad
 
         Before:
@@ -409,7 +409,7 @@ class ResponseBuilder:
         Example:
         ─────────────────────────────────────────────────────────────────
         Scenario: UserEntity.__relationships__ = [
-            Relationship(field='id', target_kls=list[PostEntity], field_name='posts', loader=post_loader)
+            Relationship(fk='id', target=list[PostEntity], name='posts', loader=post_loader)
         ]
         Query: { users { id posts { title } } }
 
@@ -456,7 +456,7 @@ class ResponseBuilder:
         Example:
         ─────────────────────────────────────────────────────────────────
         Input:
-            relationship = Relationship(field='id', target_kls=list[PostEntity], field_name='posts')
+            relationship = Relationship(fk='id', target=list[PostEntity], name='posts')
             selection = {title, content}
 
         Process:
@@ -468,7 +468,7 @@ class ResponseBuilder:
             (Annotated[List[PostResponse], AutoLoad()], [])
         ─────────────────────────────────────────────────────────────────
         """
-        target_kls = relationship.target_kls
+        target_kls = relationship.target
         origin = get_origin(target_kls)
 
         # Extract actual entity type
@@ -643,14 +643,14 @@ class ResponseBuilder:
         ─────────────────────────────────────────────────────────────────
         Scenario:
             UserEntity.__relationships__ = [
-                Relationship(field='id', target_kls=list[PostEntity], field_name='posts')
+                Relationship(fk='id', target=list[PostEntity], name='posts')
             ]
             Query selects: {'id', 'name', 'posts'}
 
         Process:
             1. Look up relationships for 'posts' field
-            2. Find Relationship with field_name='posts'
-            3. Extract field='id' (the FK needed for AutoLoad)
+            2. Find Relationship with name='posts'
+            3. Extract fk='id' (the FK needed for AutoLoad)
 
         Output: {'id'}
         ─────────────────────────────────────────────────────────────────
@@ -673,14 +673,14 @@ class ResponseBuilder:
         ─────────────────────────────────────────────────────────────────
         Scenario:
             UserEntity.__relationships__ = [
-                Relationship(field='id', target_kls=list[PostEntity], field_name='posts')
+                Relationship(fk='id', target=list[PostEntity], name='posts')
             ]
             Query selects: {'posts'}
 
         Process:
             1. Iterate through relationships
-            2. Find Relationship with field_name='posts'
-            3. Extract field='id'
+            2. Find Relationship with name='posts'
+            3. Extract fk='id'
 
         Output: {'id'}
         ─────────────────────────────────────────────────────────────────
@@ -693,8 +693,8 @@ class ResponseBuilder:
 
         for field_name in selected_fields:
             for rel in entity_cfg.relationships:
-                if rel.field_name == field_name:
-                    fk_fields.add(rel.field)
+                if rel.name == field_name:
+                    fk_fields.add(rel.fk)
 
         return fk_fields
 
@@ -715,11 +715,11 @@ class ResponseBuilder:
             entity = UserEntity
             field_name = 'posts'
             UserEntity.__relationships__ = [
-                Relationship(field='id', target_kls=list[PostEntity], field_name='posts')
+                Relationship(fk='id', target=list[PostEntity], name='posts')
             ]
 
         Output:
-            Relationship(field='id', target_kls=list[PostEntity], field_name='posts')
+            Relationship(fk='id', target=list[PostEntity], name='posts')
         ─────────────────────────────────────────────────────────────────
         """
         entity_cfg = self.entity_map.get(entity)
@@ -727,7 +727,7 @@ class ResponseBuilder:
             return None
 
         for rel in entity_cfg.relationships:
-            if rel.field_name == field_name:
+            if rel.name == field_name:
                 return rel
 
         return None

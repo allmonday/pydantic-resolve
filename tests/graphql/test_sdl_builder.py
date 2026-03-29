@@ -43,7 +43,7 @@ class SampleUser(BaseModel, SampleBaseEntity):
 class SamplePost(BaseModel, SampleBaseEntity):
     """Sample post entity with relationships."""
     __relationships__ = [
-        Relationship(field='author_id', target_kls=SampleUser, field_name='author', loader=lambda x: [])
+        Relationship(fk='author_id', target=SampleUser, name='author', loader=lambda x: [])
     ]
     id: int
     title: str
@@ -303,17 +303,17 @@ class TestHideRelationshipsWithoutLoader:
             __relationships__ = [
                 # Has loader - should appear in SDL
                 Relationship(
-                    field='author_id',
-                    target_kls=TestUser,
+                    fk='author_id',
+                    target=TestUser,
                     loader=lambda x: [],
-                    field_name='author'
+                    name='author'
                 ),
                 # No loader - should be hidden from SDL
                 Relationship(
-                    field='reviewer_id',
-                    target_kls=TestUser,
+                    fk='reviewer_id',
+                    target=TestUser,
                     loader=None,
-                    field_name='reviewer'
+                    name='reviewer'
                 ),
             ]
             id: int

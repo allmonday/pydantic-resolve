@@ -21,8 +21,8 @@ BaseEntity = base_entity()
 
 class UserEntity(BaseModel, BaseEntity):
     __relationships__ = [
-        Relationship(field='id', target_kls=list['PostEntity'],
-                     loader=user_posts_loader, field_name='myposts')
+        Relationship(fk='id', target=list['PostEntity'],
+                     loader=user_posts_loader, name='myposts')
     ]
     id: int
     name: str
@@ -63,8 +63,8 @@ diagram = ErDiagram(configs=[
     Entity(
         kls=UserEntity,
         relationships=[
-            Relationship(field='id', target_kls=list[PostEntity],
-                         loader=user_posts_loader, field_name='myposts')
+            Relationship(fk='id', target=list[PostEntity],
+                         loader=user_posts_loader, name='myposts')
         ],
         queries=[
             QueryConfig(method=get_all_users, name='users', description='获取所有用户'),
@@ -96,10 +96,10 @@ handler = GraphQLHandler(diagram)
 
 ```python
 Relationship(
-    field='author_id',           # 实体中的外键字段
-    target_kls=UserEntity,       # 目标实体
+    fk='author_id',           # 实体中的外键字段
+    target=UserEntity,       # 目标实体
     loader=user_loader,          # DataLoader 函数
-    field_name='author'  # GraphQL 字段名
+    name='author'  # GraphQL 字段名
 )
 ```
 

@@ -26,26 +26,26 @@ class MutationConfig(BaseModel):
 
 
 class Relationship(BaseModel):
-    field: str  # FK field name
-    target_kls: Any  # Target entity class
-    field_name: str  # REQUIRED - unique identifier, becomes GraphQL field name
+    fk: str  # FK field name on this entity
+    target: Any  # Target entity class
+    name: str  # Relationship name (unique identifier, becomes GraphQL field name)
 
     # Loader and behavior:
     loader: Callable | None = None
-    field_fn: Callable | None = None
-    field_none_default: Any | None = None
-    field_none_default_factory: Callable[[], Any] | None = None
+    fk_fn: Callable | None = None
+    fk_none_default: Any | None = None
+    fk_none_default_factory: Callable[[], Any] | None = None
     load_many: bool = False
     load_many_fn: Callable[[Any], Any] | None = None
 
     @model_validator(mode="after")
     def _validate_defaults(self) -> "Relationship":
         fields_set = getattr(self, 'model_fields_set', set())
-        val_set = 'field_none_default' in fields_set
-        factory_set = 'field_none_default_factory' in fields_set
+        val_set = 'fk_none_default' in fields_set
+        factory_set = 'fk_none_default_factory' in fields_set
         if val_set and factory_set:
             raise ValueError(
-                "field_none_default and field_none_default_factory cannot both be defined"
+                "fk_none_default and fk_none_default_factory cannot both be defined"
             )
         return self
 
@@ -59,22 +59,22 @@ class Entity(BaseModel):
     def _validate_relationships(self) -> "Entity":
         rels = self.relationships or []
 
-        # Disallow duplicate field_name
+        # Disallow duplicate name
         seen = set()
         for r in rels:
-            if r.field_name in seen:
+            if r.name in seen:
                 raise ValueError(
-                    f"Duplicate field_name detected in {self.kls.__name__}: '{r.field_name}'"
+                    f"Duplicate name detected in {self.kls.__name__}: '{r.name}'"
                 )
-            seen.add(r.field_name)
+            seen.add(r.name)
 
-        # Validate field_name conflicts with scalar/inherited fields
-        self._validate_field_name_conflicts()
+        # Validate name conflicts with scalar/inherited fields
+        self._validate_name_conflicts()
 
         return self
 
-    def _validate_field_name_conflicts(self) -> None:
-        """Detect naming conflicts for field_name."""
+    def _validate_name_conflicts(self) -> None:
+        """Detect naming conflicts for relationship name."""
         from typing import get_type_hints
 
         # 1. Collect scalar fields
@@ -83,16 +83,16 @@ class Entity(BaseModel):
         except Exception:
             scalar_fields = set()
 
-        # 2. Check each relationship's field_name
+        # 2. Check each relationship's name
         for rel in self.relationships or []:
-            field_name = rel.field_name
+            rel_name = rel.name
 
             # Check for conflicts with scalar fields
-            if field_name in scalar_fields:
+            if rel_name in scalar_fields:
                 raise ValueError(
-                    f"Field name conflict in {self.kls.__name__}: '{field_name}' - "
-                    f"field_name conflicts with scalar field. "
-                    f"Relationship(field={rel.field}), target_kls={rel.target_kls}"
+                    f"Name conflict in {self.kls.__name__}: '{rel_name}' - "
+                    f"relationship name conflicts with scalar field. "
+                    f"Relationship(fk={rel.fk}), target={rel.target}"
                 )
 
         # 3. Check for conflicts with parent class fields
@@ -105,11 +105,11 @@ class Entity(BaseModel):
                 continue
 
             for rel in self.relationships or []:
-                if rel.field_name in base_fields:
+                if rel.name in base_fields:
                     raise ValueError(
-                        f"Field name conflict in {self.kls.__name__}: '{rel.field_name}' - "
-                        f"relationship field conflicts with inherited field from {base_cls.__name__}. "
-                        f"Relationship(field={rel.field})"
+                        f"Name conflict in {self.kls.__name__}: '{rel.name}' - "
+                        f"relationship name conflicts with inherited field from {base_cls.__name__}. "
+                        f"Relationship(fk={rel.fk})"
                     )
 
 class ErDiagram(BaseModel):
@@ -312,7 +312,7 @@ def base_entity() -> type[BaseEntity]:
             for rel in rels:
                 resolved_rels.append(
                     rel.model_copy(update={
-                        'target_kls': _resolve_ref(rel.target_kls, module_name),
+                        'target': _resolve_ref(rel.target, module_name),
                     })
                 )
 
@@ -354,13 +354,13 @@ class ErLoaderPreGenerator:
                 return cfg
         raise AttributeError(f'No ErConfig found for {target}')
 
-    def _identify_relationship(self, config: Entity, field_name: str) -> Relationship:
-        """Find the relationship matching field_name."""
+    def _identify_relationship(self, config: Entity, name: str) -> Relationship:
+        """Find the relationship matching name."""
         for rel in config.relationships:
-            if rel.field_name == field_name:
+            if rel.name == name:
                 return rel
         raise AttributeError(
-            f'Relationship with field_name "{field_name}" not found in "{config.kls}"'
+            f'Relationship with name "{name}" not found in "{config.kls}"'
         )
 
     def prepare(self, kls: type):
@@ -390,19 +390,19 @@ class ErLoaderPreGenerator:
             lookup_key = loader_info.origin if loader_info.origin else field_name
             relationship = self._identify_relationship(
                 config=config,
-                field_name=lookup_key,
+                name=lookup_key,
             )
 
             if relationship.loader is None:
-                raise AttributeError(f'Loader not provided in relationship for field_name "{field_name}" in class "{kls}"')
+                raise AttributeError(f'Loader not provided in relationship for name "{field_name}" in class "{kls}"')
 
             def _handle_fk_none(rel: Relationship):
                 """Common logic for handling None foreign key values."""
                 fields_set = getattr(rel, 'model_fields_set', set())
-                if 'field_none_default' in fields_set:
-                    return rel.field_none_default  # may be None intentionally
-                if rel.field_none_default_factory is not None:
-                    return rel.field_none_default_factory()
+                if 'fk_none_default' in fields_set:
+                    return rel.fk_none_default  # may be None intentionally
+                if rel.fk_none_default_factory is not None:
+                    return rel.fk_none_default_factory()
                 return None
 
             def create_resolve_method(key: str, rel: Relationship):  # closure per field
@@ -410,8 +410,8 @@ class ErLoaderPreGenerator:
                     fk = getattr(self, key)
                     if fk is None:
                         return _handle_fk_none(rel)
-                    if rel.field_fn is not None:
-                        fk = rel.field_fn(fk)
+                    if rel.fk_fn is not None:
+                        fk = rel.fk_fn(fk)
                     return loader.load(fk)
                 resolve_method.__name__ = method_name
                 resolve_method.__qualname__ = f'{kls.__name__}.{method_name}'
@@ -430,9 +430,9 @@ class ErLoaderPreGenerator:
                 return resolve_method
 
             if relationship.load_many:
-                setattr(kls, method_name, create_resolve_method_with_load_many(relationship.field, relationship))
+                setattr(kls, method_name, create_resolve_method_with_load_many(relationship.fk, relationship))
             else:
-                setattr(kls, method_name, create_resolve_method(relationship.field, relationship))
+                setattr(kls, method_name, create_resolve_method(relationship.fk, relationship))
 
 
 def _get_pydantic_field_items_with_load_by(kls) -> Iterator[tuple[str, type, LoaderInfo]]:

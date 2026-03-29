@@ -303,14 +303,14 @@ diagram = ErDiagram(configs=[
     Entity(
         kls=Story,
         relationships=[
-            Relationship(field='id', target_kls=list[Task], loader=story_to_task_loader),
-            Relationship(field='owner_id', target_kls=User, loader=user_batch_loader)
+            Relationship(fk='id', target=list[Task], loader=story_to_task_loader),
+            Relationship(fk='owner_id', target=User, loader=user_batch_loader)
         ]
     ),
     Entity(
         kls=Task,
         relationships=[
-            Relationship(field='owner_id', target_kls=User, loader=user_batch_loader)
+            Relationship(fk='owner_id', target=User, loader=user_batch_loader)
         ]
     )
 ])

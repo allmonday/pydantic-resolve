@@ -205,23 +205,23 @@ class Comment(BaseModel):
 
     # 定义关系：通过 user_id 加载 User
     __relationships__ = [
-        Relationship(field='user_id', field_name='user', target_kls=User, loader=user_loader)
+        Relationship(fk='user_id', name='user', target=User, loader=user_loader)
     ]
 ```
 
 **参数：**
 
-- `field` (str): 外键字段名
-- `target_kls` (type): 目标 Pydantic 模型类
-- `field_name` (str): 唯一标识符，将成为 GraphQL 字段名（必填）
+- `fk` (str): 外键字段名
+- `target` (type): 目标 Pydantic 模型类
+- `name` (str): 唯一标识符，将成为 GraphQL 字段名（必填）
 - `loader` (Callable): DataLoader 函数，用于获取目标实体
-- `field_fn` (Callable | None): 可选函数，在传递给 loader 之前转换 FK 值
-- `field_none_default` (Any | None): 当 FK 为 None 时返回的默认值
-- `field_none_default_factory` (Callable | None): 当 FK 为 None 时创建默认值的工厂函数
+- `fk_fn` (Callable | None): 可选函数，在传递给 loader 之前转换 FK 值
+- `fk_none_default` (Any | None): 当 FK 为 None 时返回的默认值
+- `fk_none_default_factory` (Callable | None): 当 FK 为 None 时创建默认值的工厂函数
 - `load_many` (bool): FK 字段本身是否包含多个值（如 `user_ids: list[int]`），为 True 时内部调用 `loader.load_many()` 而非 `loader.load()`（默认: False）
 - `load_many_fn` (Callable | None): 将 FK 字段值转换为可迭代对象的函数，用于 load_many
 
-**注意：** `MultipleRelationship` 和 `Link` 已被移除。现在可以通过创建多个具有相同 `field` 但不同 `field_name` 的 `Relationship` 来实现多重关系。
+**注意：** `MultipleRelationship` 和 `Link` 已被移除。现在可以通过创建多个具有相同 `fk` 但不同 `name` 的 `Relationship` 来实现多重关系。
 
 #### Entity
 
@@ -233,7 +233,7 @@ from pydantic_resolve import Entity
 Entity(
     kls=Comment,
     relationships=[
-        Relationship(field='user_id', field_name='user', target_kls=User, loader=user_loader)
+        Relationship(fk='user_id', name='user', target=User, loader=user_loader)
     ]
 )
 ```
@@ -291,7 +291,7 @@ class User(BaseModel, BaseEntity):
     name: str
 
     __relationships__ = [
-        Relationship(field='org_id', field_name='organization', target_kls=Organization, loader=org_loader)
+        Relationship(fk='org_id', name='organization', target=Organization, loader=org_loader)
     ]
 
 class Comment(BaseModel, BaseEntity):
@@ -299,7 +299,7 @@ class Comment(BaseModel, BaseEntity):
     user_id: int
 
     __relationships__ = [
-        Relationship(field='user_id', field_name='user', target_kls=User, loader=user_loader)
+        Relationship(fk='user_id', name='user', target=User, loader=user_loader)
     ]
 
 # 获取 ER 图
@@ -318,7 +318,7 @@ diagram = BaseEntity.get_diagram()
 
        __relationships__ = [
            # 字符串 'User' 会被自动解析
-           Relationship(field='user_id', field_name='user', target_kls='User', loader=user_loader)
+           Relationship(fk='user_id', name='user', target='User', loader=user_loader)
        ]
    ```
 
@@ -333,9 +333,9 @@ diagram = BaseEntity.get_diagram()
        __relationships__ = [
            # 引用另一个模块中的 User
            Relationship(
-               field='user_id',
-               field_name='user',
-               target_kls='app.models.user:User',  # 模块路径:类名
+               fk='user_id',
+               name='user',
+               target='app.models.user:User',  # 模块路径:类名
                loader=user_loader
            )
        ]
@@ -362,7 +362,7 @@ class User(BaseModel, BaseEntity):
     name: str
     org_id: int
     __relationships__ = [
-        Relationship(field='org_id', field_name='organization', target_kls=Organization, loader=org_loader)
+        Relationship(fk='org_id', name='organization', target=Organization, loader=org_loader)
     ]
 
 # 2. 全局注册 ERD
@@ -374,13 +374,13 @@ class UserResponse(BaseModel):
     name: str
     org_id: int
 
-    # 字段名匹配 Relationship.field_name，通过 ERD 关系自动解析
+    # 字段名匹配 Relationship.name，通过 ERD 关系自动解析
     organization: Annotated[Optional[Organization], AutoLoad()] = None
 ```
 
 **参数：**
 
-- `origin` (str | None): 目标 Relationship 的 `field_name` 查找键。默认为 `None`，此时使用注解字段名作为查找键。当字段名与 Relationship 的 `field_name` 不一致时，可通过此参数指定。
+- `origin` (str | None): 目标 Relationship 的 `name` 查找键。默认为 `None`，此时使用注解字段名作为查找键。当字段名与 Relationship 的 `name` 不一致时，可通过此参数指定。
 
 **注意：** `AutoLoad` 需要与 `config_global_resolver()` 配合，将 ERD 注入到默认 Resolver。
 
@@ -419,11 +419,11 @@ result = await Resolver().resolve(data)
 
 ```python
 Relationship(
-    field='user_id',
-    target_kls=User,
+    fk='user_id',
+    target=User,
     loader=user_loader,
-    field_none_default=None,  # 或
-    field_none_default_factory=lambda: AnonymousUser()
+    fk_none_default=None,  # 或
+    fk_none_default_factory=lambda: AnonymousUser()
 )
 ```
 
@@ -431,8 +431,8 @@ Relationship(
 
 ```python
 Relationship(
-    field='tag_ids',
-    target_kls=Tag,
+    fk='tag_ids',
+    target=Tag,
     loader=tag_loader,
     load_many=True,
     load_many_fn=lambda ids: ids.split(',') if ids else []  # 处理逗号分隔的值
@@ -441,7 +441,7 @@ Relationship(
 
 ### 高级：多重关系
 
-当一个字段可以表示不同的事物时，创建多个具有相同 `field` 但不同 `field_name` 的 `Relationship`：
+当一个字段可以表示不同的事物时，创建多个具有相同 `fk` 但不同 `name` 的 `Relationship`：
 
 ```python
 class Comment(BaseModel, BaseEntity):
@@ -449,15 +449,15 @@ class Comment(BaseModel, BaseEntity):
     user_id: int  # 可以是 author 或 moderator
 
     __relationships__ = [
-        Relationship(field='user_id', field_name='author', target_kls=User, loader=user_loader),
-        Relationship(field='user_id', field_name='moderator', target_kls=User, loader=moderator_loader)
+        Relationship(fk='user_id', name='author', target=User, loader=user_loader),
+        Relationship(fk='user_id', name='moderator', target=User, loader=moderator_loader)
     ]
 
 class CommentResponse(BaseModel):
     id: int
     user_id: int
 
-    # 字段名匹配 Relationship.field_name
+    # 字段名匹配 Relationship.name
     author: Annotated[Optional[User], AutoLoad()] = None
     moderator: Annotated[Optional[User], AutoLoad()] = None
 ```
@@ -1019,7 +1019,7 @@ class Comment(BaseModel, BaseEntity):
     id: int
     user_id: int
     __relationships__ = [
-        Relationship(field='user_id', field_name='user', target_kls=User, loader=user_loader)
+        Relationship(fk='user_id', name='user', target=User, loader=user_loader)
     ]
 
 config_global_resolver(BaseEntity.get_diagram())

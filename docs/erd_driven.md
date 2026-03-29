@@ -93,7 +93,7 @@ class User(BaseModel):
 
 class Post(BaseModel):
 	__pydantic_resolve_relationships__ = [
-		Relationship(field='id', target_kls=list[User], loader=PostLoader)
+		Relationship(fk='id', target=list[User], loader=PostLoader)
 	]
 	id: int
 	user_id: int
@@ -111,8 +111,8 @@ BaseEntity = base_entity()
 
 class User(BaseModel, BaseEntity):
 	__pydantic_resolve_relationships__ = [
-		Relationship(field='id', target_kls=list[Post], field_name='posts', loader=PostLoader),
-		Relationship(field='id', target_kls=list[Post], field_name='latest_three_posts', loader=LatestThreePostLoader)
+		Relationship(fk='id', target=list[Post], name='posts', loader=PostLoader),
+		Relationship(fk='id', target=list[Post], name='latest_three_posts', loader=LatestThreePostLoader)
 	]
 	id: int
 	name: str
@@ -148,7 +148,7 @@ diagram = ErDiagram(configs=[
 	Entity(
 		kls=User,
 		relationships=[
-			Relationship(field='id', target_kls=list[Post], loader=PostLoader)
+			Relationship(fk='id', target=list[Post], loader=PostLoader)
 		]
 	),
 	Entity(
@@ -180,7 +180,7 @@ class UserWithPostsForSpecificBusiness(User):
 	posts: Annotated[List[Post], AutoLoad()] = []
 ```
 
-`AutoLoad()` looks up the relationship by matching the field name (`posts`) to `Relationship.field_name` from the ERD and automatically resolves the data. If the field name differs from `field_name`, use `AutoLoad(origin='posts')` to specify the lookup key explicitly.
+`AutoLoad()` looks up the relationship by matching the field name (`posts`) to `Relationship.name` from the ERD and automatically resolves the data. If the field name differs from `name`, use `AutoLoad(origin='posts')` to specify the lookup key explicitly.
 
 ### The key to maintainable code: keep business ERD consistent with your code structure
 

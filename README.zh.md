@@ -200,7 +200,7 @@ class TaskEntity(BaseModel, BaseEntity):
     __relationships__ = [
         # Loader 可以查询 Postgres、调用 RPC、或从 Redis 获取
         # API 消费者不需要知道数据从哪来
-        Relationship(field='owner_id', field_name='owner', target_kls=UserEntity, loader=user_loader)
+        Relationship(fk='owner_id', name='owner', target=UserEntity, loader=user_loader)
     ]
     id: int
     name: str

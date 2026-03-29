@@ -92,7 +92,7 @@ class User(BaseModel):
 
 class Post(BaseModel):
     __pydantic_resolve_relationships__ = [
-        Relationship(field='id', target_kls=list[User], loader=PostLoader)
+        Relationship(fk='id', target=list[User], loader=PostLoader)
     ]
     id: int
     user_id: int
@@ -111,8 +111,8 @@ BaseEntity = base_entity()
 class User(BaseModel, BaseEntity):
     __pydantic_resolve_relationships__ = [
         MultipleRelationship(
-            field='id',
-            target_kls=list[Post],
+            fk='id',
+            target=list[Post],
             links=[
                 Link(biz='default', loader=PostLoader),
                 Link(biz='latest_three', loader=LatestThreePostLoader)
@@ -153,7 +153,7 @@ diagram = ErDiagram(configs=[
     Entity(
         kls=User,
         relationships=[
-            Relationship(field='id', target_kls=list[Post], loader=PostLoader)
+            Relationship(fk='id', target=list[Post], loader=PostLoader)
         ]
     ),
     Entity(
@@ -185,7 +185,7 @@ class UserWithPostsForSpecificBusiness(User):
     posts: Annotated[List[Post], AutoLoad()] = []
 ```
 
-`AutoLoad()` 通过字段名（`posts`）匹配 ERD 中 `Relationship.field_name`，自动解析数据。当字段名与 `field_name` 不一致时，可通过 `AutoLoad(origin='posts')` 显式指定查找键。
+`AutoLoad()` 通过字段名（`posts`）匹配 ERD 中 `Relationship.name`，自动解析数据。当字段名与 `field_name` 不一致时，可通过 `AutoLoad(origin='posts')` 显式指定查找键。
 
 ### 可维护代码的诀窍： 使业务 ERD 和代码中的结构定义维持一致
 
