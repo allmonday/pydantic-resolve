@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional, Dict
 from pydantic import BaseModel, Field
-from pydantic_resolve import base_entity, query, mutation, MultipleRelationship, Relationship, Link
+from pydantic_resolve import base_entity, query, mutation, Relationship
 from pydantic_resolve.utils.dataloader import build_list, build_object
 
 
@@ -117,11 +117,8 @@ class UserEntity(BaseModel, BaseEntity):
     表示系统中的用户信息，包括基本资料和关联的文章数据。
     """
     __relationships__ = [
-        MultipleRelationship(field='id', target_kls=list['PostEntity'],
-                             links= [
-                                 Link( biz="mypost", loader=user_posts_loader, default_field_name='myposts'),
-                                 Link( biz="mypost2", loader=user_posts_loader, default_field_name='myposts2')
-                                ])
+        Relationship(field='id', target_kls=list['PostEntity'], field_name='myposts', loader=user_posts_loader),
+        Relationship(field='id', target_kls=list['PostEntity'], field_name='myposts2', loader=user_posts_loader),
     ]
     id: int = Field(description="用户唯一标识ID")
     name: str = Field(description="用户姓名")
@@ -218,8 +215,8 @@ class PostEntity(BaseModel, BaseEntity):
     表示用户发布的文章内容，包含标题、内容和作者信息。
     """
     __relationships__ = [
-        Relationship(field='author_id', target_kls=UserEntity, loader=user_loader, default_field_name='author'),
-        Relationship(field='id', target_kls=list['CommentEntity'], loader=post_comments_loader, default_field_name='comments')
+        Relationship(field='author_id', target_kls=UserEntity, field_name='author', loader=user_loader),
+        Relationship(field='id', target_kls=list['CommentEntity'], field_name='comments', loader=post_comments_loader),
     ]
     id: int = Field(description="文章ID")
     title: str = Field(description="文章标题")
@@ -330,8 +327,8 @@ class CommentEntity(BaseModel, BaseEntity):
     表示用户对文章的评论内容。
     """
     __relationships__ = [
-        Relationship(field='author_id', target_kls=UserEntity, loader=user_loader, default_field_name='author'),
-        Relationship(field='post_id', target_kls=PostEntity, loader=post_loader, default_field_name='post')
+        Relationship(field='author_id', target_kls=UserEntity, field_name='author', loader=user_loader),
+        Relationship(field='post_id', target_kls=PostEntity, field_name='post', loader=post_loader),
     ]
     id: int = Field(description="评论ID")
     text: str = Field(description="评论内容")

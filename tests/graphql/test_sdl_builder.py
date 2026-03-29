@@ -43,7 +43,7 @@ class SampleUser(BaseModel, SampleBaseEntity):
 class SamplePost(BaseModel, SampleBaseEntity):
     """Sample post entity with relationships."""
     __relationships__ = [
-        Relationship(field='author_id', target_kls=SampleUser, loader=lambda x: [])
+        Relationship(field='author_id', target_kls=SampleUser, field_name='author', loader=lambda x: [])
     ]
     id: int
     title: str
@@ -180,7 +180,7 @@ class TestBuildEntityType:
         assert "title: String!" in result
         assert "author_id: Int!" in result
         # Relationship field should be included
-        # Note: depends on relationship having default_field_name
+        # Note: depends on relationship having field_name
 
     def test_entity_type_closing_brace(self):
         """Test entity type has proper closing."""
@@ -306,14 +306,14 @@ class TestHideRelationshipsWithoutLoader:
                     field='author_id',
                     target_kls=TestUser,
                     loader=lambda x: [],
-                    default_field_name='author'
+                    field_name='author'
                 ),
                 # No loader - should be hidden from SDL
                 Relationship(
                     field='reviewer_id',
                     target_kls=TestUser,
                     loader=None,
-                    default_field_name='reviewer'
+                    field_name='reviewer'
                 ),
             ]
             id: int

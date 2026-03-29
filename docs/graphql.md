@@ -22,7 +22,7 @@ BaseEntity = base_entity()
 class UserEntity(BaseModel, BaseEntity):
     __relationships__ = [
         Relationship(field='id', target_kls=list['PostEntity'],
-                     loader=user_posts_loader, default_field_name='myposts')
+                     loader=user_posts_loader, field_name='myposts')
     ]
     id: int
     name: str
@@ -64,7 +64,7 @@ diagram = ErDiagram(configs=[
         kls=UserEntity,
         relationships=[
             Relationship(field='id', target_kls=list[PostEntity],
-                         loader=user_posts_loader, default_field_name='myposts')
+                         loader=user_posts_loader, field_name='myposts')
         ],
         queries=[
             QueryConfig(method=get_all_users, name='users', description='Get all users'),
@@ -90,7 +90,7 @@ handler = GraphQLHandler(diagram)
 
 ## Key Concepts
 
-### default_field_name
+### field_name
 
 Defines the GraphQL field name for nested queries:
 
@@ -99,7 +99,7 @@ Relationship(
     field='author_id',           # FK field in entity
     target_kls=UserEntity,       # Target entity
     loader=user_loader,          # DataLoader function
-    default_field_name='author'  # GraphQL field name
+    field_name='author'          # GraphQL field name
 )
 ```
 
@@ -108,12 +108,12 @@ This allows queries like:
 {
   posts {
     title
-    author { name }  # Uses default_field_name
+    author { name }  # Uses field_name
   }
 }
 ```
 
-**Note:** `default_field_name` must not conflict with existing scalar fields in the entity.
+**Note:** `field_name` must not conflict with existing scalar fields in the entity.
 
 ### @query Decorator
 

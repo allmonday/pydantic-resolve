@@ -11,7 +11,7 @@ from pydantic.functional_serializers import PlainSerializer
 from functools import lru_cache
 
 from pydantic_resolve.constant import ENSURE_SUBSET_REFERENCE, ER_DIAGRAM_PRE_GENERATOR
-from pydantic_resolve.utils.er_diagram import ErDiagram, Relationship, MultipleRelationship, LoadBy
+from pydantic_resolve.utils.er_diagram import ErDiagram, Relationship, LoadBy
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.types import get_core_types
 from pydantic_resolve.graphql.types import FieldSelection
@@ -31,16 +31,6 @@ def _enum_name_serializer(v):
     if isinstance(v, Enum):
         return v.name
     return v
-
-
-@dataclass
-class RelationshipInfo:
-    """统一封装 Relationship 和 Link 的信息"""
-    field: str  # FK 字段名
-    target_kls: type  # 目标类型
-    loader: Callable | None  # 加载器
-    biz: str | None = None  # 仅 Link 有
-    is_link: bool = False  # 是否为 Link（MultipleRelationship 中的链接）
 
 
 class ResponseBuilder:
@@ -144,7 +134,7 @@ class ResponseBuilder:
             class UserResponse(BaseModel):
                 id: int
                 name: str
-                posts: Annotated[List[PostResponse], LoadBy('id')] = []
+                posts: Annotated[List[PostResponse], LoadBy()] = []
 
         Key Implementation Details:
         ─────────────────────────────────────────────────────────────────
@@ -388,7 +378,7 @@ class ResponseBuilder:
 
         Example:
         ─────────────────────────────────────────────────────────────────
-        Scenario: UserEntity has Relationship(field='id', target=PostEntity)
+        Scenario: UserEntity has Relationship(field='id', target_kls=PostEntity, field_name='posts')
                   Query selects 'posts' field which needs 'id' for LoadBy
 
         Before:
@@ -397,7 +387,7 @@ class ResponseBuilder:
         After:
             field_definitions = {'name': (str, ...), 'id': (int, ...)}
 
-        Why: LoadBy('id') needs the FK field to fetch related posts
+        Why: LoadBy() needs the FK field to fetch related posts
         ─────────────────────────────────────────────────────────────────
         """
         selected_fields = set(field_selection.sub_fields.keys()) if field_selection.sub_fields else set()
@@ -420,7 +410,7 @@ class ResponseBuilder:
         Example:
         ─────────────────────────────────────────────────────────────────
         Scenario: UserEntity.__relationships__ = [
-            Relationship(field='id', target_kls=list[PostEntity], loader=post_loader)
+            Relationship(field='id', target_kls=list[PostEntity], field_name='posts', loader=post_loader)
         ]
         Query: { users { id posts { title } } }
 
@@ -431,7 +421,7 @@ class ResponseBuilder:
 
         Result:
             field_definitions['posts'] = (
-                Annotated[List[PostResponse], LoadBy('id')],
+                Annotated[List[PostResponse], LoadBy()],
                 []
             )
         ─────────────────────────────────────────────────────────────────
@@ -457,36 +447,29 @@ class ResponseBuilder:
 
     def _build_relationship_field(
         self,
-        rel_info: RelationshipInfo,
+        relationship: Relationship,
         selection: FieldSelection,
         parent_path: str
     ) -> Optional[Tuple[type, Any]]:
         """
-        Build field definition for a relationship (supports both Relationship and Link).
+        Build field definition for a relationship.
 
         Example:
         ─────────────────────────────────────────────────────────────────
-        Input (Relationship):
-            rel_info = RelationshipInfo(field='id', target_kls=list[PostEntity], is_link=False)
+        Input:
+            relationship = Relationship(field='id', target_kls=list[PostEntity], field_name='posts')
             selection = {title, content}
 
         Process:
             1. Extract PostEntity from list[PostEntity]
             2. Recursively build PostResponse model
-            3. Wrap with Annotated[..., LoadBy('id')]
+            3. Wrap with Annotated[..., LoadBy()]
 
         Output:
-            (Annotated[List[PostResponse], LoadBy('id')], [])
-
-        ─────────────────────────────────────────────────────────────────
-        Input (Link with biz):
-            rel_info = RelationshipInfo(field='user_id', target_kls=list[TaskEntity],
-                                        biz='assigned', is_link=True)
-        Output:
-            (Annotated[List[TaskResponse], LoadBy('user_id', biz='assigned')], [])
+            (Annotated[List[PostResponse], LoadBy()], [])
         ─────────────────────────────────────────────────────────────────
         """
-        target_kls = rel_info.target_kls
+        target_kls = relationship.target_kls
         origin = get_origin(target_kls)
 
         # Extract actual entity type
@@ -500,22 +483,12 @@ class ResponseBuilder:
         )
 
         # Build annotated type with LoadBy
-        if rel_info.is_link:
-            # Link 需要传入 biz 参数
-            if origin is list:
-                base_type = Annotated[List[nested_model], LoadBy(rel_info.field, biz=rel_info.biz)]
-                default = []
-            else:
-                base_type = Annotated[Optional[nested_model], LoadBy(rel_info.field, biz=rel_info.biz)]
-                default = None
+        if origin is list:
+            base_type = Annotated[List[nested_model], LoadBy()]
+            default = []
         else:
-            # Relationship 的现有逻辑
-            if origin is list:
-                base_type = Annotated[List[nested_model], LoadBy(rel_info.field)]
-                default = []
-            else:
-                base_type = Annotated[Optional[nested_model], LoadBy(rel_info.field)]
-                default = None
+            base_type = Annotated[Optional[nested_model], LoadBy()]
+            default = None
 
         return self._apply_alias((base_type, default), selection.alias)
 
@@ -580,7 +553,7 @@ class ResponseBuilder:
             field_definitions = {
                 'id': (int, ...),
                 'name': (str, ...),
-                'posts': (Annotated[List[PostResponse], LoadBy('id')], [])
+                'posts': (Annotated[List[PostResponse], LoadBy()], [])
             }
 
         Process:
@@ -593,7 +566,7 @@ class ResponseBuilder:
             class UserEntityResponse_123456789(BaseModel):
                 id: int
                 name: str
-                posts: Annotated[List[PostResponse], LoadBy('id')] = []
+                posts: Annotated[List[PostResponse], LoadBy()] = []
                 __pydantic_resolve_subset__ = UserEntity
         ─────────────────────────────────────────────────────────────────
         """
@@ -671,13 +644,13 @@ class ResponseBuilder:
         ─────────────────────────────────────────────────────────────────
         Scenario:
             UserEntity.__relationships__ = [
-                Relationship(field='id', target_kls=list[PostEntity], default_field_name='posts')
+                Relationship(field='id', target_kls=list[PostEntity], field_name='posts')
             ]
             Query selects: {'id', 'name', 'posts'}
 
         Process:
             1. Look up relationships for 'posts' field
-            2. Find Relationship with default_field_name='posts'
+            2. Find Relationship with field_name='posts'
             3. Extract field='id' (the FK needed for LoadBy)
 
         Output: {'id'}
@@ -699,22 +672,18 @@ class ResponseBuilder:
 
         Example:
         ─────────────────────────────────────────────────────────────────
-        Scenario (MultipleRelationship):
-            TaskEntity.__relationships__ = [
-                MultipleRelationship(
-                    field='user_id',
-                    links=[Link(default_field_name='created_tasks', biz='created'),
-                           Link(default_field_name='assigned_tasks', biz='assigned')]
-                )
+        Scenario:
+            UserEntity.__relationships__ = [
+                Relationship(field='id', target_kls=list[PostEntity], field_name='posts')
             ]
-            Query selects: {'created_tasks'}
+            Query selects: {'posts'}
 
         Process:
             1. Iterate through relationships
-            2. Find MultipleRelationship with link.default_field_name='created_tasks'
-            3. Extract field='user_id'
+            2. Find Relationship with field_name='posts'
+            3. Extract field='id'
 
-        Output: {'user_id'}
+        Output: {'id'}
         ─────────────────────────────────────────────────────────────────
         """
         fk_fields = set()
@@ -725,66 +694,33 @@ class ResponseBuilder:
 
         for field_name in selected_fields:
             for rel in entity_cfg.relationships:
-                if isinstance(rel, Relationship):
-                    if hasattr(rel, 'default_field_name') and rel.default_field_name == field_name:
-                        fk_fields.add(rel.field)
-
-                elif isinstance(rel, MultipleRelationship):
-                    # 检查 links
-                    for link in rel.links:
-                        if hasattr(link, 'default_field_name') and link.default_field_name == field_name:
-                            fk_fields.add(rel.field)  # 使用 MultipleRelationship 的 field
+                if rel.field_name == field_name:
+                    fk_fields.add(rel.field)
 
         return fk_fields
 
-    def _find_relationship(self, entity: type, field_name: str) -> Optional[RelationshipInfo]:
+    def _find_relationship(self, entity: type, field_name: str) -> Optional[Relationship]:
         """
-        Find relationship for a given field (supports both Relationship and MultipleRelationship)
+        Find relationship for a given field.
 
         Args:
             entity: Entity class
-            field_name: Field name (default_field_name)
+            field_name: Field name to search for
 
         Returns:
-            RelationshipInfo object, or None if not found
+            Relationship object, or None if not found
 
         Example:
         ─────────────────────────────────────────────────────────────────
-        Input (Relationship):
+        Input:
             entity = UserEntity
             field_name = 'posts'
             UserEntity.__relationships__ = [
-                Relationship(field='id', target_kls=list[PostEntity], default_field_name='posts')
+                Relationship(field='id', target_kls=list[PostEntity], field_name='posts')
             ]
 
         Output:
-            RelationshipInfo(
-                field='id',
-                target_kls=list[PostEntity],
-                loader=post_loader,
-                is_link=False
-            )
-
-        ─────────────────────────────────────────────────────────────────
-        Input (MultipleRelationship/Link):
-            entity = TaskEntity
-            field_name = 'assigned_tasks'
-            TaskEntity.__relationships__ = [
-                MultipleRelationship(
-                    field='user_id',
-                    target_kls=list[TaskEntity],
-                    links=[Link(default_field_name='assigned_tasks', biz='assigned', ...)]
-                )
-            ]
-
-        Output:
-            RelationshipInfo(
-                field='user_id',        # from MultipleRelationship
-                target_kls=list[TaskEntity],  # from MultipleRelationship
-                loader=assigned_loader, # from Link
-                biz='assigned',         # from Link
-                is_link=True
-            )
+            Relationship(field='id', target_kls=list[PostEntity], field_name='posts')
         ─────────────────────────────────────────────────────────────────
         """
         entity_cfg = self.entity_map.get(entity)
@@ -792,25 +728,7 @@ class ResponseBuilder:
             return None
 
         for rel in entity_cfg.relationships:
-            if isinstance(rel, Relationship):
-                if hasattr(rel, 'default_field_name') and rel.default_field_name == field_name:
-                    return RelationshipInfo(
-                        field=rel.field,
-                        target_kls=rel.target_kls,
-                        loader=rel.loader,
-                        is_link=False
-                    )
-
-            elif isinstance(rel, MultipleRelationship):
-                # 在 links 中查找
-                for link in rel.links:
-                    if hasattr(link, 'default_field_name') and link.default_field_name == field_name:
-                        return RelationshipInfo(
-                            field=rel.field,  # 使用 MultipleRelationship 的 field
-                            target_kls=rel.target_kls,  # 使用 MultipleRelationship 的 target_kls
-                            loader=link.loader,
-                            biz=link.biz,
-                            is_link=True
-                        )
+            if rel.field_name == field_name:
+                return rel
 
         return None

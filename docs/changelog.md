@@ -81,7 +81,7 @@
 ### v3.0.6 (2026-3-3)
 - feat:
   - **GraphQL schema now includes `Relationship.target_kls` types**: Pydantic types referenced in relationships are automatically collected and generated as GraphQL types, even if not explicitly registered in `er_diagram.configs`
-  - Supports both `Relationship` and `MultipleRelationship` with `list[T]` generics
+  - Supports `Relationship` with `list[T]` generics and `load_many=True`
 
 ### v3.0.5 (2026-3-2)
 - feat:

@@ -35,7 +35,7 @@ class UserEntityForwardRef(BaseModel, BaseEntityForForwardRef):
         Relationship(
             field='profile_id',
             target_kls='ProfileEntityForwardRef',  # String reference
-            default_field_name='profile'
+            field_name='profile'
         )
     ]
     id: int

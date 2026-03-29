@@ -22,7 +22,7 @@ BaseEntity = base_entity()
 class UserEntity(BaseModel, BaseEntity):
     __relationships__ = [
         Relationship(field='id', target_kls=list['PostEntity'],
-                     loader=user_posts_loader, default_field_name='myposts')
+                     loader=user_posts_loader, field_name='myposts')
     ]
     id: int
     name: str
@@ -64,7 +64,7 @@ diagram = ErDiagram(configs=[
         kls=UserEntity,
         relationships=[
             Relationship(field='id', target_kls=list[PostEntity],
-                         loader=user_posts_loader, default_field_name='myposts')
+                         loader=user_posts_loader, field_name='myposts')
         ],
         queries=[
             QueryConfig(method=get_all_users, name='users', description='获取所有用户'),
@@ -90,7 +90,7 @@ handler = GraphQLHandler(diagram)
 
 ## 核心概念
 
-### default_field_name
+### field_name
 
 定义嵌套查询的 GraphQL 字段名：
 
@@ -99,7 +99,7 @@ Relationship(
     field='author_id',           # 实体中的外键字段
     target_kls=UserEntity,       # 目标实体
     loader=user_loader,          # DataLoader 函数
-    default_field_name='author'  # GraphQL 字段名
+    field_name='author'  # GraphQL 字段名
 )
 ```
 
@@ -108,12 +108,12 @@ Relationship(
 {
   posts {
     title
-    author { name }  # 使用 default_field_name
+    author { name }  # 使用 field_name
   }
 }
 ```
 
-**注意：** `default_field_name` 不能与实体中已有的标量字段冲突。
+**注意：** `field_name` 不能与实体中已有的标量字段冲突。
 
 ### @query 装饰器
 

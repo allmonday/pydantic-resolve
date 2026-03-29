@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from pydantic_resolve.graphql.schema.generators.base import SchemaGenerator
 from pydantic_resolve.utils.class_util import safe_issubclass
-from pydantic_resolve.utils.er_diagram import Relationship, MultipleRelationship
+from pydantic_resolve.utils.er_diagram import Relationship
 from pydantic_resolve.utils.types import get_core_types
 from pydantic_resolve.graphql.type_mapping import map_scalar_type, is_enum_type, get_enum_names
 from pydantic_resolve.graphql.exceptions import FieldNameConflictError
@@ -153,12 +153,8 @@ class SDLBuilder(SchemaGenerator):
         relationship_field_names = set()
         for rel in entity_cfg.relationships:
             if isinstance(rel, Relationship):
-                if hasattr(rel, 'default_field_name') and rel.default_field_name:
-                    relationship_field_names.add(rel.default_field_name)
-            elif isinstance(rel, MultipleRelationship):
-                for link in rel.links:
-                    if link.default_field_name:
-                        relationship_field_names.add(link.default_field_name)
+                if rel.field_name:
+                    relationship_field_names.add(rel.field_name)
 
         # Process scalar fields (skip relationship fields)
         for field_name, field_type in type_hints.items():
@@ -174,20 +170,12 @@ class SDLBuilder(SchemaGenerator):
         # Note: relationships without loaders are hidden from GraphQL schema
         for rel in entity_cfg.relationships:
             if isinstance(rel, Relationship):
-                if hasattr(rel, 'default_field_name') and rel.default_field_name:
+                if rel.field_name:
                     if rel.loader is None:
                         continue
-                    field_name = rel.default_field_name
+                    field_name = rel.field_name
                     gql_type = self._map_python_type_to_gql(rel.target_kls)
                     fields.append(f"  {field_name}: {gql_type}")
-            elif isinstance(rel, MultipleRelationship):
-                for link in rel.links:
-                    if link.default_field_name:
-                        if link.loader is None:
-                            continue
-                        field_name = link.default_field_name
-                        gql_type = self._map_python_type_to_gql(rel.target_kls)
-                        fields.append(f"  {field_name}: {gql_type}")
 
         return f"type {entity_cfg.kls.__name__} {{\n" + "\n".join(fields) + "\n}"
 
@@ -482,8 +470,8 @@ class SDLBuilder(SchemaGenerator):
 
         relationship_fields = set()
         for rel in entity_cfg.relationships:
-            if isinstance(rel, Relationship) and rel.default_field_name:
-                relationship_fields.add(rel.default_field_name)
+            if isinstance(rel, Relationship) and rel.field_name:
+                relationship_fields.add(rel.field_name)
 
         conflicts = scalar_fields & relationship_fields
         if conflicts:
@@ -497,14 +485,14 @@ class SDLBuilder(SchemaGenerator):
 
     def _collect_nested_pydantic_types(self, processed_types: set) -> set:
         """Recursively collect all nested Pydantic BaseModel types,
-        including types from Relationship.target_kls and MultipleRelationship.target_kls."""
+        including types from Relationship.target_kls."""
         nested_types = set()
         types_to_check = list(processed_types)
 
         # Add target_kls from relationships to types_to_check
         for entity_cfg in self.er_diagram.configs:
             for rel in entity_cfg.relationships:
-                if isinstance(rel, (Relationship, MultipleRelationship)):
+                if isinstance(rel, Relationship):
                     # get_core_types handles list[T] and Optional[T] unwrapping
                     for target_class in get_core_types(rel.target_kls):
                         if safe_issubclass(target_class, BaseModel):
@@ -766,16 +754,11 @@ class SDLBuilder(SchemaGenerator):
                                 except Exception:
                                     pass
 
-                                # Collect from relationships with default_field_name
+                                # Collect from relationships with field_name
                                 for rel in entity_cfg.relationships:
                                     if isinstance(rel, Relationship):
-                                        if rel.default_field_name:
+                                        if rel.field_name:
                                             collect_from_type(rel.target_kls)
-                                    elif isinstance(rel, MultipleRelationship):
-                                        for link in rel.links:
-                                            if link.default_field_name:
-                                                collect_from_type(rel.target_kls)
-                                                break  # target_kls is the same for all links
                                 break  # Found the entity, no need to check other configs
 
         # Collect from return type
@@ -842,20 +825,12 @@ class SDLBuilder(SchemaGenerator):
         if entity_cfg:
             for rel in entity_cfg.relationships:
                 if isinstance(rel, Relationship):
-                    if hasattr(rel, 'default_field_name') and rel.default_field_name:
+                    if rel.field_name:
                         if rel.loader is None:
                             continue
-                        field_name = rel.default_field_name
+                        field_name = rel.field_name
                         gql_type = self._map_python_type_to_gql(rel.target_kls)
                         fields.append(f"  {field_name}: {gql_type}")
-                elif isinstance(rel, MultipleRelationship):
-                    for link in rel.links:
-                        if link.default_field_name:
-                            if link.loader is None:
-                                continue
-                            field_name = link.default_field_name
-                            gql_type = self._map_python_type_to_gql(rel.target_kls)
-                            fields.append(f"  {field_name}: {gql_type}")
 
         # Build type definition
         type_def = f"type {entity.__name__} {{\n" + "\n".join(fields) + "\n}"
@@ -873,10 +848,6 @@ class SDLBuilder(SchemaGenerator):
         """
         for rel in entity_cfg.relationships:
             if isinstance(rel, Relationship):
-                if hasattr(rel, 'default_field_name') and rel.default_field_name == field_name:
+                if rel.field_name == field_name:
                     return True
-            elif isinstance(rel, MultipleRelationship):
-                for link in rel.links:
-                    if link.default_field_name == field_name:
-                        return True
         return False

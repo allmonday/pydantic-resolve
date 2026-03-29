@@ -205,7 +205,7 @@ class Comment(BaseModel):
 
     # 定义关系：通过 user_id 加载 User
     __relationships__ = [
-        Relationship(field='user_id', target_kls=User, loader=user_loader)
+        Relationship(field='user_id', field_name='user', target_kls=User, loader=user_loader)
     ]
 ```
 
@@ -213,60 +213,15 @@ class Comment(BaseModel):
 
 - `field` (str): 外键字段名
 - `target_kls` (type): 目标 Pydantic 模型类
+- `field_name` (str): 唯一标识符，将成为 GraphQL 字段名（必填）
 - `loader` (Callable): DataLoader 函数，用于获取目标实体
 - `field_fn` (Callable | None): 可选函数，在传递给 loader 之前转换 FK 值
 - `field_none_default` (Any | None): 当 FK 为 None 时返回的默认值
 - `field_none_default_factory` (Callable | None): 当 FK 为 None 时创建默认值的工厂函数
-- `load_many` (bool): 是否使用 `load_many` 而不是 `load`（用于 to-many 关系）
-- `load_many_fn` (Callable | None): 手动分割 FK 值的函数，用于 load_many
+- `load_many` (bool): FK 字段本身是否包含多个值（如 `user_ids: list[int]`），为 True 时内部调用 `loader.load_many()` 而非 `loader.load()`（默认: False）
+- `load_many_fn` (Callable | None): 将 FK 字段值转换为可迭代对象的函数，用于 load_many
 
-#### MultipleRelationship
-
-定义同一字段上的多个关系。
-
-```python
-from pydantic_resolve import MultipleRelationship, Link
-
-class Comment(BaseModel):
-    id: int
-    user_id: int
-    moderator_id: int
-
-    # 通过 user_id 定义两个关系：author 和 moderator
-    __relationships__ = [
-        MultipleRelationship(
-            field='user_id',
-            target_kls=User,
-            links=[
-                Link(biz='author', loader=user_loader),
-                Link(biz='moderator', loader=moderator_loader)
-            ]
-        )
-    ]
-```
-
-**参数：**
-
-- `field` (str): 外键字段名
-- `target_kls` (type): 目标 Pydantic 模型类
-- `links` (list[Link]): Link 对象列表，定义不同的关系
-
-#### Link
-
-定义 MultipleRelationship 中的单个链接。
-
-**参数：**
-
-- `biz` (str): 业务标识符，用于区分多个关系
-- `loader` (Callable): DataLoader 函数
-- `field_fn` (Callable | None): 可选函数，用于转换 FK 值
-- `field_none_default` (Any | None): FK 为 None 时的默认值
-- `field_none_default_factory` (Callable | None): 默认值的工厂函数
-- `load_many` (bool): 是否使用 load_many
-- `load_many_fn` (Callable | None): 手动分割函数
-- `field_name` (str | None): 指定 loader 返回的是目标类的某个字段值，而不是完整对象。必须与 `LoadBy(origin_kls=...)` 配合使用，表示字段提取前的原始对象类型。
-
-示例：如果 `field_name="name"`，loader 返回 `list[str]`（name 字段值）而不是 `list[Foo]`（完整对象）。这在你只需要特定字段值并希望避免加载完整对象时很有用。
+**注意：** `MultipleRelationship` 和 `Link` 已被移除。现在可以通过创建多个具有相同 `field` 但不同 `field_name` 的 `Relationship` 来实现多重关系。
 
 #### Entity
 
@@ -278,7 +233,7 @@ from pydantic_resolve import Entity
 Entity(
     kls=Comment,
     relationships=[
-        Relationship(field='user_id', target_kls=User, loader=user_loader)
+        Relationship(field='user_id', field_name='user', target_kls=User, loader=user_loader)
     ]
 )
 ```
@@ -286,7 +241,7 @@ Entity(
 **参数：**
 
 - `kls` (type[BaseModel]): Pydantic 模型类
-- `relationships` (list[Relationship | MultipleRelationship]): 关系列表
+- `relationships` (list[Relationship]): 关系列表
 
 #### ErDiagram
 
@@ -336,7 +291,7 @@ class User(BaseModel, BaseEntity):
     name: str
 
     __relationships__ = [
-        Relationship(field='org_id', target_kls=Organization, loader=org_loader)
+        Relationship(field='org_id', field_name='organization', target_kls=Organization, loader=org_loader)
     ]
 
 class Comment(BaseModel, BaseEntity):
@@ -344,7 +299,7 @@ class Comment(BaseModel, BaseEntity):
     user_id: int
 
     __relationships__ = [
-        Relationship(field='user_id', target_kls=User, loader=user_loader)
+        Relationship(field='user_id', field_name='user', target_kls=User, loader=user_loader)
     ]
 
 # 获取 ER 图
@@ -363,7 +318,7 @@ diagram = BaseEntity.get_diagram()
 
        __relationships__ = [
            # 字符串 'User' 会被自动解析
-           Relationship(field='user_id', target_kls='User', loader=user_loader)
+           Relationship(field='user_id', field_name='user', target_kls='User', loader=user_loader)
        ]
    ```
 
@@ -379,6 +334,7 @@ diagram = BaseEntity.get_diagram()
            # 引用另一个模块中的 User
            Relationship(
                field='user_id',
+               field_name='user',
                target_kls='app.models.user:User',  # 模块路径:类名
                loader=user_loader
            )
@@ -405,7 +361,7 @@ class User(BaseModel, BaseEntity):
     id: int
     name: str
     __relationships__ = [
-        Relationship(field='org_id', target_kls=Organization, loader=org_loader)
+        Relationship(field='org_id', field_name='organization', target_kls=Organization, loader=org_loader)
     ]
 
 # 2. 全局注册 ERD
@@ -423,45 +379,9 @@ class UserResponse(BaseModel):
 **参数：**
 
 - `key` (str): 外键字段名
-- `biz` (str | None): MultipleRelationship 的业务标识符
-- `origin_kls` (type | None): 当 Link 的 `field_name` 被设置时必须提供。表示字段提取前的原始对象类型。
+- `field_name` (str | None): Relationship 的字段标识符（当同一字段有多个关系时使用）
 
 **注意：** `LoadBy` 需要与 `config_global_resolver()` 配合，将 ERD 注入到默认 Resolver。
-
-**高级：使用 field_name 与 origin_kls**
-
-当 loader 返回字段值而不是完整对象时，在 Link 中使用 `field_name`，在 LoadBy 中使用 `origin_kls`：
-
-```python
-from typing import Annotated
-
-# DataLoader 返回 list[str]（name 值）而不是 list[Foo]（完整对象）
-class FooNameLoader(DataLoader):
-    async def batch_load_fn(self, keys):
-        # 返回: [["foo1", "foo2"], ["foo3"]]
-        return [[vv['name'] for vv in v] for v in load_foo_names(keys)]
-
-class Biz(BaseModel, BaseEntity):
-    __relationships__ = [
-        MultipleRelationship(
-            field='id',
-            target_kls=list[Foo],  # 原始类型是 list[Foo]
-            links=[
-                Link(biz='foo_name', field_name="name", loader=FooNameLoader)  # 但 loader 返回 list[str]（name 字段）
-            ]
-        )
-    ]
-
-class BizResponse(BaseModel):
-    # origin_kls 告诉系统这个关系原本是 list[Foo]
-    # 即使 loader 实际返回的是 list[str]
-    foo_names: Annotated[List[str], LoadBy('id', biz='foo_name', origin_kls=list[Foo])] = []
-```
-
-这样系统可以：
-- 正确验证类型（`list[str]` 与 `list[Foo].name` 兼容）
-- 生成正确的 API 文档
-- 为 fastapi-voyager 提供类型提示
 
 #### config_resolver()
 
@@ -520,7 +440,7 @@ Relationship(
 
 ### 高级：多重关系
 
-当一个字段可以表示不同的事物时，使用 `MultipleRelationship`：
+当一个字段可以表示不同的事物时，创建多个具有相同 `field` 但不同 `field_name` 的 `Relationship`：
 
 ```python
 class Comment(BaseModel, BaseEntity):
@@ -528,22 +448,16 @@ class Comment(BaseModel, BaseEntity):
     user_id: int  # 可以是 author 或 moderator
 
     __relationships__ = [
-        MultipleRelationship(
-            field='user_id',
-            target_kls=User,
-            links=[
-                Link(biz='author', loader=user_loader),
-                Link(biz='moderator', loader=moderator_loader)
-            ]
-        )
+        Relationship(field='user_id', field_name='author', target_kls=User, loader=user_loader),
+        Relationship(field='user_id', field_name='moderator', target_kls=User, loader=moderator_loader)
     ]
 
 class CommentResponse(BaseModel):
     id: int
 
-    # 通过 'biz' 参数指定使用哪个关系
-    author: Annotated[Optional[User], LoadBy('user_id', biz='author')] = None
-    moderator: Annotated[Optional[User], LoadBy('user_id', biz='moderator')] = None
+    # 通过 'field_name' 参数指定使用哪个关系
+    author: Annotated[Optional[User], LoadBy('user_id', field_name='author')] = None
+    moderator: Annotated[Optional[User], LoadBy('user_id', field_name='moderator')] = None
 ```
 
 
@@ -1103,7 +1017,7 @@ class Comment(BaseModel, BaseEntity):
     id: int
     user_id: int
     __relationships__ = [
-        Relationship(field='user_id', target_kls=User, loader=user_loader)
+        Relationship(field='user_id', field_name='user', target_kls=User, loader=user_loader)
     ]
 
 config_global_resolver(BaseEntity.get_diagram())

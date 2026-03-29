@@ -102,23 +102,17 @@ class Post(BaseModel):
 config_global_resolver(BaseEntity.get_diagram())
 ```
 
-If User -> Post has multiple loader implementations, you can use `MultipleRelationship`:
+If User -> Post has multiple loader implementations, you can define multiple `Relationship` entries:
 
 ```python
-from pydantic_resolve import MultipleRelationship, Link, base_entity, config_global_resolver
+from pydantic_resolve import Relationship, base_entity, config_global_resolver
 
 BaseEntity = base_entity()
 
 class User(BaseModel, BaseEntity):
 	__pydantic_resolve_relationships__ = [
-		MultipleRelationship(
-			field='id',
-			target_kls=list[Post],
-			links=[
-				Link(biz='default', loader=PostLoader),
-				Link(biz='latest_three', loader=LatestThreePostLoader)
-			]
-		)
+		Relationship(field='id', target_kls=list[Post], field_name='posts', loader=PostLoader),
+		Relationship(field='id', target_kls=list[Post], field_name='latest_three_posts', loader=LatestThreePostLoader)
 	]
 	id: int
 	name: str
@@ -206,11 +200,11 @@ class UserWithPostsForSpecificBusinessB(User):
 
 Suppose the requirement for `UserWithPostsForSpecificBusinessA` changes: it should only load the latest 3 posts for each user.
 
-You just create a new DataLoader and swap it in. (`UserWithPostsForSpecificBusinessB` is completely unaffected.)
+You just create a new DataLoader and reference it by field name. (`UserWithPostsForSpecificBusinessB` is completely unaffected.)
 
 ```python
 class UserWithPostsForSpecificBusinessA(User):
-	posts: Annotated[List[Post], LoadBy('id', biz='latest_three')] = []
+	latest_three_posts: Annotated[List[Post], LoadBy('id')] = []
 ```
 
 In the end, we achieve the goal: the structure in code stays highly consistent with the ERD structure in product design, making future changes and iterations much easier.

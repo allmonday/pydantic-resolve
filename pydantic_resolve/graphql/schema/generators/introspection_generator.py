@@ -25,7 +25,6 @@ from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.er_diagram import Relationship
 from pydantic_resolve.utils.types import get_core_types
 from pydantic_resolve.graphql.type_mapping import map_scalar_type, is_list_type, is_enum_type, get_enum_names
-from pydantic_resolve.utils.er_diagram import MultipleRelationship
 
 
 class IntrospectionGenerator(SchemaGenerator):
@@ -285,7 +284,7 @@ class IntrospectionGenerator(SchemaGenerator):
         # Collect types from Relationship.target_kls (similar to SDLBuilder)
         for entity_cfg in self.er_diagram.configs:
             for rel in entity_cfg.relationships:
-                if isinstance(rel, (Relationship, MultipleRelationship)):
+                if isinstance(rel, Relationship):
                     # get_core_types handles list[T] and Optional[T] unwrapping
                     for target_class in get_core_types(rel.target_kls):
                         if safe_issubclass(target_class, BaseModel):
@@ -447,12 +446,12 @@ class IntrospectionGenerator(SchemaGenerator):
         if entity_cfg:
             for rel in entity_cfg.relationships:
                 if isinstance(rel, Relationship):
-                    if not hasattr(rel, 'default_field_name') or not rel.default_field_name:
+                    if not rel.field_name:
                         continue
                     if rel.loader is None:
                         continue
 
-                    field_name = rel.default_field_name
+                    field_name = rel.field_name
                     type_def = self._build_graphql_type(rel.target_kls)
 
                     fields.append({
@@ -470,7 +469,7 @@ class IntrospectionGenerator(SchemaGenerator):
         """Check if field is a relationship field."""
         for rel in entity_cfg.relationships:
             if isinstance(rel, Relationship):
-                if hasattr(rel, 'default_field_name') and rel.default_field_name == field_name:
+                if rel.field_name == field_name:
                     return True
         return False
 

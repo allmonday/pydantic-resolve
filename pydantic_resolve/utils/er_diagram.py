@@ -1,9 +1,11 @@
 from dataclasses import dataclass
 from typing import Iterator, Any, Callable, Optional
 from pydantic import BaseModel, model_validator, Field
-import warnings
+import logging
 import importlib
 import functools
+
+logger = logging.getLogger(__name__)
 
 import pydantic_resolve.constant as const
 from pydantic_resolve.utils import class_util, types
@@ -24,57 +26,21 @@ class MutationConfig(BaseModel):
     description: Optional[str] = None
 
 
-class BaseLinkProps(BaseModel):
-    # field_fn will not work if load_many is True, use load_many_fn instead
-    field_fn: Callable | None = None
+class Relationship(BaseModel):
+    field: str  # FK field name
+    target_kls: Any  # Target entity class
+    field_name: str  # REQUIRED - unique identifier, becomes GraphQL field name
 
+    # Loader and behavior:
+    loader: Callable | None = None
+    field_fn: Callable | None = None
     field_none_default: Any | None = None
     field_none_default_factory: Callable[[], Any] | None = None
-
-    # load_many
     load_many: bool = False
-
-    # in case of fk itself is not list, for example: str
-    # and need to separate manually,
-    # call load_many_fn to handle it.
     load_many_fn: Callable[[Any], Any] | None = None
-
-    loader: Callable | None = None
-
-    # GraphQL query field name (for exposing nested queries)
-    default_field_name: str | None = None
-
-class Link(BaseLinkProps):
-    biz: str
-
-    # specific a loader which only return one field of target model
-    field_name: str | None = None
-
-class MultipleRelationship(BaseModel):
-    field: str  # fk name
-    # use biz to distinguish multiple same target_kls under same field
-    target_kls: Any
-    links: list[Link] = Field(default_factory=list)
-
-    @model_validator(mode="after")
-    def _validate_links(self) -> "MultipleRelationship":
-        biz_set = set()
-        for link in self.links:
-            if link.biz in biz_set:
-                raise ValueError(
-                    f"Duplicate link.biz detected in MultipleRelationship for field {self.field!r}: {link.biz!r}"
-                )
-            biz_set.add(link.biz)
-        return self
-
-
-class Relationship(BaseLinkProps):
-    field: str  # fk name
-    target_kls: Any
 
     @model_validator(mode="after")
     def _validate_defaults(self) -> "Relationship":
-        # Avoid evaluating the deprecated fallback unless necessary to prevent warnings.
         fields_set = getattr(self, 'model_fields_set', set())
         val_set = 'field_none_default' in fields_set
         factory_set = 'field_none_default_factory' in fields_set
@@ -86,7 +52,7 @@ class Relationship(BaseLinkProps):
 
 class Entity(BaseModel):
     kls: type[BaseModel]
-    relationships: list[Relationship | MultipleRelationship] = Field(default_factory=list)
+    relationships: list[Relationship] = Field(default_factory=list)
     queries: list[QueryConfig] = Field(default_factory=list)
     mutations: list[MutationConfig] = Field(default_factory=list)
 
@@ -94,31 +60,22 @@ class Entity(BaseModel):
     def _validate_relationships(self) -> "Entity":
         rels = self.relationships or []
 
-        # helper to make potentially unhashable target_kls hashable for set/dict keys
-        def _hashable(x: Any) -> Any:
-            try:
-                hash(x)
-                return x
-            except TypeError:
-                return repr(x)
-
-        # Disallow duplicate (field, biz, target_kls) triples
+        # Disallow duplicate field_name
         seen = set()
         for r in rels:
-            key = (r.field, _hashable(r.target_kls))
-            if key in seen:
+            if r.field_name in seen:
                 raise ValueError(
-                    f"Duplicate relationship detected for (field={r.field!r}, target_kls={r.target_kls!r})"
+                    f"Duplicate field_name detected in {self.kls.__name__}: '{r.field_name}'"
                 )
-            seen.add(key)
+            seen.add(r.field_name)
 
-        # Validate default_field_name conflicts
+        # Validate field_name conflicts with scalar/inherited fields
         self._validate_field_name_conflicts()
 
         return self
 
     def _validate_field_name_conflicts(self) -> None:
-        """Detect naming conflicts for default_field_name."""
+        """Detect naming conflicts for field_name."""
         from typing import get_type_hints
 
         # 1. Collect scalar fields
@@ -127,69 +84,17 @@ class Entity(BaseModel):
         except Exception:
             scalar_fields = set()
 
-        # 2. Collect default_field_name from relationship fields
-        # Use tuple (source_type, source_info) to track the source
-        # source_type: 'Relationship' or 'Link'
-        # source_info: detailed information about the relationship
-        relationship_fields = {}
-
-        def _get_rel_source_info(rel, link=None):
-            """Get description information about the relationship source."""
-            if isinstance(rel, Relationship):
-                return ('Relationship', f"Relationship(field={rel.field})")
-            elif isinstance(rel, MultipleRelationship) and link:
-                return ('Link', f"Link(biz={link.biz}) in MultipleRelationship(field={rel.field})")
-            return ('Unknown', 'Unknown')
-
+        # 2. Check each relationship's field_name
         for rel in self.relationships or []:
-            if isinstance(rel, Relationship) and rel.default_field_name:
-                field_name = rel.default_field_name
-                source_type, source_info = _get_rel_source_info(rel)
+            field_name = rel.field_name
 
-                # Check for duplicate relationship fields
-                if field_name in relationship_fields:
-                    prev_source_type, prev_source_info = relationship_fields[field_name]
-                    raise ValueError(
-                        f"Field name conflict in {self.kls.__name__}: '{field_name}' - "
-                        f"multiple relationships use the same default_field_name. "
-                        f"Conflict between {prev_source_info} and {source_info}"
-                    )
-
-                relationship_fields[field_name] = (source_type, source_info)
-
-                # Check for conflicts with scalar fields
-                if field_name in scalar_fields:
-                    raise ValueError(
-                        f"Field name conflict in {self.kls.__name__}: '{field_name}' - "
-                        f"default_field_name conflicts with scalar field. "
-                        f"{source_info}, target_kls={rel.target_kls}"
-                    )
-
-            elif isinstance(rel, MultipleRelationship):
-                # Check MultipleRelationship's links
-                for link in rel.links:
-                    if link.default_field_name:
-                        field_name = link.default_field_name
-                        source_type, source_info = _get_rel_source_info(rel, link)
-
-                        # Check for duplicate relationship fields
-                        if field_name in relationship_fields:
-                            prev_source_type, prev_source_info = relationship_fields[field_name]
-                            raise ValueError(
-                                f"Field name conflict in {self.kls.__name__}: '{field_name}' - "
-                                f"multiple relationships use the same default_field_name. "
-                                f"Conflict between {prev_source_info} and {source_info}"
-                            )
-
-                        relationship_fields[field_name] = (source_type, source_info)
-
-                        # Check for conflicts with scalar fields
-                        if field_name in scalar_fields:
-                            raise ValueError(
-                                f"Field name conflict in {self.kls.__name__}: '{field_name}' - "
-                                f"default_field_name conflicts with scalar field. "
-                                f"{source_info}, target_kls={rel.target_kls}"
-                            )
+            # Check for conflicts with scalar fields
+            if field_name in scalar_fields:
+                raise ValueError(
+                    f"Field name conflict in {self.kls.__name__}: '{field_name}' - "
+                    f"field_name conflicts with scalar field. "
+                    f"Relationship(field={rel.field}), target_kls={rel.target_kls}"
+                )
 
         # 3. Check for conflicts with parent class fields
         for base_cls in self.kls.__mro__[1:]:  # Skip self
@@ -200,12 +105,12 @@ class Entity(BaseModel):
             except Exception:
                 continue
 
-            for field_name, (source_type, source_info) in relationship_fields.items():
-                if field_name in base_fields:
+            for rel in self.relationships or []:
+                if rel.field_name in base_fields:
                     raise ValueError(
-                        f"Field name conflict in {self.kls.__name__}: '{field_name}' - "
+                        f"Field name conflict in {self.kls.__name__}: '{rel.field_name}' - "
                         f"relationship field conflicts with inherited field from {base_cls.__name__}. "
-                        f"{source_info}"
+                        f"Relationship(field={rel.field})"
                     )
 
 class ErDiagram(BaseModel):
@@ -328,13 +233,12 @@ class BaseEntity:  # just type (TODO: optimize)
 
 @dataclass
 class LoaderInfo:
-    field: str
-    biz: str | None = None
-    origin_kls: type | None = None
+    """Marker annotation - field name from annotation identifies the relationship."""
+    pass
 
 
-def LoadBy(key: str, biz: str | None = None, origin_kls: type | None = None) -> LoaderInfo:
-    return LoaderInfo(field=key, biz=biz, origin_kls=origin_kls)
+def LoadBy() -> LoaderInfo:
+    return LoaderInfo()
 
 
 def base_entity() -> type[BaseEntity]:
@@ -445,40 +349,13 @@ class ErLoaderPreGenerator:
                 return cfg
         raise AttributeError(f'No ErConfig found for {target}')
 
-    def _identify_relationship(self, config: Entity, loader_info: LoaderInfo, target_kls: type) -> Relationship:
-        """
-            Find the relationship matching (field=loadby, biz, target_kls).
-
-            if biz is provided and field_name of Link is set, validate the target_kls with target_kls's field_name type
-        """
+    def _identify_relationship(self, config: Entity, field_name: str) -> Relationship:
+        """Find the relationship matching field_name."""
         for rel in config.relationships:
-            if rel.field != loader_info.field:
-                continue
-
-            if isinstance(rel, Relationship) and class_util.is_compatible_type(target_kls, rel.target_kls):
+            if rel.field_name == field_name:
                 return rel
-
-            elif isinstance(rel, MultipleRelationship):
-                for link in rel.links:
-                    if link.biz == loader_info.biz:
-                        if link.field_name:
-                            if loader_info.origin_kls is None:
-                                raise ValueError( 'origin_kls must be provided in LoaderInfo when field_name is set in Link')
-                            else:
-                                if class_util.is_compatible_type(loader_info.origin_kls, rel.target_kls):
-                                    # TODO: validate types, currently just bypass
-                                    # str == kls[field_name]
-                                    # list[str] == list[kls[field_name]]
-                                    # currently field name can provide field hint for voyager
-                                    # and leave validation to pydantic
-                                    return link
-                                else:
-                                    raise TypeError( f'Target_kls {target_kls} is not compatible with origin_kls {loader_info.origin_kls} in Link for biz {link.biz}')
-                        elif class_util.is_compatible_type(target_kls, rel.target_kls):
-                            return link
-
         raise AttributeError(
-            f'Relationship from "{config.kls}" to "{target_kls}" using "{loader_info.field}", biz: "{loader_info.biz}", not found'
+            f'Relationship with field_name "{field_name}" not found in "{config.kls}"'
         )
 
     def prepare(self, kls: type):
@@ -497,23 +374,21 @@ class ErLoaderPreGenerator:
 
         config = self._identify_entity(kls)
 
-        for field_name, loader_info, annotation in auto_loader_fields:
+        for field_name, annotation in auto_loader_fields:
             method_name = f'{const.RESOLVE_PREFIX}{field_name}'
             if hasattr(kls, method_name):
-                warnings.warn(
+                logger.warning(
                     f'{method_name} already exists in {kls}, skipping auto-generation.'
                 )
                 continue
 
             relationship = self._identify_relationship(
                 config=config,
-                loader_info=loader_info,
-                target_kls=annotation,
+                field_name=field_name,
             )
 
             if relationship.loader is None:
-                # loader is optional in Relationship, but required for auto-generation
-                raise AttributeError(f'Loader not provided in relationship for field "{loader_info.field}" in class "{kls}"')
+                raise AttributeError(f'Loader not provided in relationship for field_name "{field_name}" in class "{kls}"')
 
             def _handle_fk_none(rel: Relationship):
                 """Common logic for handling None foreign key values."""
@@ -549,31 +424,22 @@ class ErLoaderPreGenerator:
                 return resolve_method
 
             if relationship.load_many:
-                setattr(kls, method_name, create_resolve_method_with_load_many(loader_info.field, relationship))
+                setattr(kls, method_name, create_resolve_method_with_load_many(relationship.field, relationship))
             else:
-                setattr(kls, method_name, create_resolve_method(loader_info.field, relationship))
+                setattr(kls, method_name, create_resolve_method(relationship.field, relationship))
 
 
-def _get_pydantic_field_items_with_load_by(kls) -> Iterator[tuple[str, LoaderInfo, type]]:
+def _get_pydantic_field_items_with_load_by(kls) -> Iterator[tuple[str, type]]:
     """
-    find fields which have LoadBy metadata.
+    Find fields which have LoadBy metadata.
 
     example:
 
-    class Base(BaseModel):
-        id: int
-        name: str
-        b_id: int
-
-    class B(BaseModel):
-        id: int
-        name: str
-
     class A(Base):
-        b: Annotated[Optional[B], LoadBy('b_id')] = None
+        posts: Annotated[List[PostEntity], LoadBy()] = []
         extra: str = ''
 
-    return ('b', LoadBy('b_id'))
+    return ('posts', LoadBy())
     """
     items = kls.model_fields.items()
 
@@ -581,4 +447,26 @@ def _get_pydantic_field_items_with_load_by(kls) -> Iterator[tuple[str, LoaderInf
         metadata = v.metadata
         for meta in metadata:
             if isinstance(meta, LoaderInfo):
-                yield name, meta, v.annotation
+                yield name, v.annotation
+
+
+def get_global_er_diagram() -> ErDiagram:
+    """
+    Get the globally configured ER diagram from Resolver class.
+
+    Returns:
+        ErDiagram: The globally configured ER diagram
+
+    Raises:
+        ValueError: If no global ER diagram is configured
+    """
+    from pydantic_resolve.resolver import Resolver
+
+    er_diagram = getattr(Resolver, const.ER_DIAGRAM, None)
+    if er_diagram is None:
+        raise ValueError(
+            "No global ER diagram configured. "
+            "Use config_global_resolver(er_diagram=...) to configure a global ER diagram."
+        )
+    return er_diagram
+

@@ -62,7 +62,7 @@ class ExecutionError(GraphQLError):
 
 
 class FieldNameConflictError(ValidationError):
-    """Raised when default_field_name conflicts with other fields."""
+    """Raised when field_name conflicts with other fields."""
 
     def __init__(
         self,

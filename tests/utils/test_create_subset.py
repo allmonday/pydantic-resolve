@@ -539,12 +539,12 @@ async def test_subset_with_expose():
         email: str
         age: int
         active: bool
-    
+
     class SubItem(BaseModel):
         field: str = ''
         def post_field(self, ancestor_context):
             return ancestor_context['custom_field']
-        
+
         name: str = ''
         def post_name(self, ancestor_context):
             return ancestor_context['custom_name']
@@ -554,18 +554,253 @@ async def test_subset_with_expose():
             kls=Parent,
             fields=['id', 'name', 'email', 'age', 'active'],
             expose_as=[
-                ('id', 'custom_id'), 
+                ('id', 'custom_id'),
                 ('name', 'custom_name')]
         )
         field: Annotated[str, ExposeAs('custom_field')] = ''
         items: list[SubItem] = [SubItem()]
-    
-    
+
+
     sub = Sub(id=1, name='test', email='xxx.com', age=30, active=True, field='value')
     sub = await Resolver().resolve(sub)
     assert sub.id == 1
     assert sub.items[0].field == 'value'
     assert sub.items[0].name == 'test'
 
-    
-    
+
+class TestSubsetConfigRelated:
+    """Test cases for SubsetConfig.related parameter (references Relationship field_name)."""
+
+    def test_related_auto_adds_fk_and_loadby_field(self):
+        """Test that related=['author'] auto-adds FK field (exclude=True) and LoadBy field."""
+        from pydantic_resolve import config_global_resolver
+        from pydantic_resolve.utils.er_diagram import ErDiagram, Entity, Relationship, base_entity
+
+        BASE = base_entity()
+
+        class User(BaseModel, BASE):
+            id: int
+            name: str
+
+        class Post(BaseModel, BASE):
+            id: int
+            title: str
+            author_id: int
+
+            __relationships__ = [
+                Relationship(field='author_id', field_name='author', target_kls=User, loader=lambda x: x)
+            ]
+
+        diagram = BASE.get_diagram()
+        config_global_resolver(diagram)
+
+        try:
+            class PostSubset(DefineSubset):
+                __subset__ = SubsetConfig(
+                    kls=Post,
+                    fields=['id', 'title'],
+                    related=['author']
+                )
+
+            # FK field should be auto-added with exclude=True
+            assert 'author_id' in PostSubset.model_fields
+            assert PostSubset.model_fields['author_id'].exclude is True
+
+            # LoadBy field should be auto-generated
+            assert 'author' in PostSubset.model_fields
+            # Check LoadBy annotation
+            from pydantic_resolve.utils.er_diagram import LoaderInfo
+            metadata = PostSubset.model_fields['author'].metadata
+            assert any(isinstance(m, LoaderInfo) for m in metadata)
+
+            # Can create instance
+            sub = PostSubset(id=1, title='hello', author_id=42)
+            assert sub.id == 1
+            assert sub.title == 'hello'
+            assert sub.author_id == 42
+
+            # author_id excluded from serialization
+            assert sub.model_dump() == {'id': 1, 'title': 'hello', 'author': None}
+        finally:
+            # Clean up global resolver
+            from pydantic_resolve.resolver import Resolver
+            import pydantic_resolve.constant as const
+            if hasattr(Resolver, const.ER_DIAGRAM):
+                delattr(Resolver, const.ER_DIAGRAM)
+
+    def test_related_not_found_raises_error(self):
+        """Test that related with non-existent field_name raises ValueError."""
+        from pydantic_resolve import config_global_resolver
+        from pydantic_resolve.utils.er_diagram import base_entity, Relationship
+
+        BASE = base_entity()
+
+        class User(BaseModel, BASE):
+            id: int
+            name: str
+
+        class Post(BaseModel, BASE):
+            id: int
+            title: str
+            author_id: int
+
+            __relationships__ = [
+                Relationship(field='author_id', field_name='author', target_kls=User, loader=lambda x: x)
+            ]
+
+        config_global_resolver(BASE.get_diagram())
+
+        try:
+            with pytest.raises(ValueError, match='Relationship field_name "nonexistent" not found'):
+                class PostSubset(DefineSubset):
+                    __subset__ = SubsetConfig(
+                        kls=Post,
+                        fields=['id', 'title'],
+                        related=['nonexistent']
+                    )
+        finally:
+            from pydantic_resolve.resolver import Resolver
+            import pydantic_resolve.constant as const
+            if hasattr(Resolver, const.ER_DIAGRAM):
+                delattr(Resolver, const.ER_DIAGRAM)
+
+    def test_related_no_er_diagram_raises_error(self):
+        """Test that related without global ER diagram raises ValueError."""
+        class Parent(BaseModel):
+            id: int
+            name: str
+            user_id: int
+
+        with pytest.raises(ValueError, match='requires a global ER diagram'):
+            class Sub(DefineSubset):
+                __subset__ = SubsetConfig(
+                    kls=Parent,
+                    fields=['id', 'name'],
+                    related=['author']
+                )
+
+    def test_related_parent_not_in_er_diagram_raises_error(self):
+        """Test that related with parent not in ER diagram raises ValueError."""
+        from pydantic_resolve import config_global_resolver
+        from pydantic_resolve.utils.er_diagram import base_entity, Relationship
+
+        BASE = base_entity()
+
+        class User(BaseModel, BASE):
+            id: int
+            name: str
+
+        class PostNotInDiagram(BaseModel):
+            id: int
+            title: str
+            author_id: int
+
+        config_global_resolver(BASE.get_diagram())
+
+        try:
+            with pytest.raises(ValueError, match='not found in ER diagram'):
+                class PostSubset(DefineSubset):
+                    __subset__ = SubsetConfig(
+                        kls=PostNotInDiagram,
+                        fields=['id', 'title'],
+                        related=['author']
+                    )
+        finally:
+            from pydantic_resolve.resolver import Resolver
+            import pydantic_resolve.constant as const
+            if hasattr(Resolver, const.ER_DIAGRAM):
+                delattr(Resolver, const.ER_DIAGRAM)
+
+    def test_multiple_related_fields(self):
+        """Test that multiple related field_names can be specified."""
+        from pydantic_resolve import config_global_resolver
+        from pydantic_resolve.utils.er_diagram import base_entity, Relationship
+
+        BASE = base_entity()
+
+        class User(BaseModel, BASE):
+            id: int
+            name: str
+
+        class Tag(BaseModel, BASE):
+            id: int
+            label: str
+
+        class Post(BaseModel, BASE):
+            id: int
+            title: str
+            author_id: int
+            tag_id: int
+
+            __relationships__ = [
+                Relationship(field='author_id', field_name='author', target_kls=User, loader=lambda x: x),
+                Relationship(field='tag_id', field_name='tag', target_kls=Tag, loader=lambda x: x),
+            ]
+
+        config_global_resolver(BASE.get_diagram())
+
+        try:
+            class PostSubset(DefineSubset):
+                __subset__ = SubsetConfig(
+                    kls=Post,
+                    fields=['id', 'title'],
+                    related=['author', 'tag']
+                )
+
+            # Both FK fields auto-added with exclude=True
+            assert 'author_id' in PostSubset.model_fields
+            assert PostSubset.model_fields['author_id'].exclude is True
+            assert 'tag_id' in PostSubset.model_fields
+            assert PostSubset.model_fields['tag_id'].exclude is True
+
+            # Both LoadBy fields auto-generated
+            assert 'author' in PostSubset.model_fields
+            assert 'tag' in PostSubset.model_fields
+        finally:
+            from pydantic_resolve.resolver import Resolver
+            import pydantic_resolve.constant as const
+            if hasattr(Resolver, const.ER_DIAGRAM):
+                delattr(Resolver, const.ER_DIAGRAM)
+
+    def test_related_with_to_many_relationship(self):
+        """Test related with to-many relationship (target_kls=list[Entity])."""
+        from pydantic_resolve import config_global_resolver
+        from pydantic_resolve.utils.er_diagram import base_entity, Relationship
+
+        BASE = base_entity()
+
+        class Comment(BaseModel, BASE):
+            id: int
+            text: str
+
+        class Post(BaseModel, BASE):
+            id: int
+            title: str
+
+            __relationships__ = [
+                Relationship(field='id', field_name='comments', target_kls=list['Comment'], loader=lambda x: x),
+            ]
+
+        config_global_resolver(BASE.get_diagram())
+
+        try:
+            class PostSubset(DefineSubset):
+                __subset__ = SubsetConfig(
+                    kls=Post,
+                    fields=['id', 'title'],
+                    related=['comments']
+                )
+
+            # FK field (id) auto-added with exclude=True
+            # But 'id' is already in subset_fields, so it should NOT be re-added
+            # Only the LoadBy field 'comments' should be auto-generated
+            assert 'comments' in PostSubset.model_fields
+
+            from pydantic_resolve.utils.er_diagram import LoaderInfo
+            metadata = PostSubset.model_fields['comments'].metadata
+            assert any(isinstance(m, LoaderInfo) for m in metadata)
+        finally:
+            from pydantic_resolve.resolver import Resolver
+            import pydantic_resolve.constant as const
+            if hasattr(Resolver, const.ER_DIAGRAM):
+                delattr(Resolver, const.ER_DIAGRAM)

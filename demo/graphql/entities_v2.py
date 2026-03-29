@@ -251,7 +251,7 @@ diagram_v2 = ErDiagram(configs=[
         kls=UserEntityV2,
         relationships=[
             Relationship(field='id', target_kls=list[PostEntityV2],
-                         loader=user_posts_loader_v2, default_field_name='myposts')
+                         loader=user_posts_loader_v2, field_name='myposts')
         ],
         queries=[
             QueryConfig(method=get_all_users, name='users_v2', description='获取所有用户（分页）'),
@@ -266,9 +266,9 @@ diagram_v2 = ErDiagram(configs=[
         kls=PostEntityV2,
         relationships=[
             Relationship(field='author_id', target_kls=UserEntityV2,
-                         loader=user_loader_v2, default_field_name='author'),
+                         loader=user_loader_v2, field_name='author'),
             Relationship(field='id', target_kls=list[CommentEntityV2],
-                         loader=post_comments_loader_v2, default_field_name='comments')
+                         loader=post_comments_loader_v2, field_name='comments')
         ],
         queries=[
             QueryConfig(method=get_all_posts, name='posts_v2', description='获取所有文章（可按状态筛选）'),
@@ -283,9 +283,9 @@ diagram_v2 = ErDiagram(configs=[
         kls=CommentEntityV2,
         relationships=[
             Relationship(field='author_id', target_kls=UserEntityV2,
-                         loader=user_loader_v2, default_field_name='author'),
+                         loader=user_loader_v2, field_name='author'),
             Relationship(field='post_id', target_kls=PostEntityV2,
-                         loader=post_loader_v2, default_field_name='post')
+                         loader=post_loader_v2, field_name='post')
         ],
         queries=[
             QueryConfig(method=get_all_comments, name='comments_v2', description='获取所有评论'),

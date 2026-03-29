@@ -2,7 +2,7 @@ import pytest
 from typing import Optional, Annotated, List
 from pydantic import BaseModel
 from pydantic_resolve import config_resolver
-from pydantic_resolve import Relationship, MultipleRelationship, Link, LoadBy, DefineSubset, ensure_subset, base_entity
+from pydantic_resolve import Relationship, LoadBy, DefineSubset, ensure_subset, base_entity
 from aiodataloader import DataLoader
 
 
@@ -84,25 +84,18 @@ class FooNameLoader(DataLoader):
 
 class Biz(BaseModel, BASE_ENTITY):
     __relationships__ = [
-        Relationship(field='user_id', target_kls=User, loader=UserLoader),
-        Relationship(field='user_ids', target_kls=list[User], load_many=True, loader=UserLoader),
-        Relationship(field='user_ids_str', 
+        Relationship(field='user_id', field_name='user', target_kls=User, loader=UserLoader),
+        Relationship(field='user_ids', field_name='users_a', target_kls=list[User], load_many=True, loader=UserLoader),
+        Relationship(field='user_ids_str',
+                        field_name='users_b',
                         target_kls=list[User],
                         load_many=True,
                         load_many_fn=lambda x: [int(xx) for xx in x.split(',')] if x else [],
                         loader=UserLoader),
-        MultipleRelationship(
-            field='id', target_kls=list[Foo], links=[
-                Link(biz='foo_item', loader=FooLoader),
-                Link(biz='foo_name', field_name="name", loader=FooNameLoader)
-            ]
-        ),
-        MultipleRelationship(
-            field='id', target_kls=list[Bar], links=[
-                Link(biz='normal', loader=BarLoader),
-                Link(biz='special', loader=SpecialBarLoader)
-            ]
-        )
+        Relationship(field='id', field_name='foos', target_kls=list[Foo], loader=FooLoader),
+        Relationship(field='id', field_name='bars', target_kls=list[Bar], loader=BarLoader),
+        Relationship(field='id', field_name='special_bars', target_kls=list[Bar], loader=SpecialBarLoader),
+        Relationship(field='id', field_name='foos_in_str', target_kls=list[str], loader=FooNameLoader),
     ]
 
     id: int
@@ -113,13 +106,13 @@ class Biz(BaseModel, BASE_ENTITY):
 
 
 class BizCase1(Biz):
-    user: Annotated[Optional[User], LoadBy('user_id')] = None
-    foos: Annotated[List[Foo], LoadBy('id', biz='foo_item')] = []
-    foos_in_str: Annotated[List[str], LoadBy('id', biz='foo_name', origin_kls=list[Foo])] = []
-    bars: Annotated[List[Bar], LoadBy('id', biz='normal')] = []
-    special_bars: Annotated[list[Bar], LoadBy('id', biz='special')] = []
-    users_a: Annotated[list[User], LoadBy('user_ids')] = []
-    users_b: Annotated[list[User], LoadBy('user_ids_str')] = []
+    user: Annotated[Optional[User], LoadBy()] = None
+    foos: Annotated[List[Foo], LoadBy()] = []
+    foos_in_str: Annotated[List[str], LoadBy()] = []
+    bars: Annotated[List[Bar], LoadBy()] = []
+    special_bars: Annotated[list[Bar], LoadBy()] = []
+    users_a: Annotated[list[User], LoadBy()] = []
+    users_b: Annotated[list[User], LoadBy()] = []
     
 
 @pytest.mark.asyncio
@@ -146,7 +139,7 @@ class SubUser(DefineSubset):
     __pydantic_resolve_subset__ = (User, ['id'])
 
 class BizCase2(Biz):
-    user: Annotated[Optional[SubUser], LoadBy('user_id')] = None
+    user: Annotated[Optional[SubUser], LoadBy()] = None  # Already updated
 
 @pytest.mark.asyncio
 async def test_resolver_factory_with_er_configs_inherit_2():
@@ -159,7 +152,7 @@ async def test_resolver_factory_with_er_configs_inherit_2():
 class BizCase3(DefineSubset):
     __pydantic_resolve_subset__ = (Biz, ['id', 'user_id'])
 
-    user: Annotated[Optional[User], LoadBy('user_id')] = None
+    user: Annotated[Optional[User], LoadBy()] = None
 
 
 @pytest.mark.asyncio
@@ -169,14 +162,17 @@ async def test_resolver_factory_with_er_configs_subset():
     d = await MyResolver().resolve(d)
     assert d.user is not None
 
-class BizCase4(DefineSubset):
-    __pydantic_resolve_subset__ = (Biz, ['id'])
-
-    user: Annotated[Optional[User], LoadBy('user_id')] = None
-
 @pytest.mark.asyncio
 async def test_resolver_factory_of_er_config_auto_add_fk_field():
     """Test that missing LoadBy FK fields are auto-added with exclude=True."""
+    from pydantic_resolve import config_global_resolver
+    config_global_resolver(er_diagram=BASE_ENTITY.get_diagram())
+
+    class BizCase4(DefineSubset):
+        __pydantic_resolve_subset__ = (Biz, ['id'], ['user'])
+
+        user: Annotated[Optional[User], LoadBy()] = None
+
     MyResolver = config_resolver('MyResolver', er_diagram=BASE_ENTITY.get_diagram())
 
     # user_id is not in subset but should be auto-added
@@ -206,8 +202,8 @@ class BizCase5(BaseModel):
     id: int
     user_id: int
 
-    user: Annotated[Optional[User], LoadBy('user_id')] = None
-    # foos_in_str_x: Annotated[List[str], LoadBy('id', biz='foo_name')] = []
+    user: Annotated[Optional[User], LoadBy()] = None
+    # foos_in_str_x: Annotated[List[str], LoadBy()] = []
 
 
 @pytest.mark.asyncio

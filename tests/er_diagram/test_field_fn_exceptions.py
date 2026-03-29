@@ -65,8 +65,7 @@ async def test_field_fn_raises_value_error():
             Entity(
                 kls=Order,
                 relationships=[
-                    Relationship(
-                        field='user_id_str',
+                    Relationship(field='user_id_str', field_name='user',
                         target_kls=User,
                         field_fn=int,  # Will raise ValueError if user_id_str is not numeric
                         loader=ErrorOnNonNumericLoader
@@ -78,7 +77,7 @@ async def test_field_fn_raises_value_error():
 
     # OrderResponse must inherit from Order to be compatible with the Entity config
     class OrderResponse(Order):
-        user: Annotated[Optional[User], LoadBy('user_id_str')] = None
+        user: Annotated[Optional[User], LoadBy()] = None
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -99,8 +98,7 @@ async def test_field_fn_with_none_value():
             Entity(
                 kls=Order,
                 relationships=[
-                    Relationship(
-                        field='user_id_str',
+                    Relationship(field='user_id_str', field_name='user',
                         target_kls=User,
                         field_fn=int,
                         field_none_default=None,  # Return None when field is None
@@ -112,7 +110,7 @@ async def test_field_fn_with_none_value():
     )
 
     class OrderResponse(Order):
-        user: Annotated[Optional[User], LoadBy('user_id_str')] = None
+        user: Annotated[Optional[User], LoadBy()] = None
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -135,8 +133,7 @@ async def test_field_fn_returns_none():
             Entity(
                 kls=Order,
                 relationships=[
-                    Relationship(
-                        field='user_id',
+                    Relationship(field='user_id', field_name='user',
                         target_kls=User,
                         field_fn=return_none,  # Always returns None
                         field_none_default=None,
@@ -148,7 +145,7 @@ async def test_field_fn_returns_none():
     )
 
     class OrderResponse(Order):
-        user: Annotated[Optional[User], LoadBy('user_id')] = None
+        user: Annotated[Optional[User], LoadBy()] = None
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -169,8 +166,7 @@ async def test_field_fn_returns_incompatible_type():
             Entity(
                 kls=Order,
                 relationships=[
-                    Relationship(
-                        field='user_id',
+                    Relationship(field='user_id', field_name='user',
                         target_kls=User,
                         field_fn=lambda x: "string_instead_of_int",  # Returns str instead of int
                         loader=ErrorOnNonNumericLoader
@@ -181,7 +177,7 @@ async def test_field_fn_returns_incompatible_type():
     )
 
     class OrderResponse(Order):
-        user: Annotated[Optional[User], LoadBy('user_id')] = None
+        user: Annotated[Optional[User], LoadBy()] = None
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -200,8 +196,7 @@ async def test_load_many_fn_with_none_field_value():
             Entity(
                 kls=Order,
                 relationships=[
-                    Relationship(
-                        field='user_ids_str',
+                    Relationship(field='user_ids_str', field_name='users',
                         target_kls=list[User],
                         load_many=True,
                         load_many_fn=lambda x: x.split(','),  # Would fail if called with None
@@ -213,7 +208,7 @@ async def test_load_many_fn_with_none_field_value():
     )
 
     class OrderResponse(Order):
-        users: Annotated[List[User], LoadBy('user_ids_str')] = []
+        users: Annotated[List[User], LoadBy()] = []
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -234,8 +229,7 @@ async def test_load_many_fn_returns_none():
             Entity(
                 kls=Order,
                 relationships=[
-                    Relationship(
-                        field='user_ids',
+                    Relationship(field='user_ids', field_name='users',
                         target_kls=list[User],
                         load_many=True,
                         load_many_fn=lambda x: None,  # Returns None
@@ -248,7 +242,7 @@ async def test_load_many_fn_returns_none():
     )
 
     class OrderResponse(Order):
-        users: Annotated[List[User], LoadBy('user_ids')] = []
+        users: Annotated[List[User], LoadBy()] = []
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -268,8 +262,7 @@ async def test_load_many_fn_returns_non_iterable():
             Entity(
                 kls=Order,
                 relationships=[
-                    Relationship(
-                        field='user_ids',
+                    Relationship(field='user_ids', field_name='users',
                         target_kls=list[User],
                         load_many=True,
                         load_many_fn=lambda x: 42,  # Returns int instead of iterable
@@ -281,7 +274,7 @@ async def test_load_many_fn_returns_non_iterable():
     )
 
     class OrderResponse(Order):
-        users: Annotated[List[User], LoadBy('user_ids')] = []
+        users: Annotated[List[User], LoadBy()] = []
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -301,8 +294,7 @@ async def test_field_fn_with_valid_transformation():
             Entity(
                 kls=Order,
                 relationships=[
-                    Relationship(
-                        field='user_id_str',
+                    Relationship(field='user_id_str', field_name='user',
                         target_kls=User,
                         field_fn=int,  # Valid: converts string to int
                         loader=UserLoader
@@ -313,7 +305,7 @@ async def test_field_fn_with_valid_transformation():
     )
 
     class OrderResponse(Order):
-        user: Annotated[Optional[User], LoadBy('user_id_str')] = None
+        user: Annotated[Optional[User], LoadBy()] = None
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -333,8 +325,7 @@ async def test_load_many_fn_with_valid_transformation():
             Entity(
                 kls=Order,
                 relationships=[
-                    Relationship(
-                        field='user_ids_str',
+                    Relationship(field='user_ids_str', field_name='users',
                         target_kls=list[User],
                         load_many=True,
                         load_many_fn=lambda x: [int(i) for i in x.split(',')],  # Valid: CSV to list of ints
@@ -346,7 +337,7 @@ async def test_load_many_fn_with_valid_transformation():
     )
 
     class OrderResponse(Order):
-        users: Annotated[List[User], LoadBy('user_ids_str')] = []
+        users: Annotated[List[User], LoadBy()] = []
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 

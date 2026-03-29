@@ -1,4 +1,4 @@
-from typing import Any, Literal, get_origin, get_args
+from typing import Any, Literal, get_origin, get_args, Annotated, Optional, List
 from pydantic import BaseModel, create_model, model_validator, Field
 import copy
 import pydantic_resolve.constant as const
@@ -6,29 +6,63 @@ from pydantic_resolve.utils.expose import ExposeAs
 from pydantic_resolve.utils.collector import SendTo
 
 
-def _extract_loadby_fk_fields(namespace: dict[str, Any]) -> set[str]:
+def _resolve_relationships_from_field_names(
+    field_names: list[str], parent_kls: type
+) -> tuple[dict[str, str], dict[str, tuple[Any, Any]]]:
     """
-    Extract FK field names referenced by LoadBy annotations.
+    Resolve FK fields and LoadBy field types from field_names via global ER diagram.
 
-    This function scans the namespace's annotations for fields that use LoadBy
-    and extracts the FK field names they reference.
+    For each field_name (e.g. 'author'), look up the corresponding Relationship
+    in the global ER diagram for parent_kls.
 
     Returns:
-        Set of field names (e.g., {'user_id', 'order_id'}) that LoadBy references
+        Tuple of:
+        - field_name -> FK field mapping (e.g. {'author': 'author_id'})
+        - field_name -> (target_kls, load_many) for generating LoadBy annotations
+
+    Raises ValueError if no global ER diagram or parent not found.
     """
-    from typing import Annotated
-    from pydantic_resolve.utils.er_diagram import LoaderInfo
+    from pydantic_resolve.utils.er_diagram import get_global_er_diagram
 
-    annotations = namespace.get('__annotations__', {})
-    fk_fields = set()
+    try:
+        er_diagram = get_global_er_diagram()
+    except ValueError:
+        raise ValueError(
+            f'SubsetConfig.related requires a global ER diagram. '
+            f'Use config_global_resolver(er_diagram=...) before defining the class.'
+        )
 
-    for attr_name, attr_type in annotations.items():
-        if get_origin(attr_type) is Annotated:
-            for arg in get_args(attr_type):
-                if isinstance(arg, LoaderInfo):
-                    fk_fields.add(arg.field)
+    entity = None
+    for config in er_diagram.configs:
+        if config.kls is parent_kls:
+            entity = config
+            break
 
-    return fk_fields
+    if entity is None:
+        raise ValueError(
+            f'Parent class "{parent_kls.__name__}" not found in ER diagram. '
+            f'related requires the parent to be registered in the ER diagram.'
+        )
+
+    fk_map: dict[str, str] = {}
+    type_map: dict[str, tuple[Any, Any]] = {}
+
+    for rel in entity.relationships:
+        if rel.field_name in field_names:
+            fk_map[rel.field_name] = rel.field
+            type_map[rel.field_name] = (rel.target_kls, rel.load_many)
+
+    # Validate all field_names were found
+    not_found = set(field_names) - set(fk_map.keys())
+    if not_found:
+        for name in sorted(not_found):
+            raise ValueError(
+                f'Relationship field_name "{name}" not found in '
+                f'entity "{parent_kls.__name__}". '
+                f'Available: {[r.field_name for r in entity.relationships]}'
+            )
+
+    return fk_map, type_map
 
 
 class SubsetConfig(BaseModel):
@@ -44,11 +78,14 @@ class SubsetConfig(BaseModel):
     expose_as: list[tuple[str, str]] | None = None
     send_to: list[tuple[str, tuple[str, ...] | str]] | None = None
 
+    # Relationship field_names to auto-resolve FK fields and generate LoadBy annotations
+    related: list[str] | None = None
+
     @model_validator(mode='after')
     def validate_fields(self):
         if self.fields is not None and self.omit_fields is not None:
             raise ValueError("fields and omit_fields are exclusive")
-        
+
         if self.fields is None and self.omit_fields is None:
             raise ValueError("fields or omit_fields must be provided")
         return self
@@ -56,14 +93,14 @@ class SubsetConfig(BaseModel):
 
 def _extract_field_infos(kls: type[BaseModel], field_names: list[str]) -> dict[str, Any]:
     field_definitions = {}
-    
+
     for field_name in field_names:
         field = kls.model_fields.get(field_name)
         if not field:
             raise AttributeError(f'field "{field_name}" does not exist in {kls.__name__}')
-        
+
         field_definitions[field_name] = (field.annotation, field)
-    
+
     return field_definitions
 
 
@@ -81,7 +118,7 @@ def _get_kls_validators(kls: type[BaseModel], field_names: list[str]) -> dict[st
             # example: @field_validator('email', 'name') -> decorator_info.info.fields = ['email', 'name']
             if any(field in field_names for field in decorator_info.info.fields):
                 validators[validator_name] = getattr(kls, validator_name)
-    
+
     return validators
 
 
@@ -134,18 +171,18 @@ def _validate_subset_fields(fields: Any):
 def create_subset(parent: type[BaseModel], fields: list[str], name: str = "SubsetModel") -> type[BaseModel]:
     """
     Create a subset model from a parent BaseModel using Pydantic's create_model.
-    
+
     Args:
         parent: Parent BaseModel class to create subset from
         fields: List of field names to include in subset
         name: Name of the new subset class (default: "SubsetModel")
-        
+
     Returns:
         A new BaseModel class containing only the specified fields
     """
     if not issubclass(parent, BaseModel):
         raise TypeError('parent must be a pydantic BaseModel')
-    
+
     _validate_subset_fields(fields)
     field_infos = _extract_field_infos(parent, fields)
     validators = _get_kls_validators(parent, fields)
@@ -154,7 +191,7 @@ def create_subset(parent: type[BaseModel], fields: list[str], name: str = "Subse
     config = _get_kls_config(parent)
     if config:
         create_model_kwargs['__config__'] = config
-    
+
     subset_class = create_model(name, **field_infos, **create_model_kwargs)
 
     _apply_validators(subset_class, validators)
@@ -163,17 +200,36 @@ def create_subset(parent: type[BaseModel], fields: list[str], name: str = "Subse
     return subset_class
 
 
+def _build_loadby_annotation(target_kls: Any, load_many: bool):
+    """Build Annotated[Optional[target] | List[target], LoadBy()] field annotation."""
+    from pydantic_resolve.utils.er_diagram import LoadBy
+
+    if load_many:
+        annotation = Annotated[Optional[List[target_kls]], LoadBy()]
+        default = Field(default_factory=list)
+    else:
+        annotation = Annotated[Optional[target_kls], LoadBy()]
+        default = Field(default=None)
+
+    return annotation, default
+
+
 class SubsetMeta(type):
     def __new__(cls, name, bases, namespace, **kwargs):
-        # subset_info is expected to be a tuple of (parent_class, list_of_field_names) or SubsetConfig
+        # subset_info is expected to be:
+        # - a tuple of (parent_class, list_of_field_names)
+        # - a tuple of (parent_class, list_of_field_names, list_of_related_field_names)
+        # - a SubsetConfig
         subset_info = namespace.get(const.ENSURE_SUBSET_DEFINITION) or namespace.get(const.ENSURE_SUBSET_DEFINITION_SHORT)
-            
+
         # Allow defining the base marker class without warning, bypass
         if name == 'DefineSubset' and not bases:
             return super().__new__(cls, name, bases, namespace, **kwargs)
 
         if not subset_info:
             raise ValueError(f'Class {name} must define {const.ENSURE_SUBSET_DEFINITION} to use SubsetMeta')
+
+        related_field_names: list[str] = []
 
         if isinstance(subset_info, SubsetConfig):
             parent_kls = subset_info.kls
@@ -187,8 +243,14 @@ class SubsetMeta(type):
                 all_fields = list(parent_kls.model_fields.keys())
                 omit_set = set(subset_info.omit_fields)
                 subset_fields = [f for f in all_fields if f not in omit_set]
+
+            if subset_info.related:
+                related_field_names = subset_info.related
         else:
-            parent_kls, subset_fields = subset_info
+            parent_kls = subset_info[0]
+            subset_fields = subset_info[1]
+            if len(subset_info) > 2:
+                related_field_names = subset_info[2]
 
         _validate_subset_fields(subset_fields)
         field_infos = _extract_field_infos(parent_kls, subset_fields)
@@ -209,7 +271,7 @@ class SubsetMeta(type):
                         new_field_info = copy.deepcopy(field_info)
                         new_field_info.metadata.append(ExposeAs(alias))
                         field_infos[field_name] = (annotation, new_field_info)
-            
+
             if subset_info.send_to:
                 for field_name, target in subset_info.send_to:
                     if field_name in field_infos:
@@ -248,24 +310,33 @@ class SubsetMeta(type):
         field_definitions.update(field_infos)
         field_definitions.update(extra_fields)
 
-        # Auto-add missing LoadBy FK fields with exclude=True
-        # Only add fields that exist in the parent class
-        loadby_fk_fields = _extract_loadby_fk_fields(namespace)
-        all_defined_fields = set(subset_fields) | set(extra_fields.keys())
-        parent_field_names = set(parent_kls.model_fields.keys())
+        # Auto-add FK fields and LoadBy fields from related via global ER diagram
+        if related_field_names:
+            fk_map, type_map = _resolve_relationships_from_field_names(
+                related_field_names, parent_kls
+            )
 
-        for fk_field in loadby_fk_fields:
-            if fk_field not in all_defined_fields:
-                if fk_field in parent_field_names:
-                    # Get field info from parent to preserve type
-                    parent_field = parent_kls.model_fields[fk_field]
-                    field_definitions[fk_field] = (parent_field.annotation, Field(default=None, exclude=True))
-                else:
-                    # FK field doesn't exist in parent class - raise error early
-                    raise ValueError(
-                        f'LoadBy references field "{fk_field}" which does not exist in parent class "{parent_kls.__name__}". '
-                        f'Available fields: {list(parent_field_names)}'
-                    )
+            all_defined_fields = set(subset_fields) | set(extra_fields.keys())
+            parent_field_names = set(parent_kls.model_fields.keys())
+
+            for field_name, fk_field in fk_map.items():
+                # Auto-add FK field with exclude=True if not already defined
+                if fk_field not in all_defined_fields:
+                    if fk_field in parent_field_names:
+                        parent_field = parent_kls.model_fields[fk_field]
+                        field_definitions[fk_field] = (parent_field.annotation, Field(default=None, exclude=True))
+                    else:
+                        raise ValueError(
+                            f'Related field_name "{field_name}" resolves to FK field "{fk_field}" '
+                            f'which does not exist in parent class "{parent_kls.__name__}". '
+                            f'Available fields: {list(parent_field_names)}'
+                        )
+
+                # Auto-generate LoadBy field if not already defined in class body
+                if field_name not in extra_fields:
+                    target_kls, load_many = type_map[field_name]
+                    annotation, default = _build_loadby_annotation(target_kls, load_many)
+                    field_definitions[field_name] = (annotation, default)
 
         subset_class = create_model(
             name,

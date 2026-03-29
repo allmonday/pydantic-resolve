@@ -292,12 +292,12 @@ class TestCircularReferenceScenario:
         diagram = ErDiagram(configs=[
             Entity(
                 kls=AuthorEntity,
-                relationships=[Relationship(field='id', target_kls=list[BookEntity])],
+                relationships=[Relationship(field='id', target_kls=list[BookEntity], field_name='books')],
                 queries=[QueryConfig(method=_get_authors, name='authors')]
             ),
             Entity(
                 kls=BookEntity,
-                relationships=[Relationship(field='author_id', target_kls=AuthorEntity)],
+                relationships=[Relationship(field='author_id', target_kls=AuthorEntity, field_name='author')],
                 queries=[QueryConfig(method=_get_books_by_author, name='booksByAuthor')]
             )
         ])

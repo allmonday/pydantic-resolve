@@ -45,15 +45,15 @@ class BarLoader(DataLoader):
 diagram = ErDiagram(
     configs=[
         Entity(kls=Biz, relationships=[
-            Relationship(field='user_id', target_kls=User, loader=UserLoader),
-            Relationship(field='id', target_kls=list[Bar], field_none_default_factory=list, loader=BarLoader),
+            Relationship(field='user_id', field_name='user', target_kls=User, loader=UserLoader),
+            Relationship(field='id', field_name='bars', target_kls=list[Bar], field_none_default_factory=list, loader=BarLoader),
         ])
     ]
 )
 
 class BizCase1(Biz):
-    user: Annotated[Optional[User], LoadBy('user_id')] = None
-    bars: Annotated[list[Bar], LoadBy('id')] = []
+    user: Annotated[Optional[User], LoadBy()] = None
+    bars: Annotated[list[Bar], LoadBy()] = []
     
 
 @pytest.mark.asyncio

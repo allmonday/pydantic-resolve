@@ -2,7 +2,7 @@ import pytest
 from typing import Optional, Annotated, List
 from pydantic import BaseModel
 from pydantic_resolve.utils.resolver_configurator import config_global_resolver
-from pydantic_resolve import Entity, Relationship, MultipleRelationship, Link, LoadBy, DefineSubset, ErDiagram, Resolver
+from pydantic_resolve import Entity, Relationship, LoadBy, DefineSubset, ErDiagram, Resolver
 from aiodataloader import DataLoader
 
 
@@ -75,16 +75,10 @@ class FooLoader(DataLoader):
 diagram = ErDiagram(
     configs=[
         Entity(kls=Biz, relationships=[
-            Relationship(field='user_id', target_kls=User, loader=UserLoader),
-            Relationship(field='id', target_kls=List[Foo], loader=FooLoader),
-            MultipleRelationship(
-                field='id',
-                target_kls=list[Bar],
-                links=[
-                    Link(biz='a', loader=BarLoader),
-                    Link(biz='special', loader=SpecialBarLoader),
-                ]
-            )
+            Relationship(field='user_id', field_name='user', target_kls=User, loader=UserLoader),
+            Relationship(field='id', field_name='foos', target_kls=List[Foo], loader=FooLoader),
+            Relationship(field='id', field_name='bars', target_kls=list[Bar], loader=BarLoader),
+            Relationship(field='id', field_name='special_bars', target_kls=list[Bar], loader=SpecialBarLoader),
         ])
     ]
 )
@@ -99,10 +93,10 @@ def setup_global_resolver():
 class BizCase1(DefineSubset):
     __pydantic_resolve_subset__ = (Biz, ('id', 'name', 'user_id'))
 
-    user: Annotated[Optional[User], LoadBy('user_id')] = None
-    foos: Annotated[List[Foo], LoadBy('id')] = []
-    bars: Annotated[List[Bar], LoadBy('id', biz='a')] = []
-    special_bars: Annotated[list[Bar], LoadBy('id', biz='special')] = []
+    user: Annotated[Optional[User], LoadBy()] = None
+    foos: Annotated[List[Foo], LoadBy()] = []
+    bars: Annotated[List[Bar], LoadBy()] = []
+    special_bars: Annotated[list[Bar], LoadBy()] = []
     
 
 @pytest.mark.asyncio

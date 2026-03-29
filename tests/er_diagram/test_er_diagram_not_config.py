@@ -27,7 +27,7 @@ class UserLoader(DataLoader):
 
 
 class BizCase1(Biz):
-    user: Annotated[Optional[User], LoadBy('user_id')] = None
+    user: Annotated[Optional[User], LoadBy()] = None
     
 @pytest.mark.asyncio
 async def test_resolver_factory_with_er_configs_inherit():

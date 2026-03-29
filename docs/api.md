@@ -205,42 +205,11 @@ class Comment(BaseModel):
 
     # Define relationship: load User via user_id
     __relationships__ = [
-        Relationship(field='user_id', target_kls=User, loader=user_loader)
-    ]
-```
-
-**Parameters:**
-
-- `field` (str): The foreign key field name
-- `target_kls` (type): The target Pydantic model class
-- `loader` (Callable): DataLoader function to fetch the target entity
-- `field_fn` (Callable | None): Optional function to transform the FK value before passing to loader
-- `field_none_default` (Any | None): Default value to return if FK is None
-- `field_none_default_factory` (Callable | None): Factory function to create default value if FK is None
-- `load_many` (bool): Whether to use `load_many` instead of `load` (for to-many relationships)
-- `load_many_fn` (Callable | None): Optional function to manually split FK values for load_many
-
-#### MultipleRelationship
-
-Defines multiple relationships between two entities under the same field.
-
-```python
-from pydantic_resolve import MultipleRelationship, Link
-
-class Comment(BaseModel):
-    id: int
-    user_id: int
-    moderator_id: int
-
-    # Define two relationships via user_id: author and moderator
-    __relationships__ = [
-        MultipleRelationship(
+        Relationship(
             field='user_id',
             target_kls=User,
-            links=[
-                Link(biz='author', loader=user_loader),
-                Link(biz='moderator', loader=moderator_loader)
-            ]
+            field_name='user',
+            loader=user_loader
         )
     ]
 ```
@@ -249,24 +218,44 @@ class Comment(BaseModel):
 
 - `field` (str): The foreign key field name
 - `target_kls` (type): The target Pydantic model class
-- `links` (list[Link]): List of Link objects defining different relationships
+- `field_name` (str): **REQUIRED**. Unique identifier for this relationship, becomes the GraphQL field name
+- `loader` (Callable | None): DataLoader function to fetch the target entity
+- `field_fn` (Callable | None): Optional function to transform the FK value before passing to loader
+- `field_none_default` (Any | None): Default value to return if FK is None
+- `field_none_default_factory` (Callable | None): Factory function to create default value if FK is None
+- `load_many` (bool): Whether the FK field itself contains multiple values (e.g., `user_ids: list[int]`), causing `loader.load_many()` to be called instead of `loader.load()` (default: False)
+- `load_many_fn` (Callable | None): Optional function to transform the FK field value into an iterable for `load_many`
 
-#### Link
+**Note:** `MultipleRelationship` and `Link` have been removed in favor of a simplified flat `Relationship` model. To define multiple relationships from the same field, simply define multiple `Relationship` objects with unique `field_name` values.
 
-Defines a single link in a MultipleRelationship.
+#### Multiple Relationships from Same Field
 
-**Parameters:**
+To define multiple relationships from the same foreign key field, create multiple `Relationship` objects with different `field_name` values:
 
-- `biz` (str): Business identifier to distinguish multiple relationships
-- `loader` (Callable): DataLoader function
-- `field_fn` (Callable | None): Optional function to transform FK value
-- `field_none_default` (Any | None): Default value if FK is None
-- `field_none_default_factory` (Callable | None): Factory for default value
-- `load_many` (bool): Whether to use load_many
-- `load_many_fn` (Callable | None): Manual split function for load_many
-- `field_name` (str | None): Specifies that the loader returns a field value from the target class, not the full object. Must be used with `LoadBy(origin_kls=...)` to indicate the original object type.
+```python
+from pydantic_resolve import Relationship
 
-Example: If `field_name="name"`, the loader returns `list[str]` (name field values) instead of `list[Foo]` (full objects). This is useful when you only need specific field values and want to avoid loading full objects.
+class Comment(BaseModel, BaseEntity):
+    id: int
+    user_id: int
+    moderator_id: int
+
+    # Define two relationships via user_id: author and moderator
+    __relationships__ = [
+        Relationship(
+            field='user_id',
+            target_kls=User,
+            field_name='author',  # GraphQL field name for this relationship
+            loader=user_loader
+        ),
+        Relationship(
+            field='user_id',
+            target_kls=User,
+            field_name='moderator',  # Different GraphQL field name
+            loader=moderator_loader
+        )
+    ]
+```
 
 #### Entity
 
@@ -278,7 +267,7 @@ from pydantic_resolve import Entity
 Entity(
     kls=Comment,
     relationships=[
-        Relationship(field='user_id', target_kls=User, loader=user_loader)
+        Relationship(field='user_id', target_kls=User, field_name='user', loader=user_loader)
     ]
 )
 ```
@@ -286,7 +275,7 @@ Entity(
 **Parameters:**
 
 - `kls` (type[BaseModel]): The Pydantic model class
-- `relationships` (list[Relationship | MultipleRelationship]): List of relationships
+- `relationships` (list[Relationship]): List of relationships
 
 #### ErDiagram
 
@@ -336,7 +325,7 @@ class User(BaseModel, BaseEntity):
     name: str
 
     __relationships__ = [
-        Relationship(field='org_id', target_kls=Organization, loader=org_loader)
+        Relationship(field='org_id', target_kls=Organization, field_name='organization', loader=org_loader)
     ]
 
 class Comment(BaseModel, BaseEntity):
@@ -344,7 +333,7 @@ class Comment(BaseModel, BaseEntity):
     user_id: int
 
     __relationships__ = [
-        Relationship(field='user_id', target_kls=User, loader=user_loader)
+        Relationship(field='user_id', target_kls=User, field_name='user', loader=user_loader)
     ]
 
 # Get the ER diagram
@@ -363,7 +352,7 @@ Because entities reference each other through `target_kls`, you may encounter ci
 
        __relationships__ = [
            # String 'User' will be resolved automatically
-           Relationship(field='user_id', target_kls='User', loader=user_loader)
+           Relationship(field='user_id', target_kls='User', field_name='user', loader=user_loader)
        ]
    ```
 
@@ -380,6 +369,7 @@ Because entities reference each other through `target_kls`, you may encounter ci
            Relationship(
                field='user_id',
                target_kls='app.models.user:User',  # module.path:ClassName
+               field_name='user',
                loader=user_loader
            )
        ]
@@ -405,7 +395,7 @@ class User(BaseModel, BaseEntity):
     id: int
     name: str
     __relationships__ = [
-        Relationship(field='org_id', target_kls=Organization, loader=org_loader)
+        Relationship(field='org_id', target_kls=Organization, field_name='organization', loader=org_loader)
     ]
 ```
 
@@ -429,45 +419,8 @@ class UserResponse(BaseModel):
 **Parameters:**
 
 - `key` (str): The foreign key field name
-- `biz` (str | None): Business identifier for MultipleRelationship
-- `origin_kls` (type | None): Must be provided when the Link's `field_name` is set. Indicates the original object type before field extraction.
 
 **Note:** `LoadBy` works with `config_global_resolver()` to inject the ERD into the default Resolver.
-
-#### Using field_name with origin_kls
-
-When a loader returns field values instead of full objects, use `field_name` in Link and `origin_kls` in LoadBy:
-
-```python
-from typing import Annotated
-
-# DataLoader that returns list[str] (name values) instead of list[Foo] (full objects)
-class FooNameLoader(DataLoader):
-    async def batch_load_fn(self, keys):
-        # Returns: [["foo1", "foo2"], ["foo3"]]
-        return [[vv['name'] for vv in v] for v in load_foo_names(keys)]
-
-class Biz(BaseModel, BaseEntity):
-    __relationships__ = [
-        MultipleRelationship(
-            field='id',
-            target_kls=list[Foo],  # Original type is list[Foo]
-            links=[
-                Link(biz='foo_name', field_name="name", loader=FooNameLoader)  # But loader returns list[str] (name field)
-            ]
-        )
-    ]
-
-class BizResponse(BaseModel):
-    # origin_kls tells the system the relationship is originally list[Foo]
-    # even though the loader actually returns list[str]
-    foo_names: Annotated[List[str], LoadBy('id', biz='foo_name', origin_kls=list[Foo])] = []
-```
-
-This allows the system to:
-- Correctly validate types (`list[str]` is compatible with `list[Foo].name`)
-- Generate proper API documentation
-- Provide type hints for fastapi-voyager
 
 #### config_resolver()
 
@@ -480,6 +433,82 @@ diagram = ErDiagram(configs=[...])
 CustomResolver = config_resolver(diagram)
 
 result = await CustomResolver().resolve(data)
+```
+
+#### Relationship Configuration Examples
+
+**Basic Relationship (to-one):**
+
+```python
+Relationship(
+    field='user_id',
+    target_kls=User,
+    field_name='user',
+    loader=user_loader
+)
+```
+
+**To-Many Relationship:**
+
+```python
+Relationship(
+    field='tag_ids',
+    target_kls=Tag,
+    field_name='tags',
+    loader=tag_loader,
+    load_many=True,
+    load_many_fn=lambda ids: ids.split(',') if ids else []
+)
+```
+
+**Handling None FK Values:**
+
+```python
+# Return None when FK is None
+Relationship(
+    field='user_id',
+    target_kls=User,
+    field_name='user',
+    loader=user_loader,
+    field_none_default=None
+)
+
+# Or use a factory to return a default object
+Relationship(
+    field='user_id',
+    target_kls=User,
+    field_name='user',
+    loader=user_loader,
+    field_none_default_factory=lambda: AnonymousUser()
+)
+```
+
+**Multiple Relationships from Same Field:**
+
+```python
+class Comment(BaseModel, BaseEntity):
+    id: int
+    user_id: int
+
+    __relationships__ = [
+        Relationship(
+            field='user_id',
+            target_kls=User,
+            field_name='author',
+            loader=user_loader
+        ),
+        Relationship(
+            field='user_id',
+            target_kls=User,
+            field_name='moderator',
+            loader=moderator_loader
+        )
+    ]
+
+class CommentResponse(BaseModel):
+    id: int
+    author: Annotated[Optional[User], LoadBy('user_id')] = None
+    moderator: Annotated[Optional[User], LoadBy('user_id')] = None
 ```
 
 #### config_global_resolver()
@@ -496,60 +525,6 @@ config_global_resolver(BaseEntity.get_diagram())
 
 # Now default Resolver will use the ERD
 result = await Resolver().resolve(data)
-```
-
-### Handling None FK Values
-
-When a foreign key is None, you can specify what to return:
-
-```python
-Relationship(
-    field='user_id',
-    target_kls=User,
-    loader=user_loader,
-    field_none_default=None,  # or
-    field_none_default_factory=lambda: AnonymousUser()
-)
-```
-
-When using `load_many`:
-
-```python
-Relationship(
-    field='tag_ids',
-    target_kls=Tag,
-    loader=tag_loader,
-    load_many=True,
-    load_many_fn=lambda ids: ids.split(',') if ids else []  # Handle comma-separated values
-)
-```
-
-### Multiple Relationships
-
-When one field can mean different things, use `MultipleRelationship`:
-
-```python
-class Comment(BaseModel, BaseEntity):
-    id: int
-    user_id: int  # Can be author OR moderator
-
-    __relationships__ = [
-        MultipleRelationship(
-            field='user_id',
-            target_kls=User,
-            links=[
-                Link(biz='author', loader=user_loader),
-                Link(biz='moderator', loader=moderator_loader)
-            ]
-        )
-    ]
-
-class CommentResponse(BaseModel):
-    id: int
-
-    # Specify which relationship to use via the 'biz' parameter
-    author: Annotated[Optional[User], LoadBy('user_id', biz='author')] = None
-    moderator: Annotated[Optional[User], LoadBy('user_id', biz='moderator')] = None
 ```
 
 
@@ -1110,7 +1085,7 @@ class Comment(BaseModel, BaseEntity):
     id: int
     user_id: int
     __relationships__ = [
-        Relationship(field='user_id', target_kls=User, loader=user_loader)
+        Relationship(field='user_id', target_kls=User, field_name='user', loader=user_loader)
     ]
 
 config_global_resolver(BaseEntity.get_diagram())

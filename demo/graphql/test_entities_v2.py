@@ -339,7 +339,7 @@ class TestErDiagramConfiguration:
         user_cfg = next((cfg for cfg in diagram_v2.configs if cfg.kls == UserEntityV2), None)
         assert user_cfg is not None
         assert len(user_cfg.relationships) == 1
-        assert user_cfg.relationships[0].default_field_name == 'myposts'
+        assert user_cfg.relationships[0].field_name == 'myposts'
 
     def test_post_entity_has_relationships(self):
         """验证 PostEntityV2 在 ErDiagram 中有正确的关係配置"""

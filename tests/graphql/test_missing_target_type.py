@@ -78,7 +78,7 @@ class TestErDiagramMissingTargetType:
                     Relationship(
                         field='profile_id',
                         target_kls=ProfileInfo,
-                        default_field_name='profile'
+                        field_name='profile'
                     )
                 ]
             )
@@ -109,7 +109,7 @@ class TestErDiagramMissingTargetType:
                     Relationship(
                         field='profile_id',
                         target_kls=ProfileInfo,
-                        default_field_name='profile',
+                        field_name='profile',
                         loader=lambda x: []  # Required for field to appear in SDL
                     )
                 ]
@@ -143,7 +143,7 @@ class TestErDiagramMissingTargetType:
                     Relationship(
                         field='id',  # Using id as a dummy field
                         target_kls=ContactInfo,
-                        default_field_name='contact',
+                        field_name='contact',
                         loader=lambda x: []  # Required for field to appear in introspection
                     )
                 ]
@@ -174,7 +174,7 @@ class TestErDiagramMissingTargetType:
                     Relationship(
                         field='profile_id',
                         target_kls=ProfileInfo,
-                        default_field_name='profile',
+                        field_name='profile',
                         loader=lambda x: []  # Required for field to appear in introspection
                     )
                 ]
@@ -245,7 +245,7 @@ class TestBaseEntityRelationships:
                 Relationship(
                     field='profile_id',
                     target_kls=ProfileEntityTest,
-                    default_field_name='profile'
+                    field_name='profile'
                 )
             ]
             id: int
@@ -277,7 +277,7 @@ class TestBaseEntityRelationships:
                 Relationship(
                     field='profile_id',
                     target_kls=ProfileForIntrospection,
-                    default_field_name='profile'
+                    field_name='profile'
                 )
             ]
             id: int
@@ -320,7 +320,7 @@ class TestIntrospectionSDLConsistency:
                     Relationship(
                         field='profile_id',
                         target_kls=ProfileInfo,
-                        default_field_name='profile'
+                        field_name='profile'
                     )
                 ]
             )
@@ -359,7 +359,7 @@ class TestIntrospectionSDLConsistency:
                     Relationship(
                         field='id',
                         target_kls=ContactInfo,  # Contains nested AddressInfo
-                        default_field_name='contact'
+                        field_name='contact'
                     )
                 ]
             )
@@ -410,7 +410,7 @@ class TestEdgeCases:
                     Relationship(
                         field='id',
                         target_kls=list[PostEntityForManualConfig],
-                        default_field_name='posts'
+                        field_name='posts'
                     )
                 ]
             )
@@ -437,12 +437,12 @@ class TestEdgeCases:
                     Relationship(
                         field='profile_id',
                         target_kls=ProfileInfo,
-                        default_field_name='profile'
+                        field_name='profile'
                     ),
                     Relationship(
                         field='id',
                         target_kls=list[ProfileInfo],  # Same type but as list
-                        default_field_name='profiles'
+                        field_name='profiles'
                     )
                 ]
             )
