@@ -290,6 +290,12 @@ def base_entity() -> type[BaseEntity]:
             mod = sys.modules.get(module_name)
             if mod and hasattr(mod, ref):
                 return getattr(mod, ref)
+
+            # Try to find among registered entities (handles locally-defined classes)
+            for entity_cls in entities:
+                if entity_cls.__name__ == ref:
+                    return entity_cls
+
             raise AttributeError(f"Unable to resolve reference '{ref}' in module '{module_name}'")
 
         if isinstance(ref, GenericAlias):  # e.g., list['Foo']
