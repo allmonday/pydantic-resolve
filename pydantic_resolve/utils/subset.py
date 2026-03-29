@@ -1,9 +1,10 @@
-from typing import Any, Literal, get_origin, get_args, Annotated, Optional, List
+from typing import Any, Literal, Annotated, Optional, List
 from pydantic import BaseModel, create_model, model_validator, Field
 import copy
 import pydantic_resolve.constant as const
 from pydantic_resolve.utils.expose import ExposeAs
 from pydantic_resolve.utils.collector import SendTo
+from pydantic_resolve.utils.er_diagram import LoadBy
 
 
 def _resolve_relationships_from_field_names(
@@ -28,8 +29,8 @@ def _resolve_relationships_from_field_names(
         er_diagram = get_global_er_diagram()
     except ValueError:
         raise ValueError(
-            f'SubsetConfig.related requires a global ER diagram. '
-            f'Use config_global_resolver(er_diagram=...) before defining the class.'
+            'SubsetConfig.related requires a global ER diagram. '
+            'Use config_global_resolver(er_diagram=...) before defining the class.'
         )
 
     entity = None
@@ -202,7 +203,6 @@ def create_subset(parent: type[BaseModel], fields: list[str], name: str = "Subse
 
 def _build_loadby_annotation(target_kls: Any, load_many: bool):
     """Build Annotated[Optional[target] | List[target], LoadBy()] field annotation."""
-    from pydantic_resolve.utils.er_diagram import LoadBy
 
     if load_many:
         annotation = Annotated[Optional[List[target_kls]], LoadBy()]
@@ -212,6 +212,43 @@ def _build_loadby_annotation(target_kls: Any, load_many: bool):
         default = Field(default=None)
 
     return annotation, default
+
+
+def _apply_config_modifiers_to_field(
+    config: SubsetConfig,
+    field_name: str,
+    field_default: Any,
+) -> Any:
+    """Apply SubsetConfig modifiers (excluded_fields, expose_as, send_to) to a single field.
+
+    Only deep-copies when at least one modifier matches. Returns the original
+    object unchanged if no modifiers apply.
+    """
+    result = field_default
+    modified = False
+
+    if config.excluded_fields and field_name in config.excluded_fields:
+        result = copy.deepcopy(result)
+        result.exclude = True
+        modified = True
+
+    if config.expose_as:
+        for ef_name, alias in config.expose_as:
+            if ef_name == field_name:
+                if not modified:
+                    result = copy.deepcopy(result)
+                    modified = True
+                result.metadata.append(ExposeAs(alias))
+
+    if config.send_to:
+        for sf_name, target in config.send_to:
+            if sf_name == field_name:
+                if not modified:
+                    result = copy.deepcopy(result)
+                    modified = True
+                result.metadata.append(SendTo(target))
+
+    return result
 
 
 class SubsetMeta(type):
@@ -256,29 +293,10 @@ class SubsetMeta(type):
         field_infos = _extract_field_infos(parent_kls, subset_fields)
 
         if isinstance(subset_info, SubsetConfig):
-            if subset_info.excluded_fields:
-                for field_name in subset_info.excluded_fields:
-                    if field_name in field_infos:
-                        annotation, field_info = field_infos[field_name]
-                        new_field_info = copy.deepcopy(field_info)
-                        new_field_info.exclude = True
-                        field_infos[field_name] = (annotation, new_field_info)
-
-            if subset_info.expose_as:
-                for field_name, alias in subset_info.expose_as:
-                    if field_name in field_infos:
-                        annotation, field_info = field_infos[field_name]
-                        new_field_info = copy.deepcopy(field_info)
-                        new_field_info.metadata.append(ExposeAs(alias))
-                        field_infos[field_name] = (annotation, new_field_info)
-
-            if subset_info.send_to:
-                for field_name, target in subset_info.send_to:
-                    if field_name in field_infos:
-                        annotation, field_info = field_infos[field_name]
-                        new_field_info = copy.deepcopy(field_info)
-                        new_field_info.metadata.append(SendTo(target))
-                        field_infos[field_name] = (annotation, new_field_info)
+            for fname, (annotation, field_info) in list(field_infos.items()):
+                new_field_info = _apply_config_modifiers_to_field(subset_info, fname, field_info)
+                if new_field_info is not field_info:
+                    field_infos[fname] = (annotation, new_field_info)
 
         # Then extract extra fields defined in class body
         extra_fields = _extract_extra_fields_from_namespace(namespace, set(subset_fields))
@@ -336,6 +354,11 @@ class SubsetMeta(type):
                 if field_name not in extra_fields:
                     target_kls, load_many = type_map[field_name]
                     annotation, default = _build_loadby_annotation(target_kls, load_many)
+
+                    # Apply SubsetConfig modifiers to auto-generated LoadBy fields
+                    if isinstance(subset_info, SubsetConfig):
+                        default = _apply_config_modifiers_to_field(subset_info, field_name, default)
+
                     field_definitions[field_name] = (annotation, default)
 
         subset_class = create_model(
@@ -343,6 +366,15 @@ class SubsetMeta(type):
             **field_definitions,
             **create_model_kwargs
         )
+
+        # Apply excluded_fields to auto-generated LoadBy fields after create_model,
+        # since create_model does not preserve exclude=True when processing
+        # Annotated[..., LoadBy()] annotations.
+        if isinstance(subset_info, SubsetConfig) and subset_info.excluded_fields:
+            for fname in subset_info.excluded_fields:
+                if fname in subset_class.model_fields:
+                    subset_class.model_fields[fname].exclude = True
+            subset_class.model_rebuild(force=True)
 
         _apply_validators(subset_class, validators)
 

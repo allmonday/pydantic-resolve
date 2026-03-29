@@ -3,9 +3,8 @@ Dynamic Pydantic model builder based on GraphQL field selection.
 """
 
 from pydantic import ConfigDict
-from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union, get_type_hints, get_origin, get_args, Annotated
+from typing import Any, Dict, List, Optional, Set, Tuple, Union, get_type_hints, get_origin, get_args, Annotated
 from pydantic import BaseModel, create_model, Field
 from pydantic.functional_serializers import PlainSerializer
 from functools import lru_cache

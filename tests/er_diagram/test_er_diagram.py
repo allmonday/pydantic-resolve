@@ -1,6 +1,6 @@
 import pytest
 import logging
-from typing import Optional, Annotated, List
+from typing import Optional, Annotated
 from pydantic import BaseModel
 from pydantic_resolve import (
     config_resolver,

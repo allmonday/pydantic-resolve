@@ -574,7 +574,7 @@ class TestSubsetConfigRelated:
     def test_related_auto_adds_fk_and_loadby_field(self):
         """Test that related=['author'] auto-adds FK field (exclude=True) and LoadBy field."""
         from pydantic_resolve import config_global_resolver
-        from pydantic_resolve.utils.er_diagram import ErDiagram, Entity, Relationship, base_entity
+        from pydantic_resolve.utils.er_diagram import Relationship, base_entity
 
         BASE = base_entity()
 
@@ -682,7 +682,7 @@ class TestSubsetConfigRelated:
     def test_related_parent_not_in_er_diagram_raises_error(self):
         """Test that related with parent not in ER diagram raises ValueError."""
         from pydantic_resolve import config_global_resolver
-        from pydantic_resolve.utils.er_diagram import base_entity, Relationship
+        from pydantic_resolve.utils.er_diagram import base_entity
 
         BASE = base_entity()
 
@@ -756,6 +756,140 @@ class TestSubsetConfigRelated:
             # Both LoadBy fields auto-generated
             assert 'author' in PostSubset.model_fields
             assert 'tag' in PostSubset.model_fields
+        finally:
+            from pydantic_resolve.resolver import Resolver
+            import pydantic_resolve.constant as const
+            if hasattr(Resolver, const.ER_DIAGRAM):
+                delattr(Resolver, const.ER_DIAGRAM)
+
+    def test_related_with_excluded_fields(self):
+        """Test that excluded_fields applies exclude=True to auto-generated LoadBy fields."""
+        from pydantic_resolve import config_global_resolver
+        from pydantic_resolve.utils.er_diagram import base_entity, Relationship
+
+        BASE = base_entity()
+
+        class User(BaseModel, BASE):
+            id: int
+            name: str
+
+        class Post(BaseModel, BASE):
+            id: int
+            title: str
+            author_id: int
+
+            __relationships__ = [
+                Relationship(field='author_id', field_name='author', target_kls=User, loader=lambda x: x)
+            ]
+
+        config_global_resolver(BASE.get_diagram())
+
+        try:
+            class PostSubset(DefineSubset):
+                __subset__ = SubsetConfig(
+                    kls=Post,
+                    fields=['id', 'title'],
+                    related=['author'],
+                    excluded_fields=['author']
+                )
+
+            # LoadBy field should exist but with exclude=True
+            assert 'author' in PostSubset.model_fields
+            assert PostSubset.model_fields['author'].exclude is True
+
+            # FK field still auto-added with exclude=True
+            assert 'author_id' in PostSubset.model_fields
+            assert PostSubset.model_fields['author_id'].exclude is True
+
+            # author excluded from serialization
+            sub = PostSubset(id=1, title='hello', author_id=42)
+            assert sub.model_dump() == {'id': 1, 'title': 'hello'}
+        finally:
+            from pydantic_resolve.resolver import Resolver
+            import pydantic_resolve.constant as const
+            if hasattr(Resolver, const.ER_DIAGRAM):
+                delattr(Resolver, const.ER_DIAGRAM)
+
+    def test_related_with_expose_as(self):
+        """Test that expose_as applies ExposeAs metadata to auto-generated LoadBy fields."""
+        from pydantic_resolve import config_global_resolver
+        from pydantic_resolve.utils.er_diagram import base_entity, Relationship
+        from pydantic_resolve.utils.expose import ExposeInfo
+
+        BASE = base_entity()
+
+        class User(BaseModel, BASE):
+            id: int
+            name: str
+
+        class Post(BaseModel, BASE):
+            id: int
+            title: str
+            author_id: int
+
+            __relationships__ = [
+                Relationship(field='author_id', field_name='author', target_kls=User, loader=lambda x: x)
+            ]
+
+        config_global_resolver(BASE.get_diagram())
+
+        try:
+            class PostSubset(DefineSubset):
+                __subset__ = SubsetConfig(
+                    kls=Post,
+                    fields=['id', 'title'],
+                    related=['author'],
+                    expose_as=[('author', 'writer')]
+                )
+
+            # LoadBy field should have ExposeInfo metadata
+            metadata = PostSubset.model_fields['author'].metadata
+            expose_items = [m for m in metadata if isinstance(m, ExposeInfo)]
+            assert len(expose_items) == 1
+            assert expose_items[0].alias == 'writer'
+        finally:
+            from pydantic_resolve.resolver import Resolver
+            import pydantic_resolve.constant as const
+            if hasattr(Resolver, const.ER_DIAGRAM):
+                delattr(Resolver, const.ER_DIAGRAM)
+
+    def test_related_with_send_to(self):
+        """Test that send_to applies SendTo metadata to auto-generated LoadBy fields."""
+        from pydantic_resolve import config_global_resolver
+        from pydantic_resolve.utils.er_diagram import base_entity, Relationship
+        from pydantic_resolve.utils.collector import SendToInfo
+
+        BASE = base_entity()
+
+        class User(BaseModel, BASE):
+            id: int
+            name: str
+
+        class Post(BaseModel, BASE):
+            id: int
+            title: str
+            author_id: int
+
+            __relationships__ = [
+                Relationship(field='author_id', field_name='author', target_kls=User, loader=lambda x: x)
+            ]
+
+        config_global_resolver(BASE.get_diagram())
+
+        try:
+            class PostSubset(DefineSubset):
+                __subset__ = SubsetConfig(
+                    kls=Post,
+                    fields=['id', 'title'],
+                    related=['author'],
+                    send_to=[('author', 'contributors')]
+                )
+
+            # LoadBy field should have SendToInfo metadata
+            metadata = PostSubset.model_fields['author'].metadata
+            send_to_items = [m for m in metadata if isinstance(m, SendToInfo)]
+            assert len(send_to_items) == 1
+            assert send_to_items[0].collector_name == 'contributors'
         finally:
             from pydantic_resolve.resolver import Resolver
             import pydantic_resolve.constant as const

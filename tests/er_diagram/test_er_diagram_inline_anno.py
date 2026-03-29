@@ -2,7 +2,7 @@ import pytest
 from typing import Optional, Annotated, List
 from pydantic import BaseModel
 from pydantic_resolve import config_resolver
-from pydantic_resolve import Relationship, LoadBy, DefineSubset, ensure_subset, base_entity, Entity, ErDiagram
+from pydantic_resolve import Relationship, LoadBy, DefineSubset, ensure_subset, base_entity
 from aiodataloader import DataLoader
 
 

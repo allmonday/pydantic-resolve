@@ -4,12 +4,11 @@ from pydantic import BaseModel, model_validator, Field
 import logging
 import importlib
 import functools
-
-logger = logging.getLogger(__name__)
-
 import pydantic_resolve.constant as const
 from pydantic_resolve.utils import class_util, types
 from pydantic_resolve.utils.depend import LoaderDepend
+
+logger = logging.getLogger(__name__)
 
 
 class QueryConfig(BaseModel):
