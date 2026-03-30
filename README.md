@@ -191,9 +191,10 @@ Define business entities independent of database schema.
 | **API Contract** | Changes when DB changes | Stable, decoupled from storage |
 
 ```python
-from pydantic_resolve import base_entity, Relationship, AutoLoad
+from pydantic_resolve import base_entity, Relationship
 
 BaseEntity = base_entity()
+AutoLoad = BaseEntity.get_diagram().create_auto_load()
 
 # Entity defines business relationship, not database FK
 class TaskEntity(BaseModel, BaseEntity):

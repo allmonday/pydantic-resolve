@@ -349,10 +349,10 @@ diagram = BaseEntity.get_diagram()
 
 #### AutoLoad
 
-基于 ERD 关系自动解析字段的注解。
+基于 ERD 关系自动解析字段的注解。`AutoLoad` 通过 `ErDiagram` 实例的 `create_auto_load()` 方法创建。
 
 ```python
-from pydantic_resolve import AutoLoad, base_entity, config_global_resolver
+from pydantic_resolve import base_entity, config_global_resolver
 
 # 1. 使用 BaseEntity 定义实体
 BaseEntity = base_entity()
@@ -365,8 +365,9 @@ class User(BaseModel, BaseEntity):
         Relationship(fk='org_id', name='organization', target=Organization, loader=org_loader)
     ]
 
-# 2. 全局注册 ERD
+# 2. 全局注册 ERD 并创建 AutoLoad
 config_global_resolver(BaseEntity.get_diagram())
+AutoLoad = BaseEntity.get_diagram().create_auto_load()
 
 # 3. 在响应模型中使用 AutoLoad
 class UserResponse(BaseModel):
@@ -554,7 +555,9 @@ class Blog(BaseModel):
 你可以组合多个注解：
 
 ```python
-from pydantic_resolve import ExposeAs, SendTo, AutoLoad
+from pydantic_resolve import ExposeAs, SendTo
+
+# AutoLoad = diagram.create_auto_load()
 
 class Comment(BaseModel):
     owner: Annotated[

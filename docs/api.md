@@ -383,10 +383,10 @@ The `_resolve_ref` function supports:
 
 #### AutoLoad
 
-1. Annotation to automatically resolve fields based on ERD relationships.
+Annotation to automatically resolve fields based on ERD relationships. `AutoLoad` is created from an `ErDiagram` instance via `create_auto_load()`.
 
 ```python
-from pydantic_resolve import AutoLoad, base_entity, config_global_resolver
+from pydantic_resolve import base_entity, config_global_resolver
 
 # 1. Define entities with BaseEntity
 BaseEntity = base_entity()
@@ -400,10 +400,11 @@ class User(BaseModel, BaseEntity):
     ]
 ```
 
-2. Register ERD globally
+2. Register ERD globally and create AutoLoad
 
 ```python
 config_global_resolver(BaseEntity.get_diagram())
+AutoLoad = BaseEntity.get_diagram().create_auto_load()
 ```
 
 3. Use AutoLoad in response models
@@ -623,7 +624,9 @@ class Blog(BaseModel):
 You can combine multiple annotations:
 
 ```python
-from pydantic_resolve import ExposeAs, SendTo, AutoLoad
+from pydantic_resolve import ExposeAs, SendTo
+
+# AutoLoad = diagram.create_auto_load()
 
 class Comment(BaseModel):
     owner: Annotated[

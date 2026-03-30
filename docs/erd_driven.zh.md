@@ -179,7 +179,7 @@ config_global_resolver(diagram)
 定义好 `ErDiagram` 后，使用 `AutoLoad` 连接实体：
 
 ```python
-from pydantic_resolve import AutoLoad
+AutoLoad = BaseEntity.get_diagram().create_auto_load()
 
 class UserWithPostsForSpecificBusiness(User):
     posts: Annotated[List[Post], AutoLoad()] = []

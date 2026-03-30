@@ -448,7 +448,8 @@ Dynamically create subsets of base models
 
 ```python
 from pydantic import BaseModel
-from pydantic_resolve import DefineSubset, AutoLoad
+from pydantic_resolve import DefineSubset
+# AutoLoad = BaseEntity.get_diagram().create_auto_load()
 from typing import Annotated
 
 class FullStory(BaseModel):
@@ -531,7 +532,8 @@ Complete FastAPI endpoint with pydantic-resolve
 from fastapi import FastAPI, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
-from pydantic_resolve import Resolver, Loader, AutoLoad
+from pydantic_resolve import Resolver, Loader
+# AutoLoad = BaseEntity.get_diagram().create_auto_load()
 from typing import Annotated
 
 app = FastAPI()

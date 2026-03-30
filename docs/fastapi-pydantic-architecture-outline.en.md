@@ -376,7 +376,9 @@ async def user_loader_from_cache(user_ids: list[int]):
 
 #### Step 3: Define API Response from Entity
 ```python
-from pydantic_resolve import DefineSubset, AutoLoad, SubsetConfig
+from pydantic_resolve import DefineSubset, SubsetConfig
+
+# AutoLoad = BaseEntity.get_diagram().create_auto_load()
 
 # Scenario 1: User summary
 class UserSummary(DefineSubset):

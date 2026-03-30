@@ -191,9 +191,10 @@ class Story(BaseModel):
 | **API 契约** | DB 变化时 API 跟着变 | 稳定，与存储解耦 |
 
 ```python
-from pydantic_resolve import base_entity, Relationship, AutoLoad
+from pydantic_resolve import base_entity, Relationship
 
 BaseEntity = base_entity()
+AutoLoad = BaseEntity.get_diagram().create_auto_load()
 
 # Entity 定义业务关系，而非数据库 FK
 class TaskEntity(BaseModel, BaseEntity):

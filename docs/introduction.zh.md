@@ -138,7 +138,7 @@ class Sample1TeamDetail(tms.Team):
 
 ```python
 # new
-from pydantic_resolve import AutoLoad
+AutoLoad = BaseEntity.get_diagram().create_auto_load()
 
 class Sample1TeamDetail(tms.Team):
     sprints: Annotated[list[Sample1SprintDetail], AutoLoad()] = []

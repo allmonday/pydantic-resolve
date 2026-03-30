@@ -174,7 +174,7 @@ If you are a FastAPI user, this ERD can also be visualized in FastAPI Voyager.
 Once you have an `ErDiagram` defined, use `AutoLoad` to connect entities:
 
 ```python
-from pydantic_resolve import AutoLoad
+AutoLoad = BaseEntity.get_diagram().create_auto_load()
 
 class UserWithPostsForSpecificBusiness(User):
 	posts: Annotated[List[Post], AutoLoad()] = []
