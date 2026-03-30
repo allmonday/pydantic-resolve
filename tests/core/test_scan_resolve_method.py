@@ -39,13 +39,13 @@ def test_scan_resolve_method_2():
 
 
 def test_scan_resolve_method_3():
-    class Loader(DataLoader):
+    class SampleLoader(DataLoader):
         async def batch_loader_fn(self, keys):
             return keys
 
     class A(BaseModel):
         a: str
-        def resolve_a(self, context, ancestor_context, parent, loader=Loader(Loader)):
+        def resolve_a(self, context, ancestor_context, parent, loader=Loader(SampleLoader)):
             return 2 * self.a
         
     result = _scan_resolve_method(A.resolve_a, 'resolve_a', None)
@@ -58,8 +58,8 @@ def test_scan_resolve_method_3():
         'dataloaders': [
             {
                 'param': 'loader',
-                'kls': Loader,
-                'path': 'test_scan_resolve_method.test_scan_resolve_method_3.<locals>.Loader',
+                'kls': SampleLoader,
+                'path': 'test_scan_resolve_method.test_scan_resolve_method_3.<locals>.SampleLoader',
                 'request_type': None,
                 'requires_context': False
             }
