@@ -109,7 +109,7 @@ resolver = Resolver(loader_params={ LoaderA: { "param_x": 1, "param_y": 2 } })
 Set DataLoader parameters globally. This can be convenient in some cases.
 
 ```python
-resolver = Resolver(global_loader_param={ { "param_x": 1, "param_y": 2 } })
+resolver = Resolver(global_loader_param={"param_x": 1, "param_y": 2})
 ```
 
 If parameters come from multiple sources:
@@ -117,7 +117,7 @@ If parameters come from multiple sources:
 ```python
 resolver = Resolver(
 	loader_params={ LoaderA: { "param_x": 2 } },
-	global_loader_param={ { "param_x": 1, "param_y": 2 } })
+    global_loader_param={"param_x": 1, "param_y": 2})
 ```
 
 it will raise an error.
@@ -302,7 +302,7 @@ ErDiagram(
 
 To use an `ErDiagram` with the Resolver, you need to register it using either `config_resolver()` or `config_global_resolver()`:
 
-- `config_resolver(diagram)`: Creates a new custom Resolver class with the ERD
+- `config_resolver(er_diagram=diagram)`: Creates a new custom Resolver class with the ERD
 - `config_global_resolver(diagram)`: Injects the ERD into the default Resolver class globally
 
 See the [Helper Functions](#helper-functions) section below for detailed usage examples.
@@ -444,7 +444,7 @@ Creates a new Resolver class with specific ERD configuration.
 from pydantic_resolve import config_resolver, ErDiagram, Entity
 
 diagram = ErDiagram(configs=[...])
-CustomResolver = config_resolver(diagram)
+CustomResolver = config_resolver('CustomResolver', er_diagram=diagram)
 
 result = await CustomResolver().resolve(data)
 ```
@@ -588,7 +588,8 @@ class UserProfile(DefineSubset):
 - `kls` (type[BaseModel]): The parent class to subset from
 - `fields` (list[str] | "all" | None): Fields to include (mutually exclusive with omit_fields)
 - `omit_fields` (list[str] | None): Fields to exclude (mutually exclusive with fields)
-- `expose_fields` (list[str] | None): Fields to expose to descendants via ExposeAs
+- `expose_as` (list[tuple[str, str]] | None): Field and alias pairs to expose to descendants via ExposeAs
+- `send_to` (list[tuple[str, tuple[str, ...] | str]] | None): Field and collector target pairs for SendTo
 - `excluded_fields` (list[str] | None): Fields to mark as excluded (Field(exclude=True))
 
 
@@ -642,7 +643,7 @@ from pydantic_resolve import ExposeAs, SendTo
 class Comment(BaseModel):
     owner: Annotated[
         Optional[User],
-        AutoLoad('user_id'),      # Auto-resolve via ERD
+        AutoLoad(),               # Auto-resolve via ERD
         SendTo('related_users') # Send to parent's collector
     ] = None
 
@@ -752,7 +753,7 @@ With `collector`, you can reshape data without manually looping and flattening a
 For example, you can collect comment data from each blog at the top-level schema.
 
 ```python hl_lines="13 18"
-form pydantic_resolve import Collector
+from pydantic_resolve import Collector
 
 class MyBlogSite(BaseModel):
 	blogs: list[Blog] = []
@@ -815,7 +816,7 @@ class CounterCollector(ICollector):
 - In `post`, you can collect descendant data from resolved fields or other object fields.
 - In `post_default_handler`, you can additionally collect descendant data from values returned by `post` methods.
 
-** starting from v2.3.0, `SendTo` can replace __pydantic_resolve_collect__`**, they are exclusive.
+**Starting from v2.3.0, `SendTo` can replace `__pydantic_resolve_collect__`**, they are exclusive.
 
 ```python
 from pydantic_resolve import ExposeAs, SendTo
@@ -865,7 +866,7 @@ class LoaderA(DataLoader):
 	async def batch_load_fn(self, keys: List[int]):
 		return [ k** self.power for k in keys ]
 
-data = await Resolver(loader_filters={LoaderA:{'power': 2}}).resolve(data)
+data = await Resolver(loader_params={LoaderA:{'power': 2}}).resolve(data)
 ```
 
 If multiple DataLoaders of the same type use the same params, you can use `global_loader_param` to reduce boilerplate.
@@ -947,38 +948,11 @@ Used in a DataLoader to group fetched records by `keys`.
 
 Signature: `build_list(data, keys, lambda d: d.key)`
 
-### model_config
-
-> **Deprecated**: This decorator is deprecated. Use `serialization` instead for better handling of nested Pydantic models.
-
-This decorator improves some web frameworks (like FastAPI) when generating JSON schema from `response_model`.
-
-Using `exclude=True` can remove a field during Pydantic conversion, but in FastAPI-generated `openapi.json`, the field (e.g. `name`) may still appear in the schema definition. Adding the `model_config()` decorator can remove `name` from the schema.
-
-Signature: `model_config(default_required=True)`
-
-```python
-@model_config()
-class Data(BaseModel):
-	name: str = Field(default='', exclude=True)
-```
-
-```python
-from pydantic.dataclasses import dataclass
-
-@dataclass
-class Car:
-	name: str
-	used_years: int = field(default=0, metadata={'exclude': True})
-```
-
-Note: if you use pydantic v2 in FastAPI, FastAPI already handles similar behavior internally, so you may not need `model_config`.
-
 ### serialization
 
 Decorator to recursively process nested Pydantic BaseModel fields in JSON schema.
 
-This is the recommended replacement for `model_config`. It handles:
+It handles:
 - Single level nesting
 - Multi-level nesting (3+ levels)
 - List nesting (`List[Model]`)
@@ -1007,12 +981,6 @@ class Response(BaseModel):
 # Generate schema
 schema = Response.model_json_schema(mode='serialization')
 ```
-
-**Key differences from `model_config`:**
-- Automatically processes nested Pydantic models recursively
-- Only needs to be applied to the root class
-- Handles complex nesting scenarios (List, Optional, multi-level)
-- Properly sets `required` fields and excludes `exclude=True` fields at all levels
 
 ### ensure_subset
 

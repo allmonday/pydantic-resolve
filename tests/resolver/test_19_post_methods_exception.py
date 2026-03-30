@@ -1,6 +1,6 @@
 from typing import List, Optional
 from pydantic import BaseModel
-from pydantic_resolve import Resolver, mapper, LoaderDepend, ResolverTargetAttrNotFound
+from pydantic_resolve import Resolver, mapper, Loader, ResolverTargetAttrNotFound
 import pytest
 
 # define loader functions
@@ -34,7 +34,7 @@ class Friend(BaseModel):
 
     cash: Optional[Cash] = None
     @mapper(Cash)  # auto mapping
-    def resolve_cash(self, contact_loader=LoaderDepend(cash_batch_load_fn)):
+    def resolve_cash(self, contact_loader=Loader(cash_batch_load_fn)):
         return contact_loader.load(self.name)
     
     has_cash: bool = False
@@ -48,7 +48,7 @@ class User(BaseModel):
 
     friends: List[Friend] = []
     @mapper(lambda names: [Friend(name=name) for name in names])
-    def resolve_friends(self, friend_loader=LoaderDepend(friends_batch_load_fn)):
+    def resolve_friends(self, friend_loader=Loader(friends_batch_load_fn)):
         return friend_loader.load(self.name)
     
     has_cash: bool = False

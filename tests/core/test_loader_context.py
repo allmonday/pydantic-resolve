@@ -3,7 +3,7 @@ import pytest
 from pydantic import BaseModel
 from aiodataloader import DataLoader
 from pydantic_resolve.analysis import _loader_requires_context
-from pydantic_resolve import Resolver, LoaderDepend, LoaderContextNotProvidedError
+from pydantic_resolve import Resolver, Loader, LoaderContextNotProvidedError
 
 
 # Test 1: Loader with _context attribute
@@ -26,7 +26,7 @@ class ModelWithContextLoader(BaseModel):
     name: str
     value: str = ''
 
-    def resolve_value(self, loader=LoaderDepend(LoaderWithContext)):
+    def resolve_value(self, loader=Loader(LoaderWithContext)):
         return loader.load(self.name)
 
 
@@ -34,7 +34,7 @@ class ModelWithoutContextLoader(BaseModel):
     name: str
     value: str = ''
 
-    def resolve_value(self, loader=LoaderDepend(LoaderWithoutContext)):
+    def resolve_value(self, loader=Loader(LoaderWithoutContext)):
         return loader.load(self.name)
 
 
@@ -43,10 +43,10 @@ class ModelWithMixedLoaders(BaseModel):
     field1: str = ''
     field2: str = ''
 
-    def resolve_field1(self, loader=LoaderDepend(LoaderWithContext)):
+    def resolve_field1(self, loader=Loader(LoaderWithContext)):
         return loader.load(self.name)
 
-    def resolve_field2(self, loader=LoaderDepend(LoaderWithoutContext)):
+    def resolve_field2(self, loader=Loader(LoaderWithoutContext)):
         return loader.load(self.name)
 
 

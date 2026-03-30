@@ -2,7 +2,7 @@ import pytest
 from aiodataloader import DataLoader
 from pydantic import BaseModel
 from pydantic_resolve.analysis import _scan_resolve_method
-from pydantic_resolve import LoaderDepend, Collector
+from pydantic_resolve import Loader, Collector
 
 def test_scan_resolve_method_1():
     class A(BaseModel):
@@ -45,7 +45,7 @@ def test_scan_resolve_method_3():
 
     class A(BaseModel):
         a: str
-        def resolve_a(self, context, ancestor_context, parent, loader=LoaderDepend(Loader)):
+        def resolve_a(self, context, ancestor_context, parent, loader=Loader(Loader)):
             return 2 * self.a
         
     result = _scan_resolve_method(A.resolve_a, 'resolve_a', None)

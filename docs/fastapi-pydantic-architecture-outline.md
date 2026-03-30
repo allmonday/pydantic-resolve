@@ -648,8 +648,8 @@ async def get_tasks(session: AsyncSession = Depends(get_session)):
 # entities/task.py（业务实体）
 class TaskEntity(BaseModel, BaseEntity):
     __relationships__ = [
-        Relationship(fk='owner_id', target=UserEntity, loader=user_loader),
-        Relationship(fk='project_id', target=ProjectEntity, loader=project_loader),
+        Relationship(fk='owner_id', target=UserEntity, name='owner', loader=user_loader),
+        Relationship(fk='project_id', target=ProjectEntity, name='project', loader=project_loader),
     ]
     id: int
     name: str
@@ -719,7 +719,7 @@ class UserEntity(BaseModel):
 # 集中定义实体关系
 class TaskEntity(BaseModel, BaseEntity):
     __relationships__ = [
-        Relationship(fk='owner_id', target=UserEntity, loader=user_loader),
+        Relationship(fk='owner_id', target=UserEntity, name='owner', loader=user_loader),
     ]
 ```
 

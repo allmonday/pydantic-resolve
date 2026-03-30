@@ -1,6 +1,6 @@
 from typing import List
 from pydantic import BaseModel
-from pydantic_resolve import Resolver, mapper, LoaderDepend
+from pydantic_resolve import Resolver, mapper, Loader
 from aiodataloader import DataLoader
 import pytest
 
@@ -42,7 +42,7 @@ class User(BaseModel):
 
     friends: List[Friend] = []
     @mapper(lambda names: [Friend(name=name) for name in names])
-    def resolve_friends(self, friend_loader=LoaderDepend(FriendLoader)):
+    def resolve_friends(self, friend_loader=Loader(FriendLoader)):
         return friend_loader.load(self.name)
 
 class Root(BaseModel):

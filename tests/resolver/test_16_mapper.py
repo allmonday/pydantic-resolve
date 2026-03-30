@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import List, Optional
 import pytest
 from pydantic import ConfigDict, BaseModel
-from pydantic_resolve import Resolver, LoaderDepend, mapper
+from pydantic_resolve import Resolver, Loader, mapper
 from aiodataloader import DataLoader
 
 @pytest.mark.asyncio
@@ -20,7 +20,7 @@ async def test_mapper():
 
         books: str = ''
         @mapper(lambda x: str(x))
-        def resolve_books(self, loader=LoaderDepend(BookLoader)):
+        def resolve_books(self, loader=Loader(BookLoader)):
             return loader.load(self.id)
 
     students = [
@@ -56,7 +56,7 @@ async def test_mapper_2():
 
         book: List[Book] = []
         @mapper(Book)
-        def resolve_book(self, loader=LoaderDepend(BookLoader)):
+        def resolve_book(self, loader=Loader(BookLoader)):
             return loader.load(self.id)
 
     students = [ Student(id=1, name="jack") ]
@@ -91,7 +91,7 @@ async def test_mapper_3():
 
         book: Optional[Book] = None
         @mapper(Book)
-        def resolve_book(self, loader=LoaderDepend(batch_load_fn)):
+        def resolve_book(self, loader=Loader(batch_load_fn)):
             return loader.load(self.id)
 
     students = [ Student(id=1, name="jack") ]
@@ -128,7 +128,7 @@ async def test_mapper_6():
 
         books: List[Book] = []
         @mapper(Book)
-        def resolve_books(self, loader=LoaderDepend(batch_load_fn)):
+        def resolve_books(self, loader=Loader(batch_load_fn)):
             return loader.load(self.id)
 
     students = [ Student(id=1, name="jack") ]
@@ -160,7 +160,7 @@ async def test_mapper_7():
 
         books: List[Book] = []
         @mapper(Book)
-        def resolve_books(self, loader=LoaderDepend(batch_load_fn)):
+        def resolve_books(self, loader=Loader(batch_load_fn)):
             return loader.load(self.id)
 
     students = [ Student(id=1, name="jack") ]

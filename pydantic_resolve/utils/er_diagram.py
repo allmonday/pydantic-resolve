@@ -6,7 +6,7 @@ import importlib
 import functools
 import pydantic_resolve.constant as const
 from pydantic_resolve.utils import class_util, types
-from pydantic_resolve.utils.depend import LoaderDepend
+from pydantic_resolve.utils.depend import Loader
 
 logger = logging.getLogger(__name__)
 
@@ -429,7 +429,7 @@ class ErLoaderPreGenerator:
                 return None
 
             def create_resolve_method(key: str, rel: Relationship):  # closure per field
-                def resolve_method(self, loader=LoaderDepend(rel.loader)):
+                def resolve_method(self, loader=Loader(rel.loader)):
                     fk = getattr(self, key)
                     if fk is None:
                         return _handle_fk_none(rel)
@@ -441,7 +441,7 @@ class ErLoaderPreGenerator:
                 return resolve_method
 
             def create_resolve_method_with_load_many(key: str, rel: Relationship):  # closure per field
-                def resolve_method(self, loader=LoaderDepend(rel.loader)):
+                def resolve_method(self, loader=Loader(rel.loader)):
                     fk = getattr(self, key)
                     if fk is None:
                         return _handle_fk_none(rel)

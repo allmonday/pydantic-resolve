@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
-from pydantic_resolve import Resolver, LoaderDepend, mapper, build_list
+from pydantic_resolve import Resolver, Loader, mapper, build_list
 
 class Base(DeclarativeBase):
     pass
@@ -89,7 +89,7 @@ async def test_sqlite_and_dataloader():
         content: str
         feedbacks: List[FeedbackSchema]  = []
         @mapper(FeedbackSchema)
-        def resolve_feedbacks(self, loader=LoaderDepend(FeedbackLoader)):
+        def resolve_feedbacks(self, loader=Loader(FeedbackLoader)):
             return loader.load(self.id)
         model_config = ConfigDict(from_attributes=True)
 
@@ -98,7 +98,7 @@ async def test_sqlite_and_dataloader():
         name: str
         comments: List[CommentSchema]  = []
         @mapper(CommentSchema)
-        def resolve_comments(self, loader=LoaderDepend(CommentLoader)):
+        def resolve_comments(self, loader=Loader(CommentLoader)):
             return loader.load(self.id)
         model_config = ConfigDict(from_attributes=True)
 

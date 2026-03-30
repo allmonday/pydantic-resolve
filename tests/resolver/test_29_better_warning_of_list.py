@@ -1,6 +1,6 @@
 from __future__ import annotations
 from pydantic import BaseModel, ValidationError
-from pydantic_resolve import LoaderDepend, Resolver, build_list
+from pydantic_resolve import Loader, Resolver, build_list
 from typing import List, Optional
 import pytest
 
@@ -82,16 +82,16 @@ class Result(BaseModel):
 
 class Department(DepartmentBase):
     teams: List[Team] = []
-    def resolve_teams(self, loader=LoaderDepend(teams_batch_load_fn)):
+    def resolve_teams(self, loader=Loader(teams_batch_load_fn)):
         return loader.load(self.id)
 
     lead: Optional[Lead] = None
-    def resolve_lead(self, loader=LoaderDepend(lead_batch_load_fn)):
+    def resolve_lead(self, loader=Loader(lead_batch_load_fn)):
         return loader.load(self.id)
 
 class Team(TeamBase):
     members: List[Member] = []
-    def resolve_members(self, loader=LoaderDepend(members_batch_load_fn)):
+    def resolve_members(self, loader=Loader(members_batch_load_fn)):
         return loader.load(self.id)
 
 class Member(MemberBase):

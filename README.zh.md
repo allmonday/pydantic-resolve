@@ -191,10 +191,11 @@ class Story(BaseModel):
 | **API 契约** | DB 变化时 API 跟着变 | 稳定，与存储解耦 |
 
 ```python
-from pydantic_resolve import base_entity, Relationship
+from typing import Annotated, Optional
+from pydantic import BaseModel
+from pydantic_resolve import DefineSubset, base_entity, Relationship, config_global_resolver
 
 BaseEntity = base_entity()
-AutoLoad = BaseEntity.get_diagram().create_auto_load()
 
 # Entity 定义业务关系，而非数据库 FK
 class TaskEntity(BaseModel, BaseEntity):
@@ -208,6 +209,10 @@ class TaskEntity(BaseModel, BaseEntity):
     description: Optional[str] = None
     status: str  # todo, in_progress, done
     owner_id: int  # 内部 FK，可以对 API 隐藏
+
+diagram = BaseEntity.get_diagram()
+AutoLoad = diagram.create_auto_load()
+config_global_resolver(diagram)
 
 # Response schema：选择要暴露的内容
 class TaskResponse(DefineSubset):
@@ -240,7 +245,7 @@ result = await handler.execute("{ users { id name posts { title } } }")
 将 GraphQL API 暴露给 AI 代理，支持渐进式披露：
 
 ```python
-from pydantic_resolve.graphql.mcp import create_mcp_server
+from pydantic_resolve import AppConfig, create_mcp_server
 
 mcp = create_mcp_server(apps=[AppConfig(name="blog", er_diagram=diagram)])
 mcp.run()  # AI 代理现在可以发现并查询你的 API

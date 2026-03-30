@@ -191,10 +191,11 @@ Define business entities independent of database schema.
 | **API Contract** | Changes when DB changes | Stable, decoupled from storage |
 
 ```python
-from pydantic_resolve import base_entity, Relationship
+from typing import Annotated, Optional
+from pydantic import BaseModel
+from pydantic_resolve import DefineSubset, base_entity, Relationship, config_global_resolver
 
 BaseEntity = base_entity()
-AutoLoad = BaseEntity.get_diagram().create_auto_load()
 
 # Entity defines business relationship, not database FK
 class TaskEntity(BaseModel, BaseEntity):
@@ -208,6 +209,10 @@ class TaskEntity(BaseModel, BaseEntity):
     description: Optional[str] = None
     status: str  # todo, in_progress, done
     owner_id: int  # Internal FK, can be hidden from API
+
+diagram = BaseEntity.get_diagram()
+AutoLoad = diagram.create_auto_load()
+config_global_resolver(diagram)
 
 # Response schema: choose what to expose
 class TaskResponse(DefineSubset):
@@ -240,7 +245,7 @@ result = await handler.execute("{ users { id name posts { title } } }")
 Expose GraphQL APIs to AI agents with progressive disclosure:
 
 ```python
-from pydantic_resolve.graphql.mcp import create_mcp_server
+from pydantic_resolve import AppConfig, create_mcp_server
 
 mcp = create_mcp_server(apps=[AppConfig(name="blog", er_diagram=diagram)])
 mcp.run()  # AI agents can now discover and query your API

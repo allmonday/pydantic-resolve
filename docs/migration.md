@@ -106,3 +106,33 @@ class TaskEntity(BaseModel, BaseEntity):
 class TaskEntity(BaseModel, BaseEntity):
     __relationships__ = [...]
 ```
+
+## 8. `LoaderDepend` removed
+
+Use `Loader` only.
+
+## 9. `model_config` decorator removed
+
+Use `serialization` only.
+
+```python
+# v3
+from pydantic_resolve import model_config
+
+@model_config()
+class Data(BaseModel):
+    hidden: str = Field(default='', exclude=True)
+```
+
+```python
+# v4
+from pydantic_resolve import serialization
+
+@serialization
+class Data(BaseModel):
+    hidden: str = Field(default='', exclude=True)
+
+schema = Data.model_json_schema(mode='serialization')
+```
+
+`serialization` recursively processes nested models, applies `exclude=True` handling, and sets `required` fields in serialization schema.

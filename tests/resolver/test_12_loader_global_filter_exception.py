@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import List
 import pytest
 from pydantic import BaseModel
-from pydantic_resolve import Resolver, LoaderDepend, LoaderFieldNotProvidedError
+from pydantic_resolve import Resolver, Loader, LoaderFieldNotProvidedError
 from aiodataloader import DataLoader
 
 @pytest.mark.asyncio
@@ -37,7 +37,7 @@ async def test_loader_depends():
         name: str
 
         books: List[Book] = [] 
-        def resolve_books(self, loader=LoaderDepend(BookLoader)):
+        def resolve_books(self, loader=Loader(BookLoader)):
             return loader.load(self.id)
 
     students = [Student(id=1, name="jack"), Student(id=2, name="mike"), Student(id=3, name="wiki")]

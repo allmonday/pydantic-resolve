@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import List
 import pytest
 from pydantic import BaseModel
-from pydantic_resolve import Resolver, LoaderDepend
+from pydantic_resolve import Resolver, Loader
 
 BOOKS = {
     1: [{'name': 'book1'}, {'name': 'book2'}],
@@ -26,7 +26,7 @@ class Student(BaseModel):
     name: str
 
     books: List[Book] = [] 
-    def resolve_books(self, loader=LoaderDepend(batch_load_fn)):
+    def resolve_books(self, loader=Loader(batch_load_fn)):
         return loader.load(self.id)
 
 class Book(BaseModel):

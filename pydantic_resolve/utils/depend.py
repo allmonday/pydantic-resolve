@@ -9,10 +9,7 @@ class Depends:
         self.dependency = dependency
 
 
-def LoaderDepend(  # noqa: N802
+def Loader(  # noqa: N802
     dependency: Optional[Callable[..., Any]] = None,
 ) -> DataLoader:
     return Depends(dependency=dependency)
-
-
-Loader = LoaderDepend

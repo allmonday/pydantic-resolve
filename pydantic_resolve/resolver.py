@@ -80,12 +80,6 @@ class Resolver:
             default=MappingProxyType({}),
         )
 
-        # Optimization: Use single dict-based ContextVar for collectors
-        self._collector_contextvar = contextvars.ContextVar(
-            '_collectors',
-            default=MappingProxyType({})
-        )
-
         # Pre-create parent ContextVar
         self._parent_contextvar = contextvars.ContextVar('parent', default=None)
 

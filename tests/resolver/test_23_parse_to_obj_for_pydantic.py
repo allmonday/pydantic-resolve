@@ -2,7 +2,7 @@ from collections import namedtuple
 from typing import List
 import pytest
 from pydantic import ConfigDict, BaseModel, ValidationError
-from pydantic_resolve import Resolver, LoaderDepend, mapper
+from pydantic_resolve import Resolver, Loader, mapper
 
 @pytest.mark.asyncio
 async def test_1():
@@ -24,7 +24,7 @@ async def test_1():
         name: str
 
         books: List[Book] = [] 
-        def resolve_books(self, loader=LoaderDepend(batch_load_fn)):
+        def resolve_books(self, loader=Loader(batch_load_fn)):
             return loader.load(self.id)
     
     class ClassRoom(BaseModel):
@@ -59,7 +59,7 @@ async def test_2():
 
         books: List[Book] = [] 
         @mapper(lambda xx: [Book(name=x['name'], num=11) for x in xx])
-        def resolve_books(self, loader=LoaderDepend(batch_load_fn)):
+        def resolve_books(self, loader=Loader(batch_load_fn)):
             return loader.load(self.id)
     
     class ClassRoom(BaseModel):
@@ -92,7 +92,7 @@ async def test_3():
         name: str
 
         books: List[Book] = [] 
-        def resolve_books(self, loader=LoaderDepend(batch_load_fn)):
+        def resolve_books(self, loader=Loader(batch_load_fn)):
             return loader.load(self.id)
     
     class ClassRoom(BaseModel):
@@ -128,7 +128,7 @@ async def test_4():
         name: str
 
         books: List[Book] = [] 
-        def resolve_books(self, loader=LoaderDepend(batch_load_fn)):
+        def resolve_books(self, loader=Loader(batch_load_fn)):
             return loader.load(self.id)
     
     class ClassRoom(BaseModel):
@@ -163,7 +163,7 @@ async def test_5():
     class Student(StudentBase):
 
         books: List[Book] = [] 
-        def resolve_books(self, loader=LoaderDepend(batch_load_fn)):
+        def resolve_books(self, loader=Loader(batch_load_fn)):
             return loader.load(self.id)
     
     class ClassRoom(BaseModel):

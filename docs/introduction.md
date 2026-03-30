@@ -70,27 +70,27 @@ diagram = ErDiagram(
 		Entity(
 			kls=Team,
 			relationships=[
-				Relationship( fk='id', target=list[Sprint], loader=sprint_loader.team_to_sprint_loader),
-				Relationship( fk='id', target=list[User], loader=user_loader.team_to_user_loader)
+				Relationship( fk='id', target=list[Sprint], name='sprints', loader=sprint_loader.team_to_sprint_loader),
+				Relationship( fk='id', target=list[User], name='members', loader=user_loader.team_to_user_loader)
 			]
 		),
 		Entity(
 			kls=Sprint,
 			relationships=[
-				Relationship( fk='id', target=list[Story], loader=story_loader.sprint_to_story_loader)
+				Relationship( fk='id', target=list[Story], name='stories', loader=story_loader.sprint_to_story_loader)
 			]
 		),
 		Entity(
 			kls=Story,
 			relationships=[
-				Relationship( fk='id', target=list[Task], loader=task_loader.story_to_task_loader),
-				Relationship( fk='owner_id', target=User, loader=user_loader.user_batch_loader)
+				Relationship( fk='id', target=list[Task], name='tasks', loader=task_loader.story_to_task_loader),
+				Relationship( fk='owner_id', target=User, name='owner', loader=user_loader.user_batch_loader)
 			]
 		),
 		Entity(
 			kls=Task,
 			relationships=[
-				Relationship( fk='owner_id', target=User, loader=user_loader.user_batch_loader)
+				Relationship( fk='owner_id', target=User, name='owner', loader=user_loader.user_batch_loader)
 			]
 		)
 	]
@@ -107,7 +107,7 @@ BaseEntity = base_entity()
 
 class Story(BaseModel, BaseEntity):
 	__relationships__ = [
-		Relationship(fk='id', target=list[Task], loader=task_loader.story_to_task_loader)
+		Relationship(fk='id', target=list[Task], name='tasks', loader=task_loader.story_to_task_loader)
 	]
 	id: int
 	name: str
@@ -247,17 +247,17 @@ Then define the ER diagram via an explicit declaration.
 ```python
 diagram = ErDiagram(
 	configs=[
-		ErConfig(
+		Entity(
 			kls=Story,
 			relationships=[
-				Relationship( fk='id', target=list[Task], loader=task_loader.story_to_task_loader),
-				Relationship( fk='owner_id', target=User, loader=user_loader.user_batch_loader)
+				Relationship( fk='id', target=list[Task], name='tasks', loader=task_loader.story_to_task_loader),
+				Relationship( fk='owner_id', target=User, name='owner', loader=user_loader.user_batch_loader)
 			]
 		),
-		ErConfig(
+		Entity(
 			kls=Task,
 			relationships=[
-				Relationship(fk='owner_id', target=User, loader=user_loader.user_batch_loader)
+				Relationship(fk='owner_id', target=User, name='owner', loader=user_loader.user_batch_loader)
 			]
 		)
 	]

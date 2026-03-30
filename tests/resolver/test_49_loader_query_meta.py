@@ -2,7 +2,7 @@ import pytest
 from typing import List
 from pydantic import BaseModel
 from aiodataloader import DataLoader
-from pydantic_resolve import LoaderDepend, Resolver
+from pydantic_resolve import Loader, Resolver
 
 class SampleLoader(DataLoader):
     async def batch_load_fn(self, keys):
@@ -21,11 +21,11 @@ class ClassRoom(BaseModel):
     name: str
 
     students: List[Student] = []
-    def resolve_students(self, loader=LoaderDepend(SampleLoader)):
+    def resolve_students(self, loader=Loader(SampleLoader)):
         return loader.load(self.id)
 
     students2: List[Student2] = []
-    def resolve_students2(self, loader=LoaderDepend(SampleLoader)):
+    def resolve_students2(self, loader=Loader(SampleLoader)):
         return loader.load(self.id)
 
 @pytest.mark.asyncio
