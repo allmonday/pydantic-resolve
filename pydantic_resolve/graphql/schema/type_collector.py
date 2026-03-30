@@ -14,6 +14,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, get_type_hin
 from pydantic import BaseModel
 
 from .type_registry import TypeRegistry
+import pydantic_resolve.constant as const
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.types import get_core_types
 from pydantic_resolve.utils.er_diagram import ErDiagram
@@ -205,8 +206,8 @@ class TypeCollector:
                 actual_method = method.__func__
 
             # Check if it has @query or @mutation decorator marker
-            if (hasattr(actual_method, '_pydantic_resolve_query') or
-                hasattr(actual_method, '_pydantic_resolve_mutation')):
+            if (hasattr(actual_method, const.GRAPHQL_QUERY_ATTR) or
+                hasattr(actual_method, const.GRAPHQL_MUTATION_ATTR)):
                 methods.append(actual_method)
 
         return methods

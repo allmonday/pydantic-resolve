@@ -11,6 +11,7 @@ from typing import ForwardRef, get_args, get_origin, get_type_hints
 from pydantic import BaseModel
 
 from pydantic_resolve.graphql.schema.generators.base import SchemaGenerator
+import pydantic_resolve.constant as const
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.er_diagram import Relationship
 from pydantic_resolve.utils.types import get_core_types
@@ -300,7 +301,7 @@ class SDLBuilder(SchemaGenerator):
             if isinstance(method, classmethod):
                 actual_method = method.__func__
 
-            if not hasattr(actual_method, '_pydantic_resolve_query'):
+            if not hasattr(actual_method, const.GRAPHQL_QUERY_ATTR):
                 continue
 
             try:
@@ -340,11 +341,13 @@ class SDLBuilder(SchemaGenerator):
             except Exception:
                 gql_return_type = 'Any'
 
-            # Generate GraphQL query name using entity_name + method_name
+            # Operation names must always include entity prefix to avoid cross-entity collisions.
+            # Explicit configured names are treated as the method-name part.
             from pydantic_resolve.graphql.utils.naming import to_graphql_field_name
-            query_name = to_graphql_field_name(entity.__name__, name)
+            query_base_name = getattr(actual_method, const.GRAPHQL_QUERY_NAME_ATTR, None) or name
+            query_name = to_graphql_field_name(entity.__name__, query_base_name)
 
-            description = actual_method._pydantic_resolve_query_description or ""
+            description = getattr(actual_method, const.GRAPHQL_QUERY_DESCRIPTION_ATTR, "") or ""
 
             methods.append({
                 'name': query_name,
@@ -366,7 +369,7 @@ class SDLBuilder(SchemaGenerator):
             if isinstance(method, classmethod):
                 actual_method = method.__func__
 
-            if not hasattr(actual_method, '_pydantic_resolve_mutation'):
+            if not hasattr(actual_method, const.GRAPHQL_MUTATION_ATTR):
                 continue
 
             try:
@@ -406,11 +409,13 @@ class SDLBuilder(SchemaGenerator):
             except Exception:
                 gql_return_type = 'Any'
 
-            # Generate GraphQL mutation name using entity_name + method_name
+            # Operation names must always include entity prefix to avoid cross-entity collisions.
+            # Explicit configured names are treated as the method-name part.
             from pydantic_resolve.graphql.utils.naming import to_graphql_field_name
-            mutation_name = to_graphql_field_name(entity.__name__, name)
+            mutation_base_name = getattr(actual_method, const.GRAPHQL_MUTATION_NAME_ATTR, None) or name
+            mutation_name = to_graphql_field_name(entity.__name__, mutation_base_name)
 
-            description = actual_method._pydantic_resolve_mutation_description or ""
+            description = getattr(actual_method, const.GRAPHQL_MUTATION_DESCRIPTION_ATTR, "") or ""
 
             methods.append({
                 'name': mutation_name,

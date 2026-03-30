@@ -13,6 +13,7 @@ from typing import Any, Callable, Optional, get_type_hints
 from pydantic import BaseModel
 
 from pydantic_resolve.graphql.schema.generators.base import SchemaGenerator
+import pydantic_resolve.constant as const
 from pydantic_resolve.graphql.schema.type_registry import TypeInfo, FieldInfo, ArgumentInfo, SCALAR_TYPES
 from pydantic_resolve.graphql.types import (
     GraphQLArgument,
@@ -570,9 +571,15 @@ class IntrospectionGenerator(SchemaGenerator):
             # Build return type
             return_type_def = self._build_return_type(sig.return_annotation, entity)
 
+            description = None
+            if operation_type == "Query":
+                description = getattr(method, const.GRAPHQL_QUERY_DESCRIPTION_ATTR, None)
+            elif operation_type == "Mutation":
+                description = getattr(method, const.GRAPHQL_MUTATION_DESCRIPTION_ATTR, None)
+
             fields.append({
                 "name": field_name,
-                "description": f"{operation_type} for {field_name}",
+                "description": description,
                 "args": args,
                 "type": return_type_def,
                 "isDeprecated": False,

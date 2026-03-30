@@ -168,9 +168,9 @@ class ErDiagram(BaseModel):
                     existing = kls.__dict__[method_name]
                     func = getattr(existing, '__func__', existing)
                     # Check if the method is defined via decorator (not config-bound)
-                    if hasattr(func, '_pydantic_resolve_query') or hasattr(func, '_pydantic_resolve_mutation'):
+                    if hasattr(func, const.GRAPHQL_QUERY_ATTR) or hasattr(func, const.GRAPHQL_MUTATION_ATTR):
                         # If the method is from decorator, raise exception
-                        if not hasattr(func, '_pydantic_resolve_config_bound'):
+                        if not hasattr(func, const.GRAPHQL_CONFIG_BOUND_ATTR):
                             raise ValueError(
                                 f"Method '{method_name}' already exists in {kls.__name__} "
                                 f"(defined via @query/@mutation decorator). "
@@ -184,10 +184,10 @@ class ErDiagram(BaseModel):
                     return _method(*args, **kwargs)
 
                 # Set metadata (consistent with @query decorator)
-                query_wrapper._pydantic_resolve_query = True
-                query_wrapper._pydantic_resolve_query_name = query_cfg.name
-                query_wrapper._pydantic_resolve_query_description = query_cfg.description
-                query_wrapper._pydantic_resolve_config_bound = True  # Mark as config-bound
+                setattr(query_wrapper, const.GRAPHQL_QUERY_ATTR, True)
+                setattr(query_wrapper, const.GRAPHQL_QUERY_NAME_ATTR, query_cfg.name)
+                setattr(query_wrapper, const.GRAPHQL_QUERY_DESCRIPTION_ATTR, query_cfg.description)
+                setattr(query_wrapper, const.GRAPHQL_CONFIG_BOUND_ATTR, True)  # Mark as config-bound
 
                 # Bind as classmethod
                 setattr(kls, method_name, classmethod(query_wrapper))
@@ -200,8 +200,8 @@ class ErDiagram(BaseModel):
                 if method_name in kls.__dict__:
                     existing = kls.__dict__[method_name]
                     func = getattr(existing, '__func__', existing)
-                    if hasattr(func, '_pydantic_resolve_query') or hasattr(func, '_pydantic_resolve_mutation'):
-                        if not hasattr(func, '_pydantic_resolve_config_bound'):
+                    if hasattr(func, const.GRAPHQL_QUERY_ATTR) or hasattr(func, const.GRAPHQL_MUTATION_ATTR):
+                        if not hasattr(func, const.GRAPHQL_CONFIG_BOUND_ATTR):
                             raise ValueError(
                                 f"Method '{method_name}' already exists in {kls.__name__} "
                                 f"(defined via @query/@mutation decorator). "
@@ -215,10 +215,10 @@ class ErDiagram(BaseModel):
                     return _method(*args, **kwargs)
 
                 # Set metadata (consistent with @mutation decorator)
-                mutation_wrapper._pydantic_resolve_mutation = True
-                mutation_wrapper._pydantic_resolve_mutation_name = mutation_cfg.name
-                mutation_wrapper._pydantic_resolve_mutation_description = mutation_cfg.description
-                mutation_wrapper._pydantic_resolve_config_bound = True  # Mark as config-bound
+                setattr(mutation_wrapper, const.GRAPHQL_MUTATION_ATTR, True)
+                setattr(mutation_wrapper, const.GRAPHQL_MUTATION_NAME_ATTR, mutation_cfg.name)
+                setattr(mutation_wrapper, const.GRAPHQL_MUTATION_DESCRIPTION_ATTR, mutation_cfg.description)
+                setattr(mutation_wrapper, const.GRAPHQL_CONFIG_BOUND_ATTR, True)  # Mark as config-bound
 
                 # Bind as classmethod
                 setattr(kls, method_name, classmethod(mutation_wrapper))
