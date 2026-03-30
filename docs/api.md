@@ -383,13 +383,20 @@ The `_resolve_ref` function supports:
 
 #### AutoLoad
 
-Annotation to automatically resolve fields based on ERD relationships. `AutoLoad` is created from an `ErDiagram` instance via `create_auto_load()`.
+Annotation factory for automatically resolving fields based on ERD relationships.
+
+`AutoLoad` is not a standalone global helper. Create it from the same `ErDiagram` you pass into `config_global_resolver()` or `config_resolver()`.
 
 ```python
-from pydantic_resolve import base_entity, config_global_resolver
+from typing import Annotated, Optional
+from pydantic import BaseModel
+from pydantic_resolve import Relationship, base_entity, config_global_resolver
 
-# 1. Define entities with BaseEntity
 BaseEntity = base_entity()
+
+class Organization(BaseModel, BaseEntity):
+    id: int
+    name: str
 
 class User(BaseModel, BaseEntity):
     id: int
@@ -398,32 +405,36 @@ class User(BaseModel, BaseEntity):
     __relationships__ = [
         Relationship(fk='org_id', target=Organization, name='organization', loader=org_loader)
     ]
-```
 
-2. Register ERD globally and create AutoLoad
+diagram = BaseEntity.get_diagram()
+AutoLoad = diagram.create_auto_load()
+config_global_resolver(diagram)
 
-```python
-config_global_resolver(BaseEntity.get_diagram())
-AutoLoad = BaseEntity.get_diagram().create_auto_load()
-```
-
-3. Use AutoLoad in response models
-
-```python
 class UserResponse(BaseModel):
     id: int
     name: str
     org_id: int
 
-    # Field name matches Relationship.name, auto-resolves via ERD
     organization: Annotated[Optional[Organization], AutoLoad()] = None
 ```
+
+The generation step matters because `create_auto_load()` embeds relationship metadata into the annotation. That metadata is later used during ER pre-analysis and by helpers such as `DefineSubset` and GraphQL response-model generation to locate the correct `Relationship` and foreign-key field.
 
 **Parameters:**
 
 - `origin` (str | None): The `name` of the target Relationship to look up. Defaults to `None`, in which case the annotated field name is used as the lookup key.
 
-**Note:** `AutoLoad` works with `config_global_resolver()` to inject the ERD into the default Resolver.
+**Important:** `AutoLoad` and the Resolver must be wired to the same `diagram` definition.
+
+If you use a custom resolver class instead of the global resolver, keep the same flow:
+
+```python
+from pydantic_resolve import config_resolver
+
+diagram = BaseEntity.get_diagram()
+AutoLoad = diagram.create_auto_load()
+MyResolver = config_resolver('MyResolver', er_diagram=diagram)
+```
 
 #### config_resolver()
 

@@ -349,13 +349,20 @@ diagram = BaseEntity.get_diagram()
 
 #### AutoLoad
 
-基于 ERD 关系自动解析字段的注解。`AutoLoad` 通过 `ErDiagram` 实例的 `create_auto_load()` 方法创建。
+基于 ERD 关系自动解析字段的注解工厂。
+
+`AutoLoad` 不是一个独立的全局助手，必须从 `ErDiagram` 实例通过 `create_auto_load()` 生成，并与同一个 `diagram` 一起传给 `config_global_resolver()` 或 `config_resolver()`。
 
 ```python
-from pydantic_resolve import base_entity, config_global_resolver
+from typing import Annotated, Optional
+from pydantic import BaseModel
+from pydantic_resolve import Relationship, base_entity, config_global_resolver
 
-# 1. 使用 BaseEntity 定义实体
 BaseEntity = base_entity()
+
+class Organization(BaseModel, BaseEntity):
+    id: int
+    name: str
 
 class User(BaseModel, BaseEntity):
     id: int
@@ -365,25 +372,35 @@ class User(BaseModel, BaseEntity):
         Relationship(fk='org_id', name='organization', target=Organization, loader=org_loader)
     ]
 
-# 2. 全局注册 ERD 并创建 AutoLoad
-config_global_resolver(BaseEntity.get_diagram())
-AutoLoad = BaseEntity.get_diagram().create_auto_load()
+diagram = BaseEntity.get_diagram()
+AutoLoad = diagram.create_auto_load()
+config_global_resolver(diagram)
 
-# 3. 在响应模型中使用 AutoLoad
 class UserResponse(BaseModel):
     id: int
     name: str
     org_id: int
 
-    # 字段名匹配 Relationship.name，通过 ERD 关系自动解析
     organization: Annotated[Optional[Organization], AutoLoad()] = None
 ```
+
+这个生成步骤很重要，因为 `create_auto_load()` 会把 diagram 里的关系元数据嵌入注解中。后续 ER 预分析、`DefineSubset` 和 GraphQL 响应模型生成都会依赖这些元数据来定位正确的 `Relationship` 与外键字段。
 
 **参数：**
 
 - `origin` (str | None): 目标 Relationship 的 `name` 查找键。默认为 `None`，此时使用注解字段名作为查找键。当字段名与 Relationship 的 `name` 不一致时，可通过此参数指定。
 
-**注意：** `AutoLoad` 需要与 `config_global_resolver()` 配合，将 ERD 注入到默认 Resolver。
+**注意：** `AutoLoad` 与 Resolver 必须绑定到同一个 `diagram`。
+
+如果使用自定义 Resolver 类而不是全局 Resolver，流程也保持一致：
+
+```python
+from pydantic_resolve import config_resolver
+
+diagram = BaseEntity.get_diagram()
+AutoLoad = diagram.create_auto_load()
+MyResolver = config_resolver('MyResolver', er_diagram=diagram)
+```
 
 #### config_resolver()
 

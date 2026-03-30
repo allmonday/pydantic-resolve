@@ -87,19 +87,23 @@ Starting from Pydantic resolve v2, this kind of ERD can be declared more explici
 ```python
 from pydantic_resolve import Relationship, base_entity, config_global_resolver
 
-class User(BaseModel):
+BaseEntity = base_entity()
+
+class User(BaseModel, BaseEntity):
+	__relationships__ = [
+		Relationship(fk='id', target=list['Post'], name='posts', loader=PostLoader)
+	]
 	id: int
 	name: str
 
-class Post(BaseModel):
-	__relationships__ = [
-		Relationship(fk='id', target=list[User], loader=PostLoader)
-	]
+class Post(BaseModel, BaseEntity):
+	__relationships__ = []
 	id: int
 	user_id: int
 	title: str
 
-config_global_resolver(BaseEntity.get_diagram())
+diagram = BaseEntity.get_diagram()
+config_global_resolver(diagram)
 ```
 
 If User -> Post has multiple loader implementations, you can define multiple `Relationship` entries:
@@ -110,7 +114,7 @@ from pydantic_resolve import Relationship, base_entity, config_global_resolver
 BaseEntity = base_entity()
 
 class User(BaseModel, BaseEntity):
-	__pydantic_resolve_relationships__ = [
+	__relationships__ = [
 		Relationship(fk='id', target=list[Post], name='posts', loader=PostLoader),
 		Relationship(fk='id', target=list[Post], name='latest_three_posts', loader=LatestThreePostLoader)
 	]
@@ -118,12 +122,13 @@ class User(BaseModel, BaseEntity):
 	name: str
 
 class Post(BaseModel, BaseEntity):
-	__pydantic_resolve_relationships__ = []
+	__relationships__ = []
 	id: int
 	user_id: int
 	title: str
 
-config_global_resolver(BaseEntity.get_diagram())
+diagram = BaseEntity.get_diagram()
+config_global_resolver(diagram)
 ```
 
 ### External Declaration with ErDiagram
@@ -148,7 +153,7 @@ diagram = ErDiagram(configs=[
 	Entity(
 		kls=User,
 		relationships=[
-			Relationship(fk='id', target=list[Post], loader=PostLoader)
+			Relationship(fk='id', target=list[Post], name='posts', loader=PostLoader)
 		]
 	),
 	Entity(
@@ -171,16 +176,27 @@ If you are a FastAPI user, this ERD can also be visualized in FastAPI Voyager.
 
 ### Build relationships
 
-Once you have an `ErDiagram` defined, use `AutoLoad` to connect entities:
+Once you have an `ErDiagram` defined, generate `AutoLoad` from that diagram before writing response models:
 
 ```python
-AutoLoad = BaseEntity.get_diagram().create_auto_load()
+diagram = BaseEntity.get_diagram()
+AutoLoad = diagram.create_auto_load()
+config_global_resolver(diagram)
 
 class UserWithPostsForSpecificBusiness(User):
 	posts: Annotated[List[Post], AutoLoad()] = []
 ```
 
 `AutoLoad()` looks up the relationship by matching the field name (`posts`) to `Relationship.name` from the ERD and automatically resolves the data. If the field name differs from `name`, use `AutoLoad(origin='posts')` to specify the lookup key explicitly.
+
+This generation step is important: `create_auto_load()` embeds diagram-specific relationship metadata into the annotation. The resolver must be configured with the same `diagram`, otherwise ER pre-analysis, `DefineSubset`, and GraphQL response-model generation cannot reliably infer the correct relationship and FK field.
+
+If you define relationships with an external `ErDiagram`, the flow is the same:
+
+```python
+AutoLoad = diagram.create_auto_load()
+config_global_resolver(diagram)
+```
 
 ### The key to maintainable code: keep business ERD consistent with your code structure
 
