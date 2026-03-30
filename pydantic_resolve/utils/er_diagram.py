@@ -223,6 +223,25 @@ class ErDiagram(BaseModel):
                 # Bind as classmethod
                 setattr(kls, method_name, classmethod(mutation_wrapper))
 
+    def create_auto_load(self):
+        """Create an AutoLoad factory bound to this diagram's relationships.
+
+        Returns a callable that creates LoaderInfo instances with embedded
+        entity/relationship data.
+
+        Usage:
+            AutoLoad = diagram.create_auto_load()
+
+            class MyResponse(Biz):
+                user: Annotated[Optional[User], AutoLoad()] = None
+        """
+        er_configs_map = {config.kls: config for config in self.configs}
+
+        def _auto_load(origin: str | None = None) -> LoaderInfo:
+            return LoaderInfo(origin=origin, _er_configs_map=er_configs_map)
+
+        return _auto_load
+
 
 class BaseEntity:  # just type (TODO: optimize)
     entities: list[Entity]
@@ -234,10 +253,7 @@ class BaseEntity:  # just type (TODO: optimize)
 class LoaderInfo:
     """Marker annotation - field name from annotation identifies the relationship."""
     origin: str | None = None
-
-
-def AutoLoad(origin: str | None = None) -> LoaderInfo:
-    return LoaderInfo(origin=origin)
+    _er_configs_map: dict | None = None  # {type: Entity}, set by create_auto_load()
 
 
 def base_entity() -> type[BaseEntity]:
@@ -327,11 +343,8 @@ def base_entity() -> type[BaseEntity]:
                 return
 
             entities.append(cls)
-            # Check for inline relationships, __relationships__ or __pydantic_resolve_relationships__
-            # __pydantic_resolve_relationships__ has higher priority
+            # Check for inline relationships
             inline_rels = getattr(cls, const.ER_DIAGRAM_INLINE_RELATIONSHIPS, None)
-            if inline_rels is None:
-                inline_rels = getattr(cls, const.ER_DIAGRAM_INLINE_RELATIONSHIPS_SHORT, None)
             # Include entities even if they have empty relationships list
             # This is important for GraphQL @query methods on entities without relationships
             if inline_rels is not None:
@@ -347,9 +360,11 @@ class ErLoaderPreGenerator:
     def __init__(self, er_diagram: ErDiagram | None) -> None:
         self.er_configs_map = {config.kls: config for config in er_diagram.configs} if er_diagram else None
 
-    def _identify_entity(self, target: type) -> Entity:
+    def _identify_entity(self, target: type, er_configs_map: dict[type, Entity] | None = None) -> Entity:
         """Locate the matching ErConfig for a target class via compatibility check."""
-        for kls, cfg in self.er_configs_map.items():
+        if er_configs_map is None:
+            er_configs_map = self.er_configs_map
+        for kls, cfg in er_configs_map.items():
             if class_util.is_compatible_type(target, kls):
                 return cfg
         raise AttributeError(f'No ErConfig found for {target}')
@@ -374,10 +389,20 @@ class ErLoaderPreGenerator:
         if not auto_loader_fields:
             return
 
-        if self.er_configs_map is None:
+        # Resolve er_configs_map: prefer embedded from LoaderInfo, fall back to self
+        er_configs_map = None
+        for _, _, loader_info in auto_loader_fields:
+            if loader_info._er_configs_map is not None:
+                er_configs_map = loader_info._er_configs_map
+                break
+        if er_configs_map is None:
+            er_configs_map = self.er_configs_map
+        if er_configs_map is None:
             raise ValueError('er_configs_map is None, cannot identify config')
 
-        config = self._identify_entity(kls)
+        config = self._identify_entity(kls, er_configs_map)
+
+        needs_rebuild = False
 
         for field_name, annotation, loader_info in auto_loader_fields:
             method_name = f'{const.RESOLVE_PREFIX}{field_name}'
@@ -395,6 +420,14 @@ class ErLoaderPreGenerator:
 
             if relationship.loader is None:
                 raise AttributeError(f'Loader not provided in relationship for name "{field_name}" in class "{kls}"')
+
+            # Validate that the annotation type is compatible with relationship.target
+            if not class_util.is_compatible_type(annotation, relationship.target):
+                raise TypeError(
+                    f'Type mismatch in {kls.__name__}.{field_name}: '
+                    f'annotated type {annotation} is not compatible with '
+                    f'relationship target {relationship.target} (name="{lookup_key}")'
+                )
 
             def _handle_fk_none(rel: Relationship):
                 """Common logic for handling None foreign key values."""
@@ -433,6 +466,11 @@ class ErLoaderPreGenerator:
                 setattr(kls, method_name, create_resolve_method_with_load_many(relationship.fk, relationship))
             else:
                 setattr(kls, method_name, create_resolve_method(relationship.fk, relationship))
+
+            needs_rebuild = True
+
+        if needs_rebuild:
+            kls.model_rebuild(force=True)
 
 
 def _get_pydantic_field_items_with_load_by(kls) -> Iterator[tuple[str, type, LoaderInfo]]:

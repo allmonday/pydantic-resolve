@@ -2,7 +2,7 @@ import pytest
 from typing import Optional, Annotated, List
 from pydantic import BaseModel
 from pydantic_resolve.utils.resolver_configurator import config_global_resolver
-from pydantic_resolve import Entity, Relationship, AutoLoad, DefineSubset, ErDiagram, Resolver
+from pydantic_resolve import Entity, Relationship, DefineSubset, ErDiagram, Resolver
 from aiodataloader import DataLoader
 
 
@@ -82,6 +82,8 @@ diagram = ErDiagram(
         ])
     ]
 )
+
+AutoLoad = diagram.create_auto_load()
 
 
 @pytest.fixture(autouse=True)

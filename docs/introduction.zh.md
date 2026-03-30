@@ -106,7 +106,7 @@ from task.schema import Task
 BaseEntity = base_entity()
 
 class Story(BaseModel, BaseEntity):
-    __pydantic_resolve_relationships__ = [
+    __relationships__ = [
         Relationship(fk='id', target=list[Task], loader=task_loader.story_to_task_loader)
     ]
     id: int

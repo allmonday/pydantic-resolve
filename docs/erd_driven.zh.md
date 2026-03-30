@@ -91,7 +91,7 @@ class User(BaseModel):
     name: str
 
 class Post(BaseModel):
-    __pydantic_resolve_relationships__ = [
+    __relationships__ = [
         Relationship(fk='id', target=list[User], loader=PostLoader)
     ]
     id: int
@@ -109,7 +109,7 @@ from pydantic_resolve import MultipleRelationship, Link, base_entity, config_glo
 BaseEntity = base_entity()
 
 class User(BaseModel, BaseEntity):
-    __pydantic_resolve_relationships__ = [
+    __relationships__ = [
         MultipleRelationship(
             fk='id',
             target=list[Post],
@@ -123,7 +123,7 @@ class User(BaseModel, BaseEntity):
     name: str
 
 class Post(BaseModel, BaseEntity):
-    __pydantic_resolve_relationships__ = []
+    __relationships__ = []
     id: int
     user_id: int
     title: str

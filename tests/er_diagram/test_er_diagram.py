@@ -6,7 +6,6 @@ from pydantic_resolve import (
     config_resolver,
     Entity,
     Relationship,
-    AutoLoad,
     DefineSubset,
     ErDiagram,
     ensure_subset,
@@ -115,6 +114,8 @@ diagram = ErDiagram(
         ])
     ]
 )
+
+AutoLoad = diagram.create_auto_load()
 
 class BizCase0(Biz):
     user: Annotated[Optional[User], AutoLoad()] = None
@@ -241,3 +242,22 @@ async def test_autoload_with_origin():
     d = BizCaseOrigin(id=1, name="qq", user_id=1, user_id_str='1')
     d = await MyResolver().resolve(d)
     assert d.my_user.name == "a"
+
+
+class BizCaseAutoFK(DefineSubset):
+    """Subset that omits user_id - FK field should be auto-added by ErLoaderPreGenerator."""
+    __pydantic_resolve_subset__ = (Biz, ['id'])
+
+    user: Annotated[Optional[User], AutoLoad()] = None
+
+
+@pytest.mark.asyncio
+async def test_auto_fk_field_added_for_external_er_diagram():
+    """Test that missing FK fields are auto-added when using external ErDiagram."""
+    MyResolver = config_resolver('MyResolver', er_diagram=diagram)
+    d = BizCaseAutoFK(id=1, user_id=1)
+    d = await MyResolver().resolve(d)
+    assert d.user is not None
+    assert d.user.id == 1
+    # FK field should be excluded from serialization
+    assert 'user_id' not in d.model_dump()

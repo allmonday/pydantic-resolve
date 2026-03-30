@@ -8,7 +8,7 @@ class Sub(BaseModel):
     name: str
 
 class MyModel(BaseModel, Base):
-    __pydantic_resolve_relationships__ = [
+    __relationships__ = [
         Relationship(fk='id', name='sub', target=Sub, loader=None)
     ]
     id: int
@@ -17,7 +17,7 @@ class MyModelSub(MyModel):
     id: int
 
 class AnotherModel(BaseModel, Base):
-    __pydantic_resolve_relationships__ = [
+    __relationships__ = [
         Relationship(fk='id', name='sub', target=Sub, loader=None)
     ]
     id: int

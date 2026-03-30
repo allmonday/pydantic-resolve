@@ -92,7 +92,7 @@ class User(BaseModel):
 	name: str
 
 class Post(BaseModel):
-	__pydantic_resolve_relationships__ = [
+	__relationships__ = [
 		Relationship(fk='id', target=list[User], loader=PostLoader)
 	]
 	id: int

@@ -10,7 +10,7 @@ from pydantic.functional_serializers import PlainSerializer
 from functools import lru_cache
 
 from pydantic_resolve.constant import ENSURE_SUBSET_REFERENCE, ER_DIAGRAM_PRE_GENERATOR
-from pydantic_resolve.utils.er_diagram import ErDiagram, Relationship, AutoLoad
+from pydantic_resolve.utils.er_diagram import ErDiagram, Relationship
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.types import get_core_types
 from pydantic_resolve.graphql.types import FieldSelection
@@ -77,6 +77,7 @@ class ResponseBuilder:
         self.entity_map = {cfg.kls: cfg for cfg in er_diagram.configs}
         self.resolver_class = resolver_class
         self.enable_from_attribute_in_type_adapter = enable_from_attribute_in_type_adapter
+        self._create_auto_load = er_diagram.create_auto_load()
         # Bind lru_cache to instance method
         # This provides LRU eviction + thread safety + instance isolation
         self._build_cached = lru_cache(maxsize=256)(self._build_model_impl)
@@ -482,11 +483,12 @@ class ResponseBuilder:
         )
 
         # Build annotated type with AutoLoad
+        _AutoLoad = self._create_auto_load
         if origin is list:
-            base_type = Annotated[List[nested_model], AutoLoad()]
+            base_type = Annotated[List[nested_model], _AutoLoad()]
             default = []
         else:
-            base_type = Annotated[Optional[nested_model], AutoLoad()]
+            base_type = Annotated[Optional[nested_model], _AutoLoad()]
             default = None
 
         return self._apply_alias((base_type, default), selection.alias)

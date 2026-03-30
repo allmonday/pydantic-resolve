@@ -2,7 +2,7 @@ import pytest
 from typing import Optional, Annotated, List
 from pydantic import BaseModel
 from pydantic_resolve import config_resolver
-from pydantic_resolve import Relationship, AutoLoad, DefineSubset, ensure_subset, base_entity
+from pydantic_resolve import Relationship, DefineSubset, ensure_subset, base_entity
 from aiodataloader import DataLoader
 
 
@@ -83,7 +83,7 @@ class FooNameLoader(DataLoader):
 
 
 class Biz(BaseModel, BASE_ENTITY):
-    __pydantic_resolve_relationships__ = [
+    __relationships__ = [
         Relationship(fk='user_id', name='user', target=User, loader=UserLoader),
         Relationship(fk='user_ids', name='users_a', target=list[User], load_many=True, loader=UserLoader),
         Relationship(fk='user_ids_str',
@@ -103,6 +103,10 @@ class Biz(BaseModel, BASE_ENTITY):
     user_id: int
     user_ids: list[int] = []
     user_ids_str:str = ''
+
+
+# Get AutoLoad from the diagram
+AutoLoad = BASE_ENTITY.get_diagram().create_auto_load()
 
 
 class BizCase1(Biz):

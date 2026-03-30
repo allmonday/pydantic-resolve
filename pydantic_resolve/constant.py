@@ -13,5 +13,4 @@ ENSURE_SUBSET_DEFINITION_SHORT = '__subset__'
 
 ER_DIAGRAM = '__pydantic_resolve_er_diagram__'
 ER_DIAGRAM_PRE_GENERATOR = '__pydantic_resolve_er_diagram_pre_gen__'
-ER_DIAGRAM_INLINE_RELATIONSHIPS = '__pydantic_resolve_relationships__'
-ER_DIAGRAM_INLINE_RELATIONSHIPS_SHORT = '__relationships__'
+ER_DIAGRAM_INLINE_RELATIONSHIPS = '__relationships__'

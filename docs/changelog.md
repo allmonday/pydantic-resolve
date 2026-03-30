@@ -23,8 +23,10 @@
 - refactor:
   - `ResponseBuilder` removes `RelationshipInfo` wrapper, uses `Relationship` directly
   - `DefineSubset` modifier logic extracted into `_apply_config_modifiers_to_field`
-  - `DefineSubset` applies `exclude=True` after `create_model` for AutoLoad FK fields
+  - `DefineSubset` auto-adds missing AutoLoad FK fields with `exclude=True`
   - SDL / Introspection generators unified on `rel.name` and `rel.target`, all `MultipleRelationship` branches removed
+  - Removed `__pydantic_resolve_relationships__` attribute name; use `__relationships__` only
+  - Added type compatibility check in `ErLoaderPreGenerator.prepare()` for early mismatch detection
 
 ## v3.3
 

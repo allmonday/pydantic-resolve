@@ -92,3 +92,17 @@ Relationship(field='tags', target_kls=list[Tag], field_fn=lambda v: v.split(',')
 # v4
 Relationship(fk='tags', target=list[Tag], fk_fn=lambda v: v.split(','), name='tags')
 ```
+
+## 7. `__pydantic_resolve_relationships__` removed
+
+Use `__relationships__` only.
+
+```python
+# v3
+class TaskEntity(BaseModel, BaseEntity):
+    __pydantic_resolve_relationships__ = [...]
+
+# v4
+class TaskEntity(BaseModel, BaseEntity):
+    __relationships__ = [...]
+```

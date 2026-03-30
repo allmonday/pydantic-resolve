@@ -1,6 +1,5 @@
 import os
 import asyncio
-import warnings
 import contextvars
 from inspect import iscoroutine
 from typing import TypeVar, Callable, Any

@@ -12,7 +12,6 @@ from pydantic_resolve import (
     config_resolver,
     Entity,
     Relationship,
-    AutoLoad,
     ErDiagram
 )
 from aiodataloader import DataLoader
@@ -75,6 +74,8 @@ async def test_field_fn_raises_value_error():
         ]
     )
 
+    AutoLoad = diagram.create_auto_load()
+
     # OrderResponse must inherit from Order to be compatible with the Entity config
     class OrderResponse(Order):
         user: Annotated[Optional[User], AutoLoad()] = None
@@ -108,6 +109,8 @@ async def test_field_fn_with_none_value():
             )
         ]
     )
+
+    AutoLoad = diagram.create_auto_load()
 
     class OrderResponse(Order):
         user: Annotated[Optional[User], AutoLoad()] = None
@@ -144,6 +147,8 @@ async def test_field_fn_returns_none():
         ]
     )
 
+    AutoLoad = diagram.create_auto_load()
+
     class OrderResponse(Order):
         user: Annotated[Optional[User], AutoLoad()] = None
 
@@ -176,6 +181,8 @@ async def test_field_fn_returns_incompatible_type():
         ]
     )
 
+    AutoLoad = diagram.create_auto_load()
+
     class OrderResponse(Order):
         user: Annotated[Optional[User], AutoLoad()] = None
 
@@ -206,6 +213,8 @@ async def test_load_many_fn_with_none_field_value():
             )
         ]
     )
+
+    AutoLoad = diagram.create_auto_load()
 
     class OrderResponse(Order):
         users: Annotated[List[User], AutoLoad()] = []
@@ -241,6 +250,8 @@ async def test_load_many_fn_returns_none():
         ]
     )
 
+    AutoLoad = diagram.create_auto_load()
+
     class OrderResponse(Order):
         users: Annotated[List[User], AutoLoad()] = []
 
@@ -273,6 +284,8 @@ async def test_load_many_fn_returns_non_iterable():
         ]
     )
 
+    AutoLoad = diagram.create_auto_load()
+
     class OrderResponse(Order):
         users: Annotated[List[User], AutoLoad()] = []
 
@@ -303,6 +316,8 @@ async def test_field_fn_with_valid_transformation():
             )
         ]
     )
+
+    AutoLoad = diagram.create_auto_load()
 
     class OrderResponse(Order):
         user: Annotated[Optional[User], AutoLoad()] = None
@@ -335,6 +350,8 @@ async def test_load_many_fn_with_valid_transformation():
             )
         ]
     )
+
+    AutoLoad = diagram.create_auto_load()
 
     class OrderResponse(Order):
         users: Annotated[List[User], AutoLoad()] = []

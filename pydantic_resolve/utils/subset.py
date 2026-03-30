@@ -1,11 +1,12 @@
-from typing import Any, Literal
+from typing import Any, Literal, get_args, get_origin, Annotated
 from pydantic import BaseModel, create_model, model_validator
+from pydantic.fields import FieldInfo
 import copy
 import pydantic_resolve.constant as const
 from pydantic_resolve.utils.expose import ExposeAs
 from pydantic_resolve.utils.collector import SendTo
-
-
+from pydantic_resolve.utils.er_diagram import LoaderInfo
+from pydantic_resolve.utils import class_util
 class SubsetConfig(BaseModel):
     kls: type[BaseModel]  # parent class
 
@@ -175,6 +176,92 @@ def _apply_config_modifiers_to_field(
     return result
 
 
+def _auto_add_fk_fields(
+    extra_fields: dict[str, tuple[Any, Any]],
+    parent_kls: type[BaseModel],
+    field_definitions: dict[str, Any],
+) -> None:
+    """Auto-add FK fields from AutoLoad annotations in extra_fields.
+
+    When a DefineSubset class declares a field with AutoLoad() annotation, the
+    generated resolve method needs a FK field to load data, but that FK field may
+    not be included in the subset's selected fields.
+
+    Example scenario:
+        class Biz(BaseModel):
+            id: int
+            name: str
+            user_id: int  # FK field
+
+        class BizSubset(DefineSubset):
+            __pydantic_resolve_subset__ = (Biz, ['id'])  # only selected 'id'
+
+            user: Annotated[Optional[User], AutoLoad()] = None  # needs user_id
+
+    AutoLoad generates resolve_user which calls getattr(self, 'user_id'), but
+    BizSubset has no user_id field — this would fail at runtime.
+
+    This function solves the problem by:
+        1. Scanning extra_fields for Annotated[..., LoaderInfo] metadata
+        2. Extracting LoaderInfo._er_configs_map (entity → Entity config mapping)
+        3. Finding the Entity matching parent_kls (e.g. Biz)
+        4. Looking up the Relationship by name (field name or origin)
+        5. Getting rel.fk (e.g. 'user_id'), and adding it to field_definitions
+           with exclude=True if not already present
+
+    Result: BizSubset will have:
+        - id: int (user selected)
+        - user_id: int (auto-added, exclude=True, hidden from serialization)
+        - user: Annotated[Optional[User], AutoLoad()] = None (user declared)
+
+    This logic was moved from ErLoaderPreGenerator.prepare() because FK field
+    injection is a subset construction concern, not a resolve method generation
+    concern. Placing it here ensures all fields are ready before create_model().
+
+    Args:
+        extra_fields: New fields declared on the DefineSubset class body.
+        parent_kls: The parent BaseModel class being subsetted.
+        field_definitions: Field definitions dict being built (mutated in-place).
+    """
+    for fname, (anno, _default) in extra_fields.items():
+        # Extract metadata from Annotated type
+        origin = get_origin(anno)
+        if origin is not Annotated:
+            continue
+
+        args = get_args(anno)
+        for arg in args[1:]:  # skip first arg (the actual type)
+            if not isinstance(arg, LoaderInfo):
+                continue
+            if arg._er_configs_map is None:
+                continue
+
+            # Find entity matching parent_kls
+            for entity_kls, entity_cfg in arg._er_configs_map.items():
+                if not class_util.is_compatible_type(parent_kls, entity_kls):
+                    continue
+
+                lookup_key = arg.origin if arg.origin else fname
+                for rel in entity_cfg.relationships:
+                    if rel.name != lookup_key:
+                        continue
+
+                    fk = rel.fk
+                    if fk not in field_definitions and fk in parent_kls.model_fields:
+                        parent_field = parent_kls.model_fields[fk]
+                        field_definitions[fk] = (
+                            parent_field.annotation,
+                            FieldInfo(
+                                annotation=parent_field.annotation,
+                                default=None,
+                                exclude=True,
+                            ),
+                        )
+                    break
+                break
+            break
+
+
 class SubsetMeta(type):
     def __new__(cls, name, bases, namespace, **kwargs):
         # subset_info is expected to be:
@@ -216,6 +303,9 @@ class SubsetMeta(type):
 
         # Then extract extra fields defined in class body
         extra_fields = _extract_extra_fields_from_namespace(namespace, set(subset_fields))
+
+        # Auto-add FK fields from AutoLoad annotations
+        _auto_add_fk_fields(extra_fields, parent_kls, field_infos)
 
         # Parent validators and config should still apply to subset fields
         create_model_kwargs: dict[str, Any] = {}

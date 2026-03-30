@@ -2,7 +2,7 @@ import pytest
 from typing import Optional, Annotated
 from pydantic import BaseModel
 from pydantic_resolve import config_resolver
-from pydantic_resolve import Entity, Relationship, AutoLoad, ErDiagram
+from pydantic_resolve import Entity, Relationship, ErDiagram
 from aiodataloader import DataLoader
 
 
@@ -50,6 +50,8 @@ diagram = ErDiagram(
         ])
     ]
 )
+
+AutoLoad = diagram.create_auto_load()
 
 class BizCase1(Biz):
     user: Annotated[Optional[User], AutoLoad()] = None
