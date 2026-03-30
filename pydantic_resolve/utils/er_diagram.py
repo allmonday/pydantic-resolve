@@ -360,11 +360,9 @@ class ErLoaderPreGenerator:
     def __init__(self, er_diagram: ErDiagram | None) -> None:
         self.er_configs_map = {config.kls: config for config in er_diagram.configs} if er_diagram else None
 
-    def _identify_entity(self, target: type, er_configs_map: dict[type, Entity] | None = None) -> Entity:
+    def _identify_entity(self, target: type) -> Entity:
         """Locate the matching ErConfig for a target class via compatibility check."""
-        if er_configs_map is None:
-            er_configs_map = self.er_configs_map
-        for kls, cfg in er_configs_map.items():
+        for kls, cfg in self.er_configs_map.items():
             if class_util.is_compatible_type(target, kls):
                 return cfg
         raise AttributeError(f'No ErConfig found for {target}')
@@ -389,18 +387,10 @@ class ErLoaderPreGenerator:
         if not auto_loader_fields:
             return
 
-        # Resolve er_configs_map: prefer embedded from LoaderInfo, fall back to self
-        er_configs_map = None
-        for _, _, loader_info in auto_loader_fields:
-            if loader_info._er_configs_map is not None:
-                er_configs_map = loader_info._er_configs_map
-                break
-        if er_configs_map is None:
-            er_configs_map = self.er_configs_map
-        if er_configs_map is None:
+        if self.er_configs_map is None:
             raise ValueError('er_configs_map is None, cannot identify config')
 
-        config = self._identify_entity(kls, er_configs_map)
+        config = self._identify_entity(kls)
 
         needs_rebuild = False
 
