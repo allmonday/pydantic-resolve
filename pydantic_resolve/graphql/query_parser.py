@@ -218,6 +218,13 @@ class QueryParser:
         # BooleanValue
         elif kind == 'boolean_value':
             return value_node.value
+        # Variable
+        elif kind == 'variable':
+            variable_name = getattr(getattr(value_node, 'name', None), 'value', '<unknown>')
+            raise QueryParseError(
+                f"GraphQL variables are not supported yet: ${variable_name}. "
+                "Please use inline argument values."
+            )
         # ObjectValue (object literal)
         elif kind == 'object_value' and hasattr(value_node, 'fields'):
             obj = {}

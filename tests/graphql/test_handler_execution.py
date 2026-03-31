@@ -80,3 +80,25 @@ class TestHandlerExecutionBehavior:
         assert result["errors"] is None
         assert result["data"]["userEntityGetById"]["id"] == 1
         assert result["data"]["userEntityGetById"]["name"] == "Alice"
+
+    @pytest.mark.asyncio
+    async def test_query_with_variable_returns_parse_error(self):
+        """Using GraphQL variables should return a clear parse error."""
+        from tests.graphql.fixtures.entities import BaseEntity
+
+        diagram = BaseEntity.get_diagram()
+        config_global_resolver(diagram)
+        handler = GraphQLHandler(diagram)
+
+        result = await handler.execute(
+            """
+            query GetUser($id: Int!) {
+                userEntityGetById(id: $id) { id name email }
+            }
+            """
+        )
+
+        assert result["data"] is None
+        assert result["errors"] is not None
+        assert result["errors"][0]["extensions"]["code"] == "GRAPHQL_PARSE_ERROR"
+        assert "variables are not supported yet" in result["errors"][0]["message"]
