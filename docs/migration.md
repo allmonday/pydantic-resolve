@@ -38,6 +38,8 @@ Relationship(fk='owner_id', target=User, loader=user_loader, name='owner')
 
 `AutoLoad` no longer requires a FK field name. It resolves the relationship by matching the field name against relationship `name` values. If the field name differs from the relationship name, use the `origin` parameter.
 
+`AutoLoad` is not a global helper. It must be created from the same `ErDiagram` instance used by the resolver.
+
 ```python
 # v3
 class TaskResponse(DefineSubset):
@@ -51,6 +53,15 @@ class TaskResponse(DefineSubset):
 class TaskResponse(DefineSubset):
     author: Annotated[Optional[User], AutoLoad(origin='owner')] = None
 ```
+
+```python
+# v4 — diagram-bound AutoLoad factory (required)
+diagram = BaseEntity.get_diagram()
+AutoLoad = diagram.create_auto_load()
+config_global_resolver(diagram)
+```
+
+`LoadBy` parameters `biz` and `origin_kls` are removed. Use `Relationship.name` and `AutoLoad(origin=...)` instead.
 
 ## 4. `MultipleRelationship` and `Link` removed
 
