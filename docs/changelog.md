@@ -6,7 +6,7 @@
 
 ## v4.0
 
-### v4.0.0a1 (2026-3-29)
+### v4.0.0 (2026-3-29)
 
 **BREAKING CHANGES** — ER Diagram API overhaul, simplified Relationship definition. See [Migration Guide](./migration.md) for details.
 
