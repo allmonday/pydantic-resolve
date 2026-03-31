@@ -23,7 +23,7 @@
 |------|------|
 | **自动批量加载** | DataLoader 自动消除 N+1 查询 |
 | **声明式组装** | 声明依赖关系，框架自动处理 |
-| **Entity-First 架构** | ER Diagram 定义关系，`AutoLoad` 自动解析 |
+| **ER Diagram + AutoLoad** | 定义实体关系，自动解析关联数据 |
 | **GraphQL 支持** | 从 ERD 生成 Schema，动态模型查询 |
 | **MCP 集成** | 将 GraphQL API 暴露给 AI 代理，支持渐进式披露 |
 
@@ -175,92 +175,127 @@ class Story(BaseModel):
 
 ---
 
-## 高级特性
+## 声明式模式：ER Diagram + AutoLoad
 
-### Entity-First 架构
+快速开始和核心概念展示的是 pydantic-resolve 的 **Core API**：手写 `resolve_*` 方法，手动指定 Loader。对于简单场景这已经足够。
 
-定义独立于数据库 schema 的业务实体。
+当项目中有多个互相关联的实体时，pydantic-resolve 提供了 **Declarative API**：在 ER Diagram 中集中定义实体关系和默认 Loader，然后通过 `AutoLoad` 自动生成对应的 resolve 方法。
 
-**为什么选择 Entity-First 而非 DB-based 关系？**
+Declarative API 的底层就是 Core API。`AutoLoad` 字段在运行时会生成等价的 `resolve_*` 方法，因此两种模式可以自由混用——在 Declarative Mode 下，你仍然可以使用 `post_*` 方法，也可以对某些字段回退到手写 `resolve_*`。
 
-| 方面 | DB-based (ORM) | Entity-First (pydantic-resolve) |
-|------|----------------|--------------------------------|
-| **灵活性** | 绑定数据库 schema | 在应用层定义关系 |
-| **数据源** | 单一数据库 | 跨多数据源（PostgreSQL、MongoDB、Redis、RPC） |
-| **封装性** | 暴露 FK 字段（`owner_id`） | Loader 实现对 API 隐藏 |
-| **API 契约** | DB 变化时 API 跟着变 | 稳定，与存储解耦 |
+| | Core API | Declarative API |
+|--|----------|-----------------|
+| **做法** | 手写 `resolve_*` + 指定 `Loader` | 定义 ER Diagram + `AutoLoad` |
+| **控制度** | 完全控制 | 约定优于配置 |
+| **适合场景** | 简单项目、一次性数据加载 | 多实体关联、需要 GraphQL/MCP |
+| **关系定义** | 分散在各 Response 类中 | 集中在 ER Diagram 中 |
+
+### 定义实体和关系
+
+用 `base_entity()` 创建基类，在 `__relationships__` 中定义实体间关系：
 
 ```python
-from typing import Annotated, Optional
 from pydantic import BaseModel
-from pydantic_resolve import DefineSubset, base_entity, Relationship, config_global_resolver
+from typing import Annotated, Optional
+from pydantic_resolve import base_entity, Relationship, config_global_resolver
 
 BaseEntity = base_entity()
 
-# Entity 定义业务关系，而非数据库 FK
+class UserEntity(BaseModel, BaseEntity):
+    id: int
+    name: str
+
 class TaskEntity(BaseModel, BaseEntity):
     __relationships__ = [
         # Loader 可以查询 Postgres、调用 RPC、或从 Redis 获取
         # API 消费者不需要知道数据从哪来
-        Relationship(fk='owner_id', name='owner', target=UserEntity, loader=user_loader)
+        Relationship(fk='owner_id', target=UserEntity, name='owner', loader=user_loader)
     ]
     id: int
     name: str
-    description: Optional[str] = None
-    status: str  # todo, in_progress, done
     owner_id: int  # 内部 FK，可以对 API 隐藏
 
 diagram = BaseEntity.get_diagram()
 AutoLoad = diagram.create_auto_load()
 config_global_resolver(diagram)
-
-# Response schema：选择要暴露的内容
-class TaskResponse(DefineSubset):
-    __subset__ = (TaskEntity, ('id', 'name'))  # owner_id 被排除
-    owner: Annotated[User, AutoLoad()] = None  # 自动解析！
 ```
 
-**核心优势：**
-- 更换 loader 实现（SQL → RPC）无需修改 Response 代码
-- 在单个实体图中混合多个数据源
-- 隐藏内部 ID，只暴露业务概念
+也可以用外部声明方式（`ErDiagram` + `Entity`），将关系定义与实体类分离。
 
-[→ 完整 Entity-First 指南](https://allmonday.github.io/pydantic-resolve/erd_driven/)
+### 使用 AutoLoad
 
-### GraphQL 支持
+定义好 ER Diagram 后，在 Response 模型中用 `AutoLoad()` 标注需要自动加载的字段：
 
-从 ERD 生成 GraphQL schema：
+```python
+from pydantic_resolve import DefineSubset
+
+class TaskResponse(TaskEntity):
+    owner: Annotated[Optional[UserEntity], AutoLoad()] = None
+    # AutoLoad 根据 TaskEntity 的 __relationships__ 自动生成 resolve_owner
+
+# 使用方式与 Core API 完全一致
+result = await Resolver().resolve(tasks)
+```
+
+用 `DefineSubset` 选择性暴露字段，隐藏内部 FK：
+
+```python
+class TaskResponse(DefineSubset):
+    __subset__ = (TaskEntity, ('id', 'name'))  # owner_id 被排除
+    owner: Annotated[Optional[UserEntity], AutoLoad()] = None
+```
+
+### 何时使用声明式模式
+
+**适合使用声明式模式的场景：**
+- 项目中有 3 个以上互相关联的实体
+- 需要生成 GraphQL schema 或 MCP 服务
+- 团队需要集中管理实体关系
+- 希望将 FK 字段从 API 契约中隐藏
+
+**Core API 就足够的场景：**
+- 只有少量数据加载需求
+- 数据来源单一（如只用一个数据库）
+- 不需要 GraphQL 或 MCP
+
+[→ 完整 ERD 驱动指南](https://allmonday.github.io/pydantic-resolve/erd_driven/)
+
+## 集成
+
+### GraphQL
+
+从 ERD 生成 GraphQL schema 并执行查询：
 
 ```python
 from pydantic_resolve.graphql import GraphQLHandler
 
-handler = GraphQLHandler(BaseEntity.get_diagram())
+handler = GraphQLHandler(diagram)
 result = await handler.execute("{ users { id name posts { title } } }")
 ```
 
 [→ GraphQL 文档](./demo/graphql/README.md)
 
-### MCP 集成
+### MCP
 
-将 GraphQL API 暴露给 AI 代理，支持渐进式披露：
+将 GraphQL API 暴露给 AI 代理：
 
 ```python
 from pydantic_resolve import AppConfig, create_mcp_server
 
 mcp = create_mcp_server(apps=[AppConfig(name="blog", er_diagram=diagram)])
-mcp.run()  # AI 代理现在可以发现并查询你的 API
+mcp.run()
 ```
 
 [→ MCP 文档](https://allmonday.github.io/pydantic-resolve/api/)
 
 ### 可视化
 
-使用 [fastapi-voyager](https://github.com/allmonday/fastapi-voyager) 进行交互式 schema 探索：
+使用 [fastapi-voyager](https://github.com/allmonday/fastapi-voyager) 进行交互式 ERD 探索：
 
 ```python
 from fastapi_voyager import create_voyager
 
-app.mount('/voyager', create_voyager(app, er_diagram=BaseEntity.get_diagram()))
+app.mount('/voyager', create_voyager(app, er_diagram=diagram))
 ```
 
 ---
