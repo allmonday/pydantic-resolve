@@ -55,7 +55,7 @@ BaseEntity = base_entity()
 # 定义 UserEntity
 class UserEntity(BaseModel, BaseEntity):
     __relationships__ = [
-        Relationship(field='id', target_kls=list['PostEntity'], loader=post_loader)
+        Relationship(fk='id', target=list['PostEntity'], name='posts', loader=post_loader)
     ]
     id: int
     name: str
@@ -84,7 +84,7 @@ class UserEntity(BaseModel, BaseEntity):
 # 定义 CommentEntity
 class CommentEntity(BaseModel, BaseEntity):
     __relationships__ = [
-        Relationship(field='author_id', target_kls=UserEntity, loader=user_loader),
+        Relationship(fk='author_id', target=UserEntity, name='author', loader=user_loader),
     ]
     id: int
     text: str
@@ -95,8 +95,8 @@ class CommentEntity(BaseModel, BaseEntity):
 # 定义 PostEntity
 class PostEntity(BaseModel, BaseEntity):
     __relationships__ = [
-        Relationship(field='author_id', target_kls=UserEntity, loader=user_loader),
-        Relationship(field='id', target_kls=list['CommentEntity'], loader=comment_loader)
+        Relationship(fk='author_id', target=UserEntity, name='author', loader=user_loader),
+        Relationship(fk='id', target=list['CommentEntity'], name='comments', loader=comment_loader)
     ]
     id: int
     title: str

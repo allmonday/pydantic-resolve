@@ -4,6 +4,30 @@
 - **Minor (x.Y.0)**: New features, backward compatible
 - **Patch (x.y.Z)**: Bug fixes and minor improvements
 
+## v4.0
+
+### v4.0.0a1 (2026-3-29)
+
+**BREAKING CHANGES** — ER Diagram API overhaul, simplified Relationship definition. See [Migration Guide](./migration.md) for details.
+
+- feat:
+  - **`Relationship` parameter renames**: `field` → `fk`, `target_kls` → `target`
+  - **`Relationship.name` replaces `default_field_name`**: each Relationship must declare a unique `name`, used as GraphQL field name and AutoLoad lookup key
+  - **`Relationship.fk_fn` replaces `field_fn`**
+  - **`Relationship.fk_none_default` / `fk_none_default_factory` replace `field_none_default` / `field_none_default_factory`**
+  - **`AutoLoad` replaces `LoadBy`**: AutoLoad no longer requires FK field name; uses `origin` parameter to match by relationship name, defaults to field name
+  - **Remove `MultipleRelationship` and `Link`**: multiple relationships to the same target are now separate `Relationship` entries with independent `name`
+  - **Remove deprecated `Resolver` parameters**: `loader_filters` and `global_loader_filter` (deprecated since v1.9.3) are removed; use `loader_params` and `global_loader_param`
+  - **`_resolve_ref` searches registered entities**: when module attribute lookup fails, falls back to searching registered entity list, resolving same-module class ordering issues
+
+- refactor:
+  - `ResponseBuilder` removes `RelationshipInfo` wrapper, uses `Relationship` directly
+  - `DefineSubset` modifier logic extracted into `_apply_config_modifiers_to_field`
+  - `DefineSubset` auto-adds missing AutoLoad FK fields with `exclude=True`
+  - SDL / Introspection generators unified on `rel.name` and `rel.target`, all `MultipleRelationship` branches removed
+  - Removed `__pydantic_resolve_relationships__` attribute name; use `__relationships__` only
+  - Added type compatibility check in `ErLoaderPreGenerator.prepare()` for early mismatch detection
+
 ## v3.3
 
 ### 3.3.0 (2026-3-27)
@@ -61,8 +85,8 @@
 
 ### v3.1.1 (2026-3-18)
 - feat:
-    - **Auto-add missing LoadBy FK fields in DefineSubset**: When using `LoadBy` annotation in `DefineSubset`, the referenced FK field (e.g., `user_id` in `LoadBy('user_id')`) is now automatically added with `exclude=True` if not explicitly defined in the subset
-    - **Early validation for invalid FK references**: If `LoadBy` references a field that doesn't exist in the parent class, a `ValueError` is raised at class definition time instead of during `resolve()`
+    - **Auto-add missing AutoLoad FK fields in DefineSubset**: When using `AutoLoad` annotation in `DefineSubset`, the referenced FK field (e.g., `user_id` in `AutoLoad('user_id')`) is now automatically added with `exclude=True` if not explicitly defined in the subset
+    - **Early validation for invalid FK references**: If `AutoLoad` references a field that doesn't exist in the parent class, a `ValueError` is raised at class definition time instead of during `resolve()`
 
 ### v3.1.0 (2026-3-16)
 - feature:
@@ -81,7 +105,7 @@
 ### v3.0.6 (2026-3-3)
 - feat:
   - **GraphQL schema now includes `Relationship.target_kls` types**: Pydantic types referenced in relationships are automatically collected and generated as GraphQL types, even if not explicitly registered in `er_diagram.configs`
-  - Supports both `Relationship` and `MultipleRelationship` with `list[T]` generics
+  - Supports `Relationship` with `list[T]` generics and `load_many=True`
 
 ### v3.0.5 (2026-3-2)
 - feat:
@@ -105,7 +129,7 @@
 ### v3.0.3 (2026-3-1)
 - refactor:
   - `GraphQLHandler` now creates diagram-specific resolver internally using `config_resolver`, removing `resolver_class` parameter
-  - ensures `LoadBy` annotations work without requiring `config_global_resolver()` to be called
+  - ensures `AutoLoad` annotations work without requiring `config_global_resolver()` to be called
   - convert all relative imports to absolute imports in `pydantic_resolve/` directory
 
 ### v3.0.2 (2026-3-1)
@@ -201,7 +225,7 @@
 
 - feat:
     - `_resolve_ref` now supports module path syntax `'module.path:ClassName'` for lazy import, solving circular import issues in ER diagrams
-    - Use `target_kls='path.to.module:ClassName'` or `list['path.to.module:ClassName']` to reference classes across modules without direct imports
+    - Use `target='path.to.module:ClassName'` or `list['path.to.module:ClassName']` to reference classes across modules without direct imports
 - chore:
     - add pytest-benchmark
 
@@ -313,13 +337,13 @@ more details in test case: `tests/er_diagram/test_er_diagram_base.py`
 
 feat: for ininline relationships str are allowed to represent the class name
 
-for example, use `target_kls='User'` if User is defined after current class
+for example, use `target='User'` if User is defined after current class
 
 ```python
 class Biz(BaseModel, BaseEntity):
     __pydantic_resolve_relationships__ = [
-        Relationship(field='user_id', target_kls='User', loader=UserLoader),
-        Relationship(field='id', target_kls=list[Bar], field_none_default_factory=list, loader=BarLoader),
+        Relationship(fk='user_id', target='User', loader=UserLoader),
+        Relationship(fk='id', target=list[Bar], fk_none_default_factory=list, loader=BarLoader),
     ]
     id: Optional[int]
     name: str
@@ -333,7 +357,7 @@ Only use this in inline mode.
 
 ### v2.2.2 (2025.12.5)
 
-feat: add origin_kls in LoadBy to avoid blurring during matching loader
+feat: add origin_kls in AutoLoad to avoid blurring during matching loader
 
 ### v2.2.1 (2025.12.5)
 
@@ -345,8 +369,8 @@ feat: relationship can be defined inside class
 ```python
 class Biz(BaseModel, BaseEntity):
     __pydantic_resolve_relationships__ = [
-        Relationship(field='user_id', target_kls=User, loader=UserLoader),
-        Relationship(field='id', target_kls=list[Bar], field_none_default_factory=list, loader=BarLoader),
+        Relationship(fk='user_id', target=User, loader=UserLoader),
+        Relationship(fk='id', target=list[Bar], fk_none_default_factory=list, loader=BarLoader),
     ]
     id: Optional[int]
     name: str
@@ -387,8 +411,8 @@ MyResolver = config_resolver('MyResolver', er_diagram=BaseEntity.get_diagram())
 
 ### v2.0.0a2 (2025.11.17)
 - fix:
-    - raise ValueError if er_diagram are not provided when LoadBy are used in somewhere
-    - relationship.loader is optional, but required if used in LoadBy 
+    - raise ValueError if er_diagram are not provided when AutoLoad are used in somewhere
+    - relationship.loader is optional, but required if used in AutoLoad 
 
 ### v2.0.0a1 (2025.11.16)
 - features:

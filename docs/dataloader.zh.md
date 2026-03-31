@@ -25,7 +25,7 @@ class Child(BaseModel):
         desc = ', '.join([c.name for c in self.cars])
         return f'{self.name} owns {len(self.cars)} cars, they are: {desc}'
 
-children = await Resolver.resolve([
+children = await Resolver().resolve([
         Child(id=1, name="Titan"), Child(id=1, name="Siri")])
 ```
 ## DataLoader 的创建
@@ -67,7 +67,7 @@ DataLoader 可以添加参数， 但需要注意避免和 `aiodataloader` 中的
 比如给 OfficeLoader 添加 `status` 参数， 用来过滤 `open` 的 office。
 
 ```python
-class OfficeLoader(DataLoader)
+class OfficeLoader(DataLoader):
     status: Literal['open', 'closed', 'inactive']
     # status: Literal['open', 'closed', 'inactive'] = 'open'
 
@@ -141,7 +141,7 @@ companies = await Resolver(
     loader_params={
         OfficeLoader1: {
             'status': 'open'
-        }，
+        },
         OfficeLoader2: {
             'status': 'closed'
         }

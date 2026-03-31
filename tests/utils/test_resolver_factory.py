@@ -31,7 +31,7 @@ def test_config_resolver_good_case():
             Entity(
                 kls=User,
                 relationships=[
-                    Relationship(field='name', target_kls=List[User], loader=lambda keys: keys),  # type: ignore[list-item]
+                    Relationship(fk='name',name='name_rel',target=List[User], loader=lambda keys: keys),  # type: ignore[list-item]
                 ],)])
     config_resolver('MyResolver', er_configs)
 
@@ -41,12 +41,12 @@ def test_config_resolver_allow_duplicate_field_different_target():
         Entity(
             kls=User,
             relationships=[
-                Relationship(field='name', target_kls=User, loader=lambda keys: keys),
-                Relationship(field='name', target_kls=Admin, loader=lambda keys: keys),
+                Relationship(fk='name',name='user_target',target=User, loader=lambda keys: keys),
+                Relationship(fk='name',name='admin_target',target=Admin, loader=lambda keys: keys),
             ],
         )
     ])
 
-    # should not raise
+    # should not raise - different field_names are allowed even with same field
     MyResolver = config_resolver('MyResolver', er_configs)
     assert MyResolver is not None

@@ -23,7 +23,7 @@
 |------|------|
 | **自动批量加载** | DataLoader 自动消除 N+1 查询 |
 | **声明式组装** | 声明依赖关系，框架自动处理 |
-| **Entity-First 架构** | ER Diagram 定义关系，`LoadBy` 自动解析 |
+| **Entity-First 架构** | ER Diagram 定义关系，`AutoLoad` 自动解析 |
 | **GraphQL 支持** | 从 ERD 生成 Schema，动态模型查询 |
 | **MCP 集成** | 将 GraphQL API 暴露给 AI 代理，支持渐进式披露 |
 
@@ -191,7 +191,9 @@ class Story(BaseModel):
 | **API 契约** | DB 变化时 API 跟着变 | 稳定，与存储解耦 |
 
 ```python
-from pydantic_resolve import base_entity, Relationship, LoadBy
+from typing import Annotated, Optional
+from pydantic import BaseModel
+from pydantic_resolve import DefineSubset, base_entity, Relationship, config_global_resolver
 
 BaseEntity = base_entity()
 
@@ -200,7 +202,7 @@ class TaskEntity(BaseModel, BaseEntity):
     __relationships__ = [
         # Loader 可以查询 Postgres、调用 RPC、或从 Redis 获取
         # API 消费者不需要知道数据从哪来
-        Relationship(field='owner_id', target_kls=UserEntity, loader=user_loader)
+        Relationship(fk='owner_id', name='owner', target=UserEntity, loader=user_loader)
     ]
     id: int
     name: str
@@ -208,10 +210,14 @@ class TaskEntity(BaseModel, BaseEntity):
     status: str  # todo, in_progress, done
     owner_id: int  # 内部 FK，可以对 API 隐藏
 
+diagram = BaseEntity.get_diagram()
+AutoLoad = diagram.create_auto_load()
+config_global_resolver(diagram)
+
 # Response schema：选择要暴露的内容
 class TaskResponse(DefineSubset):
     __subset__ = (TaskEntity, ('id', 'name'))  # owner_id 被排除
-    owner: Annotated[User, LoadBy('owner_id')] = None  # 自动解析！
+    owner: Annotated[User, AutoLoad()] = None  # 自动解析！
 ```
 
 **核心优势：**
@@ -239,7 +245,7 @@ result = await handler.execute("{ users { id name posts { title } } }")
 将 GraphQL API 暴露给 AI 代理，支持渐进式披露：
 
 ```python
-from pydantic_resolve.graphql.mcp import create_mcp_server
+from pydantic_resolve import AppConfig, create_mcp_server
 
 mcp = create_mcp_server(apps=[AppConfig(name="blog", er_diagram=diagram)])
 mcp.run()  # AI 代理现在可以发现并查询你的 API

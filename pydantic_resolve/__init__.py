@@ -12,11 +12,11 @@ from pydantic_resolve.exceptions import (
     MissingCollector,
     LoaderContextNotProvidedError)
 from pydantic_resolve.resolver import Resolver
-from pydantic_resolve.utils.depend import LoaderDepend, Loader
+from pydantic_resolve.utils.depend import Loader
 from pydantic_resolve.utils.subset import DefineSubset, SubsetConfig
 from pydantic_resolve.utils.openapi import (
-    model_config, serialization)
-from pydantic_resolve.utils.er_diagram import Relationship, MultipleRelationship, Link, Entity, ErDiagram, LoadBy, base_entity, QueryConfig, MutationConfig
+    serialization)
+from pydantic_resolve.utils.er_diagram import Relationship, Entity, ErDiagram, base_entity, QueryConfig, MutationConfig
 from pydantic_resolve.utils.resolver_configurator import config_resolver, config_global_resolver, reset_global_resolver
 from pydantic_resolve.utils.expose import ExposeAs
 
@@ -34,8 +34,7 @@ setup_library_logger()
 
 __all__ = [
     'Resolver',
-    'LoaderDepend',
-    'Loader',  # short 
+    'Loader',
     'Collector',
     'ICollector',
     'ExposeAs',
@@ -53,7 +52,6 @@ __all__ = [
     'build_list',
     'build_object',
     'mapper',
-    'model_config',
     'serialization',
     'copy_dataloader_kls',
 
@@ -65,10 +63,7 @@ __all__ = [
     # ER diagram
     'Entity',
     'Relationship',
-    'MultipleRelationship',
-    'Link',
     'ErDiagram',
-    'LoadBy',
     'base_entity',
     'QueryConfig',
     'MutationConfig',

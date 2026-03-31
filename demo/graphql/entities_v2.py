@@ -250,8 +250,8 @@ diagram_v2 = ErDiagram(configs=[
     Entity(
         kls=UserEntityV2,
         relationships=[
-            Relationship(field='id', target_kls=list[PostEntityV2],
-                         loader=user_posts_loader_v2, default_field_name='myposts')
+            Relationship(fk='id', target=list[PostEntityV2],
+                         loader=user_posts_loader_v2, name='myposts')
         ],
         queries=[
             QueryConfig(method=get_all_users, name='users_v2', description='获取所有用户（分页）'),
@@ -265,10 +265,10 @@ diagram_v2 = ErDiagram(configs=[
     Entity(
         kls=PostEntityV2,
         relationships=[
-            Relationship(field='author_id', target_kls=UserEntityV2,
-                         loader=user_loader_v2, default_field_name='author'),
-            Relationship(field='id', target_kls=list[CommentEntityV2],
-                         loader=post_comments_loader_v2, default_field_name='comments')
+            Relationship(fk='author_id', target=UserEntityV2,
+                         loader=user_loader_v2, name='author'),
+            Relationship(fk='id', target=list[CommentEntityV2],
+                         loader=post_comments_loader_v2, name='comments')
         ],
         queries=[
             QueryConfig(method=get_all_posts, name='posts_v2', description='获取所有文章（可按状态筛选）'),
@@ -282,10 +282,10 @@ diagram_v2 = ErDiagram(configs=[
     Entity(
         kls=CommentEntityV2,
         relationships=[
-            Relationship(field='author_id', target_kls=UserEntityV2,
-                         loader=user_loader_v2, default_field_name='author'),
-            Relationship(field='post_id', target_kls=PostEntityV2,
-                         loader=post_loader_v2, default_field_name='post')
+            Relationship(fk='author_id', target=UserEntityV2,
+                         loader=user_loader_v2, name='author'),
+            Relationship(fk='post_id', target=PostEntityV2,
+                         loader=post_loader_v2, name='post')
         ],
         queries=[
             QueryConfig(method=get_all_comments, name='comments_v2', description='获取所有评论'),

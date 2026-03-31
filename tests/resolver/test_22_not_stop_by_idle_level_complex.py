@@ -1,7 +1,7 @@
 from typing import List
 import pytest
 from pydantic import BaseModel
-from pydantic_resolve import Resolver, LoaderDepend
+from pydantic_resolve import Resolver, Loader
 
 @pytest.mark.asyncio
 async def test_loader_depends():
@@ -23,7 +23,7 @@ async def test_loader_depends():
         name: str
 
         books: List[Book] = [] 
-        def resolve_books(self, loader=LoaderDepend(batch_load_fn)):
+        def resolve_books(self, loader=Loader(batch_load_fn)):
             return loader.load(self.id)
     
     class ClassRoom(BaseModel):

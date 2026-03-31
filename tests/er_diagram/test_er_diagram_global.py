@@ -2,7 +2,7 @@ import pytest
 from typing import Optional, Annotated, List
 from pydantic import BaseModel
 from pydantic_resolve.utils.resolver_configurator import config_global_resolver
-from pydantic_resolve import Entity, Relationship, MultipleRelationship, Link, LoadBy, DefineSubset, ErDiagram, Resolver
+from pydantic_resolve import Entity, Relationship, DefineSubset, ErDiagram, Resolver
 from aiodataloader import DataLoader
 
 
@@ -75,19 +75,15 @@ class FooLoader(DataLoader):
 diagram = ErDiagram(
     configs=[
         Entity(kls=Biz, relationships=[
-            Relationship(field='user_id', target_kls=User, loader=UserLoader),
-            Relationship(field='id', target_kls=List[Foo], loader=FooLoader),
-            MultipleRelationship(
-                field='id',
-                target_kls=list[Bar],
-                links=[
-                    Link(biz='a', loader=BarLoader),
-                    Link(biz='special', loader=SpecialBarLoader),
-                ]
-            )
+            Relationship(fk='user_id', name='user', target=User, loader=UserLoader),
+            Relationship(fk='id', name='foos', target=List[Foo], loader=FooLoader),
+            Relationship(fk='id', name='bars', target=list[Bar], loader=BarLoader),
+            Relationship(fk='id', name='special_bars', target=list[Bar], loader=SpecialBarLoader),
         ])
     ]
 )
+
+AutoLoad = diagram.create_auto_load()
 
 
 @pytest.fixture(autouse=True)
@@ -99,10 +95,10 @@ def setup_global_resolver():
 class BizCase1(DefineSubset):
     __pydantic_resolve_subset__ = (Biz, ('id', 'name', 'user_id'))
 
-    user: Annotated[Optional[User], LoadBy('user_id')] = None
-    foos: Annotated[List[Foo], LoadBy('id')] = []
-    bars: Annotated[List[Bar], LoadBy('id', biz='a')] = []
-    special_bars: Annotated[list[Bar], LoadBy('id', biz='special')] = []
+    user: Annotated[Optional[User], AutoLoad()] = None
+    foos: Annotated[List[Foo], AutoLoad()] = []
+    bars: Annotated[List[Bar], AutoLoad()] = []
+    special_bars: Annotated[list[Bar], AutoLoad()] = []
     
 
 @pytest.mark.asyncio

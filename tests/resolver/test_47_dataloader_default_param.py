@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import List
-from pydantic_resolve import Resolver, LoaderDepend
+from pydantic_resolve import Resolver, Loader
 from aiodataloader import DataLoader
 import pytest
 
@@ -13,7 +13,7 @@ class A(BaseModel):
     val: int
 
     a: int = 0
-    def resolve_a(self, loader=LoaderDepend(LoaderA)):
+    def resolve_a(self, loader=Loader(LoaderA)):
         return loader.load(self.val)
 
 @pytest.mark.asyncio

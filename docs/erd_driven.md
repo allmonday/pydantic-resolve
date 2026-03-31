@@ -87,49 +87,48 @@ Starting from Pydantic resolve v2, this kind of ERD can be declared more explici
 ```python
 from pydantic_resolve import Relationship, base_entity, config_global_resolver
 
-class User(BaseModel):
-	id: int
-	name: str
-
-class Post(BaseModel):
-	__pydantic_resolve_relationships__ = [
-		Relationship(field='id', target_kls=list[User], loader=PostLoader)
-	]
-	id: int
-	user_id: int
-	title: str
-
-config_global_resolver(BaseEntity.get_diagram())
-```
-
-If User -> Post has multiple loader implementations, you can use `MultipleRelationship`:
-
-```python
-from pydantic_resolve import MultipleRelationship, Link, base_entity, config_global_resolver
-
 BaseEntity = base_entity()
 
 class User(BaseModel, BaseEntity):
-	__pydantic_resolve_relationships__ = [
-		MultipleRelationship(
-			field='id',
-			target_kls=list[Post],
-			links=[
-				Link(biz='default', loader=PostLoader),
-				Link(biz='latest_three', loader=LatestThreePostLoader)
-			]
-		)
+	__relationships__ = [
+		Relationship(fk='id', target=list['Post'], name='posts', loader=PostLoader)
 	]
 	id: int
 	name: str
 
 class Post(BaseModel, BaseEntity):
-	__pydantic_resolve_relationships__ = []
+	__relationships__ = []
 	id: int
 	user_id: int
 	title: str
 
-config_global_resolver(BaseEntity.get_diagram())
+diagram = BaseEntity.get_diagram()
+config_global_resolver(diagram)
+```
+
+If User -> Post has multiple loader implementations, you can define multiple `Relationship` entries:
+
+```python
+from pydantic_resolve import Relationship, base_entity, config_global_resolver
+
+BaseEntity = base_entity()
+
+class User(BaseModel, BaseEntity):
+	__relationships__ = [
+		Relationship(fk='id', target=list[Post], name='posts', loader=PostLoader),
+		Relationship(fk='id', target=list[Post], name='latest_three_posts', loader=LatestThreePostLoader)
+	]
+	id: int
+	name: str
+
+class Post(BaseModel, BaseEntity):
+	__relationships__ = []
+	id: int
+	user_id: int
+	title: str
+
+diagram = BaseEntity.get_diagram()
+config_global_resolver(diagram)
 ```
 
 ### External Declaration with ErDiagram
@@ -154,7 +153,7 @@ diagram = ErDiagram(configs=[
 	Entity(
 		kls=User,
 		relationships=[
-			Relationship(field='id', target_kls=list[Post], loader=PostLoader)
+			Relationship(fk='id', target=list[Post], name='posts', loader=PostLoader)
 		]
 	),
 	Entity(
@@ -177,16 +176,27 @@ If you are a FastAPI user, this ERD can also be visualized in FastAPI Voyager.
 
 ### Build relationships
 
-Once you have an `ErDiagram` defined, use `LoadBy` to connect entities:
+Once you have an `ErDiagram` defined, generate `AutoLoad` from that diagram before writing response models:
 
 ```python
-from pydantic_resolve import LoadBy
+diagram = BaseEntity.get_diagram()
+AutoLoad = diagram.create_auto_load()
+config_global_resolver(diagram)
 
 class UserWithPostsForSpecificBusiness(User):
-	posts: Annotated[List[Post], LoadBy('id')] = []
+	posts: Annotated[List[Post], AutoLoad()] = []
 ```
 
-`LoadBy('id')` looks up the relationship from the ERD and automatically resolves the data.
+`AutoLoad()` looks up the relationship by matching the field name (`posts`) to `Relationship.name` from the ERD and automatically resolves the data. If the field name differs from `name`, use `AutoLoad(origin='posts')` to specify the lookup key explicitly.
+
+This generation step is important: `create_auto_load()` embeds diagram-specific relationship metadata into the annotation. The resolver must be configured with the same `diagram`, otherwise ER pre-analysis, `DefineSubset`, and GraphQL response-model generation cannot reliably infer the correct relationship and FK field.
+
+If you define relationships with an external `ErDiagram`, the flow is the same:
+
+```python
+AutoLoad = diagram.create_auto_load()
+config_global_resolver(diagram)
+```
 
 ### The key to maintainable code: keep business ERD consistent with your code structure
 
@@ -198,19 +208,19 @@ Two classes with the same structure can have different names, representing diffe
 
 ```python
 class UserWithPostsForSpecificBusinessA(User):
-	posts: Annotated[List[Post], LoadBy('id')] = []
+	posts: Annotated[List[Post], AutoLoad()] = []
 
 class UserWithPostsForSpecificBusinessB(User):
-	posts: Annotated[List[Post], LoadBy('id')] = []
+	posts: Annotated[List[Post], AutoLoad()] = []
 ```
 
 Suppose the requirement for `UserWithPostsForSpecificBusinessA` changes: it should only load the latest 3 posts for each user.
 
-You just create a new DataLoader and swap it in. (`UserWithPostsForSpecificBusinessB` is completely unaffected.)
+You just create a new DataLoader and reference it by field name. (`UserWithPostsForSpecificBusinessB` is completely unaffected.)
 
 ```python
 class UserWithPostsForSpecificBusinessA(User):
-	posts: Annotated[List[Post], LoadBy('id', biz='latest_three')] = []
+	latest_three_posts: Annotated[List[Post], AutoLoad()] = []
 ```
 
 In the end, we achieve the goal: the structure in code stays highly consistent with the ERD structure in product design, making future changes and iterations much easier.
@@ -235,10 +245,10 @@ erDiagram
 
 ```python
 class BizAPost(Post):
-	comments: Annotated[List[Comment], LoadBy('id')] = []
-	likes: Annotated[List[Like], LoadBy('id')] = []
+	comments: Annotated[List[Comment], AutoLoad()] = []
+	likes: Annotated[List[Like], AutoLoad()] = []
 
 class BizAUser(User):
-	posts: Annotated[List[BizAPost], LoadBy('id')] = []
+	posts: Annotated[List[BizAPost], AutoLoad()] = []
 ```
 

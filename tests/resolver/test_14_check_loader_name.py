@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import List
 import pytest
 from pydantic import BaseModel
-from pydantic_resolve import Resolver, LoaderDepend
+from pydantic_resolve import Resolver, Loader
 import tests.resolver.test_14_deps.mod_a as a
 import tests.resolver.test_14_deps.mod_b as b
 
@@ -14,11 +14,11 @@ async def test_loader_depends():
         name: str
 
         a_books: List[a.Book] = [] 
-        def resolve_a_books(self, loader=LoaderDepend(a.BookLoader)):
+        def resolve_a_books(self, loader=Loader(a.BookLoader)):
             return loader.load(self.id)
 
         b_books: List[b.Book] = [] 
-        def resolve_b_books(self, loader=LoaderDepend(b.BookLoader)):
+        def resolve_b_books(self, loader=Loader(b.BookLoader)):
             return loader.load(self.id)
 
     students = [Student(id=1, name="jack"), Student(id=2, name="mike")]

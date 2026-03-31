@@ -1,6 +1,5 @@
 import os
 import asyncio
-import warnings
 import contextvars
 from inspect import iscoroutine
 from typing import TypeVar, Callable, Any
@@ -53,9 +52,7 @@ class Resolver:
 
     def __init__(
             self,
-            loader_filters: dict[Any, dict[str, Any]] | None = None,  # deprecated
             loader_params: dict[Any, dict[str, Any]] | None = None,
-            global_loader_filter: dict[str, Any] | None = None,  # deprecated
             global_loader_param: dict[str, Any] | None = None,
             loader_instances: dict[Any, Any] | None = None,
             ensure_type=False,
@@ -83,12 +80,6 @@ class Resolver:
             default=MappingProxyType({}),
         )
 
-        # Optimization: Use single dict-based ContextVar for collectors
-        self._collector_contextvar = contextvars.ContextVar(
-            '_collectors',
-            default=MappingProxyType({})
-        )
-
         # Pre-create parent ContextVar
         self._parent_contextvar = contextvars.ContextVar('parent', default=None)
 
@@ -98,19 +89,11 @@ class Resolver:
         self.parent_contextvars = {}
 
         # for dataloader which has class attributes, you can assign the value at here
-        if loader_filters:
-            warnings.warn('loader_filters is deprecated, use loader_params instead.', DeprecationWarning)
-            self.loader_params = loader_filters
-        else:
-            self.loader_params = loader_params or {}
+        self.loader_params = loader_params or {}
 
-        # keys in global_loader_filter are mutually exclusive with key-value pairs in loader_filters
-        # eg: Resolver(global_loader_filter={'key_a': 1}, loader_filters={'key_a': 1}) will raise exception
-        if global_loader_filter:
-            warnings.warn('global_loader_filter is deprecated, use global_loader_param instead.', DeprecationWarning)
-            self.global_loader_param = global_loader_filter or {}
-        else:
-            self.global_loader_param = global_loader_param or {}
+        # keys in global_loader_params are mutually exclusive with key-value pairs in loader_params
+        # eg: Resolver(global_loader_param={'key_a': 1}, loader_params={'key_a': 1}) will raise exception
+        self.global_loader_param = global_loader_param or {}
 
         # now you can pass your loader instance, Resolver will check `isinstance``
         if loader_instances and self._validate_loader_instance(loader_instances):

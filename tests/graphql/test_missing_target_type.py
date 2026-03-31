@@ -76,9 +76,9 @@ class TestErDiagramMissingTargetType:
                 kls=UserEntityForManualConfig,
                 relationships=[
                     Relationship(
-                        field='profile_id',
-                        target_kls=ProfileInfo,
-                        default_field_name='profile'
+                        fk='profile_id',
+                        target=ProfileInfo,
+                        name='profile'
                     )
                 ]
             )
@@ -107,9 +107,9 @@ class TestErDiagramMissingTargetType:
                 kls=UserEntityForManualConfig,
                 relationships=[
                     Relationship(
-                        field='profile_id',
-                        target_kls=ProfileInfo,
-                        default_field_name='profile',
+                        fk='profile_id',
+                        target=ProfileInfo,
+                        name='profile',
                         loader=lambda x: []  # Required for field to appear in SDL
                     )
                 ]
@@ -141,9 +141,9 @@ class TestErDiagramMissingTargetType:
                 kls=UserEntityForManualConfig,
                 relationships=[
                     Relationship(
-                        field='id',  # Using id as a dummy field
-                        target_kls=ContactInfo,
-                        default_field_name='contact',
+                        fk='id',  # Using id as a dummy field
+                        target=ContactInfo,
+                        name='contact',
                         loader=lambda x: []  # Required for field to appear in introspection
                     )
                 ]
@@ -172,9 +172,9 @@ class TestErDiagramMissingTargetType:
                 kls=UserEntityForManualConfig,
                 relationships=[
                     Relationship(
-                        field='profile_id',
-                        target_kls=ProfileInfo,
-                        default_field_name='profile',
+                        fk='profile_id',
+                        target=ProfileInfo,
+                        name='profile',
                         loader=lambda x: []  # Required for field to appear in introspection
                     )
                 ]
@@ -243,9 +243,9 @@ class TestBaseEntityRelationships:
         class UserEntityTest(BaseModel, BaseEntity):
             __relationships__ = [
                 Relationship(
-                    field='profile_id',
-                    target_kls=ProfileEntityTest,
-                    default_field_name='profile'
+                    fk='profile_id',
+                    target=ProfileEntityTest,
+                    name='profile'
                 )
             ]
             id: int
@@ -275,9 +275,9 @@ class TestBaseEntityRelationships:
         class UserForIntrospection(BaseModel, BaseEntity):
             __relationships__ = [
                 Relationship(
-                    field='profile_id',
-                    target_kls=ProfileForIntrospection,
-                    default_field_name='profile'
+                    fk='profile_id',
+                    target=ProfileForIntrospection,
+                    name='profile'
                 )
             ]
             id: int
@@ -318,9 +318,9 @@ class TestIntrospectionSDLConsistency:
                 kls=UserEntityForManualConfig,
                 relationships=[
                     Relationship(
-                        field='profile_id',
-                        target_kls=ProfileInfo,
-                        default_field_name='profile'
+                        fk='profile_id',
+                        target=ProfileInfo,
+                        name='profile'
                     )
                 ]
             )
@@ -357,9 +357,9 @@ class TestIntrospectionSDLConsistency:
                 kls=UserEntityForManualConfig,
                 relationships=[
                     Relationship(
-                        field='id',
-                        target_kls=ContactInfo,  # Contains nested AddressInfo
-                        default_field_name='contact'
+                        fk='id',
+                        target=ContactInfo,  # Contains nested AddressInfo
+                        name='contact'
                     )
                 ]
             )
@@ -408,9 +408,9 @@ class TestEdgeCases:
                 kls=UserEntityForManualConfig,
                 relationships=[
                     Relationship(
-                        field='id',
-                        target_kls=list[PostEntityForManualConfig],
-                        default_field_name='posts'
+                        fk='id',
+                        target=list[PostEntityForManualConfig],
+                        name='posts'
                     )
                 ]
             )
@@ -435,14 +435,14 @@ class TestEdgeCases:
                 kls=UserEntityForManualConfig,
                 relationships=[
                     Relationship(
-                        field='profile_id',
-                        target_kls=ProfileInfo,
-                        default_field_name='profile'
+                        fk='profile_id',
+                        target=ProfileInfo,
+                        name='profile'
                     ),
                     Relationship(
-                        field='id',
-                        target_kls=list[ProfileInfo],  # Same type but as list
-                        default_field_name='profiles'
+                        fk='id',
+                        target=list[ProfileInfo],  # Same type but as list
+                        name='profiles'
                     )
                 ]
             )

@@ -86,49 +86,48 @@ erDiagram
 ```python
 from pydantic_resolve import Relationship, base_entity, config_global_resolver
 
-class User(BaseModel):
-    id: int
-    name: str
-
-class Post(BaseModel):
-    __pydantic_resolve_relationships__ = [
-        Relationship(field='id', target_kls=list[User], loader=PostLoader)
-    ]
-    id: int
-    user_id: int
-    title: str
-
-config_global_resolver(BaseEntity.get_diagram())
-```
-
-如果 User -> Post 有多种 loader 实现， 则可以使用 MultipleRelationship 来定义：
-
-```python
-from pydantic_resolve import MultipleRelationship, Link, base_entity, config_global_resolver
-
 BaseEntity = base_entity()
 
 class User(BaseModel, BaseEntity):
-    __pydantic_resolve_relationships__ = [
-        MultipleRelationship(
-            field='id',
-            target_kls=list[Post],
-            links=[
-                Link(biz='default', loader=PostLoader),
-                Link(biz='latest_three', loader=LatestThreePostLoader)
-            ]
-        )
+    __relationships__ = [
+        Relationship(fk='id', target=list['Post'], name='posts', loader=PostLoader)
     ]
     id: int
     name: str
 
 class Post(BaseModel, BaseEntity):
-    __pydantic_resolve_relationships__ = []
+    __relationships__ = []
     id: int
     user_id: int
     title: str
 
-config_global_resolver(BaseEntity.get_diagram())
+diagram = BaseEntity.get_diagram()
+config_global_resolver(diagram)
+```
+
+如果 User -> Post 有多种 loader 实现，则直接声明多个 `Relationship`：
+
+```python
+from pydantic_resolve import Relationship, base_entity, config_global_resolver
+
+BaseEntity = base_entity()
+
+class User(BaseModel, BaseEntity):
+    __relationships__ = [
+        Relationship(fk='id', target=list[Post], name='posts', loader=PostLoader),
+        Relationship(fk='id', target=list[Post], name='latest_three_posts', loader=LatestThreePostLoader)
+    ]
+    id: int
+    name: str
+
+class Post(BaseModel, BaseEntity):
+    __relationships__ = []
+    id: int
+    user_id: int
+    title: str
+
+diagram = BaseEntity.get_diagram()
+config_global_resolver(diagram)
 ```
 
 ### 使用 ErDiagram 外部声明
@@ -153,7 +152,7 @@ diagram = ErDiagram(configs=[
     Entity(
         kls=User,
         relationships=[
-            Relationship(field='id', target_kls=list[Post], loader=PostLoader)
+            Relationship(fk='id', target=list[Post], name='posts', loader=PostLoader)
         ]
     ),
     Entity(
@@ -176,16 +175,27 @@ config_global_resolver(diagram)
 
 ### 建立关联
 
-定义好 `ErDiagram` 后，使用 `LoadBy` 连接实体：
+定义好 `ErDiagram` 后，需要先从这个 diagram 生成 `AutoLoad`，再编写响应模型：
 
 ```python
-from pydantic_resolve import LoadBy
+diagram = BaseEntity.get_diagram()
+AutoLoad = diagram.create_auto_load()
+config_global_resolver(diagram)
 
 class UserWithPostsForSpecificBusiness(User):
-    posts: Annotated[List[Post], LoadBy('id')] = []
+    posts: Annotated[List[Post], AutoLoad()] = []
 ```
 
-`LoadBy('id')` 会从 ERD 中查找关系定义，自动解析数据。
+`AutoLoad()` 通过字段名（`posts`）匹配 ERD 中 `Relationship.name`，自动解析数据。当字段名与 `name` 不一致时，可通过 `AutoLoad(origin='posts')` 显式指定查找键。
+
+这个生成步骤很关键：`create_auto_load()` 会把 diagram 专属的关系元数据嵌入注解里。Resolver 也必须使用同一个 `diagram`，否则 ER 预分析、`DefineSubset` 和 GraphQL 响应模型生成都无法稳定推断出正确的关系和外键字段。
+
+如果关系是通过外部 `ErDiagram` 定义的，流程也是一样：
+
+```python
+AutoLoad = diagram.create_auto_load()
+config_global_resolver(diagram)
+```
 
 ### 可维护代码的诀窍： 使业务 ERD 和代码中的结构定义维持一致
 
@@ -197,10 +207,10 @@ class UserWithPostsForSpecificBusiness(User):
 
 ```python
 class UserWithPostsForSpecificBusinessA(User):
-    posts: Annotated[List[Post], LoadBy('id')] = []
+    posts: Annotated[List[Post], AutoLoad()] = []
 
 class UserWithPostsForSpecificBusinessB(User):
-    posts: Annotated[List[Post], LoadBy('id')] = []
+    posts: Annotated[List[Post], AutoLoad()] = []
 ```
 
 假设 `UserWithPostsForSpecificBusinessA` 的需求发生了变更， 需要只加载每个 user 最近的 3 条 posts
@@ -209,7 +219,7 @@ class UserWithPostsForSpecificBusinessB(User):
 
 ```python
 class UserWithPostsForSpecificBusinessA(User):
-    posts: Annotated[List[Post], LoadBy('id', biz='latest_three')] = []
+    latest_three_posts: Annotated[List[Post], AutoLoad()] = []
 ```
 
 最终， 我们实现了目标， 让代码侧的结构与产品设计侧的 ERD 结构保持高度的一致， 这使得后续的变更和调整变得更容易。
@@ -234,9 +244,9 @@ erDiagram
 
 ```python
 class BizAPost(Post):
-    comments: Annotated[List[Comment], LoadBy('id')] = []
-    likes: Annotated[List[Like], LoadBy('id')] = []
+    comments: Annotated[List[Comment], AutoLoad()] = []
+    likes: Annotated[List[Like], AutoLoad()] = []
 
 class BizAUser(User):
-    posts: Annotated[List[BizAPost], LoadBy('id')] = []
+    posts: Annotated[List[BizAPost], AutoLoad()] = []
 ```

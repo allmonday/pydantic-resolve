@@ -42,11 +42,20 @@ class QueryParseError(GraphQLError):
 class ValidationError(GraphQLError):
     """Raised when GraphQL query validation fails."""
 
-    def __init__(self, message: str, path: Optional[list] = None):
+    def __init__(
+        self,
+        message: str,
+        path: Optional[list] = None,
+        extensions: Optional[Dict[str, Any]] = None,
+    ):
+        merged_extensions = {"code": "GRAPHQL_VALIDATION_ERROR"}
+        if extensions:
+            merged_extensions.update(extensions)
+
         super().__init__(
             message,
             path=path,
-            extensions={"code": "GRAPHQL_VALIDATION_ERROR"}
+            extensions=merged_extensions,
         )
 
 
@@ -62,7 +71,7 @@ class ExecutionError(GraphQLError):
 
 
 class FieldNameConflictError(ValidationError):
-    """Raised when default_field_name conflicts with other fields."""
+    """Raised when field_name conflicts with other fields."""
 
     def __init__(
         self,
@@ -91,7 +100,7 @@ class FieldNameConflictError(ValidationError):
         if details:
             extensions.update(details)
 
-        super().__init__(message, extensions=extensions)
+        super().__init__(message=message, extensions=extensions)
 
         self.entity_name = entity_name
         self.field_name = field_name

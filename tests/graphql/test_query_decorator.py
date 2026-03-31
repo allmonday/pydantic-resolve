@@ -3,6 +3,7 @@
 """
 
 from pydantic_resolve import query
+import pydantic_resolve.constant as const
 
 
 def test_query_decorator_sets_attributes():
@@ -17,9 +18,9 @@ def test_query_decorator_sets_attributes():
     assert isinstance(my_query, classmethod)
 
     # 验证属性被正确设置（在 __func__ 上）
-    assert hasattr(my_query.__func__, '_pydantic_resolve_query')
-    assert my_query.__func__._pydantic_resolve_query
-    assert my_query.__func__._pydantic_resolve_query_description == "测试查询"
+    assert hasattr(my_query.__func__, const.GRAPHQL_QUERY_ATTR)
+    assert getattr(my_query.__func__, const.GRAPHQL_QUERY_ATTR)
+    assert getattr(my_query.__func__, const.GRAPHQL_QUERY_DESCRIPTION_ATTR) == "测试查询"
 
 
 def test_query_decorator_without_docstring():
@@ -33,6 +34,6 @@ def test_query_decorator_without_docstring():
     assert isinstance(my_query, classmethod)
 
     # 验证属性被正确设置（在 __func__ 上）
-    assert hasattr(my_query.__func__, '_pydantic_resolve_query')
-    assert my_query.__func__._pydantic_resolve_query
-    assert my_query.__func__._pydantic_resolve_query_description == ""
+    assert hasattr(my_query.__func__, const.GRAPHQL_QUERY_ATTR)
+    assert getattr(my_query.__func__, const.GRAPHQL_QUERY_ATTR)
+    assert getattr(my_query.__func__, const.GRAPHQL_QUERY_DESCRIPTION_ATTR) == ""

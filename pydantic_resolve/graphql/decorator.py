@@ -9,6 +9,7 @@ Description is automatically extracted from the method's docstring.
 """
 
 from typing import Callable
+import pydantic_resolve.constant as const
 
 
 # ============================================================================
@@ -61,8 +62,8 @@ def query(func: Callable) -> classmethod:
     # Extract description from docstring
     description = func.__doc__.strip() if func.__doc__ else ""
 
-    func._pydantic_resolve_query = True
-    func._pydantic_resolve_query_description = description
+    setattr(func, const.GRAPHQL_QUERY_ATTR, True)
+    setattr(func, const.GRAPHQL_QUERY_DESCRIPTION_ATTR, description)
     return classmethod(func)
 
 
@@ -121,6 +122,6 @@ def mutation(func: Callable) -> classmethod:
     # Extract description from docstring
     description = func.__doc__.strip() if func.__doc__ else ""
 
-    func._pydantic_resolve_mutation = True
-    func._pydantic_resolve_mutation_description = description
+    setattr(func, const.GRAPHQL_MUTATION_ATTR, True)
+    setattr(func, const.GRAPHQL_MUTATION_DESCRIPTION_ATTR, description)
     return classmethod(func)

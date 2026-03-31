@@ -2,7 +2,7 @@ import pytest
 from typing import Optional, Annotated
 from pydantic import BaseModel
 from pydantic_resolve import config_resolver
-from pydantic_resolve import Entity, Relationship, LoadBy, ErDiagram
+from pydantic_resolve import Entity, Relationship, ErDiagram
 from aiodataloader import DataLoader
 
 
@@ -45,15 +45,17 @@ class BarLoader(DataLoader):
 diagram = ErDiagram(
     configs=[
         Entity(kls=Biz, relationships=[
-            Relationship(field='user_id', target_kls=User, loader=UserLoader),
-            Relationship(field='id', target_kls=list[Bar], field_none_default_factory=list, loader=BarLoader),
+            Relationship(fk='user_id', name='user', target=User, loader=UserLoader),
+            Relationship(fk='id', name='bars', target=list[Bar], fk_none_default_factory=list, loader=BarLoader),
         ])
     ]
 )
 
+AutoLoad = diagram.create_auto_load()
+
 class BizCase1(Biz):
-    user: Annotated[Optional[User], LoadBy('user_id')] = None
-    bars: Annotated[list[Bar], LoadBy('id')] = []
+    user: Annotated[Optional[User], AutoLoad()] = None
+    bars: Annotated[list[Bar], AutoLoad()] = []
     
 
 @pytest.mark.asyncio

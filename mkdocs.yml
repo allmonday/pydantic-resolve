@@ -45,6 +45,7 @@ nav:
       - GraphQL Support: ./graphql.md
   - API:
       - Reference: ./api.md
+      - Migration Guide: ./migration.md
       - Change log: ./changelog.md
   - Others:
       - Why create it: ./why.md
@@ -87,6 +88,7 @@ plugins:
             GraphQL Support: "GraphQL 支持"
             ERD Driven Pattern: "ERD 驱动开发"
             Change log: "变更记录"
+            Migration Guide: "迁移指南"
             Install: "安装"
             Let's start: "开始"
             Inheritance: "继承"

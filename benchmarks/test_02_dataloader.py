@@ -3,7 +3,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 from aiodataloader import DataLoader
 
-from pydantic_resolve import Resolver, LoaderDepend
+from pydantic_resolve import Resolver, Loader
 
 # ============================================================================
 # Test Data and Loaders
@@ -35,7 +35,7 @@ class TaskWithUser(BaseModel):
     user_id: int
 
     owner: Optional[SimpleUser] = None
-    async def resolve_owner(self, loader=LoaderDepend(UserLoader)):
+    async def resolve_owner(self, loader=Loader(UserLoader)):
         return await loader.load(self.user_id)
 
 # ============================================================================

@@ -25,7 +25,7 @@ class Child(BaseModel):
         desc = ', '.join([c.name for c in self.cars])
         return f'{self.name} owns {len(self.cars)} cars, they are: {desc}'
 
-children = await Resolver.resolve([
+children = await Resolver().resolve([
         Child(id=1, name="Titan"), Child(id=1, name="Siri")])
 ```
 
@@ -73,7 +73,7 @@ You can add params to a DataLoader, but be careful not to conflict with `aiodata
 For example, we add a `status` param to `OfficeLoader` to filter only `open` offices.
 
 ```python
-class OfficeLoader(DataLoader)
+class OfficeLoader(DataLoader):
     status: Literal['open', 'closed', 'inactive']
     # status: Literal['open', 'closed', 'inactive'] = 'open'
 
@@ -146,7 +146,7 @@ companies = await Resolver(
     loader_params={
         OfficeLoader1: {
             'status': 'open'
-        }，
+        },
         OfficeLoader2: {
             'status': 'closed'
         }

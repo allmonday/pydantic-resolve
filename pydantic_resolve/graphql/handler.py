@@ -7,6 +7,9 @@ import logging
 import types
 from typing import Any, Callable, Dict, ForwardRef, Optional, Tuple, Union, get_args, get_origin
 
+from graphql import parse as parse_graphql
+from graphql.language.ast import OperationDefinitionNode, OperationType
+
 from pydantic_resolve.utils.er_diagram import ErDiagram
 from pydantic_resolve.utils.resolver_configurator import config_resolver
 from pydantic_resolve.graphql.exceptions import GraphQLError
@@ -221,15 +224,16 @@ class GraphQLHandler:
         Returns:
             'query' or 'mutation'
         """
-        query_stripped = query.strip()
-
-        # Check for explicit 'mutation' keyword
-        if query_stripped.startswith('mutation'):
-            return 'mutation'
-
-        # Check if root field is in mutation_map (for implicit mutations without 'mutation' keyword)
-        for mutation_name in self.mutation_map.keys():
-            if mutation_name in query_stripped:
-                return 'mutation'
+        try:
+            document = parse_graphql(query)
+            for definition in document.definitions:
+                if isinstance(definition, OperationDefinitionNode):
+                    if definition.operation == OperationType.MUTATION:
+                        return 'mutation'
+                    return 'query'
+        except Exception:
+            # Keep default behavior on parse failure; actual parsing/validation
+            # will happen in QueryExecutor with proper GraphQL error reporting.
+            pass
 
         return 'query'

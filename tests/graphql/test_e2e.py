@@ -66,6 +66,27 @@ class TestGraphQLIntegration:
         assert len(result["data"]["simpleEntityGetAll"]) == 1
 
     @pytest.mark.asyncio
+    async def test_query_with_fragment_spread(self):
+        """测试带 FragmentSpread 的查询"""
+        query_str = """
+        query {
+            simpleEntityGetAll(limit: 1) {
+                ...SimpleFields
+            }
+        }
+
+        fragment SimpleFields on SimpleEntity {
+            id
+            name
+        }
+        """
+        result = await self.handler.execute(query_str)
+
+        assert result["errors"] is None
+        assert result["data"]["simpleEntityGetAll"][0]["id"] == 1
+        assert result["data"]["simpleEntityGetAll"][0]["name"] == "Alice"
+
+    @pytest.mark.asyncio
     async def test_invalid_query(self):
         """测试无效查询"""
         query_str = "{ non_existent { id } }"

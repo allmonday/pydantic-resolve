@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import List
-from pydantic_resolve import Resolver, LoaderDepend
+from pydantic_resolve import Resolver, Loader
 from aiodataloader import DataLoader
 import pytest
 from pydantic_resolve.exceptions import GlobalLoaderFieldOverlappedError
@@ -29,15 +29,15 @@ class A(BaseModel):
     val: int
 
     a: int = 0
-    def resolve_a(self, loader=LoaderDepend(LoaderA)):
+    def resolve_a(self, loader=Loader(LoaderA)):
         return loader.load(self.val)
 
     b: int = 0
-    def resolve_b(self, loader=LoaderDepend(LoaderB)):
+    def resolve_b(self, loader=Loader(LoaderB)):
         return loader.load(self.val)
 
     c: int = 0
-    def resolve_c(self, loader=LoaderDepend(LoaderC)):
+    def resolve_c(self, loader=Loader(LoaderC)):
         return loader.load(self.val)
 
 

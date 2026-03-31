@@ -101,14 +101,14 @@ class Item(BaseModel):
 
     description: str = ''
     def post_description(self, ancestor_context):
-        return f'this is item: {self.name}, it belongs to {ancestor_context['owner_name']}'
+        return f"this is item: {self.name}, it belongs to {ancestor_context['owner_name']}"
 
 owners = [
     dict(name="alice", items=[dict(name='car'), dict(name="house")]),
     dict(name="bob", items=[dict(name='shoe'), dict(name="pen")]),
 ]
 
-owners = await Resolver.resolve([Owner(**o) for o in owners])
+owners = await Resolver().resolve([Owner(**o) for o in owners])
 ```
 
 ## Cross-level Data Passing: Send Data to Ancestors

@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Optional, List
 from pydantic import BaseModel
 from pydantic_resolve.analysis import Analytic, convert_metadata_key_as_kls
-from pydantic_resolve import LoaderDepend
+from pydantic_resolve import Loader
 
 async def loader_fn(keys):
     return keys
@@ -12,7 +12,7 @@ class Student(BaseModel):
     name: str = ''
     resolve_hello: str = ''
 
-    def resolve_name(self, context, ancestor_context, loader=LoaderDepend(loader_fn)):
+    def resolve_name(self, context, ancestor_context, loader=Loader(loader_fn)):
         return '.'
 
     def post_name(self):

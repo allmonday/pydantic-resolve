@@ -32,6 +32,17 @@ class TestQueryParser:
         assert 'limit' in parsed.field_tree['users'].arguments
         assert parsed.field_tree['users'].arguments['limit'] == 10
 
+    def test_parse_query_with_variable_raises_error(self):
+        """变量参数目前不支持，应抛出明确错误而不是静默变为 None。"""
+        query = """
+        query GetUsers($limit: Int!) {
+            users(limit: $limit) { id }
+        }
+        """
+
+        with pytest.raises(QueryParseError, match="variables are not supported yet"):
+            self.parser.parse(query)
+
     def test_parse_nested_query(self):
         """测试解析嵌套查询"""
         query = "{ users { id posts { title } } }"
@@ -58,3 +69,41 @@ class TestQueryParser:
 
         with pytest.raises(QueryParseError):
             self.parser.parse(query)
+
+    def test_parse_fragment_spread(self):
+        """测试解析 FragmentSpread"""
+        query = """
+        query {
+            users {
+                ...UserFields
+            }
+        }
+
+        fragment UserFields on UserEntity {
+            id
+            name
+        }
+        """
+        parsed = self.parser.parse(query)
+
+        assert 'users' in parsed.field_tree
+        assert 'id' in parsed.field_tree['users'].sub_fields
+        assert 'name' in parsed.field_tree['users'].sub_fields
+
+    def test_parse_inline_fragment(self):
+        """测试解析 InlineFragment"""
+        query = """
+        query {
+            users {
+                ... on UserEntity {
+                    id
+                    name
+                }
+            }
+        }
+        """
+        parsed = self.parser.parse(query)
+
+        assert 'users' in parsed.field_tree
+        assert 'id' in parsed.field_tree['users'].sub_fields
+        assert 'name' in parsed.field_tree['users'].sub_fields

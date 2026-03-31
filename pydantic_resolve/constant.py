@@ -13,5 +13,23 @@ ENSURE_SUBSET_DEFINITION_SHORT = '__subset__'
 
 ER_DIAGRAM = '__pydantic_resolve_er_diagram__'
 ER_DIAGRAM_PRE_GENERATOR = '__pydantic_resolve_er_diagram_pre_gen__'
-ER_DIAGRAM_INLINE_RELATIONSHIPS = '__pydantic_resolve_relationships__'
-ER_DIAGRAM_INLINE_RELATIONSHIPS_SHORT = '__relationships__'
+ER_DIAGRAM_INLINE_RELATIONSHIPS = '__relationships__'
+
+# GraphQL method metadata attributes.
+# These keys are attached to method functions by GraphQL decorators
+# and by ErDiagram QueryConfig/MutationConfig dynamic binding.
+GRAPHQL_QUERY_ATTR = '_pydantic_resolve_query'
+# Optional explicit GraphQL operation name override for queries.
+GRAPHQL_QUERY_NAME_ATTR = '_pydantic_resolve_query_name'
+# Operation description used by SDL/introspection outputs.
+GRAPHQL_QUERY_DESCRIPTION_ATTR = '_pydantic_resolve_query_description'
+
+GRAPHQL_MUTATION_ATTR = '_pydantic_resolve_mutation'
+# Optional explicit GraphQL operation name override for mutations.
+GRAPHQL_MUTATION_NAME_ATTR = '_pydantic_resolve_mutation_name'
+# Operation description used by SDL/introspection outputs.
+GRAPHQL_MUTATION_DESCRIPTION_ATTR = '_pydantic_resolve_mutation_description'
+
+# Marks methods dynamically bound from config to avoid
+# conflict with decorator-defined methods of the same name.
+GRAPHQL_CONFIG_BOUND_ATTR = '_pydantic_resolve_config_bound'

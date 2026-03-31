@@ -63,8 +63,9 @@ class Project(BaseModel):
     members: list[User] = []
 
     def resolve_members(self, loader=Loader(FilteredUserLoader), context):
-        min_level = context['min_level']
-        # Use context data in resolution logic
+        # Context can add request-specific business rules on top of loader params.
+        if context['min_level'] > 10:
+            return []
         return loader.load(self.id)
 
 # Configure resolver with parameters
@@ -157,14 +158,15 @@ resolved = await Resolver().resolve(sprints)
 Collect data from descendants to ancestors
 
 ```python
+from typing import Annotated
 from pydantic import BaseModel
-from pydantic_resolve import Resolver, Loader, Collector
+from pydantic_resolve import Resolver, Loader, Collector, SendTo
 
 class Task(BaseModel):
-    __pydantic_resolve_collect__ = {'assignee': 'all_assignees'}
-
     id: int
-    assignee: User | None = None
+    assignee_id: int
+    assignee: Annotated[User | None, SendTo('all_assignees')] = None
+
     def resolve_assignee(self, loader=Loader(UserLoader)):
         return loader.load(self.assignee_id)
 
@@ -182,12 +184,12 @@ class Project(BaseModel):
 
     # Collector aggregates 'assignee' from all descendant tasks
     all_assignees: list[User] = []
-    def post_all_assignees(self, collector=Collector(alias='all_assignees', flat=True)):
+    def post_all_assignees(self, collector=Collector(alias='all_assignees')):
         return collector.values()
 
 projects = [Project(id=1)]
 resolved = await Resolver().resolve(projects)
-# Output: projects[0].all_assignees contains all unique users from nested tasks
+# Output: projects[0].all_assignees contains the assignees collected from nested tasks
 ```
 
 ## Expose and Ancestor Context
@@ -195,8 +197,9 @@ resolved = await Resolver().resolve(projects)
 Share ancestor data with descendants
 
 ```python
+from typing import Annotated
 from pydantic import BaseModel
-from pydantic_resolve import Resolver, Loader
+from pydantic_resolve import Resolver, Loader, ExposeAs
 
 class Task(BaseModel):
     id: int
@@ -210,19 +213,15 @@ class Task(BaseModel):
         return f"{project_name}/{story_name}/{self.name}"
 
 class Story(BaseModel):
-    __pydantic_resolve_expose__ = {'name': 'story_name'}
-
     id: int
-    name: str
+    name: Annotated[str, ExposeAs('story_name')]
     tasks: list[Task] = []
     def resolve_tasks(self, loader=Loader(TaskLoader)):
         return loader.load(self.id)
 
 class Project(BaseModel):
-    __pydantic_resolve_expose__ = {'name': 'project_name'}
-
     id: int
-    name: str
+    name: Annotated[str, ExposeAs('project_name')]
     stories: list[Story] = []
     def resolve_stories(self, loader=Loader(StoryLoader)):
         return loader.load(self.id)
@@ -272,7 +271,7 @@ resolved = await Resolver().resolve(tree)
 # resolved.children[0].children[0].depth = 2
 ```
 
-## ErDiagram with LoadBy for Automatic Loader Inference
+## ErDiagram with AutoLoad for Automatic Loader Inference
 
 Declare entity relationships once, use everywhere
 
@@ -281,7 +280,7 @@ from typing import Annotated
 from pydantic import BaseModel
 from pydantic_resolve import (
     Resolver, Entity, Relationship, ErDiagram,
-    LoadBy, config_global_resolver
+    config_global_resolver
 )
 
 # Define base entities
@@ -303,30 +302,34 @@ diagram = ErDiagram(configs=[
     Entity(
         kls=Story,
         relationships=[
-            Relationship(field='id', target_kls=list[Task], loader=story_to_task_loader),
-            Relationship(field='owner_id', target_kls=User, loader=user_batch_loader)
+            Relationship(fk='id', target=list[Task], name='tasks', loader=story_to_task_loader),
+            Relationship(fk='owner_id', target=User, name='owner', loader=user_batch_loader)
         ]
     ),
     Entity(
         kls=Task,
         relationships=[
-            Relationship(field='owner_id', target_kls=User, loader=user_batch_loader)
+            Relationship(fk='owner_id', target=User, name='owner', loader=user_batch_loader)
         ]
     )
 ])
 
+AutoLoad = diagram.create_auto_load()
+
 # Apply diagram globally
 config_global_resolver(diagram)
 
-# Use LoadBy annotation - loaders auto-inferred from diagram
+# Use AutoLoad annotation - loaders auto-inferred from diagram
 class StoryDetail(Story):
-    tasks: Annotated[list[Task], LoadBy('id')] = []
-    owner: Annotated[User, LoadBy('owner_id')] = None
+    tasks: Annotated[list[Task], AutoLoad()] = []
+    owner: Annotated[User, AutoLoad()] = None
 
 stories = [StoryDetail(id=1, owner_id=10)]
 resolved = await Resolver().resolve(stories)
 # Output: tasks and owner automatically resolved using diagram loaders
 ```
+
+`AutoLoad()` matches the response field name (`tasks`, `owner`) against `Relationship.name`. If the field name differs, use `AutoLoad(origin='relationship_name')`.
 
 ## ensure_subset for Type Safety
 
@@ -358,8 +361,8 @@ class UserSummary(BaseModel):
 
 # Safe to use as response models - guaranteed valid subset
 users = [FullUser(**data) for data in fetch_users()]
-public_users = [PublicUser(**u.dict()) for u in users]
-# Output: Compile-time safety that fields exist in base model
+public_users = [PublicUser(**u.model_dump()) for u in users]
+# Output: definition-time safety that fields exist in the base model
 ```
 
 ## mapper for Custom Data Transformation
@@ -407,8 +410,9 @@ resolved = await Resolver().resolve(posts)
 Implement custom collection logic
 
 ```python
+from typing import Annotated
 from pydantic import BaseModel
-from pydantic_resolve import Resolver, ICollector
+from pydantic_resolve import Resolver, ICollector, SendTo
 
 class SumCollector(ICollector):
     def __init__(self, alias):
@@ -422,10 +426,8 @@ class SumCollector(ICollector):
         return self.total
 
 class Task(BaseModel):
-    __pydantic_resolve_collect__ = {'estimate': 'total_estimate'}
-
     id: int
-    estimate: int
+    estimate: Annotated[int, SendTo('total_estimate')]
 
 class Project(BaseModel):
     id: int
@@ -448,8 +450,12 @@ Dynamically create subsets of base models
 
 ```python
 from pydantic import BaseModel
-from pydantic_resolve import DefineSubset, LoadBy
+from pydantic_resolve import DefineSubset
 from typing import Annotated
+
+# Prerequisite:
+# AutoLoad = diagram.create_auto_load()
+# config_global_resolver(diagram)
 
 class FullStory(BaseModel):
     id: int
@@ -460,25 +466,27 @@ class FullStory(BaseModel):
     updated_at: str
     sprint_id: int
 
-# Define subset with only needed fields
+# Define subset with only needed fields.
+# owner_id is kept explicit here for clarity, although DefineSubset can auto-add
+# missing FK fields required by AutoLoad with exclude=True.
 class StoryListItem(DefineSubset):
-    __pydantic_resolve_subset__ = (FullStory, ('id', 'name', 'owner_id'))
+    __subset__ = (FullStory, ('id', 'name', 'owner_id'))
 
-    owner: Annotated[User, LoadBy('owner_id')] = None
+    owner: Annotated[User, AutoLoad()] = None
 
 class StoryDetail(DefineSubset):
-    __pydantic_resolve_subset__ = (
+    __subset__ = (
         FullStory,
         ('id', 'name', 'description', 'owner_id', 'sprint_id')
     )
 
-    owner: Annotated[User, LoadBy('owner_id')] = None
-    tasks: Annotated[list[Task], LoadBy('id')] = []
+    owner: Annotated[User, AutoLoad()] = None
+    tasks: Annotated[list[Task], AutoLoad()] = []
 
 # Use different views for different endpoints
 stories = await fetch_stories()
-list_view = [StoryListItem(**s.dict()) for s in stories]
-detail_view = [StoryDetail(**s.dict()) for s in stories]
+list_view = [StoryListItem(**s.model_dump()) for s in stories]
+detail_view = [StoryDetail(**s.model_dump()) for s in stories]
 ```
 
 ## post_default_handler for Final Processing
@@ -486,12 +494,12 @@ detail_view = [StoryDetail(**s.dict()) for s in stories]
 Execute final logic after all post methods complete
 
 ```python
+from typing import Annotated
 from pydantic import BaseModel
-from pydantic_resolve import Resolver, Collector
+from pydantic_resolve import Resolver, Collector, SendTo
 
 class Task(BaseModel):
-    __pydantic_resolve_collect__ = {'id': 'task_ids'}
-    id: int
+    id: Annotated[int, SendTo('task_ids')]
     status: str
 
 class Sprint(BaseModel):
@@ -507,8 +515,11 @@ class Sprint(BaseModel):
         return len([t for t in self.tasks if t.status == 'done'])
 
     task_ids: list[int] = []
-    def post_task_ids(self, collector=Collector(alias='task_ids', flat=True)):
+    def post_task_ids(self, collector=Collector(alias='task_ids')):
         return collector.values()
+
+    completion_rate: float = 0.0
+    summary: str = ''
 
     # Runs after ALL other post methods finish
     def post_default_handler(self):
@@ -528,23 +539,30 @@ resolved = await Resolver().resolve(sprints)
 Complete FastAPI endpoint with pydantic-resolve
 
 ```python
+from typing import Annotated
 from fastapi import FastAPI, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
-from pydantic_resolve import Resolver, Loader, LoadBy
-from typing import Annotated
+from pydantic_resolve import Resolver
+
+# Prerequisite:
+# diagram defines relationships named 'tasks' on Story and 'assignee' on Task.
+# AutoLoad = diagram.create_auto_load()
+# config_global_resolver(diagram)
 
 app = FastAPI()
 
 class TaskDetail(BaseModel):
     id: int
     name: str
-    assignee: Annotated[User | None, LoadBy('assignee_id')] = None
+    estimate: int
+    assignee_id: int  # FK required by AutoLoad on a plain BaseModel
+    assignee: Annotated[User | None, AutoLoad()] = None
 
 class StoryResponse(BaseModel):
     id: int
     name: str
-    tasks: Annotated[list[TaskDetail], LoadBy('id')] = []
+    tasks: Annotated[list[TaskDetail], AutoLoad()] = []
 
     total_estimate: int = 0
     def post_total_estimate(self):
@@ -552,9 +570,9 @@ class StoryResponse(BaseModel):
 
 @app.get('/stories', response_model=list[StoryResponse])
 async def get_stories(session: AsyncSession = Depends(get_session)):
-    # Fetch base data
-    stories = await session.execute(select(Story))
-    story_data = [StoryResponse(**s.dict()) for s in stories.scalars()]
+    # Fetch base data as dicts or Pydantic-compatible objects.
+    story_rows = await fetch_story_rows(session)
+    story_data = [StoryResponse.model_validate(row) for row in story_rows]
 
     # Resolve nested data and compute fields
     resolved = await Resolver(
@@ -564,6 +582,43 @@ async def get_stories(session: AsyncSession = Depends(get_session)):
 
     return resolved
 # Output: JSON with stories including nested tasks, assignees, and computed totals
+```
+
+## GraphQL Query Execution
+
+Execute GraphQL queries directly from the shared ERD.
+
+```python
+# Prerequisite: diagram exposes a root query named `stories`, defined via
+# QueryConfig(method=list_stories, name='stories') or an entity @query method.
+from pydantic_resolve import GraphQLHandler
+
+handler = GraphQLHandler(diagram)
+result = await handler.execute(
+    "{ stories { id tasks { id name } owner { name } } }"
+)
+# Output: {'data': {...}} or {'data': None, 'errors': [...]}
+```
+
+## MCP Integration
+
+Expose the same ERD-powered GraphQL API to AI agents through MCP.
+
+```python
+from pydantic_resolve import AppConfig, create_mcp_server
+
+mcp = create_mcp_server(
+    apps=[
+        AppConfig(
+            name="blog",
+            er_diagram=diagram,
+            description="Blog API powered by the shared ERD",
+        )
+    ],
+    name="Blog API",
+)
+mcp.run()
+# Output: AI agents can inspect the schema and execute GraphQL operations through MCP tools
 ```
 
 pydantic-resolve excels at building complex data structures by combining base entities, efficient batch loading via DataLoader, flexible post-processing for computed fields, and bidirectional data flow between ancestors and descendants. The ErDiagram feature in v2.0 enables declarative entity relationship definitions with automatic loader inference, drastically reducing boilerplate code.

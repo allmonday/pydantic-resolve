@@ -4,7 +4,7 @@ from typing import Optional, List
 from pydantic import BaseModel
 from aiodataloader import DataLoader
 from pydantic_resolve.analysis import Analytic
-from pydantic_resolve import LoaderDepend, LoaderFieldNotProvidedError
+from pydantic_resolve import Loader, LoaderFieldNotProvidedError
 from pydantic_resolve.loader_manager import validate_and_create_loader_instance
 
 async def loader_fn(keys):
@@ -33,10 +33,10 @@ class Student(BaseModel):
     name: str = ''
     resolve_hello: str = ''
 
-    def resolve_name(self, context, ancestor_context, loader=LoaderDepend(loader_fn)):
+    def resolve_name(self, context, ancestor_context, loader=Loader(loader_fn)):
         return '.'
 
-    def post_name(self, loader=LoaderDepend(loader_fn)):
+    def post_name(self, loader=Loader(loader_fn)):
         return '.'
 
     zones: List[Optional[Zone]] = [None]
@@ -50,18 +50,18 @@ class Student(BaseModel):
 
     no_param: str = ''
     # For testing NoParamLoader (no required params)
-    def resolve_no_param(self, loader=LoaderDepend(NoParamLoader)):
+    def resolve_no_param(self, loader=Loader(NoParamLoader)):
         return loader.load(self.name)
 
     with_default: str = ''
     # For testing LoaderWithDefault (has default values)
-    def resolve_with_default(self, loader=LoaderDepend(LoaderWithDefault)):
+    def resolve_with_default(self, loader=Loader(LoaderWithDefault)):
         return loader.load(self.name)
 
 class Zone(BaseModel):
     name: str
     qs: List[Queue]
-    def resolve_qs(self, qs_loader=LoaderDepend(MyLoader)):
+    def resolve_qs(self, qs_loader=Loader(MyLoader)):
         return qs_loader.load(self.name)
 
 class Queue(BaseModel):

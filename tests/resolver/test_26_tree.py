@@ -2,7 +2,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import List
 from pydantic import BaseModel
-from pydantic_resolve import Resolver, LoaderDepend
+from pydantic_resolve import Resolver, Loader
 from aiodataloader import DataLoader
 import pytest
 
@@ -15,7 +15,7 @@ class Tree(BaseModel):
     id: int
     content: str
     children: List[Tree] = []
-    def resolve_children(self, loader=LoaderDepend(DummyLoader)):
+    def resolve_children(self, loader=Loader(DummyLoader)):
         return loader.load(self.id)
     
 

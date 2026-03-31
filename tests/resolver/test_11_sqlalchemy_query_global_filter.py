@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
-from pydantic_resolve import Resolver, LoaderDepend
+from pydantic_resolve import Resolver, Loader
 
 
 """
@@ -123,7 +123,7 @@ class CommentSchema(BaseModel):
     content: str
     feedbacks: List[FeedbackSchema]  = []
 
-    def resolve_feedbacks(self, loader=LoaderDepend(FeedbackLoader)):
+    def resolve_feedbacks(self, loader=Loader(FeedbackLoader)):
         return loader.load(self.id)
     model_config = ConfigDict(from_attributes=True)
 
@@ -132,7 +132,7 @@ class TaskSchema(BaseModel):
     name: str
     comments: List[CommentSchema]  = []
     
-    def resolve_comments(self, loader=LoaderDepend(CommentLoader)):
+    def resolve_comments(self, loader=Loader(CommentLoader)):
         return loader.load(self.id)
     model_config = ConfigDict(from_attributes=True)
 

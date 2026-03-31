@@ -13,6 +13,7 @@ from typing import Any, Callable, Optional, get_type_hints
 from pydantic import BaseModel
 
 from pydantic_resolve.graphql.schema.generators.base import SchemaGenerator
+import pydantic_resolve.constant as const
 from pydantic_resolve.graphql.schema.type_registry import TypeInfo, FieldInfo, ArgumentInfo, SCALAR_TYPES
 from pydantic_resolve.graphql.types import (
     GraphQLArgument,
@@ -25,7 +26,6 @@ from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.er_diagram import Relationship
 from pydantic_resolve.utils.types import get_core_types
 from pydantic_resolve.graphql.type_mapping import map_scalar_type, is_list_type, is_enum_type, get_enum_names
-from pydantic_resolve.utils.er_diagram import MultipleRelationship
 
 
 class IntrospectionGenerator(SchemaGenerator):
@@ -282,12 +282,12 @@ class IntrospectionGenerator(SchemaGenerator):
         for entity_cfg in self.er_diagram.configs:
             self._collected_types[entity_cfg.kls.__name__] = entity_cfg.kls
 
-        # Collect types from Relationship.target_kls (similar to SDLBuilder)
+        # Collect types from Relationship.target (similar to SDLBuilder)
         for entity_cfg in self.er_diagram.configs:
             for rel in entity_cfg.relationships:
-                if isinstance(rel, (Relationship, MultipleRelationship)):
+                if isinstance(rel, Relationship):
                     # get_core_types handles list[T] and Optional[T] unwrapping
-                    for target_class in get_core_types(rel.target_kls):
+                    for target_class in get_core_types(rel.target):
                         if safe_issubclass(target_class, BaseModel):
                             if target_class.__name__ not in self._collected_types:
                                 self._collected_types[target_class.__name__] = target_class
@@ -447,13 +447,13 @@ class IntrospectionGenerator(SchemaGenerator):
         if entity_cfg:
             for rel in entity_cfg.relationships:
                 if isinstance(rel, Relationship):
-                    if not hasattr(rel, 'default_field_name') or not rel.default_field_name:
+                    if not rel.name:
                         continue
                     if rel.loader is None:
                         continue
 
-                    field_name = rel.default_field_name
-                    type_def = self._build_graphql_type(rel.target_kls)
+                    field_name = rel.name
+                    type_def = self._build_graphql_type(rel.target)
 
                     fields.append({
                         "name": field_name,
@@ -470,7 +470,7 @@ class IntrospectionGenerator(SchemaGenerator):
         """Check if field is a relationship field."""
         for rel in entity_cfg.relationships:
             if isinstance(rel, Relationship):
-                if hasattr(rel, 'default_field_name') and rel.default_field_name == field_name:
+                if rel.name == field_name:
                     return True
         return False
 
@@ -571,9 +571,15 @@ class IntrospectionGenerator(SchemaGenerator):
             # Build return type
             return_type_def = self._build_return_type(sig.return_annotation, entity)
 
+            description = None
+            if operation_type == "Query":
+                description = getattr(method, const.GRAPHQL_QUERY_DESCRIPTION_ATTR, None)
+            elif operation_type == "Mutation":
+                description = getattr(method, const.GRAPHQL_MUTATION_DESCRIPTION_ATTR, None)
+
             fields.append({
                 "name": field_name,
-                "description": f"{operation_type} for {field_name}",
+                "description": description,
                 "args": args,
                 "type": return_type_def,
                 "isDeprecated": False,

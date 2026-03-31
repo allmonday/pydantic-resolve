@@ -539,12 +539,12 @@ async def test_subset_with_expose():
         email: str
         age: int
         active: bool
-    
+
     class SubItem(BaseModel):
         field: str = ''
         def post_field(self, ancestor_context):
             return ancestor_context['custom_field']
-        
+
         name: str = ''
         def post_name(self, ancestor_context):
             return ancestor_context['custom_name']
@@ -554,18 +554,16 @@ async def test_subset_with_expose():
             kls=Parent,
             fields=['id', 'name', 'email', 'age', 'active'],
             expose_as=[
-                ('id', 'custom_id'), 
+                ('id', 'custom_id'),
                 ('name', 'custom_name')]
         )
         field: Annotated[str, ExposeAs('custom_field')] = ''
         items: list[SubItem] = [SubItem()]
-    
-    
+
+
     sub = Sub(id=1, name='test', email='xxx.com', age=30, active=True, field='value')
     sub = await Resolver().resolve(sub)
     assert sub.id == 1
     assert sub.items[0].field == 'value'
     assert sub.items[0].name == 'test'
 
-    
-    

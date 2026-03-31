@@ -290,7 +290,7 @@ user_loader = DataLoader(load_users)
 # Automatic via ERD
 class UserEntity(BaseModel, BaseEntity):
     __relationships__ = [
-        Relationship(field='id', target_kls=list[Post], loader=post_loader)
+        Relationship(fk='id', target=list[Post], loader=post_loader)
     ]
     # Batching happens automatically
 ```

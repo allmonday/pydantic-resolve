@@ -15,6 +15,7 @@ from pydantic_resolve import (
     query,
     mutation,
 )
+import pydantic_resolve.constant as const
 from pydantic_resolve.graphql import SchemaBuilder
 
 
@@ -169,9 +170,9 @@ class TestErDiagramBinding:
 
         # 验证元数据被正确设置
         actual_func = bound_method.__func__
-        assert hasattr(actual_func, '_pydantic_resolve_query')
-        assert actual_func._pydantic_resolve_query is True
-        assert actual_func._pydantic_resolve_query_name == 'users'
+        assert hasattr(actual_func, const.GRAPHQL_QUERY_ATTR)
+        assert getattr(actual_func, const.GRAPHQL_QUERY_ATTR) is True
+        assert getattr(actual_func, const.GRAPHQL_QUERY_NAME_ATTR) == 'users'
 
     def test_method_callable_without_cls(self):
         """测试绑定后的方法可以正常调用（无需传递 cls）"""
@@ -233,11 +234,11 @@ class TestSchemaBuilderCompatibility:
         builder = SchemaBuilder(diagram)
         schema = builder.build_schema()
 
-        # 验证 Query 类型包含配置的方法 (新命名风格)
-        assert 'userEntityForConfigGetAllUsers(limit: Int): [UserEntityForConfig!]' in schema
+        # 验证 Query 类型包含配置的方法（显式 name 生效且保留 entity 前缀）
+        assert 'userEntityForConfigUsers(limit: Int): [UserEntityForConfig!]' in schema
         assert 'postEntityForConfigGetAllPosts: [PostEntityForConfig!]' in schema
 
-        # 验证 Mutation 类型包含配置的方法
+        # 验证 Mutation 类型包含配置的方法（显式 name 生效且保留 entity 前缀）
         assert 'postEntityForConfigCreatePost(input: CreatePostInput!): PostEntityForConfig!' in schema
 
     def test_mixed_decorator_and_config(self):
@@ -254,9 +255,9 @@ class TestSchemaBuilderCompatibility:
         builder = SchemaBuilder(diagram)
         schema = builder.build_schema()
 
-        # 验证两种方式都能被正确识别 (新命名风格)
+        # 验证两种方式都能被正确识别（配置显式 name 生效且保留 entity 前缀）
         assert 'userWithDecoratorGetAll(limit: Int): [UserWithDecorator!]' in schema
-        assert 'postWithConfigGetPostsForMixedTest: [PostWithConfig!]' in schema
+        assert 'postWithConfigPosts: [PostWithConfig!]' in schema
 
 
 # ========== 循环引用测试用的实体（模块级别，避免动态类导致的 teardown 问题）==========
@@ -292,12 +293,12 @@ class TestCircularReferenceScenario:
         diagram = ErDiagram(configs=[
             Entity(
                 kls=AuthorEntity,
-                relationships=[Relationship(field='id', target_kls=list[BookEntity])],
+                relationships=[Relationship(fk='id', target=list[BookEntity], name='books')],
                 queries=[QueryConfig(method=_get_authors, name='authors')]
             ),
             Entity(
                 kls=BookEntity,
-                relationships=[Relationship(field='author_id', target_kls=AuthorEntity)],
+                relationships=[Relationship(fk='author_id', target=AuthorEntity, name='author')],
                 queries=[QueryConfig(method=_get_books_by_author, name='booksByAuthor')]
             )
         ])
@@ -308,9 +309,9 @@ class TestCircularReferenceScenario:
 
         assert 'type AuthorEntity' in schema
         assert 'type BookEntity' in schema
-        # 新命名风格
-        assert 'authorEntityGetAuthors: [AuthorEntity!]' in schema
-        assert 'bookEntityGetBooksByAuthor(author_id: Int!): [BookEntity!]' in schema
+        # 显式配置的 operation name 应生效且保留 entity 前缀
+        assert 'authorEntityAuthors: [AuthorEntity!]' in schema
+        assert 'bookEntityBooksByAuthor(author_id: Int!): [BookEntity!]' in schema
 
 
 class TestEntityDefaultValues:

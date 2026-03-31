@@ -1,7 +1,7 @@
 from __future__ import annotations
 from pydantic import BaseModel
 from typing import List, Annotated
-from pydantic_resolve import Resolver, Collector, LoaderDepend, SendTo, DefineSubset, SubsetConfig
+from pydantic_resolve import Resolver, Collector, Loader, SendTo, DefineSubset, SubsetConfig
 import pytest
 
 
@@ -51,7 +51,7 @@ class B(BaseModel):
         return collector.values()
 
     c_list: List[C] = []
-    async def resolve_c_list(self, loader=LoaderDepend(c_loader_fn)):
+    async def resolve_c_list(self, loader=Loader(c_loader_fn)):
         return loader.load(self.name)
 
 class C(BaseModel):

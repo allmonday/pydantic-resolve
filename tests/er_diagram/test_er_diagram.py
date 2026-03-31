@@ -1,16 +1,14 @@
 import pytest
-from typing import Optional, Annotated, List
+import logging
+from typing import Optional, Annotated
 from pydantic import BaseModel
 from pydantic_resolve import (
     config_resolver,
     Entity,
     Relationship,
-    MultipleRelationship,
-    Link,
-    LoadBy,
     DefineSubset,
     ErDiagram,
-    ensure_subset, 
+    ensure_subset,
     Loader
 )
 from aiodataloader import DataLoader
@@ -101,53 +99,48 @@ class FooNameLoader(DataLoader):
 diagram = ErDiagram(
     configs=[
         Entity(kls=Biz, relationships=[
-            Relationship(field='user_id', target_kls=User, loader=UserLoader),
-            Relationship(field='user_id_str', field_fn=int, target_kls=User, loader=UserLoader),
-            Relationship(field='user_ids', target_kls=list[User], load_many=True, loader=UserLoader),
-            Relationship(field='user_ids_str', 
-                         target_kls=list[User],
+            Relationship(fk='user_id', name='user', target=User, loader=UserLoader),
+            Relationship(fk='user_id_str', name='user_2', fk_fn=int, target=User, loader=UserLoader),
+            Relationship(fk='user_ids', name='users_a', target=list[User], load_many=True, loader=UserLoader),
+            Relationship(fk='user_ids_str',
+                         name='users_b',
+                         target=list[User],
                          load_many=True,
                          load_many_fn=lambda x: [int(xx) for xx in x.split(',')] if x else [],
                          loader=UserLoader),
-            MultipleRelationship(
-                field='id', target_kls=list[Foo], links=[
-                    Link(biz='foo_item', loader=FooLoader),
-                    Link(biz='foo_name', field_name="name", loader=FooNameLoader)
-                ]
-            ),
-            MultipleRelationship(
-                field='id', target_kls=list[Bar], links=[
-                    Link(biz='normal', loader=BarLoader),
-                    Link(biz='special', loader=SpecialBarLoader)
-                ]
-            )
+            # MultipleRelationship feature removed
+            # Relationship(fk='id', name='foos', target=list[Foo], loader=FooLoader),
+            # Relationship(fk='id', name='bars', target=list[Bar], loader=BarLoader),
         ])
     ]
 )
 
+AutoLoad = diagram.create_auto_load()
+
 class BizCase0(Biz):
-    user: Annotated[Optional[User], LoadBy('user_id')] = None
+    user: Annotated[Optional[User], AutoLoad()] = None
     def resolve_user(self, loader=Loader(UserLoader)):
         return loader.load(self.user_id)
 
 
 @pytest.mark.asyncio
-async def test_resolver_factory_warning():
+async def test_resolver_factory_warning(caplog):
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
     d = [BizCase0(id=1, name="qq", user_id=1, user_id_str='1', user_ids=[1], user_ids_str='1,2'), BizCase0(id=2, name="ww", user_id=2, user_id_str='2')]
-    with pytest.warns(UserWarning):
+    with caplog.at_level(logging.WARNING, logger="pydantic_resolve.utils.er_diagram"):
         await MyResolver().resolve(d)
+    assert any('resolve_user already exists' in record.message for record in caplog.records)
 
 class BizCase1(Biz):
-    user: Annotated[Optional[User], LoadBy('user_id')] = None
-    user_2: Annotated[Optional[User], LoadBy('user_id_str')] = None
-    user_3: Annotated[User | None, LoadBy('user_id_str')] = None
-    foos: Annotated[List[Foo], LoadBy('id', biz='foo_item')] = []
-    foos_in_str: Annotated[List[str], LoadBy('id', biz='foo_name', origin_kls=list[Foo])] = []
-    bars: Annotated[List[Bar], LoadBy('id', biz='normal')] = []
-    special_bars: Annotated[list[Bar], LoadBy('id', biz='special')] = []
-    users_a: Annotated[list[User], LoadBy('user_ids')] = []
-    users_b: Annotated[list[User], LoadBy('user_ids_str')] = []
+    user: Annotated[Optional[User], AutoLoad()] = None
+    user_2: Annotated[Optional[User], AutoLoad()] = None
+    # user_3: Annotated[User | None, AutoLoad()] = None  # Removed - no corresponding relationship
+    # foos: Annotated[List[Foo], AutoLoad()] = []  # MultipleRelationship removed
+    # foos_in_str: Annotated[List[str], AutoLoad()] = []  # MultipleRelationship removed
+    # bars: Annotated[List[Bar], AutoLoad()] = []  # MultipleRelationship removed
+    # special_bars: Annotated[list[Bar], AutoLoad()] = []  # MultipleRelationship removed
+    users_a: Annotated[list[User], AutoLoad()] = []
+    users_b: Annotated[list[User], AutoLoad()] = []
     
 
 @pytest.mark.asyncio
@@ -158,17 +151,18 @@ async def test_resolver_factory_with_er_configs_inherit():
 
     assert d[0].user.name == "a"
     assert d[0].user_2.name == "a"
-    assert d[0].user_3.name == "a"
-    assert d[0].bars == [Bar(id=1, name="bar1", biz_id=1), Bar(id=2, name="bar2", biz_id=1)]
-    assert d[0].special_bars == [Bar(id=1, name="special-bar1", biz_id=1), Bar(id=2, name="special-bar2", biz_id=1)]
+    # assert d[0].user_3.name == "a"  # Removed - no corresponding relationship
+    # MultipleRelationship feature removed - commented out assertions
+    # assert d[0].bars == [Bar(id=1, name="bar1", biz_id=1), Bar(id=2, name="bar2", biz_id=1)]
+    # assert d[0].special_bars == [Bar(id=1, name="special-bar1", biz_id=1), Bar(id=2, name="special-bar2", biz_id=1)]
     assert d[0].users_a == [User(id=1, name="a")]
     assert d[0].users_b == [User(id=1, name="a"), User(id=2, name="b")]
-    assert d[0].foos_in_str == ["foo1", "foo2"]
+    # assert d[0].foos_in_str == ["foo1", "foo2"]
 
     assert d[1].user.name == "b"
     assert d[1].user_2.name == "b"
-    assert d[1].user_3.name == "b"
-    assert d[1].foos == [Foo(id=3, name="foo3", biz_id=2)]
+    # assert d[1].user_3.name == "b"  # Removed - no corresponding relationship
+    # assert d[1].foos == [Foo(id=3, name="foo3", biz_id=2)]
     assert d[1].users_a == []
     assert d[1].users_b == []
 
@@ -177,7 +171,7 @@ class SubUser(DefineSubset):
     __pydantic_resolve_subset__ = (User, ['id'])
 
 class BizCase2(Biz):
-    user: Annotated[Optional[SubUser], LoadBy('user_id')] = None
+    user: Annotated[Optional[SubUser], AutoLoad()] = None
 
 @pytest.mark.asyncio
 async def test_resolver_factory_with_er_configs_inherit_2():
@@ -190,7 +184,7 @@ async def test_resolver_factory_with_er_configs_inherit_2():
 class BizCase3(DefineSubset):
     __pydantic_resolve_subset__ = (Biz, ['id', 'user_id'])
 
-    user: Annotated[Optional[User], LoadBy('user_id')] = None
+    user: Annotated[Optional[User], AutoLoad()] = None
 
 
 @pytest.mark.asyncio
@@ -200,45 +194,13 @@ async def test_resolver_factory_with_er_configs_subset():
     d = await MyResolver().resolve(d)
     assert d.user is not None
 
-class BizCase4(DefineSubset):
-    __pydantic_resolve_subset__ = (Biz, ['id'])
-
-    user: Annotated[Optional[User], LoadBy('user_id')] = None
-
-@pytest.mark.asyncio
-async def test_resolver_factory_of_er_config_auto_add_fk_field():
-    """Test that missing LoadBy FK fields are auto-added with exclude=True."""
-    MyResolver = config_resolver('MyResolver', er_diagram=diagram)
-
-    # user_id is not in subset but should be auto-added
-    d = BizCase4(id=1, user_id=1)
-
-    # Verify user_id field exists and has correct value
-    assert hasattr(d, 'user_id')
-    assert d.user_id == 1
-
-    # Verify user_id is excluded from serialization
-    dumped = d.model_dump()
-    assert 'user_id' not in dumped
-    assert dumped == {'id': 1, 'user': None}
-
-    # Resolve should work correctly
-    d = await MyResolver().resolve(d)
-    assert d.user is not None
-    assert d.user.name == "a"
-
-    # After resolve, user_id should still be excluded
-    dumped = d.model_dump()
-    assert 'user_id' not in dumped
-    assert 'user' in dumped
-
 @ensure_subset(Biz)
 class BizCase5(BaseModel):
     id: int
     user_id: int
 
-    user: Annotated[Optional[User], LoadBy('user_id')] = None
-    # foos_in_str_x: Annotated[List[str], LoadBy('id', biz='foo_name')] = []
+    user: Annotated[Optional[User], AutoLoad()] = None
+    # foos_in_str_x: Annotated[List[str], AutoLoad('id', biz='foo_name')] = []
 
 
 @pytest.mark.asyncio
@@ -250,13 +212,52 @@ async def test_resolver_factory_with_permitive_annotation():
     # assert d.foos_in_str_x == ["foo1", "foo2"]
 
 
-def test_loadby_references_nonexistent_field():
-    """Test that LoadBy referencing a non-existent field raises ValueError at class definition time."""
-    with pytest.raises(ValueError) as excinfo:
-        class BizCase6(DefineSubset):
-            __pydantic_resolve_subset__ = (Biz, ['id', 'user_id'])
+@pytest.mark.asyncio
+async def test_loadby_references_nonexistent_field():
+    """Test that AutoLoad referencing a non-existent field raises ValueError when resolver is used."""
+    # With the new AutoLoad() API, validation is deferred until resolver time
+    # when there's no global ER diagram configured at class definition time.
+    class BizCase6(DefineSubset):
+        __pydantic_resolve_subset__ = (Biz, ['id', 'user_id'])
 
-            user: Annotated[Optional[User], LoadBy('user_id_0')] = None
+        # This field name 'user_xyz' doesn't match any relationship field_name
+        user_xyz: Annotated[Optional[User], AutoLoad()] = None
 
-    assert 'LoadBy references field "user_id_0" which does not exist in parent class "Biz"' in str(excinfo.value)
-    assert 'Available fields:' in str(excinfo.value)
+    # Class definition succeeds (validation deferred)
+    # But when we try to use it with a resolver, it should fail
+    MyResolver = config_resolver('MyResolver', er_diagram=diagram)
+    with pytest.raises(AttributeError, match='Relationship with name "user_xyz" not found'):
+        d = BizCase6(id=1, user_id=1)
+        await MyResolver().resolve(d)
+
+
+class BizCaseOrigin(Biz):
+    my_user: Annotated[Optional[User], AutoLoad(origin='user')] = None
+
+
+@pytest.mark.asyncio
+async def test_autoload_with_origin():
+    """Test that AutoLoad(origin=...) uses origin as the lookup key for Relationship.field_name."""
+    MyResolver = config_resolver('MyResolver', er_diagram=diagram)
+    d = BizCaseOrigin(id=1, name="qq", user_id=1, user_id_str='1')
+    d = await MyResolver().resolve(d)
+    assert d.my_user.name == "a"
+
+
+class BizCaseAutoFK(DefineSubset):
+    """Subset that omits user_id - FK field should be auto-added by ErLoaderPreGenerator."""
+    __pydantic_resolve_subset__ = (Biz, ['id'])
+
+    user: Annotated[Optional[User], AutoLoad()] = None
+
+
+@pytest.mark.asyncio
+async def test_auto_fk_field_added_for_external_er_diagram():
+    """Test that missing FK fields are auto-added when using external ErDiagram."""
+    MyResolver = config_resolver('MyResolver', er_diagram=diagram)
+    d = BizCaseAutoFK(id=1, user_id=1)
+    d = await MyResolver().resolve(d)
+    assert d.user is not None
+    assert d.user.id == 1
+    # FK field should be excluded from serialization
+    assert 'user_id' not in d.model_dump()

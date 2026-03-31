@@ -70,27 +70,27 @@ diagram = ErDiagram(
 		Entity(
 			kls=Team,
 			relationships=[
-				Relationship( field='id', target_kls=list[Sprint], loader=sprint_loader.team_to_sprint_loader),
-				Relationship( field='id', target_kls=list[User], loader=user_loader.team_to_user_loader)
+				Relationship( fk='id', target=list[Sprint], name='sprints', loader=sprint_loader.team_to_sprint_loader),
+				Relationship( fk='id', target=list[User], name='members', loader=user_loader.team_to_user_loader)
 			]
 		),
 		Entity(
 			kls=Sprint,
 			relationships=[
-				Relationship( field='id', target_kls=list[Story], loader=story_loader.sprint_to_story_loader)
+				Relationship( fk='id', target=list[Story], name='stories', loader=story_loader.sprint_to_story_loader)
 			]
 		),
 		Entity(
 			kls=Story,
 			relationships=[
-				Relationship( field='id', target_kls=list[Task], loader=task_loader.story_to_task_loader),
-				Relationship( field='owner_id', target_kls=User, loader=user_loader.user_batch_loader)
+				Relationship( fk='id', target=list[Task], name='tasks', loader=task_loader.story_to_task_loader),
+				Relationship( fk='owner_id', target=User, name='owner', loader=user_loader.user_batch_loader)
 			]
 		),
 		Entity(
 			kls=Task,
 			relationships=[
-				Relationship( field='owner_id', target_kls=User, loader=user_loader.user_batch_loader)
+				Relationship( fk='owner_id', target=User, name='owner', loader=user_loader.user_batch_loader)
 			]
 		)
 	]
@@ -106,8 +106,8 @@ from task.schema import Task
 BaseEntity = base_entity()
 
 class Story(BaseModel, BaseEntity):
-	__pydantic_resolve_relationships__ = [
-		Relationship(field='id', target_kls=list[Task], loader=task_loader.story_to_task_loader)
+	__relationships__ = [
+		Relationship(fk='id', target=list[Task], name='tasks', loader=task_loader.story_to_task_loader)
 	]
 	id: int
 	name: str
@@ -136,14 +136,14 @@ class Sample1TeamDetail(tms.Team):
 
 ```python
 # new
-from pydantic_resolve import LoadBy
+AutoLoad = BaseEntity.get_diagram().create_auto_load()
 
 class Sample1TeamDetail(tms.Team):
-	sprints: Annotated[list[Sample1SprintDetail], LoadBy('id')] = []
-	members: Annotated[list[us.User], LoadBy('id')] = []
+	sprints: Annotated[list[Sample1SprintDetail], AutoLoad()] = []
+	members: Annotated[list[us.User], AutoLoad()] = []
 ```
 
-It determines the unique `Relationship` and its loader based on the inheritance source, the `LoadBy` argument, and the annotated return type.
+It determines the unique `Relationship` and its loader based on the inheritance source, the `AutoLoad` argument, and the annotated return type.
 
 ## Define subsets and inheritance
 
@@ -155,19 +155,19 @@ from pydantic_resolve import DefineSubset
 class MyStory(DefineSubset):
 	__subset__ = (Story, ('id'))
 
-	tasks: Annotated[list[Task], LoadBy('id')] = []
+	tasks: Annotated[list[Task], AutoLoad()] = []
 
 ```
 
 With this, `MyStory` is a class that selects only the `id` field from `Story`. Internally, it keeps private metadata to track the source type.
 
-So the `LoadBy` declared in `MyStory` will eventually trace back to `Story`, then find the corresponding `Relationship` defined under `Story`.
+So the `AutoLoad` declared in `MyStory` will eventually trace back to `Story`, then find the corresponding `Relationship` defined under `Story`.
 
 If you want the full set of fields, you can simply inherit from the base model:
 
 ```python
 class MyStory(Story):
-	tasks: Annotated[list[Task], LoadBy('id')] = []
+	tasks: Annotated[list[Task], AutoLoad()] = []
 ```
 
 ## Build complex data in three steps
@@ -247,17 +247,17 @@ Then define the ER diagram via an explicit declaration.
 ```python
 diagram = ErDiagram(
 	configs=[
-		ErConfig(
+		Entity(
 			kls=Story,
 			relationships=[
-				Relationship( field='id', target_kls=list[Task], loader=task_loader.story_to_task_loader),
-				Relationship( field='owner_id', target_kls=User, loader=user_loader.user_batch_loader)
+				Relationship( fk='id', target=list[Task], name='tasks', loader=task_loader.story_to_task_loader),
+				Relationship( fk='owner_id', target=User, name='owner', loader=user_loader.user_batch_loader)
 			]
 		),
-		ErConfig(
+		Entity(
 			kls=Task,
 			relationships=[
-				Relationship(field='owner_id', target_kls=User, loader=user_loader.user_batch_loader)
+				Relationship(fk='owner_id', target=User, name='owner', loader=user_loader.user_batch_loader)
 			]
 		)
 	]
@@ -270,7 +270,7 @@ Now the setup is complete.
 
 By the way, dataloader is just the default implementation. Under the hood, your loader can be an RPC call, a local file lookup, or a database query—callers don't need to care.
 
-Also, if you are using ORM relationships, you can remove the `loader` config in `Relationship`, and remove `LoadBy` (or your `resolve_*` methods), then use ORM-provided composed data instead.
+Also, if you are using ORM relationships, you can remove the `loader` config in `Relationship`, and remove `AutoLoad` (or your `resolve_*` methods), then use ORM-provided composed data instead.
 
 ### 2. Build data for business needs
 
@@ -298,11 +298,11 @@ If `ErDiagram` is available, the code can be further simplified:
 
 ```python
 class Task(BaseTask):
-	user: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+	user: Annotated[Optional[BaseUser], AutoLoad()] = None
 
 class Story(BaseStory):
-	tasks: Annotated[list[Task], LoadBy('id')] = []
-	assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None        
+	tasks: Annotated[list[Task], AutoLoad()] = []
+	assignee: Annotated[Optional[BaseUser], AutoLoad()] = None        
 ```
 
 The `DefineSubset` metaclass can quickly create subset types by listing the fields you want:
@@ -312,8 +312,8 @@ class Story1(DefineSubset):
 	# define the base class and fields wanted
 	__subset__ = (BaseStory, ('id', 'name', 'owner_id'))
 
-	tasks: Annotated[list[Task1], LoadBy('id')] = []
-	assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+	tasks: Annotated[list[Task1], AutoLoad()] = []
+	assignee: Annotated[Optional[BaseUser], AutoLoad()] = None
 ```
 
 ### 3. Adjust data for UI details
@@ -352,7 +352,7 @@ Descendants can read the value via `ancestor_context['story_name']`.
 
 # post case 1
 class Task3(BaseTask):
-	user: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+	user: Annotated[Optional[BaseUser], AutoLoad()] = None
 
 	fullname: str = ''
 	def post_fullname(self, ancestor_context):  # Access story.name from parent context
@@ -362,8 +362,8 @@ class Story3(DefineSubset):
 	__subset__ = (BaseStory, ('id', 'name', 'owner_id'))
 	__pydantic_resolve_expose__ = {'name': 'story_name'}
 
-	tasks: Annotated[list[Task3], LoadBy('id')] = []
-	assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+	tasks: Annotated[list[Task3], AutoLoad()] = []
+	assignee: Annotated[Optional[BaseUser], AutoLoad()] = None
 ```
 
 
@@ -377,13 +377,13 @@ Because `post_*` runs after `resolve_*`, this is straightforward—just `sum` it
 
 ```python
 class Task2(BaseTask):
-	user: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+	user: Annotated[Optional[BaseUser], AutoLoad()] = None
 
 class Story2(DefineSubset):
 	__subset__ = (BaseStory, ('id', 'name', 'owner_id'))
 
-	tasks: Annotated[list[Task2], LoadBy('id')] = []
-	assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+	tasks: Annotated[list[Task2], AutoLoad()] = []
+	assignee: Annotated[Optional[BaseUser], AutoLoad()] = None
 
 	total_estimate: int = 0
 	def post_total_estimate(self):
@@ -422,13 +422,13 @@ Here is the complete code. `related_users` will collect all `user` values. (Note
 class Task1(BaseTask):
 	__pydantic_resolve_collect__ = {'user': 'related_users'}  # Propagate user to collector: 'related_users'
 
-	user: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+	user: Annotated[Optional[BaseUser], AutoLoad()] = None
 
 class Story1(DefineSubset):
 	__subset__ = (BaseStory, ('id', 'name', 'owner_id'))
 
-	tasks: Annotated[list[Task1], LoadBy('id')] = []
-	assignee: Annotated[Optional[BaseUser], LoadBy('owner_id')] = None
+	tasks: Annotated[list[Task1], AutoLoad()] = []
+	assignee: Annotated[Optional[BaseUser], AutoLoad()] = None
 
 	related_users: list[BaseUser] = []
 	def post_related_users(self, collector=Collector(alias='related_users')):
