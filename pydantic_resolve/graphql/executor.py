@@ -18,6 +18,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel
 
+import pydantic_resolve.constant as const
 from pydantic_resolve.resolver import Resolver
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.types import get_core_types
@@ -187,7 +188,7 @@ class QueryExecutor:
 
                 # === Phase 1: Execute mutation method ===
                 args = root_field_selection.arguments or {}
-                root_data = await self._execute_method(mutation_method, args, "mutation")
+                root_data = await self._execute_method(mutation_method, args, "mutation", entity)
                 logger.debug(f"Mutation method executed: {root_mutation_name}")
 
                 # === Phase 1: Build response model ===
@@ -252,7 +253,8 @@ class QueryExecutor:
         self,
         method: Callable,
         arguments: Dict[str, Any],
-        operation_type: str = "query"
+        operation_type: str = "query",
+        entity: Optional[type] = None,
     ) -> Any:
         """
         Execute @query or @mutation method
@@ -270,9 +272,22 @@ class QueryExecutor:
             # Convert arguments (handle BaseModel types)
             converted_args = self._convert_arguments(method, arguments)
 
-            # schema_builder has extracted the underlying function (for classmethod it's __func__)
-            # Call directly, passing None for first parameter (cls/self)
-            return await method(None, **converted_args)
+            # staticmethod object: call underlying function directly without cls
+            if isinstance(method, staticmethod):
+                return await method.__func__(**converted_args)
+
+            # QueryConfig/MutationConfig wrappers are bound as classmethod and always expect cls.
+            if hasattr(method, const.GRAPHQL_CONFIG_BOUND_ATTR):
+                return await method(entity, **converted_args)
+
+            # Regular @query/@mutation methods generally declare cls/self explicitly.
+            sig = inspect.signature(method)
+            params = tuple(sig.parameters.keys())
+            if params and params[0] in ("self", "cls"):
+                return await method(entity, **converted_args)
+
+            # Fallback for callables that don't need cls.
+            return await method(**converted_args)
         except Exception as e:
             logger.error(f"{operation_type.capitalize()} method execution failed: {e}")
             raise GraphQLError(
@@ -453,11 +468,11 @@ class QueryExecutor:
             if semaphore:
                 async with semaphore:
                     return await self._execute_single_query(
-                        query_name, query_method, field_selection, response_model
+                        query_name, entity, query_method, field_selection, response_model
                     )
             else:
                 return await self._execute_single_query(
-                    query_name, query_method, field_selection, response_model
+                    query_name, entity, query_method, field_selection, response_model
                 )
 
         # Execute all (query_method + transform + resolve) tasks concurrently
@@ -487,6 +502,7 @@ class QueryExecutor:
     async def _execute_single_query(
         self,
         query_name: str,
+        entity: type,
         query_method: Callable,
         field_selection: Any,
         response_model: type
@@ -513,7 +529,7 @@ class QueryExecutor:
         try:
             # 1. Execute query method (I/O operation)
             args = field_selection.arguments or {}
-            root_data = await self._execute_method(query_method, args, "query")
+            root_data = await self._execute_method(query_method, args, "query", entity)
             logger.debug(f"[Phase 2] Query method executed: {query_name}")
 
             # 2. Transform to response model

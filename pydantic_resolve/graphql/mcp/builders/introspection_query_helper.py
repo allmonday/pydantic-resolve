@@ -52,16 +52,18 @@ class IntrospectionQueryHelper:
                 self._type_cache[name] = type_info
 
     def collect_related_types(self, type_ref: GraphQLTypeRef | None) -> set[str]:
-        """Collect all entity types reachable from the given type reference.
+        """Collect all related types reachable from the given type reference.
 
-        Recursively traces through LIST and NON_NULL wrappers and follows
-        relationship fields to collect all related entity types.
+        Recursively traces through LIST and NON_NULL wrappers and follows:
+        - OBJECT fields (entity output types)
+        - INPUT_OBJECT fields (operation argument/input types)
+        - ENUM leaf types
 
         Args:
             type_ref: GraphQL type reference from introspection data
 
         Returns:
-            Set of entity type names that are reachable from the given type
+            Set of related type names that are reachable from the given type
 
         Example:
             >>> helper.collect_related_types({"kind": "OBJECT", "name": "User", "ofType": None})
@@ -87,6 +89,17 @@ class IntrospectionQueryHelper:
                     if type_info:
                         for field in type_info.get("fields", []) or []:
                             trace(field.get("type"))
+
+            elif kind == "INPUT_OBJECT" and name:
+                if name not in visited:
+                    visited.add(name)
+                    type_info = self._type_cache.get(name)
+                    if type_info:
+                        for field in type_info.get("inputFields", []) or []:
+                            trace(field.get("type"))
+
+            elif kind == "ENUM" and name:
+                visited.add(name)
 
             elif kind == "LIST":
                 trace(of_type)

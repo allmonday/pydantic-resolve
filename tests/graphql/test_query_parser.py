@@ -58,3 +58,41 @@ class TestQueryParser:
 
         with pytest.raises(QueryParseError):
             self.parser.parse(query)
+
+    def test_parse_fragment_spread(self):
+        """测试解析 FragmentSpread"""
+        query = """
+        query {
+            users {
+                ...UserFields
+            }
+        }
+
+        fragment UserFields on UserEntity {
+            id
+            name
+        }
+        """
+        parsed = self.parser.parse(query)
+
+        assert 'users' in parsed.field_tree
+        assert 'id' in parsed.field_tree['users'].sub_fields
+        assert 'name' in parsed.field_tree['users'].sub_fields
+
+    def test_parse_inline_fragment(self):
+        """测试解析 InlineFragment"""
+        query = """
+        query {
+            users {
+                ... on UserEntity {
+                    id
+                    name
+                }
+            }
+        }
+        """
+        parsed = self.parser.parse(query)
+
+        assert 'users' in parsed.field_tree
+        assert 'id' in parsed.field_tree['users'].sub_fields
+        assert 'name' in parsed.field_tree['users'].sub_fields

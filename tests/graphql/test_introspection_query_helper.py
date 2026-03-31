@@ -209,6 +209,40 @@ class TestCollectRelatedTypes:
         # Each type should appear only once
         assert result == {"User", "Post"}
 
+    def test_input_object_collects_nested_enum_types(self, entity_names):
+        """INPUT_OBJECT should include itself and nested enum/input dependencies."""
+        data = {
+            "types": [
+                {
+                    "name": "CreateUserInput",
+                    "kind": "INPUT_OBJECT",
+                    "inputFields": [
+                        {"name": "name", "type": {"kind": "SCALAR", "name": "String", "ofType": None}},
+                        {"name": "role", "type": {"kind": "ENUM", "name": "UserRole", "ofType": None}},
+                    ],
+                    "fields": None,
+                },
+                {
+                    "name": "UserRole",
+                    "kind": "ENUM",
+                    "enumValues": [
+                        {"name": "ADMIN"},
+                        {"name": "USER"},
+                    ],
+                    "fields": None,
+                    "inputFields": None,
+                },
+                {"name": "String", "kind": "SCALAR", "fields": None, "inputFields": None},
+            ]
+        }
+        helper = IntrospectionQueryHelper(data, entity_names)
+
+        result = helper.collect_related_types(
+            {"kind": "INPUT_OBJECT", "name": "CreateUserInput", "ofType": None}
+        )
+
+        assert result == {"CreateUserInput", "UserRole"}
+
 
 # === Test get_introspection_for_types ===
 

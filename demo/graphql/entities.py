@@ -127,7 +127,6 @@ class UserEntity(BaseModel, BaseEntity):
     created_at: datetime = Field(description="创建时间")
     something: dict = Field(default={'key': 'value'}, description="额外信息字典")
     meta: list[UserMetaEntity] = Field(default_factory=list, description="用户元信息列表")
-    meta: list[UserMetaEntity] = Field(default_factory=list, description="用户元信息列表")
 
     @query
     async def get_all(cls, limit: int = 10, offset: int = 0) -> List['UserEntity']:

@@ -2,14 +2,18 @@
 GraphQL query parser using graphql-core.
 """
 
-from typing import Dict
+from typing import Any, Dict, Optional
 from graphql import parse as parse_graphql
 from graphql.language.ast import (
-    DocumentNode,
-    OperationDefinitionNode,
-    FieldNode,
     ArgumentNode,
+    DocumentNode,
+    FieldNode,
+    FragmentDefinitionNode,
+    FragmentSpreadNode,
+    InlineFragmentNode,
+    OperationDefinitionNode,
     OperationType,
+    SelectionSetNode,
 )
 
 from pydantic_resolve.graphql.types import FieldSelection, ParsedQuery
@@ -42,8 +46,11 @@ class QueryParser:
         if not operation:
             raise QueryParseError("No query operation found")
 
-        # Extract all root query fields (supports multiple)
-        root_fields = self._extract_root_fields(operation)
+        # Extract fragment definitions for spread expansion
+        fragments = self._extract_fragments(document)
+
+        # Extract all root query fields (supports multiple, including fragments)
+        root_fields = self._extract_root_fields(operation, fragments)
         if not root_fields:
             raise QueryParseError("Query is empty")
 
@@ -51,7 +58,14 @@ class QueryParser:
         field_tree = {}
         for root_field in root_fields:
             root_field_name = root_field.name.value
-            field_tree[root_field_name] = self._build_field_tree(root_field)
+            parsed_field = self._build_field_tree(root_field, fragments)
+            if root_field_name in field_tree:
+                field_tree[root_field_name] = self._merge_field_selections(
+                    field_tree[root_field_name],
+                    parsed_field,
+                )
+            else:
+                field_tree[root_field_name] = parsed_field
 
         return ParsedQuery(
             field_tree=field_tree,
@@ -68,22 +82,59 @@ class QueryParser:
                     return definition
         return None
 
-    def _extract_root_fields(self, operation: OperationDefinitionNode) -> list[FieldNode]:
+    def _extract_fragments(
+        self,
+        document: DocumentNode,
+    ) -> Dict[str, FragmentDefinitionNode]:
+        """Extract named fragment definitions from document."""
+        fragments: Dict[str, FragmentDefinitionNode] = {}
+        for definition in document.definitions:
+            if isinstance(definition, FragmentDefinitionNode):
+                fragments[definition.name.value] = definition
+        return fragments
+
+    def _extract_root_fields(
+        self,
+        operation: OperationDefinitionNode,
+        fragments: Optional[Dict[str, FragmentDefinitionNode]] = None,
+    ) -> list[FieldNode]:
         """Extract all root query fields"""
         selection_set = operation.selection_set
         if not selection_set or not selection_set.selections:
             raise QueryParseError("Query is empty")
 
-        # Return all root query fields
-        root_fields = []
+        return self._extract_fields_from_selection_set(selection_set, fragments or {})
+
+    def _extract_fields_from_selection_set(
+        self,
+        selection_set: SelectionSetNode,
+        fragments: Dict[str, FragmentDefinitionNode],
+    ) -> list[FieldNode]:
+        """Flatten FieldNodes from selection set, expanding fragments recursively."""
+        fields: list[FieldNode] = []
+
         for selection in selection_set.selections:
             if isinstance(selection, FieldNode):
-                root_fields.append(selection)
+                fields.append(selection)
+            elif isinstance(selection, FragmentSpreadNode):
+                fragment_name = selection.name.value
+                fragment = fragments.get(fragment_name)
+                if fragment is None:
+                    raise QueryParseError(f"Unknown fragment: {fragment_name}")
+                fields.extend(self._extract_fields_from_selection_set(fragment.selection_set, fragments))
+            elif isinstance(selection, InlineFragmentNode):
+                fields.extend(self._extract_fields_from_selection_set(selection.selection_set, fragments))
 
-        return root_fields
+        return fields
 
-    def _build_field_tree(self, field_node: FieldNode) -> FieldSelection:
+    def _build_field_tree(
+        self,
+        field_node: FieldNode,
+        fragments: Optional[Dict[str, FragmentDefinitionNode]] = None,
+    ) -> FieldSelection:
         """Recursively build field selection tree"""
+        fragments = fragments or {}
+
         # Extract alias
         alias = field_node.alias.value if field_node.alias else None
 
@@ -97,7 +148,41 @@ class QueryParser:
             for selection in field_node.selection_set.selections:
                 if isinstance(selection, FieldNode):
                     sub_field_name = selection.name.value
-                    sub_fields[sub_field_name] = self._build_field_tree(selection)
+                    parsed_field = self._build_field_tree(selection, fragments)
+                    if sub_field_name in sub_fields:
+                        sub_fields[sub_field_name] = self._merge_field_selections(
+                            sub_fields[sub_field_name],
+                            parsed_field,
+                        )
+                    else:
+                        sub_fields[sub_field_name] = parsed_field
+                elif isinstance(selection, FragmentSpreadNode):
+                    fragment_name = selection.name.value
+                    fragment = fragments.get(fragment_name)
+                    if fragment is None:
+                        raise QueryParseError(f"Unknown fragment: {fragment_name}")
+
+                    for fragment_field in self._extract_fields_from_selection_set(fragment.selection_set, fragments):
+                        sub_field_name = fragment_field.name.value
+                        parsed_field = self._build_field_tree(fragment_field, fragments)
+                        if sub_field_name in sub_fields:
+                            sub_fields[sub_field_name] = self._merge_field_selections(
+                                sub_fields[sub_field_name],
+                                parsed_field,
+                            )
+                        else:
+                            sub_fields[sub_field_name] = parsed_field
+                elif isinstance(selection, InlineFragmentNode):
+                    for inline_field in self._extract_fields_from_selection_set(selection.selection_set, fragments):
+                        sub_field_name = inline_field.name.value
+                        parsed_field = self._build_field_tree(inline_field, fragments)
+                        if sub_field_name in sub_fields:
+                            sub_fields[sub_field_name] = self._merge_field_selections(
+                                sub_fields[sub_field_name],
+                                parsed_field,
+                            )
+                        else:
+                            sub_fields[sub_field_name] = parsed_field
 
         return FieldSelection(
             alias=alias,
@@ -105,7 +190,7 @@ class QueryParser:
             arguments=arguments
         )
 
-    def _extract_arguments(self, field_node: FieldNode) -> Dict[str, any]:
+    def _extract_arguments(self, field_node: FieldNode) -> Dict[str, Any]:
         """Extract field arguments"""
         arguments = {}
         if field_node.arguments:
@@ -116,7 +201,7 @@ class QueryParser:
                     arguments[arg.name.value] = value
         return arguments
 
-    def _get_argument_value(self, value_node) -> any:
+    def _get_argument_value(self, value_node) -> Any:
         """Get argument value from GraphQL AST node"""
         # kind is string in GraphQL AST, not enum
         kind = getattr(value_node, 'kind', '')
@@ -148,3 +233,36 @@ class QueryParser:
             return value_node.value
         else:
             return None
+
+    def _merge_field_selections(
+        self,
+        left: FieldSelection,
+        right: FieldSelection,
+    ) -> FieldSelection:
+        """Merge two selections for the same field name."""
+        merged_alias = left.alias or right.alias
+
+        merged_arguments = None
+        if left.arguments or right.arguments:
+            merged_arguments = {
+                **(left.arguments or {}),
+                **(right.arguments or {}),
+            }
+
+        merged_sub_fields = None
+        if left.sub_fields or right.sub_fields:
+            merged_sub_fields = dict(left.sub_fields or {})
+            for field_name, sub_selection in (right.sub_fields or {}).items():
+                if field_name in merged_sub_fields:
+                    merged_sub_fields[field_name] = self._merge_field_selections(
+                        merged_sub_fields[field_name],
+                        sub_selection,
+                    )
+                else:
+                    merged_sub_fields[field_name] = sub_selection
+
+        return FieldSelection(
+            alias=merged_alias,
+            sub_fields=merged_sub_fields,
+            arguments=merged_arguments,
+        )
