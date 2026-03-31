@@ -23,7 +23,7 @@
 |---------|--------------|
 | **Automatic Batching** | DataLoader eliminates N+1 queries automatically |
 | **Declarative Assembly** | Declare dependencies, framework handles the rest |
-| **Entity-First Architecture** | ER Diagram defines relationships, `AutoLoad` auto-resolves |
+| **ER Diagram + AutoLoad** | Define entity relationships, auto-resolve related data |
 | **GraphQL Support** | Generate schema from ERD, query with dynamic models |
 | **MCP Integration** | Expose GraphQL APIs to AI agents with progressive disclosure |
 
@@ -175,92 +175,127 @@ class Story(BaseModel):
 
 ---
 
-## Advanced Features
+## Declarative Mode: ER Diagram + AutoLoad
 
-### Entity-First Architecture
+Quick Start and Core Concepts demonstrate pydantic-resolve's **Core API**: writing `resolve_*` methods and manually specifying Loaders. For simple use cases, this is sufficient.
 
-Define business entities independent of database schema.
+When a project involves multiple interrelated entities, pydantic-resolve offers a **Declarative API**: define entity relationships and default loaders in an ER Diagram, then use `AutoLoad` to auto-generate the corresponding resolve methods.
 
-**Why Entity-First vs DB-based relationships?**
+Declarative API is built on top of Core API. `AutoLoad` fields generate equivalent `resolve_*` methods at runtime, so both modes can be freely mixed — you can still use `post_*` methods in Declarative Mode, or fall back to hand-written `resolve_*` for specific fields.
 
-| Aspect | DB-based (ORM) | Entity-First (pydantic-resolve) |
-|--------|----------------|--------------------------------|
-| **Flexibility** | Tied to database schema | Define relationships at application layer |
-| **Data Sources** | Single database | Cross multiple sources (PostgreSQL, MongoDB, Redis, RPC) |
-| **Encapsulation** | Exposes FK fields (`owner_id`) | Loader implementation hidden from API |
-| **API Contract** | Changes when DB changes | Stable, decoupled from storage |
+| | Core API | Declarative API |
+|--|----------|-----------------|
+| **Approach** | Hand-write `resolve_*` + specify `Loader` | Define ER Diagram + `AutoLoad` |
+| **Control** | Full control | Convention over configuration |
+| **Best for** | Simple projects, one-off data loading | Multiple related entities, GraphQL/MCP needed |
+| **Relationships** | Scattered across Response classes | Centralized in ER Diagram |
+
+### Define Entities and Relationships
+
+Create a base class with `base_entity()`, then define relationships in `__relationships__`:
 
 ```python
-from typing import Annotated, Optional
 from pydantic import BaseModel
-from pydantic_resolve import DefineSubset, base_entity, Relationship, config_global_resolver
+from typing import Annotated, Optional
+from pydantic_resolve import base_entity, Relationship, config_global_resolver
 
 BaseEntity = base_entity()
 
-# Entity defines business relationship, not database FK
+class UserEntity(BaseModel, BaseEntity):
+    id: int
+    name: str
+
 class TaskEntity(BaseModel, BaseEntity):
     __relationships__ = [
         # Loader can query Postgres, call RPC, or fetch from Redis
         # API consumers don't need to know where data comes from
-        Relationship(fk='owner_id', name='owner', target=UserEntity, loader=user_loader)
+        Relationship(fk='owner_id', target=UserEntity, name='owner', loader=user_loader)
     ]
     id: int
     name: str
-    description: Optional[str] = None
-    status: str  # todo, in_progress, done
     owner_id: int  # Internal FK, can be hidden from API
 
 diagram = BaseEntity.get_diagram()
 AutoLoad = diagram.create_auto_load()
 config_global_resolver(diagram)
-
-# Response schema: choose what to expose
-class TaskResponse(DefineSubset):
-    __subset__ = (TaskEntity, ('id', 'name'))  # owner_id excluded
-    owner: Annotated[User, AutoLoad()] = None  # Auto-resolved!
 ```
 
-**Key benefits:**
-- Change loader implementation (SQL → RPC) without touching Response code
-- Mix data from multiple sources in single entity graph
-- Hide internal IDs from API, expose only business concepts
+You can also use external declaration (`ErDiagram` + `Entity`) to separate relationship definitions from entity classes.
 
-[→ Full Entity-First Guide](https://allmonday.github.io/pydantic-resolve/erd_driven/)
+### Use AutoLoad
 
-### GraphQL Support
+After defining the ER Diagram, annotate fields with `AutoLoad()` in Response models:
 
-Generate GraphQL schema from ERD:
+```python
+from pydantic_resolve import DefineSubset
+
+class TaskResponse(TaskEntity):
+    owner: Annotated[Optional[UserEntity], AutoLoad()] = None
+    # AutoLoad generates resolve_owner based on TaskEntity's __relationships__
+
+# Usage is identical to Core API
+result = await Resolver().resolve(tasks)
+```
+
+Use `DefineSubset` to selectively expose fields and hide internal FKs:
+
+```python
+class TaskResponse(DefineSubset):
+    __subset__ = (TaskEntity, ('id', 'name'))  # owner_id excluded
+    owner: Annotated[Optional[UserEntity], AutoLoad()] = None
+```
+
+### When to Use Declarative Mode
+
+**Declarative Mode is a good fit when:**
+- The project has 3+ interrelated entities
+- You need to generate GraphQL schema or MCP services
+- The team needs centralized relationship management
+- You want to hide FK fields from API contracts
+
+**Core API is sufficient when:**
+- Only a few data loading requirements
+- Simple data source
+- No GraphQL or MCP needed
+
+[→ Full ERD-Driven Guide](https://allmonday.github.io/pydantic-resolve/erd_driven/)
+
+## Integrations
+
+### GraphQL
+
+Generate GraphQL schema from ERD and execute queries:
 
 ```python
 from pydantic_resolve.graphql import GraphQLHandler
 
-handler = GraphQLHandler(BaseEntity.get_diagram())
+handler = GraphQLHandler(diagram)
 result = await handler.execute("{ users { id name posts { title } } }")
 ```
 
 [→ GraphQL Documentation](./demo/graphql/README.md)
 
-### MCP Integration
+### MCP
 
-Expose GraphQL APIs to AI agents with progressive disclosure:
+Expose GraphQL APIs to AI agents:
 
 ```python
 from pydantic_resolve import AppConfig, create_mcp_server
 
 mcp = create_mcp_server(apps=[AppConfig(name="blog", er_diagram=diagram)])
-mcp.run()  # AI agents can now discover and query your API
+mcp.run()
 ```
 
 [→ MCP Documentation](https://allmonday.github.io/pydantic-resolve/api/)
 
 ### Visualization
 
-Interactive schema exploration with [fastapi-voyager](https://github.com/allmonday/fastapi-voyager):
+Interactive ERD exploration with [fastapi-voyager](https://github.com/allmonday/fastapi-voyager):
 
 ```python
 from fastapi_voyager import create_voyager
 
-app.mount('/voyager', create_voyager(app, er_diagram=BaseEntity.get_diagram()))
+app.mount('/voyager', create_voyager(app, er_diagram=diagram))
 ```
 
 ---
