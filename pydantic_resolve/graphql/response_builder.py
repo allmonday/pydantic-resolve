@@ -395,7 +395,7 @@ class ResponseBuilder:
 
         for fk_field in fk_fields:
             if fk_field not in field_definitions and fk_field in type_hints:
-                field_definitions[fk_field] = (type_hints[fk_field], ...)
+                field_definitions[fk_field] = (type_hints[fk_field], Field(exclude=True))
 
     def _add_relationship_fields(
         self,
@@ -431,13 +431,16 @@ class ResponseBuilder:
             if field_name in field_definitions:
                 continue
 
-            # Skip fields without sub-selections
-            if not selection.sub_fields:
-                continue
-
-            # Find relationship
+            # Find relationship (moved before sub_fields check)
             relationship = self._find_relationship(entity, field_name)
             if not relationship:
+                # Not a relationship field — skip if no sub-fields
+                if not selection.sub_fields:
+                    continue
+                continue
+
+            # Skip non-scalar relationships without sub-selections
+            if not selection.sub_fields and not self._is_scalar_relationship(relationship):
                 continue
 
             # Build relationship field
@@ -472,6 +475,12 @@ class ResponseBuilder:
         target_kls = relationship.target
         origin = get_origin(target_kls)
 
+        # Handle scalar targets (str, int, etc.) — skip recursive model building
+        if self._is_scalar_relationship(relationship):
+            _AutoLoad = self._create_auto_load
+            base_type = Annotated[Optional[target_kls], _AutoLoad()]
+            return self._apply_alias((base_type, None), selection.alias)
+
         # Extract actual entity type
         actual_entity = self._extract_entity_type(target_kls)
         if actual_entity is None:
@@ -492,6 +501,12 @@ class ResponseBuilder:
             default = None
 
         return self._apply_alias((base_type, default), selection.alias)
+
+    def _is_scalar_relationship(self, relationship: Relationship) -> bool:
+        """Check if a relationship targets a scalar type (not a BaseModel)."""
+        target = relationship.target
+        core_types = get_core_types(target)
+        return not any(safe_issubclass(ct, BaseModel) for ct in core_types)
 
     def _extract_entity_type(self, target_kls: type) -> Optional[type]:
         """

@@ -245,13 +245,16 @@ async def create_user_with_input(input: CreateUserInput) -> UserEntityV2:
 # =====================================
 # 手动创建 ErDiagram（关系定义 + QueryConfig/MutationConfig）
 # =====================================
+async def temp_loader(ids: List[int]):
+    return ids
 
 diagram_v2 = ErDiagram(configs=[
     Entity(
         kls=UserEntityV2,
         relationships=[
             Relationship(fk='id', target=list[PostEntityV2],
-                         loader=user_posts_loader_v2, name='myposts')
+                         loader=user_posts_loader_v2, name='myposts'),
+            Relationship(fk='id', target=int, name='self_id', loader=temp_loader)  # demo: scalar relationship
         ],
         queries=[
             QueryConfig(method=get_all_users, name='users_v2', description='获取所有用户（分页）'),

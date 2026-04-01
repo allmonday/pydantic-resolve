@@ -6,6 +6,12 @@
 
 ## v4.0
 
+### v4.0.1 (2026-4-1)
+- fix:
+  - **Auto-added FK fields no longer leak into GraphQL response**: `ResponseBuilder._add_fk_fields()` now uses `Field(exclude=True)` instead of `...`, so fields like `id` that are auto-added for `AutoLoad` resolution are excluded from `model_dump()` serialization while remaining accessible as attributes
+  - **Support scalar target relationships in GraphQL**: `_build_relationship_field()` now handles scalar targets (e.g., `str`, `int`) via `_is_scalar_relationship()` check, skipping recursive model building for non-BaseModel targets
+  - **Allow scalar relationship fields without sub-selections**: `_add_relationship_fields()` now permits scalar relationship fields to be included even when no sub-fields are selected
+
 ### v4.0.0 (2026-3-29)
 
 **BREAKING CHANGES** — ER Diagram API overhaul, simplified Relationship definition. See [Migration Guide](./migration.md) for details.
