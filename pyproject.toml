@@ -43,6 +43,9 @@ sqlalchemy = [
 tortoise = [
     "tortoise-orm>=1.1.7,<2.0.0"
 ]
+django = [
+    "Django>=4.2,<6.0"
+]
 dev = [
     "fastmcp >= 3.0.0",
     "tox>=4.4.6,<5.0.0",
@@ -54,6 +57,7 @@ dev = [
     "pydantic>=2.12.0,<3.0.0",
     "sqlalchemy[asyncio]>=2.0.7,<3.0.0",
     "tortoise-orm>=1.1.7,<2.0.0",
+    "Django>=4.2,<6.0",
     "pytest-asyncio>=0.21.0,<0.22.0",
     "mkdocs-material>=9,<10",
     "mkdocs-static-i18n[material]==1.2.0",
@@ -77,3 +81,4 @@ filterwarnings = [
     "ignore::ResourceWarning",
 ]
 asyncio_mode = "auto"
+
