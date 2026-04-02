@@ -49,6 +49,7 @@ result = await Resolver().resolve(tasks)
 
 ```bash
 pip install pydantic-resolve
+pip install pydantic-resolve[mcp]  # 包含 MCP 支持
 ```
 
 ### N+1 问题
@@ -277,7 +278,7 @@ result = await handler.execute("{ users { id name posts { title } } }")
 
 ### MCP
 
-将 GraphQL API 暴露给 AI 代理：
+将 GraphQL API 暴露给 AI 代理（需要 `pip install pydantic-resolve[mcp]`）：
 
 ```python
 from pydantic_resolve import AppConfig, create_mcp_server

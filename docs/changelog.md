@@ -4,6 +4,15 @@
 - **Minor (x.Y.0)**: New features, backward compatible
 - **Patch (x.y.Z)**: Bug fixes and minor improvements
 
+## v4.1
+
+### v4.1.0 (2026-4-2)
+- feat:
+  - **MCP dependencies are now optional**: `fastmcp` moved from core dependencies to `[project.optional-dependencies]` under `mcp` group. Install via `pip install pydantic-resolve[mcp]`. Core functionality (Resolver, GraphQL, ERD) no longer pulls in `fastmcp`.
+  - MCP imports in `pydantic_resolve/__init__.py` now use `try/except` for graceful degradation when `fastmcp` is not installed.
+- fix:
+  - Remove misleading `config_global_resolver` calls from MCP module docstring examples (`__init__.py`, `server.py`). MCP internally uses `config_resolver` via `GraphQLHandler` for proper isolation.
+
 ## v4.0
 
 ### v4.0.1 (2026-4-1)

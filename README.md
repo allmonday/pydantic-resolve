@@ -49,6 +49,7 @@ result = await Resolver().resolve(tasks)
 
 ```bash
 pip install pydantic-resolve
+pip install pydantic-resolve[mcp]  # with MCP support
 ```
 
 ### The N+1 Problem
@@ -277,7 +278,7 @@ result = await handler.execute("{ users { id name posts { title } } }")
 
 ### MCP
 
-Expose GraphQL APIs to AI agents:
+Expose GraphQL APIs to AI agents (requires `pip install pydantic-resolve[mcp]`):
 
 ```python
 from pydantic_resolve import AppConfig, create_mcp_server
