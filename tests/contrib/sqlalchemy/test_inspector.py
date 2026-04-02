@@ -4,7 +4,7 @@ import logging
 from typing import get_args, get_origin
 
 import pytest
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
 from sqlalchemy import ForeignKeyConstraint, Integer, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from pydantic_resolve.contrib.sqlalchemy import build_relationship
@@ -150,3 +150,48 @@ def test_inspector_raises_when_default_filter_returns_non_list():
             session_factory=_dummy_session_factory,
             default_filter=lambda cls: cls.deleted.is_(False),  # type: ignore[return-value]
         )
+
+
+class _SchoolDTOWithMissingRequiredField(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    missing: str
+
+
+def test_inspector_raises_when_required_dto_scalar_field_missing_in_orm():
+    with pytest.raises(ValueError, match="Required DTO fields not found in ORM scalar fields"):
+        build_relationship(
+            mappings=[(_SchoolDTOWithMissingRequiredField, SchoolOrm)],
+            session_factory=_dummy_session_factory,
+        )
+
+
+class _SchoolDTOWithOptionalAndComputedFields(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    extra: str = "fallback"
+
+    @computed_field
+    @property
+    def label(self) -> str:
+        return f"{self.id}-{self.name}"
+
+
+def test_inspector_skips_default_and_computed_fields_in_dto_validation():
+    entities = build_relationship(
+        mappings=[
+            (StudentDTO, StudentOrm),
+            (_SchoolDTOWithOptionalAndComputedFields, SchoolOrm),
+            (CourseDTO, CourseOrm),
+        ],
+        session_factory=_dummy_session_factory,
+    )
+
+    school_entity = _find_entity(entities, _SchoolDTOWithOptionalAndComputedFields)
+    students_rel = _find_relationship(school_entity, "students")
+
+    assert students_rel.name == "students"

@@ -79,6 +79,27 @@ def _resolve_target_filters(
     return list(resolved)
 
 
+def _validate_dto_scalar_fields(dto_kls: type, orm_kls: type) -> None:
+    from sqlalchemy import inspect
+
+    mapper = inspect(orm_kls)
+    orm_scalar_fields = {attr.key for attr in mapper.column_attrs}
+
+    missing_required_fields = []
+    for field_name, field_info in dto_kls.model_fields.items():
+        if not field_info.is_required():
+            continue
+        if field_name not in orm_scalar_fields:
+            missing_required_fields.append(field_name)
+
+    if missing_required_fields:
+        missing_str = ", ".join(sorted(missing_required_fields))
+        raise ValueError(
+            f"Required DTO fields not found in ORM scalar fields for mapping "
+            f"{dto_kls.__name__} -> {orm_kls.__name__}: {missing_str}"
+        )
+
+
 def _inspect_orm_relationships(
     orm_kls: type,
     orm_to_dto: dict[type, type],
@@ -205,6 +226,7 @@ def build_relationship(
     entities: list[Entity] = []
 
     for dto_kls, orm_kls in normalized_mappings:
+        _validate_dto_scalar_fields(dto_kls, orm_kls)
         relationships = _inspect_orm_relationships(
             orm_kls=orm_kls,
             orm_to_dto=orm_to_dto,
