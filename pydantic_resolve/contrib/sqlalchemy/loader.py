@@ -35,6 +35,12 @@ def _row_get(row: Any, key: str) -> Any:
     return getattr(row, key)
 
 
+def _apply_filters(stmt: Any, filters: list[Any] | None) -> Any:
+    if filters:
+        return stmt.where(*filters)
+    return stmt
+
+
 def create_many_to_one_loader(
     *,
     source_orm_kls: type,
@@ -43,6 +49,7 @@ def create_many_to_one_loader(
     target_dto_kls: type,
     target_remote_col_name: str,
     session_factory: Callable,
+    filters: list[Any] | None = None,
 ) -> type[DataLoader]:
     class _Loader(DataLoader):
         async def batch_load_fn(self, keys):
@@ -52,6 +59,7 @@ def create_many_to_one_loader(
                 stmt = select(target_orm_kls).where(
                     getattr(target_orm_kls, target_remote_col_name).in_(keys)
                 )
+                stmt = _apply_filters(stmt, filters)
                 rows = (await session.scalars(stmt)).all()
 
             lookup = {getattr(row, target_remote_col_name): row for row in rows}
@@ -74,6 +82,7 @@ def create_one_to_many_loader(
     target_dto_kls: type,
     target_fk_col_name: str,
     session_factory: Callable,
+    filters: list[Any] | None = None,
 ) -> type[DataLoader]:
     class _Loader(DataLoader):
         async def batch_load_fn(self, keys):
@@ -83,6 +92,7 @@ def create_one_to_many_loader(
                 stmt = select(target_orm_kls).where(
                     getattr(target_orm_kls, target_fk_col_name).in_(keys)
                 )
+                stmt = _apply_filters(stmt, filters)
                 rows = (await session.scalars(stmt)).all()
 
             grouped = defaultdict(list)
@@ -110,6 +120,7 @@ def create_many_to_many_loader(
     secondary_remote_col_name: str,
     target_match_col_name: str,
     session_factory: Callable,
+    filters: list[Any] | None = None,
 ) -> type[DataLoader]:
     class _Loader(DataLoader):
         async def batch_load_fn(self, keys):
@@ -130,6 +141,7 @@ def create_many_to_many_loader(
                 target_stmt = select(target_orm_kls).where(
                     getattr(target_orm_kls, target_match_col_name).in_(target_keys)
                 )
+                target_stmt = _apply_filters(target_stmt, filters)
                 target_rows = (await session.scalars(target_stmt)).all()
 
             target_map = {

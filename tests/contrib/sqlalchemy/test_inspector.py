@@ -9,7 +9,7 @@ from sqlalchemy import ForeignKeyConstraint, Integer, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from pydantic_resolve.contrib.sqlalchemy import build_relationship
 
-from .conftest import CourseDTO, SchoolDTO, StudentDTO, StudentOrm
+from .conftest import CourseDTO, CourseOrm, SchoolDTO, SchoolOrm, StudentDTO, StudentOrm
 
 
 def _dummy_session_factory():
@@ -125,4 +125,28 @@ def test_inspector_raises_on_composite_foreign_key():
         build_relationship(
             mappings=[(_ParentDTO, _ParentOrm), (_ChildDTO, _ChildOrm)],
             session_factory=_dummy_session_factory,
+        )
+
+
+def test_inspector_raises_on_invalid_mapping_filter_type():
+    with pytest.raises(TypeError, match="Invalid mapping filter"):
+        build_relationship(
+            mappings=[
+                (StudentDTO, StudentOrm),
+                (SchoolDTO, SchoolOrm, "not-a-list"),  # type: ignore[arg-type]
+            ],
+            session_factory=_dummy_session_factory,
+        )
+
+
+def test_inspector_raises_when_default_filter_returns_non_list():
+    with pytest.raises(TypeError, match="default_filter"):
+        build_relationship(
+            mappings=[
+                (StudentDTO, StudentOrm),
+                (SchoolDTO, SchoolOrm),
+                (CourseDTO, CourseOrm),
+            ],
+            session_factory=_dummy_session_factory,
+            default_filter=lambda cls: cls.deleted.is_(False),  # type: ignore[return-value]
         )

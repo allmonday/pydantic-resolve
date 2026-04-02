@@ -13,6 +13,9 @@ from pydantic_resolve.utils.er_diagram import Entity, Relationship
 logger = logging.getLogger(__name__)
 
 
+Mapping = tuple[type, type] | tuple[type, type, list[Any]]
+
+
 def _expect_single_pair(pairs: Any, message: str) -> tuple[Any, Any]:
     pair_list = list(pairs)
     if len(pair_list) != 1:
@@ -20,22 +23,68 @@ def _expect_single_pair(pairs: Any, message: str) -> tuple[Any, Any]:
     return pair_list[0]
 
 
-def _build_orm_to_dto_map(mappings: list[tuple[type, type]]) -> dict[type, type]:
+def _normalize_mappings(
+    mappings: list[Mapping],
+) -> tuple[list[tuple[type, type]], dict[type, type], dict[type, list[Any]]]:
+    normalized_mappings: list[tuple[type, type]] = []
     orm_to_dto: dict[type, type] = {}
-    for dto_kls, orm_kls in mappings:
+    orm_filter_overrides: dict[type, list[Any]] = {}
+
+    for mapping in mappings:
+        if len(mapping) == 2:
+            dto_kls, orm_kls = mapping
+            filter_override = None
+        elif len(mapping) == 3:
+            dto_kls, orm_kls, filter_override = mapping
+            if not isinstance(filter_override, list):
+                raise TypeError(
+                    f"Invalid mapping filter for {orm_kls}: expected list, got {type(filter_override).__name__}"
+                )
+            orm_filter_overrides[orm_kls] = list(filter_override)
+        else:
+            raise TypeError(
+                f"Invalid mapping item length {len(mapping)}: expected 2 or 3"
+            )
+
         prev = orm_to_dto.get(orm_kls)
         if prev is not None and prev is not dto_kls:
             raise ValueError(
                 f"Duplicate ORM mapping detected for {orm_kls}: {prev} vs {dto_kls}"
             )
         orm_to_dto[orm_kls] = dto_kls
-    return orm_to_dto
+        normalized_mappings.append((dto_kls, orm_kls))
+
+    return normalized_mappings, orm_to_dto, orm_filter_overrides
+
+
+def _resolve_target_filters(
+    target_orm: type,
+    orm_filter_overrides: dict[type, list[Any]],
+    default_filter: Callable[[type], list[Any]] | None,
+) -> list[Any]:
+    # Explicit mapping override has highest priority. [] means explicit reset.
+    if target_orm in orm_filter_overrides:
+        return list(orm_filter_overrides[target_orm])
+
+    if default_filter is None:
+        return []
+
+    resolved = default_filter(target_orm)
+    if resolved is None:
+        return []
+    if not isinstance(resolved, list):
+        raise TypeError(
+            f"default_filter({target_orm.__name__}) must return list, got {type(resolved).__name__}"
+        )
+    return list(resolved)
 
 
 def _inspect_orm_relationships(
     orm_kls: type,
     orm_to_dto: dict[type, type],
     session_factory: Callable,
+    orm_filter_overrides: dict[type, list[Any]],
+    default_filter: Callable[[type], list[Any]] | None,
 ) -> list[Relationship]:
     from sqlalchemy import inspect
     from sqlalchemy.orm import MANYTOONE, ONETOMANY, MANYTOMANY
@@ -57,6 +106,11 @@ def _inspect_orm_relationships(
             continue
 
         direction = rel.direction
+        filters = _resolve_target_filters(
+            target_orm=target_orm,
+            orm_filter_overrides=orm_filter_overrides,
+            default_filter=default_filter,
+        )
 
         if direction is MANYTOONE:
             local_col, remote_col = _expect_single_pair(
@@ -72,6 +126,7 @@ def _inspect_orm_relationships(
                 target_dto_kls=target_dto,
                 target_remote_col_name=remote_col.key,
                 session_factory=session_factory,
+                filters=filters,
             )
 
         elif direction is ONETOMANY:
@@ -88,6 +143,7 @@ def _inspect_orm_relationships(
                 target_dto_kls=target_dto,
                 target_fk_col_name=remote_col.key,
                 session_factory=session_factory,
+                filters=filters,
             )
 
         elif direction is MANYTOMANY:
@@ -118,6 +174,7 @@ def _inspect_orm_relationships(
                 secondary_remote_col_name=secondary_remote_col.key,
                 target_match_col_name=target_col.key,
                 session_factory=session_factory,
+                filters=filters,
             )
 
         else:
@@ -140,17 +197,20 @@ def _inspect_orm_relationships(
 
 def build_relationship(
     *,
-    mappings: list[tuple[type, type]],
+    mappings: list[Mapping],
     session_factory: Callable,
+    default_filter: Callable[[type], list[Any]] | None = None,
 ) -> list[Entity]:
-    orm_to_dto = _build_orm_to_dto_map(mappings)
+    normalized_mappings, orm_to_dto, orm_filter_overrides = _normalize_mappings(mappings)
     entities: list[Entity] = []
 
-    for dto_kls, orm_kls in mappings:
+    for dto_kls, orm_kls in normalized_mappings:
         relationships = _inspect_orm_relationships(
             orm_kls=orm_kls,
             orm_to_dto=orm_to_dto,
             session_factory=session_factory,
+            orm_filter_overrides=orm_filter_overrides,
+            default_filter=default_filter,
         )
         if relationships:
             entities.append(Entity(kls=dto_kls, relationships=relationships))

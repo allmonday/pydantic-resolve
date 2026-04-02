@@ -89,6 +89,93 @@ async def test_create_many_to_many_loader(session_factory, seeded_db):
     assert result[3] == []
 
 
+@pytest.mark.asyncio
+async def test_many_to_one_loader_applies_filters(
+    session_factory,
+    session_maker,
+    seeded_db,
+):
+    loader_mod = _loader_module()
+
+    async with session_maker() as session:
+        async with session.begin():
+            session.add(SchoolOrm(id=99, name="Deleted-School", deleted=True))
+
+    loader_kls = loader_mod.create_many_to_one_loader(
+        source_orm_kls=StudentOrm,
+        rel_name="school",
+        target_orm_kls=SchoolOrm,
+        target_dto_kls=SchoolDTO,
+        target_remote_col_name="id",
+        session_factory=session_factory,
+        filters=[SchoolOrm.deleted.is_(False)],
+    )
+
+    result = await loader_kls().load_many([1, 99])
+
+    assert result[0] == SchoolDTO(id=1, name="School-A")
+    assert result[1] is None
+
+
+@pytest.mark.asyncio
+async def test_one_to_many_loader_applies_filters(
+    session_factory,
+    session_maker,
+    seeded_db,
+):
+    loader_mod = _loader_module()
+
+    async with session_maker() as session:
+        async with session.begin():
+            session.add(StudentOrm(id=99, name="Ghost", school_id=1, deleted=True))
+
+    loader_kls = loader_mod.create_one_to_many_loader(
+        source_orm_kls=SchoolOrm,
+        rel_name="students",
+        target_orm_kls=StudentOrm,
+        target_dto_kls=StudentDTO,
+        target_fk_col_name="school_id",
+        session_factory=session_factory,
+        filters=[StudentOrm.deleted.is_(False)],
+    )
+
+    result = await loader_kls().load_many([1])
+    assert sorted(s.name for s in result[0]) == ["Alice", "Bob"]
+
+
+@pytest.mark.asyncio
+async def test_many_to_many_loader_applies_filters(
+    session_factory,
+    session_maker,
+    seeded_db,
+):
+    loader_mod = _loader_module()
+
+    async with session_maker() as session:
+        async with session.begin():
+            session.add(CourseOrm(id=99, title="Ghost", deleted=True))
+            await session.execute(
+                student_course.insert(),
+                [{"student_id": 1, "course_id": 99}],
+            )
+
+    loader_kls = loader_mod.create_many_to_many_loader(
+        source_orm_kls=StudentOrm,
+        rel_name="courses",
+        target_orm_kls=CourseOrm,
+        target_dto_kls=CourseDTO,
+        secondary_table=student_course,
+        secondary_local_col_name="student_id",
+        secondary_remote_col_name="course_id",
+        target_match_col_name="id",
+        session_factory=session_factory,
+        filters=[CourseOrm.deleted.is_(False)],
+    )
+
+    result = await loader_kls().load_many([1])
+    assert sorted(c.title for c in result[0]) == ["Math", "Science"]
+
+
 def test_loader_factory_generates_unique_identity():
     loader_mod = _loader_module()
 

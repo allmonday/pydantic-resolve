@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator, Callable
 
 import pytest
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import Column, ForeignKey, Integer, String, Table
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Table
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -26,6 +26,7 @@ class SchoolOrm(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String)
+    deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     students: Mapped[list["StudentOrm"]] = relationship(back_populates="school")
 
 
@@ -34,6 +35,7 @@ class StudentOrm(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String)
+    deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     school_id: Mapped[int] = mapped_column(ForeignKey("school.id"))
 
     school: Mapped[SchoolOrm] = relationship(back_populates="students")
@@ -48,6 +50,7 @@ class CourseOrm(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     title: Mapped[str] = mapped_column(String)
+    deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     students: Mapped[list[StudentOrm]] = relationship(
         secondary=student_course,
         back_populates="courses",
@@ -106,14 +109,14 @@ async def seeded_db(session_maker: async_sessionmaker[AsyncSession]) -> None:
         async with session.begin():
             session.add_all(
                 [
-                    SchoolOrm(id=1, name="School-A"),
-                    SchoolOrm(id=2, name="School-B"),
-                    StudentOrm(id=1, name="Alice", school_id=1),
-                    StudentOrm(id=2, name="Bob", school_id=1),
-                    StudentOrm(id=3, name="Cathy", school_id=2),
-                    CourseOrm(id=10, title="Math"),
-                    CourseOrm(id=20, title="Science"),
-                    CourseOrm(id=30, title="History"),
+                    SchoolOrm(id=1, name="School-A", deleted=False),
+                    SchoolOrm(id=2, name="School-B", deleted=False),
+                    StudentOrm(id=1, name="Alice", school_id=1, deleted=False),
+                    StudentOrm(id=2, name="Bob", school_id=1, deleted=False),
+                    StudentOrm(id=3, name="Cathy", school_id=2, deleted=False),
+                    CourseOrm(id=10, title="Math", deleted=False),
+                    CourseOrm(id=20, title="Science", deleted=False),
+                    CourseOrm(id=30, title="History", deleted=False),
                 ]
             )
             await session.execute(
