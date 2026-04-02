@@ -9,10 +9,11 @@ from pydantic_resolve.contrib.django.loader import (
     create_many_to_many_loader,
     create_many_to_one_loader,
     create_one_to_many_loader,
+    create_reverse_one_to_one_loader,
 )
 
-from tests.contrib.django.dto import CourseDTO, SchoolDTO, StudentDTO
-from tests.contrib.django.models import CourseOrm, SchoolOrm, StudentOrm
+from tests.contrib.django.dto import CourseDTO, SchoolDTO, StudentDTO, StudentProfileDTO
+from tests.contrib.django.models import CourseOrm, SchoolOrm, StudentOrm, StudentProfileOrm
 
 
 async def _run_sync(fn):
@@ -71,6 +72,24 @@ async def test_create_many_to_many_loader(seeded_db):
     assert [course.title for course in result[1]] == ["Science"]
     assert result[2] == []
     assert result[3] == []
+
+
+@pytest.mark.asyncio
+async def test_create_reverse_one_to_one_loader(seeded_db):
+    loader_kls = create_reverse_one_to_one_loader(
+        source_orm_kls=StudentOrm,
+        rel_name="profile",
+        target_orm_kls=StudentProfileOrm,
+        target_dto_kls=StudentProfileDTO,
+        target_relation_field_name="student_id",
+    )
+
+    result = await loader_kls().load_many([1, 2, 3, 999])
+
+    assert result[0] == StudentProfileDTO(id=100, student_id=1, nickname="ali")
+    assert result[1] is None
+    assert result[2] == StudentProfileDTO(id=300, student_id=3, nickname="cat")
+    assert result[3] is None
 
 
 @pytest.mark.asyncio

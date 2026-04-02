@@ -35,7 +35,7 @@ if not settings.configured:
 
 django.setup()
 
-from tests.contrib.django.models import CourseOrm, SchoolOrm, StudentOrm  # noqa: E402
+from tests.contrib.django.models import CourseOrm, SchoolOrm, StudentOrm, StudentProfileOrm  # noqa: E402
 
 
 @pytest.fixture(scope="session")
@@ -44,6 +44,7 @@ def django_schema():
         editor.create_model(SchoolOrm)
         editor.create_model(StudentOrm)
         editor.create_model(CourseOrm)
+        editor.create_model(StudentProfileOrm)
 
     try:
         yield
@@ -55,6 +56,7 @@ def django_schema():
 
 @pytest.fixture
 def seeded_db(django_schema):
+    StudentProfileOrm.objects.all().delete()
     StudentOrm.objects.all().delete()
     CourseOrm.objects.all().delete()
     SchoolOrm.objects.all().delete()
@@ -64,7 +66,7 @@ def seeded_db(django_schema):
 
     alice = StudentOrm.objects.create(id=1, name="Alice", school=school_a, deleted=False)
     bob = StudentOrm.objects.create(id=2, name="Bob", school=school_a, deleted=False)
-    StudentOrm.objects.create(id=3, name="Cathy", school=school_b, deleted=False)
+    cathy = StudentOrm.objects.create(id=3, name="Cathy", school=school_b, deleted=False)
 
     math = CourseOrm.objects.create(id=10, title="Math", deleted=False)
     science = CourseOrm.objects.create(id=20, title="Science", deleted=False)
@@ -72,6 +74,9 @@ def seeded_db(django_schema):
 
     alice.courses.add(math, science)
     bob.courses.add(science)
+
+    StudentProfileOrm.objects.create(id=100, student=alice, nickname="ali", deleted=False)
+    StudentProfileOrm.objects.create(id=300, student=cathy, nickname="cat", deleted=False)
 
 
 @pytest.fixture

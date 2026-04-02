@@ -35,3 +35,17 @@ class CourseOrm(models.Model):
     class Meta:
         app_label = "tests_contrib_django"
         db_table = "course"
+
+
+class StudentProfileOrm(models.Model):
+    student = models.OneToOneField(
+        StudentOrm,
+        on_delete=models.CASCADE,
+        related_name="profile",
+    )
+    nickname = models.CharField(max_length=100)
+    deleted = models.BooleanField(default=False)
+
+    class Meta:
+        app_label = "tests_contrib_django"
+        db_table = "student_profile"

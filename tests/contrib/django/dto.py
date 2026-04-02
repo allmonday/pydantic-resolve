@@ -21,3 +21,11 @@ class CourseDTO(BaseModel):
 
     id: int
     title: str
+
+
+class StudentProfileDTO(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    student_id: int
+    nickname: str

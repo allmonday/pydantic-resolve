@@ -8,8 +8,8 @@ from pydantic import BaseModel, ConfigDict, computed_field
 
 from pydantic_resolve.contrib.django import build_relationship
 
-from tests.contrib.django.dto import CourseDTO, SchoolDTO, StudentDTO
-from tests.contrib.django.models import CourseOrm, SchoolOrm, StudentOrm
+from tests.contrib.django.dto import CourseDTO, SchoolDTO, StudentDTO, StudentProfileDTO
+from tests.contrib.django.models import CourseOrm, SchoolOrm, StudentOrm, StudentProfileOrm
 
 
 def _find_entity(entities, target_kls):
@@ -43,6 +43,24 @@ def test_inspector_builds_relationships_for_m2o_o2m_m2m(django_schema, orm_mappi
     assert get_origin(students_rel.target) is list
     assert get_args(students_rel.target)[0] is StudentDTO
     assert students_rel.load_many is False
+
+
+def test_inspector_builds_relationship_for_reverse_one_to_one(django_schema):
+    entities = build_relationship(
+        mappings=[
+            (StudentDTO, StudentOrm),
+            (SchoolDTO, SchoolOrm),
+            (CourseDTO, CourseOrm),
+            (StudentProfileDTO, StudentProfileOrm),
+        ]
+    )
+
+    student_entity = _find_entity(entities, StudentDTO)
+    profile_rel = _find_relationship(student_entity, "profile")
+
+    assert profile_rel.fk == "id"
+    assert profile_rel.target is StudentProfileDTO
+    assert profile_rel.load_many is False
 
 
 def test_inspector_skips_unmapped_targets_with_warning(django_schema, caplog):
