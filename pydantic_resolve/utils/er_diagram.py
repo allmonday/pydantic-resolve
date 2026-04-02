@@ -242,6 +242,93 @@ class ErDiagram(BaseModel):
 
         return _auto_load
 
+    def add_relationship(self, entities: list[Entity]) -> "ErDiagram":
+        """Return a new ErDiagram with entities merged by class.
+
+        Merge rules for entities with same `kls`:
+        - relationships: merged by `name` (error on duplicate)
+        - queries: merged by method name (error on duplicate)
+        - mutations: merged by method name (error on duplicate)
+        """
+        if not entities:
+            return ErDiagram(configs=list(self.configs), description=self.description)
+
+        seen_incoming = set()
+        for entity in entities:
+            if entity.kls in seen_incoming:
+                raise ValueError(f"Duplicate incoming entity.kls detected: {entity.kls}")
+            seen_incoming.add(entity.kls)
+
+        incoming_map = {entity.kls: entity for entity in entities}
+
+        def _merge_method_configs(
+            existing_items: list[QueryConfig] | list[MutationConfig],
+            incoming_items: list[QueryConfig] | list[MutationConfig],
+            *,
+            kind: str,
+            kls: type,
+        ) -> list[QueryConfig] | list[MutationConfig]:
+            merged = list(existing_items)
+            seen_method_names = {cfg.method.__name__ for cfg in existing_items}
+
+            for cfg in incoming_items:
+                method_name = cfg.method.__name__
+                if method_name in seen_method_names:
+                    raise ValueError(
+                        f"Duplicate {kind} method detected in {kls.__name__}: '{method_name}'"
+                    )
+                merged.append(cfg)
+                seen_method_names.add(method_name)
+
+            return merged
+
+        merged_configs: list[Entity] = []
+        existing_kls = {cfg.kls for cfg in self.configs}
+
+        for cfg in self.configs:
+            incoming = incoming_map.get(cfg.kls)
+            if incoming is None:
+                merged_configs.append(cfg)
+                continue
+
+            merged_relationships = list(cfg.relationships)
+            seen_relationship_names = {rel.name for rel in merged_relationships}
+            for rel in incoming.relationships:
+                if rel.name in seen_relationship_names:
+                    raise ValueError(
+                        f"Duplicate relationship name detected in {cfg.kls.__name__}: '{rel.name}'"
+                    )
+                merged_relationships.append(rel)
+                seen_relationship_names.add(rel.name)
+
+            merged_queries = _merge_method_configs(
+                cfg.queries,
+                incoming.queries,
+                kind='query',
+                kls=cfg.kls,
+            )
+            merged_mutations = _merge_method_configs(
+                cfg.mutations,
+                incoming.mutations,
+                kind='mutation',
+                kls=cfg.kls,
+            )
+
+            merged_configs.append(
+                Entity(
+                    kls=cfg.kls,
+                    relationships=merged_relationships,
+                    queries=merged_queries,
+                    mutations=merged_mutations,
+                )
+            )
+
+        for incoming in entities:
+            if incoming.kls not in existing_kls:
+                merged_configs.append(incoming)
+
+        return ErDiagram(configs=merged_configs, description=self.description)
+
 
 class BaseEntity:  # just type (TODO: optimize)
     entities: list[Entity]

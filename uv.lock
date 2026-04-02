@@ -1485,7 +1485,7 @@ wheels = [
 
 [[package]]
 name = "pydantic-resolve"
-version = "4.0.1"
+version = "4.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiodataloader" },
@@ -1514,6 +1514,9 @@ dev = [
 mcp = [
     { name = "fastmcp" },
 ]
+sqlalchemy = [
+    { name = "sqlalchemy", extra = ["asyncio"] },
+]
 
 [package.metadata]
 requires-dist = [
@@ -1534,10 +1537,11 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0,<5.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.14.5,<0.15.0" },
     { name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'dev'", specifier = ">=2.0.7,<3.0.0" },
+    { name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'sqlalchemy'", specifier = ">=2.0.7,<3.0.0" },
     { name = "tox", marker = "extra == 'dev'", specifier = ">=4.4.6,<5.0.0" },
     { name = "uvicorn", marker = "extra == 'dev'", specifier = ">=0.41.0" },
 ]
-provides-extras = ["mcp", "dev"]
+provides-extras = ["mcp", "sqlalchemy", "dev"]
 
 [[package]]
 name = "pydantic-settings"
