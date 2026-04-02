@@ -45,14 +45,14 @@ def create_mcp_server(
 
     Example:
         ```python
-        from pydantic_resolve import base_entity, config_global_resolver
+        from pydantic_resolve import base_entity
         from pydantic_resolve.graphql.mcp import create_mcp_server
 
         # Define entities
         BaseEntity = base_entity()
-        config_global_resolver(BaseEntity.get_diagram())
 
         # Create MCP server
+        # No need to call config_global_resolver - MCP internally uses isolated resolvers
         apps = [
             {
                 "name": "blog",
