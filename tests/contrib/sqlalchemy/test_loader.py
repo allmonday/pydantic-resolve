@@ -12,6 +12,8 @@ from .conftest import (
     SchoolOrm,
     StudentDTO,
     StudentOrm,
+    StudentProfileDTO,
+    StudentProfileOrm,
     student_course,
 )
 
@@ -211,3 +213,26 @@ def test_loader_factory_generates_unique_identity():
     }
 
     assert len(names) == 3
+
+
+@pytest.mark.asyncio
+async def test_create_reverse_one_to_one_loader(session_factory, seeded_db):
+    loader_mod = _loader_module()
+
+    loader_kls = loader_mod.create_reverse_one_to_one_loader(
+        source_orm_kls=StudentOrm,
+        rel_name="profile",
+        target_orm_kls=StudentProfileOrm,
+        target_dto_kls=StudentProfileDTO,
+        target_fk_col_name="student_id",
+        session_factory=session_factory,
+    )
+
+    assert issubclass(loader_kls, DataLoader)
+
+    result = await loader_kls().load_many([1, 2, 3, 999])
+
+    assert result[0] == StudentProfileDTO(id=100, student_id=1, nickname="ali")
+    assert result[1] is None
+    assert result[2] == StudentProfileDTO(id=300, student_id=3, nickname="cat")
+    assert result[3] is None

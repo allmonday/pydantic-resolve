@@ -16,6 +16,8 @@ from .conftest import (
     SchoolOrm,
     StudentDTO,
     StudentOrm,
+    StudentProfileDTO,
+    StudentProfileOrm,
     student_course,
 )
 
@@ -316,3 +318,47 @@ async def test_contrib_loader_uses_query_meta_fields(
     assert set(school_loader._effective_query_fields) == {"name", "id"}
     assert set(courses_loader._query_meta["fields"]) == {"title"}
     assert set(courses_loader._effective_query_fields) == {"title", "id"}
+
+
+@pytest.mark.asyncio
+async def test_resolver_with_reverse_one_to_one(
+    session_factory,
+    session_maker,
+    seeded_db,
+):
+    entities = build_relationship(
+        mappings=[
+            (StudentDTO, StudentOrm),
+            (StudentProfileDTO, StudentProfileOrm),
+        ],
+        session_factory=session_factory,
+    )
+
+    diagram = ErDiagram(configs=[]).add_relationship(entities)
+    AutoLoad = diagram.create_auto_load()
+
+    class StudentView(StudentDTO):
+        model_config = ConfigDict(from_attributes=True)
+
+        profile: Annotated[StudentProfileDTO | None, AutoLoad()] = None
+
+    MyResolver = config_resolver("SA_RO2OResolver", er_diagram=diagram)
+
+    async with session_maker() as session:
+        students = (
+            await session.execute(select(StudentOrm).order_by(StudentOrm.id))
+        ).scalars().all()
+
+    payload = [
+        StudentView(id=student.id, name=student.name, school_id=student.school_id)
+        for student in students
+    ]
+    result = await MyResolver().resolve(payload)
+
+    alice = _find_by_id(result, 1)
+    bob = _find_by_id(result, 2)
+    cathy = _find_by_id(result, 3)
+
+    assert alice.profile == StudentProfileDTO(id=100, student_id=1, nickname="ali")
+    assert bob.profile is None
+    assert cathy.profile == StudentProfileDTO(id=300, student_id=3, nickname="cat")

@@ -7,6 +7,7 @@ from pydantic_resolve.contrib.sqlalchemy.loader import (
     create_many_to_many_loader,
     create_many_to_one_loader,
     create_one_to_many_loader,
+    create_reverse_one_to_one_loader,
 )
 from pydantic_resolve.utils.er_diagram import Entity, Relationship
 
@@ -156,16 +157,29 @@ def _inspect_orm_relationships(
                 f"Composite FK is not supported for ONETOMANY: {orm_kls.__name__}.{rel.key}",
             )
             fk_field = local_col.key
-            target_type = list[target_dto]
-            loader = create_one_to_many_loader(
-                source_orm_kls=orm_kls,
-                rel_name=rel.key,
-                target_orm_kls=target_orm,
-                target_dto_kls=target_dto,
-                target_fk_col_name=remote_col.key,
-                session_factory=session_factory,
-                filters=filters,
-            )
+
+            if rel.uselist is False:
+                target_type = target_dto
+                loader = create_reverse_one_to_one_loader(
+                    source_orm_kls=orm_kls,
+                    rel_name=rel.key,
+                    target_orm_kls=target_orm,
+                    target_dto_kls=target_dto,
+                    target_fk_col_name=remote_col.key,
+                    session_factory=session_factory,
+                    filters=filters,
+                )
+            else:
+                target_type = list[target_dto]
+                loader = create_one_to_many_loader(
+                    source_orm_kls=orm_kls,
+                    rel_name=rel.key,
+                    target_orm_kls=target_orm,
+                    target_dto_kls=target_dto,
+                    target_fk_col_name=remote_col.key,
+                    session_factory=session_factory,
+                    filters=filters,
+                )
 
         elif direction is MANYTOMANY:
             secondary = rel.secondary

@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Table
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from typing import Optional
 
 
 class Base(DeclarativeBase):
@@ -43,6 +44,20 @@ class StudentOrm(Base):
         secondary=student_course,
         back_populates="students",
     )
+    profile: Mapped[Optional["StudentProfileOrm"]] = relationship(
+        back_populates="student", uselist=False
+    )
+
+
+class StudentProfileOrm(Base):
+    __tablename__ = "student_profile"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("student.id"), unique=True)
+    nickname: Mapped[str] = mapped_column(String)
+    deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    student: Mapped["StudentOrm"] = relationship(back_populates="profile")
 
 
 class CourseOrm(Base):
@@ -77,6 +92,14 @@ class CourseDTO(BaseModel):
 
     id: int
     title: str
+
+
+class StudentProfileDTO(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    student_id: int
+    nickname: str
 
 
 @pytest.fixture
@@ -126,6 +149,12 @@ async def seeded_db(session_maker: async_sessionmaker[AsyncSession]) -> None:
                     {"student_id": 1, "course_id": 20},
                     {"student_id": 2, "course_id": 20},
                 ],
+            )
+            session.add_all(
+                [
+                    StudentProfileOrm(id=100, student_id=1, nickname="ali", deleted=False),
+                    StudentProfileOrm(id=300, student_id=3, nickname="cat", deleted=False),
+                ]
             )
 
 
