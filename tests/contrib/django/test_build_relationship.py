@@ -5,7 +5,7 @@ from typing import Annotated
 from asgiref.sync import sync_to_async
 import pytest
 from django.db.models import Q
-from pydantic import ConfigDict
+from pydantic import BaseModel, ConfigDict
 
 from pydantic_resolve import ErDiagram, config_resolver
 from pydantic_resolve.contrib.django import build_relationship
@@ -190,3 +190,63 @@ async def test_mapping_filter_non_empty_overrides_global_default(seeded_db):
 
     assert student4.school == SchoolDTO(id=99, name="Deleted-School")
     assert [course.title for course in student1.courses] == ["Deleted-Course"]
+
+
+@pytest.mark.asyncio
+async def test_contrib_loader_uses_query_meta_fields(seeded_db):
+    class SchoolNameDTO(BaseModel):
+        model_config = ConfigDict(from_attributes=True)
+
+        name: str
+
+    class CourseTitleDTO(BaseModel):
+        model_config = ConfigDict(from_attributes=True)
+
+        title: str
+
+    entities = build_relationship(
+        mappings=[
+            (StudentDTO, StudentOrm),
+            (SchoolNameDTO, SchoolOrm),
+            (CourseTitleDTO, CourseOrm),
+        ]
+    )
+
+    diagram = ErDiagram(configs=[]).add_relationship(entities)
+    AutoLoad = diagram.create_auto_load()
+
+    class StudentView(StudentDTO):
+        model_config = ConfigDict(from_attributes=True)
+
+        school: Annotated[SchoolNameDTO | None, AutoLoad()] = None
+        courses: Annotated[list[CourseTitleDTO], AutoLoad()] = []
+
+    MyResolver = config_resolver("DjangoContribQueryMetaResolver", er_diagram=diagram)
+
+    students = await _run_sync(lambda: list(StudentOrm.objects.order_by("id")))
+    payload = [
+        StudentView(id=student.id, name=student.name, school_id=student.school_id)
+        for student in students
+    ]
+    resolver = MyResolver()
+    result = await resolver.resolve(payload)
+
+    first = _find_student(result)
+    assert first.school == SchoolNameDTO(name="School-A")
+    assert sorted(course.title for course in first.courses) == ["Math", "Science"]
+
+    school_loader = next(
+        loader
+        for path, loader in resolver.loader_instance_cache.items()
+        if "_school_" in path
+    )
+    courses_loader = next(
+        loader
+        for path, loader in resolver.loader_instance_cache.items()
+        if "_courses_" in path
+    )
+
+    assert set(school_loader._query_meta["fields"]) == {"name"}
+    assert set(school_loader._effective_query_fields) == {"name", "id"}
+    assert set(courses_loader._query_meta["fields"]) == {"title"}
+    assert set(courses_loader._effective_query_fields) == {"title", "id"}

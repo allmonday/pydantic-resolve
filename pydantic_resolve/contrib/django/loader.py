@@ -47,6 +47,38 @@ def _apply_filters(queryset: Any, filters: list[Any] | None) -> Any:
     return queryset
 
 
+def _dedupe_fields(fields: list[str]) -> list[str]:
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for field in fields:
+        if field not in seen:
+            deduped.append(field)
+            seen.add(field)
+    return deduped
+
+
+def _get_default_fields(target_dto_kls: type) -> list[str]:
+    return list(target_dto_kls.model_fields.keys())
+
+
+def _get_effective_query_fields(
+    loader: DataLoader,
+    target_dto_kls: type,
+    extra_fields: list[str] | None = None,
+) -> list[str]:
+    query_meta = getattr(loader, "_query_meta", None)
+    requested_fields = query_meta["fields"] if query_meta else _get_default_fields(target_dto_kls)
+    effective_fields = _dedupe_fields([*requested_fields, *(extra_fields or [])])
+    loader._effective_query_fields = effective_fields
+    return effective_fields
+
+
+def _apply_only(queryset: Any, fields: list[str]) -> Any:
+    if fields:
+        return queryset.only(*fields)
+    return queryset
+
+
 async def _evaluate_queryset(queryset: Any) -> list[Any]:
     return await sync_to_async(list, thread_sensitive=True)(queryset)
 
@@ -65,18 +97,31 @@ def create_many_to_one_loader(
 
     class _Loader(DataLoader):
         async def batch_load_fn(self, keys):
-            queryset = target_orm_kls.objects.filter(
-                **{f"{target_remote_field_name}__in": list(set(keys))}
+            effective_fields = _get_effective_query_fields(
+                self,
+                self.target_dto_kls,
+                extra_fields=[self.target_remote_field_name],
             )
-            queryset = _maybe_use_database(queryset, using)
-            queryset = _apply_filters(queryset, filters)
+
+            queryset = self.target_orm_kls.objects.filter(
+                **{f"{self.target_remote_field_name}__in": list(set(keys))}
+            )
+            queryset = _maybe_use_database(queryset, self.using)
+            queryset = _apply_filters(queryset, self.filters)
+            queryset = _apply_only(queryset, effective_fields)
             rows = await _evaluate_queryset(queryset)
 
-            lookup = {getattr(row, target_remote_field_name): row for row in rows}
+            lookup = {getattr(row, self.target_remote_field_name): row for row in rows}
             return [
-                target_dto_kls.model_validate(lookup[key]) if key in lookup else None
+                self.target_dto_kls.model_validate(lookup[key]) if key in lookup else None
                 for key in keys
             ]
+
+    _Loader.target_orm_kls = target_orm_kls
+    _Loader.target_dto_kls = target_dto_kls
+    _Loader.target_remote_field_name = target_remote_field_name
+    _Loader.using = staticmethod(using) if callable(using) else using
+    _Loader.filters = filters
 
     return _finalize_loader_class(_Loader, identity)
 
@@ -95,20 +140,33 @@ def create_one_to_many_loader(
 
     class _Loader(DataLoader):
         async def batch_load_fn(self, keys):
-            queryset = target_orm_kls.objects.filter(
-                **{f"{target_relation_field_name}__in": list(set(keys))}
+            effective_fields = _get_effective_query_fields(
+                self,
+                self.target_dto_kls,
+                extra_fields=[self.target_relation_field_name],
             )
-            queryset = _maybe_use_database(queryset, using)
-            queryset = _apply_filters(queryset, filters)
+
+            queryset = self.target_orm_kls.objects.filter(
+                **{f"{self.target_relation_field_name}__in": list(set(keys))}
+            )
+            queryset = _maybe_use_database(queryset, self.using)
+            queryset = _apply_filters(queryset, self.filters)
+            queryset = _apply_only(queryset, effective_fields)
             rows = await _evaluate_queryset(queryset)
 
             grouped = defaultdict(list)
             for row in rows:
-                grouped[getattr(row, target_relation_field_name)].append(
-                    target_dto_kls.model_validate(row)
+                grouped[getattr(row, self.target_relation_field_name)].append(
+                    self.target_dto_kls.model_validate(row)
                 )
 
             return [grouped.get(key, []) for key in keys]
+
+    _Loader.target_orm_kls = target_orm_kls
+    _Loader.target_dto_kls = target_dto_kls
+    _Loader.target_relation_field_name = target_relation_field_name
+    _Loader.using = staticmethod(using) if callable(using) else using
+    _Loader.filters = filters
 
     return _finalize_loader_class(_Loader, identity)
 
@@ -127,18 +185,31 @@ def create_reverse_one_to_one_loader(
 
     class _Loader(DataLoader):
         async def batch_load_fn(self, keys):
-            queryset = target_orm_kls.objects.filter(
-                **{f"{target_relation_field_name}__in": list(set(keys))}
+            effective_fields = _get_effective_query_fields(
+                self,
+                self.target_dto_kls,
+                extra_fields=[self.target_relation_field_name],
             )
-            queryset = _maybe_use_database(queryset, using)
-            queryset = _apply_filters(queryset, filters)
+
+            queryset = self.target_orm_kls.objects.filter(
+                **{f"{self.target_relation_field_name}__in": list(set(keys))}
+            )
+            queryset = _maybe_use_database(queryset, self.using)
+            queryset = _apply_filters(queryset, self.filters)
+            queryset = _apply_only(queryset, effective_fields)
             rows = await _evaluate_queryset(queryset)
 
-            lookup = {getattr(row, target_relation_field_name): row for row in rows}
+            lookup = {getattr(row, self.target_relation_field_name): row for row in rows}
             return [
-                target_dto_kls.model_validate(lookup[key]) if key in lookup else None
+                self.target_dto_kls.model_validate(lookup[key]) if key in lookup else None
                 for key in keys
             ]
+
+    _Loader.target_orm_kls = target_orm_kls
+    _Loader.target_dto_kls = target_dto_kls
+    _Loader.target_relation_field_name = target_relation_field_name
+    _Loader.using = staticmethod(using) if callable(using) else using
+    _Loader.filters = filters
 
     return _finalize_loader_class(_Loader, identity)
 
@@ -160,27 +231,43 @@ def create_many_to_many_loader(
 
     class _Loader(DataLoader):
         async def batch_load_fn(self, keys):
-            source_queryset = source_orm_kls.objects.filter(
-                **{f"{source_match_field_name}__in": list(set(keys))}
+            target_pk_field = self.target_orm_kls._meta.pk.attname
+            effective_fields = _get_effective_query_fields(
+                self,
+                self.target_dto_kls,
+                extra_fields=[target_pk_field],
             )
-            source_queryset = _maybe_use_database(source_queryset, using)
 
-            target_queryset = target_orm_kls.objects.all()
-            target_queryset = _maybe_use_database(target_queryset, using)
-            target_queryset = _apply_filters(target_queryset, filters)
+            source_queryset = self.source_orm_kls.objects.filter(
+                **{f"{self.source_match_field_name}__in": list(set(keys))}
+            )
+            source_queryset = _maybe_use_database(source_queryset, self.using)
+
+            target_queryset = self.target_orm_kls.objects.all()
+            target_queryset = _maybe_use_database(target_queryset, self.using)
+            target_queryset = _apply_filters(target_queryset, self.filters)
+            target_queryset = _apply_only(target_queryset, effective_fields)
 
             source_queryset = source_queryset.prefetch_related(
-                Prefetch(rel_name, queryset=target_queryset, to_attr=prefetch_attr)
+                Prefetch(rel_name, queryset=target_queryset, to_attr=self.prefetch_attr)
             )
             source_rows = await _evaluate_queryset(source_queryset)
 
             grouped = {}
             for row in source_rows:
-                grouped[getattr(row, source_match_field_name)] = [
-                    target_dto_kls.model_validate(item)
-                    for item in getattr(row, prefetch_attr, [])
+                grouped[getattr(row, self.source_match_field_name)] = [
+                    self.target_dto_kls.model_validate(item)
+                    for item in getattr(row, self.prefetch_attr, [])
                 ]
 
             return [grouped.get(key, []) for key in keys]
+
+    _Loader.source_orm_kls = source_orm_kls
+    _Loader.target_orm_kls = target_orm_kls
+    _Loader.target_dto_kls = target_dto_kls
+    _Loader.source_match_field_name = source_match_field_name
+    _Loader.using = staticmethod(using) if callable(using) else using
+    _Loader.filters = filters
+    _Loader.prefetch_attr = prefetch_attr
 
     return _finalize_loader_class(_Loader, identity)
