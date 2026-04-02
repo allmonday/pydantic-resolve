@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 import re
-from typing import Any, Callable
+from typing import Any
 
 from aiodataloader import DataLoader
 
