@@ -268,8 +268,15 @@ class ErDiagram(BaseModel):
             kind: str,
             kls: type,
         ) -> list[QueryConfig] | list[MutationConfig]:
+            from pydantic_resolve.graphql.utils.naming import to_graphql_field_name
+
+            def _to_operation_name(cfg: QueryConfig | MutationConfig) -> str:
+                base_name = cfg.name or cfg.method.__name__
+                return to_graphql_field_name(kls.__name__, base_name)
+
             merged = list(existing_items)
             seen_method_names = {cfg.method.__name__ for cfg in existing_items}
+            seen_operation_names = {_to_operation_name(cfg) for cfg in existing_items}
 
             for cfg in incoming_items:
                 method_name = cfg.method.__name__
@@ -277,8 +284,16 @@ class ErDiagram(BaseModel):
                     raise ValueError(
                         f"Duplicate {kind} method detected in {kls.__name__}: '{method_name}'"
                     )
+
+                operation_name = _to_operation_name(cfg)
+                if operation_name in seen_operation_names:
+                    raise ValueError(
+                        f"Duplicate {kind} operation name detected in {kls.__name__}: '{operation_name}'"
+                    )
+
                 merged.append(cfg)
                 seen_method_names.add(method_name)
+                seen_operation_names.add(operation_name)
 
             return merged
 

@@ -61,6 +61,10 @@ def _get_default_fields(target_dto_kls: type) -> list[str]:
     return list(target_dto_kls.model_fields.keys())
 
 
+def _get_orm_scalar_fields(target_orm_kls: type) -> set[str]:
+    return {field.attname for field in target_orm_kls._meta.concrete_fields}
+
+
 def _get_effective_query_fields(
     loader: DataLoader,
     target_dto_kls: type,
@@ -71,6 +75,13 @@ def _get_effective_query_fields(
     effective_fields = _dedupe_fields([*requested_fields, *(extra_fields or [])])
     loader._effective_query_fields = effective_fields
     return effective_fields
+
+
+def _sanitize_only_fields(loader: DataLoader, target_orm_kls: type, fields: list[str]) -> list[str]:
+    scalar_fields = _get_orm_scalar_fields(target_orm_kls)
+    sanitized_fields = [field for field in fields if field in scalar_fields]
+    loader._effective_query_fields = sanitized_fields
+    return sanitized_fields
 
 
 def _apply_only(queryset: Any, fields: list[str]) -> Any:
@@ -102,6 +113,7 @@ def create_many_to_one_loader(
                 self.target_dto_kls,
                 extra_fields=[self.target_remote_field_name],
             )
+            effective_fields = _sanitize_only_fields(self, self.target_orm_kls, effective_fields)
 
             queryset = self.target_orm_kls.objects.filter(
                 **{f"{self.target_remote_field_name}__in": list(set(keys))}
@@ -145,6 +157,7 @@ def create_one_to_many_loader(
                 self.target_dto_kls,
                 extra_fields=[self.target_relation_field_name],
             )
+            effective_fields = _sanitize_only_fields(self, self.target_orm_kls, effective_fields)
 
             queryset = self.target_orm_kls.objects.filter(
                 **{f"{self.target_relation_field_name}__in": list(set(keys))}
@@ -190,6 +203,7 @@ def create_reverse_one_to_one_loader(
                 self.target_dto_kls,
                 extra_fields=[self.target_relation_field_name],
             )
+            effective_fields = _sanitize_only_fields(self, self.target_orm_kls, effective_fields)
 
             queryset = self.target_orm_kls.objects.filter(
                 **{f"{self.target_relation_field_name}__in": list(set(keys))}
@@ -237,6 +251,7 @@ def create_many_to_many_loader(
                 self.target_dto_kls,
                 extra_fields=[target_pk_field],
             )
+            effective_fields = _sanitize_only_fields(self, self.target_orm_kls, effective_fields)
 
             source_queryset = self.source_orm_kls.objects.filter(
                 **{f"{self.source_match_field_name}__in": list(set(keys))}

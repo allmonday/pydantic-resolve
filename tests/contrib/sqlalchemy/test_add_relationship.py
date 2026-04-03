@@ -149,6 +149,46 @@ def test_add_relationship_raises_on_duplicate_mutation_name():
         )
 
 
+def test_add_relationship_raises_on_duplicate_query_operation_name():
+    class User(BaseModel):
+        id: int
+
+    def list_items():
+        return []
+
+    def fetch_items():
+        return []
+
+    base_diagram = ErDiagram(
+        entities=[Entity(kls=User, queries=[QueryConfig(method=list_items, name="items")])]
+    )
+
+    with pytest.raises(ValueError, match="Duplicate query operation name"):
+        base_diagram.add_relationship(
+            [Entity(kls=User, queries=[QueryConfig(method=fetch_items, name="items")])]
+        )
+
+
+def test_add_relationship_raises_on_duplicate_mutation_operation_name():
+    class User(BaseModel):
+        id: int
+
+    def create_item():
+        return None
+
+    def save_item():
+        return None
+
+    base_diagram = ErDiagram(
+        entities=[Entity(kls=User, mutations=[MutationConfig(method=create_item, name="save")])]
+    )
+
+    with pytest.raises(ValueError, match="Duplicate mutation operation name"):
+        base_diagram.add_relationship(
+            [Entity(kls=User, mutations=[MutationConfig(method=save_item, name="save")])]
+        )
+
+
 def test_add_relationship_with_empty_entities_returns_equivalent_diagram():
     class User(BaseModel):
         id: int

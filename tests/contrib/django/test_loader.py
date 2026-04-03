@@ -4,6 +4,7 @@ from asgiref.sync import sync_to_async
 import pytest
 from aiodataloader import DataLoader
 from django.db.models import Q
+from pydantic import BaseModel, ConfigDict
 
 from pydantic_resolve.contrib.django.loader import (
     create_many_to_many_loader,
@@ -178,3 +179,28 @@ def test_loader_factory_generates_unique_identity():
     }
 
     assert len(names) == 3
+
+
+@pytest.mark.asyncio
+async def test_many_to_one_loader_ignores_non_orm_dto_fields(seeded_db):
+    class SchoolWithExtraDTO(BaseModel):
+        model_config = ConfigDict(from_attributes=True)
+
+        id: int
+        name: str
+        extra: str = "fallback"
+
+    loader_kls = create_many_to_one_loader(
+        source_orm_kls=StudentOrm,
+        rel_name="school",
+        target_orm_kls=SchoolOrm,
+        target_dto_kls=SchoolWithExtraDTO,
+        target_remote_field_name="id",
+    )
+
+    loader = loader_kls()
+    result = await loader.load_many([1, 999])
+
+    assert result[0] == SchoolWithExtraDTO(id=1, name="School-A")
+    assert result[1] is None
+    assert set(loader._effective_query_fields) == {"id", "name"}
