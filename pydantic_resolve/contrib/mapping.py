@@ -17,6 +17,7 @@ def normalize_mappings(
     normalized: list[tuple[type, type]] = []
     orm_to_entity: dict[type, type] = {}
     orm_filter_overrides: dict[type, list[Any]] = {}
+    seen_pairs: set[tuple[type, type]] = set()
 
     for m in mappings:
         if m.filters is not None:
@@ -26,13 +27,14 @@ def normalize_mappings(
                 )
             orm_filter_overrides[m.orm] = list(m.filters)
 
-        prev = orm_to_entity.get(m.orm)
-        if prev is not None and prev is not m.entity:
-            raise ValueError(
-                f"Duplicate ORM mapping detected for {m.orm}: {prev} vs {m.entity}"
-            )
+        pair = (m.entity, m.orm)
+        if pair in seen_pairs:
+            continue
+        seen_pairs.add(pair)
 
-        orm_to_entity[m.orm] = m.entity
-        normalized.append((m.entity, m.orm))
+        # Allow DTO -> ORM many-to-one mappings.
+        # The first DTO seen for a target ORM is used as relationship target inference default.
+        orm_to_entity.setdefault(m.orm, m.entity)
+        normalized.append(pair)
 
     return normalized, orm_to_entity, orm_filter_overrides

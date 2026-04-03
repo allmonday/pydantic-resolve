@@ -363,3 +363,79 @@ async def test_resolver_with_reverse_one_to_one(
     assert alice.profile == StudentProfileDTO(id=100, student_id=1, nickname="ali")
     assert bob.profile is None
     assert cathy.profile == StudentProfileDTO(id=300, student_id=3, nickname="cat")
+
+
+@pytest.mark.asyncio
+async def test_dataloader_reused_for_multiple_dto_to_same_orm(
+    session_factory,
+    session_maker,
+    seeded_db,
+):
+    class StudentBizA(BaseModel):
+        model_config = ConfigDict(from_attributes=True)
+
+        id: int
+        name: str
+        school_id: int
+
+    class StudentBizB(BaseModel):
+        model_config = ConfigDict(from_attributes=True)
+
+        id: int
+        name: str
+        school_id: int
+
+    entities = build_relationship(
+        mappings=[
+            Mapping(entity=StudentBizA, orm=StudentOrm),
+            Mapping(entity=StudentBizB, orm=StudentOrm),
+            Mapping(entity=SchoolDTO, orm=SchoolOrm),
+        ],
+        session_factory=session_factory,
+    )
+
+    diagram = ErDiagram(entities=[]).add_relationship(entities)
+    AutoLoad = diagram.create_auto_load()
+
+    class StudentBizAView(StudentBizA):
+        model_config = ConfigDict(from_attributes=True)
+
+        school: Annotated[SchoolDTO | None, AutoLoad()] = None
+
+    class StudentBizBView(StudentBizB):
+        model_config = ConfigDict(from_attributes=True)
+
+        school: Annotated[SchoolDTO | None, AutoLoad()] = None
+
+    class RootView(BaseModel):
+        biz_a_students: list[StudentBizAView] = []
+        biz_b_students: list[StudentBizBView] = []
+
+    MyResolver = config_resolver("SQLAlchemyContribReuseResolver", er_diagram=diagram)
+
+    async with session_maker() as session:
+        students = (
+            await session.execute(select(StudentOrm).order_by(StudentOrm.id))
+        ).scalars().all()
+
+    payload = RootView(
+        biz_a_students=[
+            StudentBizAView(id=student.id, name=student.name, school_id=student.school_id)
+            for student in students
+        ],
+        biz_b_students=[
+            StudentBizBView(id=student.id, name=student.name, school_id=student.school_id)
+            for student in students
+        ],
+    )
+
+    resolver = MyResolver()
+    result = await resolver.resolve(payload)
+
+    assert result.biz_a_students[0].school == SchoolDTO(id=1, name="School-A")
+    assert result.biz_b_students[0].school == SchoolDTO(id=1, name="School-A")
+
+    school_loader_paths = [
+        path for path in resolver.loader_instance_cache.keys() if "_school_" in path
+    ]
+    assert len(school_loader_paths) == 1
