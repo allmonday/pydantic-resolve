@@ -1,8 +1,98 @@
-# Migration Guide (v3 to v4)
+# Migration Guide
+
+## v4 to v5
+
+v5.0 introduces one breaking rename and a new ORM integration module (`contrib`).
+
+### 1. `ErDiagram.configs` → `ErDiagram.entities`
+
+The `ErDiagram` constructor parameter is renamed from `configs` to `entities`.
+
+```python
+# v4
+diagram = ErDiagram(configs=[
+    Entity(kls=User, relationships=[...]),
+])
+
+# v5
+diagram = ErDiagram(entities=[
+    Entity(kls=User, relationships=[...]),
+])
+```
+
+If you use `base_entity()` with `__relationships__`, no change is needed — `get_diagram()` is updated internally.
+
+### 2. ORM relationship auto-discovery (new)
+
+The new `pydantic_resolve.contrib` module generates `Relationship` + `DataLoader` directly from ORM model definitions, eliminating hand-written loaders.
+
+Install the ORM extra:
+
+```bash
+pip install pydantic-resolve[sqlalchemy]   # or [django] or [tortoise]
+```
+
+Usage (SQLAlchemy example):
+
+```python
+from pydantic_resolve.contrib.sqlalchemy import build_relationship
+from pydantic_resolve.contrib.mapping import Mapping
+
+# Define Pydantic DTOs that mirror your ORM models
+class UserDTO(BaseModel):
+    id: int
+    name: str
+
+class TaskDTO(BaseModel):
+    id: int
+    name: str
+    owner_id: int
+
+# build_relationship inspects ORM relationships and generates loaders
+sa_entities = build_relationship(
+    mappings=[
+        Mapping(entity=UserDTO, orm=UserORM),
+        Mapping(entity=TaskDTO, orm=TaskORM),
+    ],
+    session_factory=async_session_factory,
+)
+
+# Merge into your ErDiagram
+diagram = BaseEntity.get_diagram()
+merged_diagram = diagram.add_relationship(sa_entities)
+```
+
+Supported relationship types per ORM:
+
+| Relationship | SQLAlchemy | Django | Tortoise |
+|-------------|-----------|--------|----------|
+| Many-to-One | yes | yes | yes |
+| One-to-Many | yes | yes | yes |
+| One-to-One (forward) | yes | yes | yes |
+| Reverse One-to-One | yes | yes | yes |
+| Many-to-Many | yes | yes | yes |
+
+Optional per-mapping filters:
+
+```python
+Mapping(entity=TaskDTO, orm=TaskORM, filters=[TaskORM.status == 'active'])
+```
+
+### 3. `ErDiagram.add_relationship()` (new)
+
+Merge ORM-generated entities into an existing `ErDiagram`. Duplicate relationship names, query names, or mutation names within the same entity class raise `ValueError`.
+
+```python
+merged = diagram.add_relationship(sa_entities)
+```
+
+---
+
+## v3 to v4
 
 v4.0 introduces breaking changes to the ER Diagram API, simplifying how relationships are defined.
 
-## 1. Relationship parameter renames
+### 1. Relationship parameter renames
 
 | v3 | v4 | Description |
 |----|----|-------------|
@@ -22,7 +112,7 @@ Relationship(fk='user_id', target=User, loader=user_loader, name='owner')
 Relationship(fk='id', target=list[Post], fk_none_default_factory=list, loader=post_loader, name='posts')
 ```
 
-## 2. Relationship `name` is now required (replaces `default_field_name`)
+### 2. Relationship `name` is now required (replaces `default_field_name`)
 
 `name` is the unique identifier for each relationship. It serves as the GraphQL field name and the lookup key for `AutoLoad`.
 
@@ -34,7 +124,7 @@ Relationship(field='owner_id', target_kls=User, loader=user_loader, default_fiel
 Relationship(fk='owner_id', target=User, loader=user_loader, name='owner')
 ```
 
-## 3. `LoadBy` replaced by `AutoLoad`
+### 3. `LoadBy` replaced by `AutoLoad`
 
 `AutoLoad` no longer requires a FK field name. It resolves the relationship by matching the field name against relationship `name` values. If the field name differs from the relationship name, use the `origin` parameter.
 
@@ -63,7 +153,7 @@ config_global_resolver(diagram)
 
 `LoadBy` parameters `biz` and `origin_kls` are removed. Use `Relationship.name` and `AutoLoad(origin=...)` instead.
 
-## 4. `MultipleRelationship` and `Link` removed
+### 4. `MultipleRelationship` and `Link` removed
 
 Multiple relationships to the same target entity are now expressed as separate `Relationship` entries, each with its own `name`, `loader`, and behavior.
 
@@ -82,7 +172,7 @@ Relationship(fk='user_id', target=list[Task], loader=created_loader, name='creat
 Relationship(fk='user_id', target=list[Task], loader=assigned_loader, name='assigned_tasks'),
 ```
 
-## 5. Deprecated `Resolver` parameters removed
+### 5. Deprecated `Resolver` parameters removed
 
 `loader_filters` and `global_loader_filter` (deprecated since v1.9.3) have been removed.
 
@@ -94,7 +184,7 @@ Resolver(loader_filters={...}, global_loader_filter={...})
 Resolver(loader_params={...}, global_loader_param={...})
 ```
 
-## 6. `field_fn` renamed to `fk_fn`
+### 6. `field_fn` renamed to `fk_fn`
 
 ```python
 # v3
@@ -104,7 +194,7 @@ Relationship(field='tags', target_kls=list[Tag], field_fn=lambda v: v.split(',')
 Relationship(fk='tags', target=list[Tag], fk_fn=lambda v: v.split(','), name='tags')
 ```
 
-## 7. `__pydantic_resolve_relationships__` removed
+### 7. `__pydantic_resolve_relationships__` removed
 
 Use `__relationships__` only.
 
@@ -118,11 +208,11 @@ class TaskEntity(BaseModel, BaseEntity):
     __relationships__ = [...]
 ```
 
-## 8. `LoaderDepend` removed
+### 8. `LoaderDepend` removed
 
 Use `Loader` only.
 
-## 9. `model_config` decorator removed
+### 9. `model_config` decorator removed
 
 Use `serialization` only.
 
