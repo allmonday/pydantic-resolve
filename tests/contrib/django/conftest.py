@@ -7,9 +7,9 @@ import django
 import pytest
 from django.conf import settings
 from django.db import connection, connections
-from pydantic import BaseModel
 
 from tests.contrib.django.dto import CourseDTO, SchoolDTO, StudentDTO
+from pydantic_resolve.contrib.mapping import Mapping
 
 DB_PATH = Path(tempfile.gettempdir()) / "pydantic_resolve_django_contrib.sqlite3"
 
@@ -80,9 +80,9 @@ def seeded_db(django_schema):
 
 
 @pytest.fixture
-def orm_mappings() -> list[tuple[type[BaseModel], type]]:
+def orm_mappings() -> list[Mapping]:
     return [
-        (StudentDTO, StudentOrm),
-        (SchoolDTO, SchoolOrm),
-        (CourseDTO, CourseOrm),
+        Mapping(entity=StudentDTO, orm=StudentOrm),
+        Mapping(entity=SchoolDTO, orm=SchoolOrm),
+        Mapping(entity=CourseDTO, orm=CourseOrm),
     ]

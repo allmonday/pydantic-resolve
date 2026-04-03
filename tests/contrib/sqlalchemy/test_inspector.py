@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, computed_field
 from sqlalchemy import ForeignKeyConstraint, Integer, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from pydantic_resolve.contrib.sqlalchemy import build_relationship
+from pydantic_resolve.contrib.mapping import Mapping
 
 from .conftest import CourseDTO, CourseOrm, SchoolDTO, SchoolOrm, StudentDTO, StudentOrm
 
@@ -62,7 +63,7 @@ def test_inspector_builds_relationships_for_m2o_o2m_m2m(orm_mappings):
 def test_inspector_skips_unmapped_targets_with_warning(caplog):
     with caplog.at_level(logging.WARNING):
         entities = build_relationship(
-            mappings=[(StudentDTO, StudentOrm)],
+            mappings=[Mapping(entity=StudentDTO, orm=StudentOrm)],
             session_factory=_dummy_session_factory,
         )
 
@@ -123,7 +124,10 @@ class _ChildDTO(BaseModel):
 def test_inspector_raises_on_composite_foreign_key():
     with pytest.raises(NotImplementedError):
         build_relationship(
-            mappings=[(_ParentDTO, _ParentOrm), (_ChildDTO, _ChildOrm)],
+            mappings=[
+                Mapping(entity=_ParentDTO, orm=_ParentOrm),
+                Mapping(entity=_ChildDTO, orm=_ChildOrm)
+            ],
             session_factory=_dummy_session_factory,
         )
 
@@ -132,8 +136,8 @@ def test_inspector_raises_on_invalid_mapping_filter_type():
     with pytest.raises(TypeError, match="Invalid mapping filter"):
         build_relationship(
             mappings=[
-                (StudentDTO, StudentOrm),
-                (SchoolDTO, SchoolOrm, "not-a-list"),  # type: ignore[arg-type]
+                Mapping(entity=StudentDTO, orm=StudentOrm),
+                Mapping(entity=SchoolDTO, orm=SchoolOrm, filters="not-a-list"),  # type: ignore[arg-type]
             ],
             session_factory=_dummy_session_factory,
         )
@@ -143,9 +147,9 @@ def test_inspector_raises_when_default_filter_returns_non_list():
     with pytest.raises(TypeError, match="default_filter"):
         build_relationship(
             mappings=[
-                (StudentDTO, StudentOrm),
-                (SchoolDTO, SchoolOrm),
-                (CourseDTO, CourseOrm),
+                Mapping(entity=StudentDTO, orm=StudentOrm),
+                Mapping(entity=SchoolDTO, orm=SchoolOrm),
+                Mapping(entity=CourseDTO, orm=CourseOrm),
             ],
             session_factory=_dummy_session_factory,
             default_filter=lambda cls: cls.deleted.is_(False),  # type: ignore[return-value]
@@ -163,7 +167,7 @@ class _SchoolDTOWithMissingRequiredField(BaseModel):
 def test_inspector_raises_when_required_dto_scalar_field_missing_in_orm():
     with pytest.raises(ValueError, match="Required DTO fields not found in ORM scalar fields"):
         build_relationship(
-            mappings=[(_SchoolDTOWithMissingRequiredField, SchoolOrm)],
+            mappings=[Mapping(entity=_SchoolDTOWithMissingRequiredField, orm=SchoolOrm)],
             session_factory=_dummy_session_factory,
         )
 
@@ -184,9 +188,9 @@ class _SchoolDTOWithOptionalAndComputedFields(BaseModel):
 def test_inspector_skips_default_and_computed_fields_in_dto_validation():
     entities = build_relationship(
         mappings=[
-            (StudentDTO, StudentOrm),
-            (_SchoolDTOWithOptionalAndComputedFields, SchoolOrm),
-            (CourseDTO, CourseOrm),
+            Mapping(entity=StudentDTO, orm=StudentOrm),
+            Mapping(entity=_SchoolDTOWithOptionalAndComputedFields, orm=SchoolOrm),
+            Mapping(entity=CourseDTO, orm=CourseOrm),
         ],
         session_factory=_dummy_session_factory,
     )

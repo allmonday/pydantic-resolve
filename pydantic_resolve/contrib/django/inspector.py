@@ -9,46 +9,10 @@ from pydantic_resolve.contrib.django.loader import (
     create_one_to_many_loader,
     create_reverse_one_to_one_loader,
 )
+from pydantic_resolve.contrib.mapping import Mapping, normalize_mappings
 from pydantic_resolve.utils.er_diagram import Entity, Relationship
 
 logger = logging.getLogger(__name__)
-
-
-Mapping = tuple[type, type] | tuple[type, type, list[Any]]
-
-
-def _normalize_mappings(
-    mappings: list[Mapping],
-) -> tuple[list[tuple[type, type]], dict[type, type], dict[type, list[Any]]]:
-    normalized_mappings: list[tuple[type, type]] = []
-    orm_to_dto: dict[type, type] = {}
-    orm_filter_overrides: dict[type, list[Any]] = {}
-
-    for mapping in mappings:
-        if len(mapping) == 2:
-            dto_kls, orm_kls = mapping
-        elif len(mapping) == 3:
-            dto_kls, orm_kls, filter_override = mapping
-            if not isinstance(filter_override, list):
-                raise TypeError(
-                    f"Invalid mapping filter for {orm_kls}: expected list, got {type(filter_override).__name__}"
-                )
-            orm_filter_overrides[orm_kls] = list(filter_override)
-        else:
-            raise TypeError(
-                f"Invalid mapping item length {len(mapping)}: expected 2 or 3"
-            )
-
-        prev = orm_to_dto.get(orm_kls)
-        if prev is not None and prev is not dto_kls:
-            raise ValueError(
-                f"Duplicate ORM mapping detected for {orm_kls}: {prev} vs {dto_kls}"
-            )
-
-        orm_to_dto[orm_kls] = dto_kls
-        normalized_mappings.append((dto_kls, orm_kls))
-
-    return normalized_mappings, orm_to_dto, orm_filter_overrides
 
 
 def _resolve_target_filters(
@@ -231,7 +195,7 @@ def build_relationship(
     using: Any = None,
     default_filter: Callable[[type], list[Any]] | None = None,
 ) -> list[Entity]:
-    normalized_mappings, orm_to_dto, orm_filter_overrides = _normalize_mappings(mappings)
+    normalized_mappings, orm_to_dto, orm_filter_overrides = normalize_mappings(mappings)
     entities: list[Entity] = []
 
     for dto_kls, orm_kls in normalized_mappings:

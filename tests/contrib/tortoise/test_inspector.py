@@ -7,6 +7,7 @@ import pytest
 from pydantic import BaseModel, ConfigDict, computed_field
 
 from pydantic_resolve.contrib.tortoise import build_relationship
+from pydantic_resolve.contrib.mapping import Mapping
 
 from .conftest import CourseDTO, CourseOrm, SchoolDTO, SchoolOrm, StudentDTO, StudentOrm
 
@@ -46,7 +47,7 @@ def test_inspector_builds_relationships_for_m2o_o2m_m2m(tortoise_db, orm_mapping
 
 def test_inspector_skips_unmapped_targets_with_warning(tortoise_db, caplog):
     with caplog.at_level(logging.WARNING):
-        entities = build_relationship(mappings=[(StudentDTO, StudentOrm)])
+        entities = build_relationship(mappings=[Mapping(entity=StudentDTO, orm=StudentOrm)])
 
     assert entities == []
     assert len(caplog.records) >= 1
@@ -56,8 +57,8 @@ def test_inspector_raises_on_invalid_mapping_filter_type(tortoise_db):
     with pytest.raises(TypeError, match="Invalid mapping filter"):
         build_relationship(
             mappings=[
-                (StudentDTO, StudentOrm),
-                (SchoolDTO, SchoolOrm, "not-a-list"),  # type: ignore[arg-type]
+                Mapping(entity=StudentDTO, orm=StudentOrm),
+                Mapping(entity=SchoolDTO, orm=SchoolOrm, filters="not-a-list"),  # type: ignore[arg-type]
             ]
         )
 
@@ -66,9 +67,9 @@ def test_inspector_raises_when_default_filter_returns_non_list(tortoise_db):
     with pytest.raises(TypeError, match="default_filter"):
         build_relationship(
             mappings=[
-                (StudentDTO, StudentOrm),
-                (SchoolDTO, SchoolOrm),
-                (CourseDTO, CourseOrm),
+                Mapping(entity=StudentDTO, orm=StudentOrm),
+                Mapping(entity=SchoolDTO, orm=SchoolOrm),
+                Mapping(entity=CourseDTO, orm=CourseOrm),
             ],
             default_filter=lambda cls: object(),  # type: ignore[return-value]
         )
@@ -84,7 +85,7 @@ class _SchoolDTOWithMissingRequiredField(BaseModel):
 
 def test_inspector_raises_when_required_dto_scalar_field_missing_in_orm(tortoise_db):
     with pytest.raises(ValueError, match="Required DTO fields not found in ORM scalar fields"):
-        build_relationship(mappings=[(_SchoolDTOWithMissingRequiredField, SchoolOrm)])
+        build_relationship(mappings=[Mapping(entity=_SchoolDTOWithMissingRequiredField, orm=SchoolOrm)])
 
 
 class _SchoolDTOWithOptionalAndComputedFields(BaseModel):
@@ -105,9 +106,9 @@ def test_inspector_skips_default_and_computed_fields_in_dto_validation(
 ):
     entities = build_relationship(
         mappings=[
-            (StudentDTO, StudentOrm),
-            (_SchoolDTOWithOptionalAndComputedFields, SchoolOrm),
-            (CourseDTO, CourseOrm),
+            Mapping(entity=StudentDTO, orm=StudentOrm),
+            Mapping(entity=_SchoolDTOWithOptionalAndComputedFields, orm=SchoolOrm),
+            Mapping(entity=CourseDTO, orm=CourseOrm),
         ]
     )
 

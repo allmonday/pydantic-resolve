@@ -7,6 +7,8 @@ from pydantic import BaseModel, ConfigDict
 from tortoise import Tortoise, fields
 from tortoise.models import Model
 
+from pydantic_resolve.contrib.mapping import Mapping
+
 
 class SchoolOrm(Model):
     id = fields.IntField(primary_key=True)
@@ -113,9 +115,9 @@ async def seeded_db(tortoise_db) -> None:
 
 
 @pytest.fixture
-def orm_mappings() -> list[tuple[type[BaseModel], type[Model]]]:
+def orm_mappings() -> list[Mapping]:
     return [
-        (StudentDTO, StudentOrm),
-        (SchoolDTO, SchoolOrm),
-        (CourseDTO, CourseOrm),
+        Mapping(entity=StudentDTO, orm=StudentOrm),
+        Mapping(entity=SchoolDTO, orm=SchoolOrm),
+        Mapping(entity=CourseDTO, orm=CourseOrm),
     ]

@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable
 
+from pydantic_resolve.contrib.mapping import Mapping, normalize_mappings
 from pydantic_resolve.contrib.sqlalchemy.loader import (
     create_many_to_many_loader,
     create_many_to_one_loader,
@@ -14,9 +15,6 @@ from pydantic_resolve.utils.er_diagram import Entity, Relationship
 logger = logging.getLogger(__name__)
 
 
-Mapping = tuple[type, type] | tuple[type, type, list[Any]]
-
-
 def _expect_single_pair(pairs: Any, message: str) -> tuple[Any, Any]:
     pair_list = list(pairs)
     if len(pair_list) != 1:
@@ -24,46 +22,11 @@ def _expect_single_pair(pairs: Any, message: str) -> tuple[Any, Any]:
     return pair_list[0]
 
 
-def _normalize_mappings(
-    mappings: list[Mapping],
-) -> tuple[list[tuple[type, type]], dict[type, type], dict[type, list[Any]]]:
-    normalized_mappings: list[tuple[type, type]] = []
-    orm_to_dto: dict[type, type] = {}
-    orm_filter_overrides: dict[type, list[Any]] = {}
-
-    for mapping in mappings:
-        if len(mapping) == 2:
-            dto_kls, orm_kls = mapping
-            filter_override = None
-        elif len(mapping) == 3:
-            dto_kls, orm_kls, filter_override = mapping
-            if not isinstance(filter_override, list):
-                raise TypeError(
-                    f"Invalid mapping filter for {orm_kls}: expected list, got {type(filter_override).__name__}"
-                )
-            orm_filter_overrides[orm_kls] = list(filter_override)
-        else:
-            raise TypeError(
-                f"Invalid mapping item length {len(mapping)}: expected 2 or 3"
-            )
-
-        prev = orm_to_dto.get(orm_kls)
-        if prev is not None and prev is not dto_kls:
-            raise ValueError(
-                f"Duplicate ORM mapping detected for {orm_kls}: {prev} vs {dto_kls}"
-            )
-        orm_to_dto[orm_kls] = dto_kls
-        normalized_mappings.append((dto_kls, orm_kls))
-
-    return normalized_mappings, orm_to_dto, orm_filter_overrides
-
-
 def _resolve_target_filters(
     target_orm: type,
     orm_filter_overrides: dict[type, list[Any]],
     default_filter: Callable[[type], list[Any]] | None,
 ) -> list[Any]:
-    # Explicit mapping override has highest priority. [] means explicit reset.
     if target_orm in orm_filter_overrides:
         return list(orm_filter_overrides[target_orm])
 
@@ -117,7 +80,6 @@ def _inspect_orm_relationships(
     for rel in mapper.relationships:
         target_orm = rel.mapper.class_
         target_dto = orm_to_dto.get(target_orm)
-
         if target_dto is None:
             logger.warning(
                 "Skipping relationship %s.%s: target ORM %s is not in mappings",
@@ -187,7 +149,6 @@ def _inspect_orm_relationships(
                 raise NotImplementedError(
                     f"MANYTOMANY without secondary table is not supported: {orm_kls.__name__}.{rel.key}"
                 )
-
             source_col, secondary_local_col = _expect_single_pair(
                 rel.synchronize_pairs,
                 f"Composite source pair is not supported for MANYTOMANY: {orm_kls.__name__}.{rel.key}",
@@ -196,7 +157,6 @@ def _inspect_orm_relationships(
                 rel.secondary_synchronize_pairs,
                 f"Composite target pair is not supported for MANYTOMANY: {orm_kls.__name__}.{rel.key}",
             )
-
             fk_field = source_col.key
             target_type = list[target_dto]
             loader = create_many_to_many_loader(
@@ -236,7 +196,7 @@ def build_relationship(
     session_factory: Callable,
     default_filter: Callable[[type], list[Any]] | None = None,
 ) -> list[Entity]:
-    normalized_mappings, orm_to_dto, orm_filter_overrides = _normalize_mappings(mappings)
+    normalized_mappings, orm_to_dto, orm_filter_overrides = normalize_mappings(mappings)
     entities: list[Entity] = []
 
     for dto_kls, orm_kls in normalized_mappings:

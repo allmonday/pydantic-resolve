@@ -8,6 +8,7 @@ from sqlalchemy import select
 from pydantic_resolve.contrib.sqlalchemy import build_relationship
 
 from pydantic_resolve import ErDiagram, config_resolver
+from pydantic_resolve.contrib.mapping import Mapping
 
 from .conftest import (
     CourseDTO,
@@ -105,9 +106,9 @@ async def test_build_relationship_with_default_filter(
 
     entities = build_relationship(
         mappings=[
-            (StudentDTO, StudentOrm),
-            (SchoolDTO, SchoolOrm),
-            (CourseDTO, CourseOrm),
+            Mapping(entity=StudentDTO, orm=StudentOrm),
+            Mapping(entity=SchoolDTO, orm=SchoolOrm),
+            Mapping(entity=CourseDTO, orm=CourseOrm),
         ],
         session_factory=session_factory,
         default_filter=lambda cls: [cls.deleted.is_(False)],
@@ -159,9 +160,9 @@ async def test_mapping_filter_empty_list_resets_global_default(
 
     entities = build_relationship(
         mappings=[
-            (StudentDTO, StudentOrm),
-            (SchoolDTO, SchoolOrm, []),
-            (CourseDTO, CourseOrm),
+            Mapping(entity=StudentDTO, orm=StudentOrm),
+            Mapping(entity=SchoolDTO, orm=SchoolOrm, filters=[]),
+            Mapping(entity=CourseDTO, orm=CourseOrm),
         ],
         session_factory=session_factory,
         default_filter=lambda cls: [cls.deleted.is_(False)],
@@ -214,9 +215,9 @@ async def test_mapping_filter_non_empty_overrides_global_default(
 
     entities = build_relationship(
         mappings=[
-            (StudentDTO, StudentOrm),
-            (SchoolDTO, SchoolOrm, [SchoolOrm.deleted.is_(True)]),
-            (CourseDTO, CourseOrm, [CourseOrm.deleted.is_(True)]),
+            Mapping(entity=StudentDTO, orm=StudentOrm),
+            Mapping(entity=SchoolDTO, orm=SchoolOrm, filters=[SchoolOrm.deleted.is_(True)]),
+            Mapping(entity=CourseDTO, orm=CourseOrm, filters=[CourseOrm.deleted.is_(True)]),
         ],
         session_factory=session_factory,
         default_filter=lambda cls: [cls.deleted.is_(False)],
@@ -269,9 +270,9 @@ async def test_contrib_loader_uses_query_meta_fields(
 
     entities = build_relationship(
         mappings=[
-            (StudentDTO, StudentOrm),
-            (SchoolNameDTO, SchoolOrm),
-            (CourseTitleDTO, CourseOrm),
+            Mapping(entity=StudentDTO, orm=StudentOrm),
+            Mapping(entity=SchoolNameDTO, orm=SchoolOrm),
+            Mapping(entity=CourseTitleDTO, orm=CourseOrm),
         ],
         session_factory=session_factory,
     )
@@ -328,8 +329,8 @@ async def test_resolver_with_reverse_one_to_one(
 ):
     entities = build_relationship(
         mappings=[
-            (StudentDTO, StudentOrm),
-            (StudentProfileDTO, StudentProfileOrm),
+            Mapping(entity=StudentDTO, orm=StudentOrm),
+            Mapping(entity=StudentProfileDTO, orm=StudentProfileOrm),
         ],
         session_factory=session_factory,
     )

@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from typing import Optional
 
+from pydantic_resolve.contrib.mapping import Mapping
+
 
 class Base(DeclarativeBase):
     pass
@@ -159,9 +161,9 @@ async def seeded_db(session_maker: async_sessionmaker[AsyncSession]) -> None:
 
 
 @pytest.fixture
-def orm_mappings() -> list[tuple[type[BaseModel], type[Base]]]:
+def orm_mappings() -> list[Mapping]:
     return [
-        (StudentDTO, StudentOrm),
-        (SchoolDTO, SchoolOrm),
-        (CourseDTO, CourseOrm),
+        Mapping(entity=StudentDTO, orm=StudentOrm),
+        Mapping(entity=SchoolDTO, orm=SchoolOrm),
+        Mapping(entity=CourseDTO, orm=CourseOrm),
     ]

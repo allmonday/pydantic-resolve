@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict
 
 from pydantic_resolve import ErDiagram, config_resolver
 from pydantic_resolve.contrib.django import build_relationship
+from pydantic_resolve.contrib.mapping import Mapping
 
 from tests.contrib.django.dto import CourseDTO, SchoolDTO, StudentDTO
 from tests.contrib.django.models import CourseOrm, SchoolOrm, StudentOrm
@@ -82,9 +83,9 @@ async def test_build_relationship_with_default_filter(seeded_db):
 
     entities = build_relationship(
         mappings=[
-            (StudentDTO, StudentOrm),
-            (SchoolDTO, SchoolOrm),
-            (CourseDTO, CourseOrm),
+            Mapping(entity=StudentDTO, orm=StudentOrm),
+            Mapping(entity=SchoolDTO, orm=SchoolOrm),
+            Mapping(entity=CourseDTO, orm=CourseOrm),
         ],
         default_filter=lambda cls: [Q(deleted=False)],
     )
@@ -121,9 +122,9 @@ async def test_mapping_filter_empty_list_resets_global_default(seeded_db):
 
     entities = build_relationship(
         mappings=[
-            (StudentDTO, StudentOrm),
-            (SchoolDTO, SchoolOrm, []),
-            (CourseDTO, CourseOrm),
+            Mapping(entity=StudentDTO, orm=StudentOrm),
+            Mapping(entity=SchoolDTO, orm=SchoolOrm, filters=[]),
+            Mapping(entity=CourseDTO, orm=CourseOrm),
         ],
         default_filter=lambda cls: [Q(deleted=False)],
     )
@@ -160,9 +161,9 @@ async def test_mapping_filter_non_empty_overrides_global_default(seeded_db):
 
     entities = build_relationship(
         mappings=[
-            (StudentDTO, StudentOrm),
-            (SchoolDTO, SchoolOrm, [Q(deleted=True)]),
-            (CourseDTO, CourseOrm, [Q(deleted=True)]),
+            Mapping(entity=StudentDTO, orm=StudentOrm),
+            Mapping(entity=SchoolDTO, orm=SchoolOrm, filters=[Q(deleted=True)]),
+            Mapping(entity=CourseDTO, orm=CourseOrm, filters=[Q(deleted=True)]),
         ],
         default_filter=lambda cls: [Q(deleted=False)],
     )
@@ -206,9 +207,9 @@ async def test_contrib_loader_uses_query_meta_fields(seeded_db):
 
     entities = build_relationship(
         mappings=[
-            (StudentDTO, StudentOrm),
-            (SchoolNameDTO, SchoolOrm),
-            (CourseTitleDTO, CourseOrm),
+            Mapping(entity=StudentDTO, orm=StudentOrm),
+            Mapping(entity=SchoolNameDTO, orm=SchoolOrm),
+            Mapping(entity=CourseTitleDTO, orm=CourseOrm),
         ]
     )
 
