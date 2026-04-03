@@ -35,7 +35,7 @@ def test_add_relationship_merges_relationship_query_and_mutation():
         return None
 
     base_diagram = ErDiagram(
-        configs=[
+        entities=[
             Entity(
                 kls=User,
                 relationships=[
@@ -70,7 +70,7 @@ def test_add_relationship_merges_relationship_query_and_mutation():
         ]
     )
 
-    user_cfg = next(cfg for cfg in merged.configs if cfg.kls is User)
+    user_cfg = next(cfg for cfg in merged.entities if cfg.kls is User)
 
     assert {rel.name for rel in user_cfg.relationships} == {"posts", "comments"}
     assert {q.method.__name__ for q in user_cfg.queries} == {"list_posts", "list_comments"}
@@ -82,7 +82,7 @@ def test_add_relationship_raises_on_duplicate_relationship_name():
         id: int
 
     base_diagram = ErDiagram(
-        configs=[
+        entities=[
             Entity(
                 kls=User,
                 relationships=[
@@ -123,7 +123,7 @@ def test_add_relationship_raises_on_duplicate_query_name():
         return []
 
     base_diagram = ErDiagram(
-        configs=[Entity(kls=User, queries=[QueryConfig(method=list_items)])]
+        entities=[Entity(kls=User, queries=[QueryConfig(method=list_items)])]
     )
 
     with pytest.raises(ValueError):
@@ -140,7 +140,7 @@ def test_add_relationship_raises_on_duplicate_mutation_name():
         return None
 
     base_diagram = ErDiagram(
-        configs=[Entity(kls=User, mutations=[MutationConfig(method=create_item)])]
+        entities=[Entity(kls=User, mutations=[MutationConfig(method=create_item)])]
     )
 
     with pytest.raises(ValueError):
@@ -154,7 +154,7 @@ def test_add_relationship_with_empty_entities_returns_equivalent_diagram():
         id: int
 
     base_diagram = ErDiagram(
-        configs=[
+        entities=[
             Entity(
                 kls=User,
                 relationships=[
@@ -180,7 +180,7 @@ def test_add_relationship_raises_on_duplicate_incoming_kls():
     class User(BaseModel):
         id: int
 
-    base_diagram = ErDiagram(configs=[])
+    base_diagram = ErDiagram(entities=[])
 
     incoming = [
         Entity(

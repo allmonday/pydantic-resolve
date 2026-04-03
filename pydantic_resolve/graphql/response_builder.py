@@ -74,7 +74,7 @@ class ResponseBuilder:
                            Allows loaders to return Pydantic instances instead of dictionaries.
         """
         self.er_diagram = er_diagram
-        self.entity_map = {cfg.kls: cfg for cfg in er_diagram.configs}
+        self.entity_map = {cfg.kls: cfg for cfg in er_diagram.entities}
         self.resolver_class = resolver_class
         self.enable_from_attribute_in_type_adapter = enable_from_attribute_in_type_adapter
         self._create_auto_load = er_diagram.create_auto_load()

@@ -80,7 +80,7 @@ class GraphQLHandler:
             Dictionary mapping query names to (return entity class, method) tuples
         """
         query_map = {}
-        for entity_cfg in self.er_diagram.configs:
+        for entity_cfg in self.er_diagram.entities:
             methods = self.schema_builder._extract_query_methods(entity_cfg.kls)
             for method_info in methods:
                 query_name = method_info['name']
@@ -96,7 +96,7 @@ class GraphQLHandler:
             Dictionary mapping mutation names to (return entity class, method) tuples
         """
         mutation_map = {}
-        for entity_cfg in self.er_diagram.configs:
+        for entity_cfg in self.er_diagram.entities:
             methods = self.schema_builder._extract_mutation_methods(entity_cfg.kls)
             for method_info in methods:
                 mutation_name = method_info['name']
@@ -150,13 +150,13 @@ class GraphQLHandler:
         # Handle ForwardRef
         if isinstance(return_annotation, ForwardRef):
             type_name = return_annotation.__forward_arg__
-            for cfg in self.er_diagram.configs:
+            for cfg in self.er_diagram.entities:
                 if cfg.kls.__name__ == type_name:
                     return cfg.kls
 
         # Handle string annotation (from __future__ import annotations)
         if isinstance(return_annotation, str):
-            for cfg in self.er_diagram.configs:
+            for cfg in self.er_diagram.entities:
                 if cfg.kls.__name__ == return_annotation:
                     return cfg.kls
 

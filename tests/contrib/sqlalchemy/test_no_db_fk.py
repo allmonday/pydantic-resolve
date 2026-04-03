@@ -150,7 +150,7 @@ async def test_resolver_loads_data_without_db_fk(
         session_factory=nofk_session_factory,
     )
 
-    diagram = ErDiagram(configs=[]).add_relationship(entities)
+    diagram = ErDiagram(entities=[]).add_relationship(entities)
     AutoLoad = diagram.create_auto_load()
 
     class EmployeeView(EmployeeDTO):

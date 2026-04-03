@@ -28,7 +28,7 @@ class SchoolDTO(BaseModel):
     name: str
 
 # Build from ORM mappings
-diagram = ErDiagram(configs=existing_configs)
+diagram = ErDiagram(entities=existing_configs)
 diagram = diagram.add_relationship(
     build_relationship(
         mappings=[(StudentDTO, StudentOrm), (SchoolDTO, SchoolOrm)],
@@ -276,7 +276,7 @@ Add method to existing `ErDiagram` class. Returns new `ErDiagram` (immutable pat
     - Merge queries by method name (raise on duplicate)
     - Merge mutations by method name (raise on duplicate)
 3. Append new entities whose kls is not in existing configs
-4. Return `ErDiagram(configs=merged_configs, description=self.description)`
+4. Return `ErDiagram(entities=merged_configs, description=self.description)`
 
 Method signature:
 

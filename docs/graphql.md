@@ -59,7 +59,7 @@ async def get_all_users(limit: int = 10) -> List[UserEntity]:
     return await fetch_users(limit)
 
 # Create ErDiagram with configuration
-diagram = ErDiagram(configs=[
+diagram = ErDiagram(entities=[
     Entity(
         kls=UserEntity,
         relationships=[

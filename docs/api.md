@@ -285,7 +285,7 @@ Container for all entity relationship definitions.
 from pydantic_resolve import ErDiagram
 
 ErDiagram(
-    configs=[
+    entities=[
         Entity(kls=Comment, relationships=[...]),
         Entity(kls=User, relationships=[...])
     ],
@@ -443,7 +443,7 @@ Creates a new Resolver class with specific ERD configuration.
 ```python
 from pydantic_resolve import config_resolver, ErDiagram, Entity
 
-diagram = ErDiagram(configs=[...])
+diagram = ErDiagram(entities=[...])
 CustomResolver = config_resolver('CustomResolver', er_diagram=diagram)
 
 result = await CustomResolver().resolve(data)

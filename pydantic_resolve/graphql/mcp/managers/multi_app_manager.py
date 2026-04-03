@@ -81,7 +81,7 @@ class MultiAppManager:
             mutation_map=handler.mutation_map
         )
         introspection_data = introspection_generator.generate()
-        entity_names = {cfg.kls.__name__ for cfg in er_diagram.configs}
+        entity_names = {cfg.kls.__name__ for cfg in er_diagram.entities}
         introspection_helper = IntrospectionQueryHelper(introspection_data, entity_names)
 
         # Create SDLBuilder

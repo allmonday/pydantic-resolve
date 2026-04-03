@@ -4,6 +4,12 @@
 - **Minor (x.Y.0)**: New features, backward compatible
 - **Patch (x.y.Z)**: Bug fixes and minor improvements
 
+## 5.0
+
+### 5.0.0 (2026-4-3)
+
+
+
 ## v4.1
 
 ### v4.1.0 (2026-4-2)

@@ -251,7 +251,7 @@ Entity(
 from pydantic_resolve import ErDiagram
 
 ErDiagram(
-    configs=[
+    entities=[
         Entity(kls=Comment, relationships=[...]),
         Entity(kls=User, relationships=[...])
     ],
@@ -409,7 +409,7 @@ MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 ```python
 from pydantic_resolve import config_resolver, ErDiagram, Entity
 
-diagram = ErDiagram(configs=[...])
+diagram = ErDiagram(entities=[...])
 CustomResolver = config_resolver('CustomResolver', er_diagram=diagram)
 
 result = await CustomResolver().resolve(data)

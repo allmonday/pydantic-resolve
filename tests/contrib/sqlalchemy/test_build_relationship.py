@@ -34,9 +34,9 @@ def _find_by_id(items, item_id: int):
 def test_build_relationship_can_feed_add_relationship(orm_mappings, session_factory):
     entities = build_relationship(mappings=orm_mappings, session_factory=session_factory)
 
-    diagram = ErDiagram(configs=[]).add_relationship(entities)
+    diagram = ErDiagram(entities=[]).add_relationship(entities)
 
-    assert {cfg.kls for cfg in diagram.configs} == {StudentDTO, SchoolDTO, CourseDTO}
+    assert {cfg.kls for cfg in diagram.entities} == {StudentDTO, SchoolDTO, CourseDTO}
 
 
 @pytest.mark.asyncio
@@ -48,7 +48,7 @@ async def test_resolver_with_built_relationship(
 ):
     entities = build_relationship(mappings=orm_mappings, session_factory=session_factory)
 
-    diagram = ErDiagram(configs=[]).add_relationship(entities)
+    diagram = ErDiagram(entities=[]).add_relationship(entities)
     AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
@@ -114,7 +114,7 @@ async def test_build_relationship_with_default_filter(
         default_filter=lambda cls: [cls.deleted.is_(False)],
     )
 
-    diagram = ErDiagram(configs=[]).add_relationship(entities)
+    diagram = ErDiagram(entities=[]).add_relationship(entities)
     AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
@@ -168,7 +168,7 @@ async def test_mapping_filter_empty_list_resets_global_default(
         default_filter=lambda cls: [cls.deleted.is_(False)],
     )
 
-    diagram = ErDiagram(configs=[]).add_relationship(entities)
+    diagram = ErDiagram(entities=[]).add_relationship(entities)
     AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
@@ -223,7 +223,7 @@ async def test_mapping_filter_non_empty_overrides_global_default(
         default_filter=lambda cls: [cls.deleted.is_(False)],
     )
 
-    diagram = ErDiagram(configs=[]).add_relationship(entities)
+    diagram = ErDiagram(entities=[]).add_relationship(entities)
     AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
@@ -277,7 +277,7 @@ async def test_contrib_loader_uses_query_meta_fields(
         session_factory=session_factory,
     )
 
-    diagram = ErDiagram(configs=[]).add_relationship(entities)
+    diagram = ErDiagram(entities=[]).add_relationship(entities)
     AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
@@ -335,7 +335,7 @@ async def test_resolver_with_reverse_one_to_one(
         session_factory=session_factory,
     )
 
-    diagram = ErDiagram(configs=[]).add_relationship(entities)
+    diagram = ErDiagram(entities=[]).add_relationship(entities)
     AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):

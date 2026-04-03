@@ -86,4 +86,4 @@ def test_erdiagram_duplicate_entity_kls_raises():
 		relationships=[Relationship(fk="fk", name="t1", target=T1, loader=dummy_loader)],
 	)
 	with pytest.raises(ValidationError):
-		ErDiagram(configs=[cfg, cfg])
+		ErDiagram(entities=[cfg, cfg])

@@ -113,11 +113,11 @@ class Entity(BaseModel):
                     )
 
 class ErDiagram(BaseModel):
-    configs: list[Entity]
+    entities: list[Entity]
 
     @model_validator(mode="after")
     def _validate_configs(self) -> "ErDiagram":
-        cfgs = self.configs or []
+        cfgs = self.entities or []
         seen = set()
         seen_names = {}
         for cfg in cfgs:
@@ -154,7 +154,7 @@ class ErDiagram(BaseModel):
             ValueError: If a pydantic-resolve method with the same name already exists
                 on the target class (defined via decorator)
         """
-        for entity_cfg in self.configs:
+        for entity_cfg in self.entities:
             kls = entity_cfg.kls
 
             for query_cfg in entity_cfg.queries:
@@ -235,7 +235,7 @@ class ErDiagram(BaseModel):
             class MyResponse(Biz):
                 user: Annotated[Optional[User], AutoLoad()] = None
         """
-        er_configs_map = {config.kls: config for config in self.configs}
+        er_configs_map = {config.kls: config for config in self.entities}
 
         def _auto_load(origin: str | None = None) -> LoaderInfo:
             return LoaderInfo(origin=origin, _er_configs_map=er_configs_map)
@@ -251,7 +251,7 @@ class ErDiagram(BaseModel):
         - mutations: merged by method name (error on duplicate)
         """
         if not entities:
-            return ErDiagram(configs=list(self.configs), description=self.description)
+            return ErDiagram(entities=list(self.entities), description=self.description)
 
         seen_incoming = set()
         for entity in entities:
@@ -283,9 +283,9 @@ class ErDiagram(BaseModel):
             return merged
 
         merged_configs: list[Entity] = []
-        existing_kls = {cfg.kls for cfg in self.configs}
+        existing_kls = {cfg.kls for cfg in self.entities}
 
-        for cfg in self.configs:
+        for cfg in self.entities:
             incoming = incoming_map.get(cfg.kls)
             if incoming is None:
                 merged_configs.append(cfg)
@@ -327,7 +327,7 @@ class ErDiagram(BaseModel):
             if incoming.kls not in existing_kls:
                 merged_configs.append(incoming)
 
-        return ErDiagram(configs=merged_configs, description=self.description)
+        return ErDiagram(entities=merged_configs, description=self.description)
 
 
 class BaseEntity:  # just type (TODO: optimize)
@@ -420,7 +420,7 @@ def base_entity() -> type[BaseEntity]:
                 )
 
             resolved_configs.append(Entity(kls=kls, relationships=resolved_rels))
-        return ErDiagram(configs=resolved_configs)
+        return ErDiagram(entities=resolved_configs)
 
     class Base:
         def __init_subclass__(cls, **kwargs):
@@ -445,7 +445,7 @@ def base_entity() -> type[BaseEntity]:
 
 class ErLoaderPreGenerator:
     def __init__(self, er_diagram: ErDiagram | None) -> None:
-        self.er_configs_map = {config.kls: config for config in er_diagram.configs} if er_diagram else None
+        self.er_configs_map = {config.kls: config for config in er_diagram.entities} if er_diagram else None
 
     def _identify_entity(self, target: type) -> Entity:
         """Locate the matching ErConfig for a target class via compatibility check."""

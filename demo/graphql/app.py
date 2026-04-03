@@ -11,14 +11,12 @@ from typing import Optional
 from pydantic_resolve import config_global_resolver
 from pydantic_resolve import GraphQLHandler, SchemaBuilder
 
-# from demo.graphql.entities import BaseEntity
-from demo.graphql.entities_v2 import diagram_v2
+from demo.graphql.entities_v3 import diagram_v3, init_db_v3
 
-# diagram = BaseEntity.get_diagram()  # 获取 V1 实体图
-diagram = diagram_v2
+diagram = diagram_v3
 
 # 创建 FastAPI 应用
-app = FastAPI(diagram = diagram,  # 获取 V1 实体图
+app = FastAPI(diagram=diagram,
     title="Pydantic Resolve GraphQL Demo",
     description="演示 pydantic-resolve 的 GraphQL 查询功能",
     version="1.0.0"
@@ -35,6 +33,12 @@ app.add_middleware(
 
 # 配置全局 resolver
 config_global_resolver(diagram)
+
+
+@app.on_event("startup")
+async def startup():
+    """Initialize database tables and seed data."""
+    await init_db_v3()
 
 # 创建 GraphQL handler 和 schema builder
 handler = GraphQLHandler(diagram, enable_from_attribute_in_type_adapter=True)

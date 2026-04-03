@@ -66,7 +66,7 @@ v2 版本提供的 `ErDiagram` 是个非常强力的工具， 它提供了应用
 
 ```python
 diagram = ErDiagram(
-    configs=[
+    entities=[
         Entity(
             kls=Team,
             relationships=[
@@ -249,7 +249,7 @@ async def story_to_task_loader(story_ids: list[int]):
 
 ```python
 diagram = ErDiagram(
-    configs=[
+    entities=[
         Entity(
             kls=Story,
             relationships=[

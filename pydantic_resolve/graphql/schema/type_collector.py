@@ -90,7 +90,7 @@ class TypeCollector:
                             pass
 
         # Collect from query methods in ERD entities
-        for entity_cfg in self.er_diagram.configs:
+        for entity_cfg in self.er_diagram.entities:
             methods = self._extract_query_mutation_methods(entity_cfg.kls)
             for method in methods:
                 try:
@@ -129,7 +129,7 @@ class TypeCollector:
     def _collect_entity_types(self) -> List[type]:
         """Collect all entity types from ERD configs."""
         entity_types = []
-        for entity_cfg in self.er_diagram.configs:
+        for entity_cfg in self.er_diagram.entities:
             entity_types.append(entity_cfg.kls)
         return entity_types
 

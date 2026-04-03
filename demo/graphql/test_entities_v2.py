@@ -317,33 +317,33 @@ class TestErDiagramConfiguration:
 
     def test_diagram_has_configs(self):
         """验证 ErDiagram 包含所有实体配置"""
-        assert len(diagram_v2.configs) == 3
+        assert len(diagram_v2.entities) == 3
 
     def test_diagram_contains_user_entity(self):
         """验证 ErDiagram 包含 UserEntityV2"""
-        entity_names = [cfg.kls.__name__ for cfg in diagram_v2.configs]
+        entity_names = [cfg.kls.__name__ for cfg in diagram_v2.entities]
         assert 'UserEntityV2' in entity_names
 
     def test_diagram_contains_post_entity(self):
         """验证 ErDiagram 包含 PostEntityV2"""
-        entity_names = [cfg.kls.__name__ for cfg in diagram_v2.configs]
+        entity_names = [cfg.kls.__name__ for cfg in diagram_v2.entities]
         assert 'PostEntityV2' in entity_names
 
     def test_diagram_contains_comment_entity(self):
         """验证 ErDiagram 包含 CommentEntityV2"""
-        entity_names = [cfg.kls.__name__ for cfg in diagram_v2.configs]
+        entity_names = [cfg.kls.__name__ for cfg in diagram_v2.entities]
         assert 'CommentEntityV2' in entity_names
 
     def test_user_entity_has_relationships(self):
         """验证 UserEntityV2 在 ErDiagram 中有正确的关係配置"""
-        user_cfg = next((cfg for cfg in diagram_v2.configs if cfg.kls == UserEntityV2), None)
+        user_cfg = next((cfg for cfg in diagram_v2.entities if cfg.kls == UserEntityV2), None)
         assert user_cfg is not None
         assert len(user_cfg.relationships) == 1
         assert user_cfg.relationships[0].name == 'myposts'
 
     def test_post_entity_has_relationships(self):
         """验证 PostEntityV2 在 ErDiagram 中有正确的关係配置"""
-        post_cfg = next((cfg for cfg in diagram_v2.configs if cfg.kls == PostEntityV2), None)
+        post_cfg = next((cfg for cfg in diagram_v2.entities if cfg.kls == PostEntityV2), None)
         assert post_cfg is not None
         assert len(post_cfg.relationships) == 2  # author 和 comments
 

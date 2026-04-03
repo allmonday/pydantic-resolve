@@ -24,16 +24,16 @@ def _find_by_id(items, item_id: int):
 def test_build_relationship_can_feed_add_relationship(tortoise_db, orm_mappings):
     entities = build_relationship(mappings=orm_mappings)
 
-    diagram = ErDiagram(configs=[]).add_relationship(entities)
+    diagram = ErDiagram(entities=[]).add_relationship(entities)
 
-    assert {cfg.kls for cfg in diagram.configs} == {StudentDTO, SchoolDTO, CourseDTO}
+    assert {cfg.kls for cfg in diagram.entities} == {StudentDTO, SchoolDTO, CourseDTO}
 
 
 @pytest.mark.asyncio
 async def test_resolver_with_built_relationship(orm_mappings, seeded_db):
     entities = build_relationship(mappings=orm_mappings)
 
-    diagram = ErDiagram(configs=[]).add_relationship(entities)
+    diagram = ErDiagram(entities=[]).add_relationship(entities)
     AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
@@ -83,7 +83,7 @@ async def test_build_relationship_with_default_filter(seeded_db):
         default_filter=lambda cls: [Q(deleted=False)],
     )
 
-    diagram = ErDiagram(configs=[]).add_relationship(entities)
+    diagram = ErDiagram(entities=[]).add_relationship(entities)
     AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
@@ -122,7 +122,7 @@ async def test_mapping_filter_empty_list_resets_global_default(seeded_db):
         default_filter=lambda cls: [Q(deleted=False)],
     )
 
-    diagram = ErDiagram(configs=[]).add_relationship(entities)
+    diagram = ErDiagram(entities=[]).add_relationship(entities)
     AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
@@ -160,7 +160,7 @@ async def test_mapping_filter_non_empty_overrides_global_default(seeded_db):
         default_filter=lambda cls: [Q(deleted=False)],
     )
 
-    diagram = ErDiagram(configs=[]).add_relationship(entities)
+    diagram = ErDiagram(entities=[]).add_relationship(entities)
     AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
@@ -205,7 +205,7 @@ async def test_contrib_loader_uses_query_meta_fields(seeded_db):
         ]
     )
 
-    diagram = ErDiagram(configs=[]).add_relationship(entities)
+    diagram = ErDiagram(entities=[]).add_relationship(entities)
     AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):

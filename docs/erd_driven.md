@@ -149,7 +149,7 @@ class Post(BaseModel):
 	title: str
 
 # Define relationships externally - no modification to entities
-diagram = ErDiagram(configs=[
+diagram = ErDiagram(entities=[
 	Entity(
 		kls=User,
 		relationships=[

@@ -148,7 +148,7 @@ class Post(BaseModel):
     title: str
 
 # 在外部定义关系 —— 实体类无需修改
-diagram = ErDiagram(configs=[
+diagram = ErDiagram(entities=[
     Entity(
         kls=User,
         relationships=[

@@ -41,7 +41,7 @@ class TestTargetKlsCollection:
 
     def test_relationship_target_kls_collected(self):
         """Test that Relationship.target_kls type is collected even if not registered"""
-        diagram = ErDiagram(configs=[
+        diagram = ErDiagram(entities=[
             Entity(
                 kls=UserEntity,
                 relationships=[
@@ -64,7 +64,7 @@ class TestTargetKlsCollection:
 
     def test_list_target_kls_collected(self):
         """Test that list[TargetType] is correctly extracted"""
-        diagram = ErDiagram(configs=[
+        diagram = ErDiagram(entities=[
             Entity(
                 kls=UserEntity,
                 relationships=[
@@ -85,7 +85,7 @@ class TestTargetKlsCollection:
 
     def test_registered_entity_not_duplicated(self):
         """Test that already registered entities are not duplicated"""
-        diagram = ErDiagram(configs=[
+        diagram = ErDiagram(entities=[
             Entity(kls=UserEntity, relationships=[]),
             Entity(
                 kls=PostEntity,

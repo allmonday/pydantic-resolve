@@ -60,9 +60,11 @@ def _get_effective_query_fields(
     target_dto_kls: type,
     extra_fields: list[str] | None = None,
 ) -> list[str]:
-    query_meta = getattr(loader, "_query_meta", None)
-    requested_fields = query_meta["fields"] if query_meta else _get_default_fields(target_dto_kls)
-    effective_fields = _dedupe_fields([*requested_fields, *(extra_fields or [])])
+    # Always include all DTO fields to ensure model_validate can access every attribute.
+    # _query_meta may only contain a subset of fields from GraphQL field selection,
+    # which would cause load_only to defer non-selected columns and break model_validate.
+    dto_fields = _get_default_fields(target_dto_kls)
+    effective_fields = _dedupe_fields([*dto_fields, *(extra_fields or [])])
     loader._effective_query_fields = effective_fields
     return effective_fields
 
@@ -72,9 +74,16 @@ def _apply_load_only(
     target_orm_kls: type,
     fields: list[str],
 ) -> Any:
+    from sqlalchemy import inspect as sa_inspect
     from sqlalchemy.orm import load_only
 
-    attrs = [getattr(target_orm_kls, field) for field in fields if hasattr(target_orm_kls, field)]
+    mapper = sa_inspect(target_orm_kls)
+    rel_keys = {rel.key for rel in mapper.relationships}
+    attrs = [
+        getattr(target_orm_kls, field)
+        for field in fields
+        if hasattr(target_orm_kls, field) and field not in rel_keys
+    ]
     if attrs:
         return stmt.options(load_only(*attrs))
     return stmt
