@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
+from pydantic import BaseModel
 
-@dataclass
-class Mapping:
+
+class Mapping(BaseModel):
     entity: type
     orm: type
     filters: list[Any] | None = None
@@ -21,15 +21,13 @@ def normalize_mappings(
 
     for m in mappings:
         if m.filters is not None:
-            if not isinstance(m.filters, list):
-                raise TypeError(
-                    f"Invalid mapping filter for {m.orm}: expected list, got {type(m.filters).__name__}"
-                )
             orm_filter_overrides[m.orm] = list(m.filters)
 
         pair = (m.entity, m.orm)
         if pair in seen_pairs:
-            continue
+            raise ValueError(
+                f"Duplicate mapping: entity={m.entity.__name__}, orm={m.orm.__name__}"
+            )
         seen_pairs.add(pair)
 
         # Allow DTO -> ORM many-to-one mappings.

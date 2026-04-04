@@ -4,7 +4,7 @@ import logging
 from typing import get_args, get_origin
 
 import pytest
-from pydantic import BaseModel, ConfigDict, computed_field
+from pydantic import BaseModel, ConfigDict, ValidationError, computed_field
 from sqlalchemy import ForeignKeyConstraint, Integer, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from pydantic_resolve.contrib.sqlalchemy import build_relationship
@@ -105,7 +105,7 @@ class _ChildOrm(_CompositeBase):
 
 
 class _ParentDTO(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+
 
     tenant_id: int
     id: int
@@ -113,7 +113,7 @@ class _ParentDTO(BaseModel):
 
 
 class _ChildDTO(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+
 
     tenant_id: int
     id: int
@@ -133,7 +133,7 @@ def test_inspector_raises_on_composite_foreign_key():
 
 
 def test_inspector_raises_on_invalid_mapping_filter_type():
-    with pytest.raises(TypeError, match="Invalid mapping filter"):
+    with pytest.raises(ValidationError, match="filters"):
         build_relationship(
             mappings=[
                 Mapping(entity=StudentDTO, orm=StudentOrm),
@@ -157,7 +157,7 @@ def test_inspector_raises_when_default_filter_returns_non_list():
 
 
 class _SchoolDTOWithMissingRequiredField(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+
 
     id: int
     name: str
@@ -173,7 +173,7 @@ def test_inspector_raises_when_required_dto_scalar_field_missing_in_orm():
 
 
 class _SchoolDTOWithOptionalAndComputedFields(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+
 
     id: int
     name: str
@@ -202,7 +202,7 @@ def test_inspector_skips_default_and_computed_fields_in_dto_validation():
 
 
 class _SchoolLiteDTO(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+
 
     id: int
     name: str

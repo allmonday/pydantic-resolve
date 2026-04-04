@@ -4,7 +4,7 @@ import logging
 from typing import get_args, get_origin
 
 import pytest
-from pydantic import BaseModel, ConfigDict, computed_field
+from pydantic import BaseModel, ConfigDict, ValidationError, computed_field
 
 from pydantic_resolve.contrib.django import build_relationship
 from pydantic_resolve.contrib.mapping import Mapping
@@ -73,7 +73,7 @@ def test_inspector_skips_unmapped_targets_with_warning(django_schema, caplog):
 
 
 def test_inspector_raises_on_invalid_mapping_filter_type(django_schema):
-    with pytest.raises(TypeError, match="Invalid mapping filter"):
+    with pytest.raises(ValidationError, match="filters"):
         build_relationship(
             mappings=[
                 Mapping(entity=StudentDTO, orm=StudentOrm),
