@@ -37,7 +37,6 @@ async def test_resolver_with_built_relationship(orm_mappings, seeded_db):
     AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
-        model_config = ConfigDict(from_attributes=True)
 
         school: Annotated[SchoolDTO | None, AutoLoad()] = None
         courses: Annotated[list[CourseDTO], AutoLoad()] = []
@@ -50,7 +49,7 @@ async def test_resolver_with_built_relationship(orm_mappings, seeded_db):
         StudentView(id=student.id, name=student.name, school_id=student.school_id)
         for student in students
     ]
-    result = await MyResolver().resolve(payload)
+    result = await MyResolver(enable_from_attribute_in_type_adapter=True).resolve(payload)
 
     first = _find_student(result)
     second = next(row for row in result if row.id == 2)
@@ -87,7 +86,6 @@ async def test_build_relationship_with_default_filter(seeded_db):
     AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
-        model_config = ConfigDict(from_attributes=True)
 
         school: Annotated[SchoolDTO | None, AutoLoad()] = None
         courses: Annotated[list[CourseDTO], AutoLoad()] = []
@@ -100,7 +98,7 @@ async def test_build_relationship_with_default_filter(seeded_db):
         for student in students
     ]
 
-    result = await MyResolver().resolve(payload)
+    result = await MyResolver(enable_from_attribute_in_type_adapter=True).resolve(payload)
     student1 = _find_by_id(result, 1)
     student4 = _find_by_id(result, 4)
 
@@ -126,7 +124,6 @@ async def test_mapping_filter_empty_list_resets_global_default(seeded_db):
     AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
-        model_config = ConfigDict(from_attributes=True)
 
         school: Annotated[SchoolDTO | None, AutoLoad()] = None
 
@@ -137,7 +134,7 @@ async def test_mapping_filter_empty_list_resets_global_default(seeded_db):
         StudentView(id=student.id, name=student.name, school_id=student.school_id)
         for student in students
     ]
-    result = await MyResolver().resolve(payload)
+    result = await MyResolver(enable_from_attribute_in_type_adapter=True).resolve(payload)
 
     student4 = _find_by_id(result, 4)
     assert student4.school == SchoolDTO(id=99, name="Deleted-School")
@@ -164,8 +161,7 @@ async def test_mapping_filter_non_empty_overrides_global_default(seeded_db):
     AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
-        model_config = ConfigDict(from_attributes=True)
-
+ 
         school: Annotated[SchoolDTO | None, AutoLoad()] = None
         courses: Annotated[list[CourseDTO], AutoLoad()] = []
 
@@ -176,7 +172,7 @@ async def test_mapping_filter_non_empty_overrides_global_default(seeded_db):
         StudentView(id=student.id, name=student.name, school_id=student.school_id)
         for student in students
     ]
-    result = await MyResolver().resolve(payload)
+    result = await MyResolver(enable_from_attribute_in_type_adapter=True).resolve(payload)
 
     student1 = _find_by_id(result, 1)
     student4 = _find_by_id(result, 4)
@@ -209,7 +205,6 @@ async def test_contrib_loader_uses_query_meta_fields(seeded_db):
     AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
-        model_config = ConfigDict(from_attributes=True)
 
         school: Annotated[SchoolNameDTO | None, AutoLoad()] = None
         courses: Annotated[list[CourseTitleDTO], AutoLoad()] = []
@@ -221,7 +216,7 @@ async def test_contrib_loader_uses_query_meta_fields(seeded_db):
         StudentView(id=student.id, name=student.name, school_id=student.school_id)
         for student in students
     ]
-    resolver = MyResolver()
+    resolver = MyResolver(enable_from_attribute_in_type_adapter=True)
     result = await resolver.resolve(payload)
 
     first = _find_student(result)
