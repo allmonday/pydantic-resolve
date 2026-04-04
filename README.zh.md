@@ -158,10 +158,10 @@ class SprintResponse(BaseModel):
 ```python
 class OrderResponse(BaseModel):
     items: List[ItemResponse] = []
-    total_price: float = 0.0
+    total_price: Decimal = Decimal('0')
 
     def post_total_price(self):
-        return round(sum(item.price for item in self.items), 2)
+        return sum(item.price for item in self.items)
 ```
 
 `post_*` 方法还支持接收上下文参数（见下文 Expose & Collect）。
