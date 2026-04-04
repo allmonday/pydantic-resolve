@@ -246,6 +246,50 @@ class TaskResponse(DefineSubset):
     owner: Annotated[Optional[UserEntity], AutoLoad()] = None
 ```
 
+### Auto-Discover Relationships from ORM
+
+Instead of manually defining `__relationships__`, use `build_relationship` to auto-discover ORM relationships and generate DataLoaders. Supports **SQLAlchemy**, **Django**, and **Tortoise ORM**.
+
+```python
+from pydantic_resolve import ErDiagram, config_resolver
+from pydantic_resolve.contrib.sqlalchemy import build_relationship  # or .django / .tortoise
+from pydantic_resolve.contrib.mapping import Mapping
+
+# 1. Map DTOs to ORM models
+entities = build_relationship(
+    mappings=[
+        Mapping(entity=StudentDTO, orm=StudentOrm),
+        Mapping(entity=SchoolDTO, orm=SchoolOrm),
+        Mapping(entity=CourseDTO, orm=CourseOrm),
+    ],
+    session_factory=session_factory,  # SQLAlchemy / Django / Tortoise
+)
+
+# 2. Add to ErDiagram
+diagram = ErDiagram(entities=[]).add_relationship(entities)
+AutoLoad = diagram.create_auto_load()
+MyResolver = config_resolver("MyResolver", er_diagram=diagram)
+
+# 3. Use AutoLoad — relationships are resolved automatically
+class StudentView(StudentDTO):
+    school: Annotated[SchoolDTO | None, AutoLoad()] = None
+    courses: Annotated[list[CourseDTO], AutoLoad()] = []
+```
+
+`build_relationship` inspects ORM metadata and generates loaders for **Many-to-One**, **One-to-Many**, **Many-to-Many**, and **One-to-One** relationships. You can also apply filters:
+
+```python
+entities = build_relationship(
+    mappings=[
+        Mapping(entity=StudentDTO, orm=StudentOrm),
+        Mapping(entity=SchoolDTO, orm=SchoolOrm, filters=[]),  # bypass default filter
+        Mapping(entity=CourseDTO, orm=CourseOrm, filters=[CourseOrm.active.is_(True)]),
+    ],
+    session_factory=session_factory,
+    default_filter=lambda cls: [cls.deleted.is_(False)],  # global default
+)
+```
+
 ### When to Use Declarative Mode
 
 **Declarative Mode is a good fit when:**

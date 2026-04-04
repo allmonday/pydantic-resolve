@@ -246,6 +246,50 @@ class TaskResponse(DefineSubset):
     owner: Annotated[Optional[UserEntity], AutoLoad()] = None
 ```
 
+### 从 ORM 自动发现关联关系
+
+除了手动定义 `__relationships__`，还可以使用 `build_relationship` 自动发现 ORM 关联关系并生成 DataLoader。支持 **SQLAlchemy**、**Django** 和 **Tortoise ORM**。
+
+```python
+from pydantic_resolve import ErDiagram, config_resolver
+from pydantic_resolve.contrib.sqlalchemy import build_relationship  # 或 .django / .tortoise
+from pydantic_resolve.contrib.mapping import Mapping
+
+# 1. 将 DTO 映射到 ORM 模型
+entities = build_relationship(
+    mappings=[
+        Mapping(entity=StudentDTO, orm=StudentOrm),
+        Mapping(entity=SchoolDTO, orm=SchoolOrm),
+        Mapping(entity=CourseDTO, orm=CourseOrm),
+    ],
+    session_factory=session_factory,  # SQLAlchemy / Django / Tortoise
+)
+
+# 2. 加入 ErDiagram
+diagram = ErDiagram(entities=[]).add_relationship(entities)
+AutoLoad = diagram.create_auto_load()
+MyResolver = config_resolver("MyResolver", er_diagram=diagram)
+
+# 3. 使用 AutoLoad — 关联数据自动加载
+class StudentView(StudentDTO):
+    school: Annotated[SchoolDTO | None, AutoLoad()] = None
+    courses: Annotated[list[CourseDTO], AutoLoad()] = []
+```
+
+`build_relationship` 检查 ORM 元数据，自动为 **多对一**、**一对多**、**多对多** 和 **一对一** 关系生成 loader。还支持筛选器：
+
+```python
+entities = build_relationship(
+    mappings=[
+        Mapping(entity=StudentDTO, orm=StudentOrm),
+        Mapping(entity=SchoolDTO, orm=SchoolOrm, filters=[]),  # 跳过默认筛选器
+        Mapping(entity=CourseDTO, orm=CourseOrm, filters=[CourseOrm.active.is_(True)]),
+    ],
+    session_factory=session_factory,
+    default_filter=lambda cls: [cls.deleted.is_(False)],  # 全局默认筛选器
+)
+```
+
 ### 何时使用声明式模式
 
 **适合使用声明式模式的场景：**
