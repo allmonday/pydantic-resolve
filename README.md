@@ -137,6 +137,35 @@ async def user_loader(user_ids: list[int]):
     return await db.query(User).filter(User.id.in_(user_ids)).all()
 ```
 
+### Post: Post-Processing After Resolution
+
+After all `resolve_*` methods complete, use `post_*` methods to transform or aggregate data:
+
+```python
+class SprintResponse(BaseModel):
+    tasks: List[TaskResponse] = []
+    task_count: int = 0
+
+    def post_task_count(self):
+        return len(self.tasks)
+```
+
+`post_*` methods run after all nested data is fully resolved, making them ideal for:
+- Computing derived values (counts, sums, averages)
+- Formatting or cleaning up loaded data
+- Aggregating results from child collections
+
+```python
+class OrderResponse(BaseModel):
+    items: List[ItemResponse] = []
+    total_price: float = 0.0
+
+    def post_total_price(self):
+        return round(sum(item.price for item in self.items), 2)
+```
+
+`post_*` methods also accept parameters for context access (see Expose & Collect below).
+
 ### Expose & Collect: Cross-layer Data Flow
 
 In nested data structures, parent and child nodes often need to share data. Traditional approaches require explicit parameter passing or tight coupling. pydantic-resolve provides two declarative mechanisms:

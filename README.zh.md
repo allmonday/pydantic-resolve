@@ -137,6 +137,35 @@ async def user_loader(user_ids: list[int]):
     return await db.query(User).filter(User.id.in_(user_ids)).all()
 ```
 
+### Post：解析后处理
+
+在所有 `resolve_*` 方法执行完毕后，使用 `post_*` 方法对数据进行转换或聚合：
+
+```python
+class SprintResponse(BaseModel):
+    tasks: List[TaskResponse] = []
+    task_count: int = 0
+
+    def post_task_count(self):
+        return len(self.tasks)
+```
+
+`post_*` 方法在所有嵌套数据完全解析后执行，适用于：
+- 计算派生值（计数、求和、平均值）
+- 格式化或清洗已加载的数据
+- 聚合子集合的结果
+
+```python
+class OrderResponse(BaseModel):
+    items: List[ItemResponse] = []
+    total_price: float = 0.0
+
+    def post_total_price(self):
+        return round(sum(item.price for item in self.items), 2)
+```
+
+`post_*` 方法还支持接收上下文参数（见下文 Expose & Collect）。
+
 ### Expose & Collect：跨层数据流
 
 在嵌套数据结构中，父子节点经常需要共享数据。传统方式需要显式传参或紧耦合。pydantic-resolve 提供两种声明式机制：
