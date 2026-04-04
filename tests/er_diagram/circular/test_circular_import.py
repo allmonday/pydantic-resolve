@@ -23,11 +23,11 @@ def test_circular_import_error():
     from tests.er_diagram.circular.entities.post import PostEntity
     from tests.er_diagram.circular.entities import BaseEntity
     diagram = BaseEntity.get_diagram()
-    assert len(diagram.configs) == 2
+    assert len(diagram.entities) == 2
 
     # Find UserEntity and PostEntity configs
-    user_cfg = next((c for c in diagram.configs if c.kls == UserEntity), None)
-    post_cfg = next((c for c in diagram.configs if c.kls == PostEntity), None)
+    user_cfg = next((c for c in diagram.entities if c.kls == UserEntity), None)
+    post_cfg = next((c for c in diagram.entities if c.kls == PostEntity), None)
 
     assert user_cfg is not None, "UserEntity config not found"
     assert post_cfg is not None, "PostEntity config not found"
@@ -56,7 +56,7 @@ def test_module_path_syntax_with_list():
     from tests.er_diagram.circular.entities import BaseEntity
 
     diagram = BaseEntity.get_diagram()
-    user_cfg = next((c for c in diagram.configs if c.kls == UserEntity), None)
+    user_cfg = next((c for c in diagram.entities if c.kls == UserEntity), None)
 
     # UserEntity should have list[PostEntity] relationship
     assert user_cfg is not None
@@ -78,7 +78,7 @@ def test_module_path_syntax_with_simple_class():
     from tests.er_diagram.circular.entities import BaseEntity
 
     diagram = BaseEntity.get_diagram()
-    post_cfg = next((c for c in diagram.configs if c.kls == PostEntity), None)
+    post_cfg = next((c for c in diagram.entities if c.kls == PostEntity), None)
 
     # PostEntity should have UserEntity relationship
     assert post_cfg is not None

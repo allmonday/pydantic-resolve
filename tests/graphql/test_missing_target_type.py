@@ -253,7 +253,7 @@ class TestBaseEntityRelationships:
             profile_id: int
 
         diagram = BaseEntity.get_diagram()
-        config_class_names = {cfg.kls.__name__ for cfg in diagram.configs}
+        config_class_names = {cfg.kls.__name__ for cfg in diagram.entities}
 
         # Both entities should be collected
         assert 'UserEntityTest' in config_class_names, \

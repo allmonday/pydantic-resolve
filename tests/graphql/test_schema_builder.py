@@ -33,7 +33,7 @@ class TestSchemaBuilder:
         """测试提取 @query 方法"""
         # 获取 UserEntity
         user_entity_cfg = None
-        for cfg in self.er_diagram.configs:
+        for cfg in self.er_diagram.entities:
             if cfg.kls.__name__ == 'UserEntity':
                 user_entity_cfg = cfg
                 break

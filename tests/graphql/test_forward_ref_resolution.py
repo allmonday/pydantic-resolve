@@ -54,7 +54,7 @@ class TestForwardRefResolution:
 
         # Verify that the relationship target_kls is resolved to the actual class
         user_config = None
-        for cfg in diagram.configs:
+        for cfg in diagram.entities:
             if cfg.kls.__name__ == 'UserEntityForwardRef':
                 user_config = cfg
                 break

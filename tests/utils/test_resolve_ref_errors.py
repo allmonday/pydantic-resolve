@@ -36,7 +36,7 @@ def test_multiple_colons_in_module_path():
 
     # This should work since the module path is valid
     diagram = Base.get_diagram()
-    assert len(diagram.configs) == 1
+    assert len(diagram.entities) == 1
 
 
 def test_missing_module_name_before_colon():
@@ -125,9 +125,9 @@ def test_valid_module_path_syntax():
         user_id: int
 
     diagram = Base.get_diagram()
-    assert len(diagram.configs) == 1
+    assert len(diagram.entities) == 1
     # The target_kls should be resolved to the actual User class
-    entity = diagram.configs[0]
+    entity = diagram.entities[0]
     resolved_class = entity.relationships[0].target
     # Check the class name and module instead of using 'is' because they might be
     # different objects in memory due to different import paths
@@ -150,7 +150,7 @@ def test_nested_list_generic_with_string_ref():
     # Current implementation doesn't support nested generics
     # The inner list['User'] will be processed, but outer list will remain as-is
     diagram = Base.get_diagram()
-    assert len(diagram.configs) == 1
+    assert len(diagram.entities) == 1
 
 
 def test_other_container_types():
@@ -166,9 +166,9 @@ def test_other_container_types():
         user_id: int
 
     diagram = Base.get_diagram()
-    assert len(diagram.configs) == 1
+    assert len(diagram.entities) == 1
     # tuple['User'] should remain as-is since only list is processed
-    entity = diagram.configs[0]
+    entity = diagram.entities[0]
     # Check that the GenericAlias is preserved
     assert entity.relationships[0].target == tuple['User']
 
@@ -186,7 +186,7 @@ def test_dict_generic_with_string_ref():
         user_id: int
 
     diagram = Base.get_diagram()
-    assert len(diagram.configs) == 1
+    assert len(diagram.entities) == 1
     # dict should remain as-is since only list is processed
 
 
@@ -203,8 +203,8 @@ def test_valid_list_generic_with_string_ref():
         user_id: int
 
     diagram = Base.get_diagram()
-    assert len(diagram.configs) == 1
-    entity = diagram.configs[0]
+    assert len(diagram.entities) == 1
+    entity = diagram.entities[0]
     # The list['User'] should be resolved to list[User]
     assert entity.relationships[0].target == list[User]
 
@@ -222,8 +222,8 @@ def test_list_generic_with_module_path():
         user_id: int
 
     diagram = Base.get_diagram()
-    assert len(diagram.configs) == 1
-    entity = diagram.configs[0]
+    assert len(diagram.entities) == 1
+    entity = diagram.entities[0]
     # Should be resolved to list[User] where User is the actual class
     resolved_type = entity.relationships[0].target
     # Check it's a list type with correct element type
@@ -279,6 +279,6 @@ def test_resolve_ref_with_direct_class_reference():
         user_id: int
 
     diagram = Base.get_diagram()
-    assert len(diagram.configs) == 1
-    entity = diagram.configs[0]
+    assert len(diagram.entities) == 1
+    entity = diagram.entities[0]
     assert entity.relationships[0].target is User

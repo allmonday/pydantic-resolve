@@ -247,7 +247,7 @@ class TestCollectRelatedEntitiesFromMethod:
     def test_collect_from_return_type(self):
         """Test collecting entities from return type."""
         # Find the get_all method
-        for entity_cfg in self.er_diagram.configs:
+        for entity_cfg in self.er_diagram.entities:
             if entity_cfg.kls.__name__ == 'SampleUser':
                 methods = self.builder._extract_query_methods(entity_cfg.kls)
                 for method in methods:
@@ -259,7 +259,7 @@ class TestCollectRelatedEntitiesFromMethod:
 
     def test_collect_from_list_return_type(self):
         """Test collecting entities from list return type."""
-        for entity_cfg in self.er_diagram.configs:
+        for entity_cfg in self.er_diagram.entities:
             if entity_cfg.kls.__name__ == 'SampleUser':
                 methods = self.builder._extract_query_methods(entity_cfg.kls)
                 for method in methods:
@@ -272,7 +272,7 @@ class TestCollectRelatedEntitiesFromMethod:
 
     def test_collect_from_string_annotation(self):
         """Test collecting entities from string type annotation."""
-        for entity_cfg in self.er_diagram.configs:
+        for entity_cfg in self.er_diagram.entities:
             if entity_cfg.kls.__name__ == 'SampleUser':
                 methods = self.builder._extract_mutation_methods(entity_cfg.kls)
                 for method in methods:
