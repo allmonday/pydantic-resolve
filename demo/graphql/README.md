@@ -21,6 +21,138 @@ uv run uvicorn demo.graphql.app:app --reload
 
 服务器将在 `http://localhost:8000` 启动。
 
+## 配置流程
+
+本 Demo 的核心是 `entities_v3.py`，通过四个步骤完成 GraphQL 的配置：
+
+### Step 1: 定义 DTO 和 ORM 模型
+
+DTO 是独立的 API 契约，ORM 模型描述数据库结构：
+
+```python
+# DTO - 定义 API 契约
+class UserEntityV3(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    email: str
+    role: str
+    created_at: datetime
+
+# ORM - 定义数据库结构
+class UserOrm(Base):
+    __tablename__ = "user"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String)
+    # ...
+    posts: Mapped[List["PostOrm"]] = relationship(back_populates="author")
+```
+
+### Step 2: 通过 `build_relationship` 自动发现关联关系
+
+将 DTO 映射到 ORM 模型，框架自动读取 ORM 元数据生成 DataLoader：
+
+```python
+from pydantic_resolve.contrib.sqlalchemy import build_relationship
+from pydantic_resolve.contrib.mapping import Mapping
+
+relationship_entities = build_relationship(
+    mappings=[
+        Mapping(entity=UserEntityV3, orm=UserOrm),
+        Mapping(entity=PostEntityV3, orm=PostOrm),
+        Mapping(entity=CommentEntityV3, orm=CommentOrm),
+    ],
+    session_factory=session_factory,
+)
+```
+
+ORM 中已定义的关系会被自动识别：
+
+```
+User ──1:N──> Post       (user.posts)
+Post ──N:1──> User       (post.author)
+User ──1:N──> Comment    (user.comments)
+Post ──1:N──> Comment    (post.comments)
+Comment ──N:1──> User    (comment.author)
+Comment ──N:1──> Post    (comment.post)
+```
+
+### Step 3: 通过 `Entity` + `QueryConfig` / `MutationConfig` 注册查询和变更
+
+为每个 DTO 配置 GraphQL 的入口方法：
+
+```python
+from pydantic_resolve import Entity, QueryConfig, MutationConfig
+
+qm_entities = [
+    Entity(
+        kls=UserEntityV3,
+        queries=[
+            QueryConfig(method=get_all_users, name="users_v3"),
+            QueryConfig(method=get_user_by_id, name="user_v3"),
+        ],
+        mutations=[
+            MutationConfig(method=create_user, name="createUserV3"),
+        ],
+    ),
+    Entity(
+        kls=PostEntityV3,
+        queries=[
+            QueryConfig(method=get_all_posts, name="posts_v3"),
+            QueryConfig(method=get_post_by_id, name="post_v3"),
+        ],
+        mutations=[
+            MutationConfig(method=create_post, name="createPostV3"),
+        ],
+    ),
+    # ... CommentEntityV3 同理
+]
+```
+
+查询和变更方法的签名决定了 GraphQL 的参数类型，返回类型由 DTO 定义：
+
+```python
+# 参数 (limit, offset) 自动映射为 GraphQL 参数
+# 返回 List[UserEntityV3] 自动映射为 GraphQL 类型
+async def get_all_users(limit: int = 10, offset: int = 0) -> List[UserEntityV3]:
+    ...
+```
+
+### Step 4: 合并为 ErDiagram 并配置 Resolver
+
+将 Query/Mutation 配置和自动发现的关系合并，生成完整的 ER Diagram：
+
+```python
+from pydantic_resolve import ErDiagram, config_global_resolver
+
+# Q/M 配置为基础，追加自动发现的关系
+diagram_v3 = ErDiagram(entities=qm_entities).add_relationship(relationship_entities)
+
+# 配置全局 Resolver
+config_global_resolver(diagram_v3)
+```
+
+`ErDiagram` 会自动生成 GraphQL Schema，包括：
+- 每个 Entity 对应一个 GraphQL Type
+- `QueryConfig` 注册为 Query 入口
+- `MutationConfig` 注册为 Mutation 入口
+- 关联关系自动生成为嵌套查询字段
+
+### 在 FastAPI 中使用
+
+`app.py` 中通过 `GraphQLHandler` 执行查询：
+
+```python
+from pydantic_resolve import GraphQLHandler, SchemaBuilder
+
+handler = GraphQLHandler(diagram, enable_from_attribute_in_type_adapter=True)
+schema_builder = SchemaBuilder(diagram)
+
+@app.post("/graphql")
+async def graphql_endpoint(req: GraphQLRequest):
+    return await handler.execute(query=req.query)
+```
+
 ## Endpoints
 
 | Endpoint | Method | 说明 |
@@ -139,17 +271,6 @@ curl -X POST http://localhost:8000/graphql \
 ```
 
 ## 数据模型
-
-本 Demo 使用 SQLAlchemy ORM 定义模型，通过 `build_relationship` 自动发现关联关系：
-
-```
-User ──1:N──> Post       (user.posts)
-Post ──N:1──> User       (post.author)
-User ──1:N──> Comment    (user.comments)
-Post ──1:N──> Comment    (post.comments)
-Comment ──N:1──> User    (comment.author)
-Comment ──N:1──> Post    (comment.post)
-```
 
 ### UserEntityV3
 - `id`: Int

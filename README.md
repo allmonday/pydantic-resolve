@@ -107,9 +107,11 @@ async def get_sprints():
 
 ## Core Concepts
 
+The Quick Start showed the end-to-end flow. Now let's break down each building block — `resolve_*` loads related data, `post_*` transforms results, and Expose/Collect handles cross-layer communication. Understanding these will let you handle any data assembly scenario.
+
 ### Resolve: Declarative Data Loading
 
-Instead of imperative data fetching, declare what you need:
+In traditional code, you fetch data imperatively — loop through items, query one by one. pydantic-resolve flips this: you declare *what* data each field needs, and the framework handles *how* to get it.
 
 ```python
 class Task(BaseModel):
@@ -139,7 +141,7 @@ async def user_loader(user_ids: list[int]):
 
 ### Post: Post-Processing After Resolution
 
-After all `resolve_*` methods complete, use `post_*` methods to transform or aggregate data:
+`resolve_*` handles loading external data, but what about derived values? For example, a sprint response needs a `task_count` that depends on the resolved `tasks` list, and an order response needs a `total_price` computed from its items. This is where `post_*` comes in — it runs after all nested resolves complete, when the data tree is fully assembled.
 
 ```python
 class SprintResponse(BaseModel):
@@ -168,7 +170,7 @@ class OrderResponse(BaseModel):
 
 ### Expose & Collect: Cross-layer Data Flow
 
-In nested data structures, parent and child nodes often need to share data. Traditional approaches require explicit parameter passing or tight coupling. pydantic-resolve provides two declarative mechanisms:
+So far, each node resolves its own data independently. But in real nested structures, nodes often need to communicate across layers: a child task needs to know which sprint it belongs to, or a parent story needs to collect all unique contributors from its tasks. Passing these through constructors creates tight coupling. pydantic-resolve provides two declarative mechanisms for cross-layer communication without explicit references:
 
 - **ExposeAs**: Parent nodes expose data to all descendants (downward flow)
 - **SendTo + Collector**: Child nodes send data to parent collectors (upward flow)
@@ -207,11 +209,7 @@ class Story(BaseModel):
 
 ## Declarative Mode: ER Diagram + AutoLoad
 
-Quick Start and Core Concepts demonstrate pydantic-resolve's **Core API**: writing `resolve_*` methods and manually specifying Loaders. For simple use cases, this is sufficient.
-
-When a project involves multiple interrelated entities, pydantic-resolve offers a **Declarative API**: define entity relationships and default loaders in an ER Diagram, then use `AutoLoad` to auto-generate the corresponding resolve methods.
-
-Declarative API is built on top of Core API. `AutoLoad` fields generate equivalent `resolve_*` methods at runtime, so both modes can be freely mixed — you can still use `post_*` methods in Declarative Mode, or fall back to hand-written `resolve_*` for specific fields.
+The Core API works well for a handful of `resolve_*` methods. But as the project grows — say you have Users, Tasks, Sprints, Comments, and Labels, all interrelated — you end up writing many similar resolve methods and duplicating relationship knowledge across Response classes. Declarative Mode addresses this by centralizing relationships in an ER Diagram and auto-generating resolve methods via `AutoLoad`.
 
 | | Core API | Declarative API |
 |--|----------|-----------------|
@@ -219,6 +217,8 @@ Declarative API is built on top of Core API. `AutoLoad` fields generate equivale
 | **Control** | Full control | Convention over configuration |
 | **Best for** | Simple projects, one-off data loading | Multiple related entities, GraphQL/MCP needed |
 | **Relationships** | Scattered across Response classes | Centralized in ER Diagram |
+
+Declarative API is built on top of Core API. `AutoLoad` fields generate equivalent `resolve_*` methods at runtime, so both modes can be freely mixed — you can still use `post_*` methods in Declarative Mode, or fall back to hand-written `resolve_*` for specific fields.
 
 ### Define Entities and Relationships
 
@@ -254,7 +254,7 @@ You can also use external declaration (`ErDiagram` + `Entity`) to separate relat
 
 ### Use AutoLoad
 
-After defining the ER Diagram, annotate fields with `AutoLoad()` in Response models:
+With the ER Diagram in place, you no longer need to write `resolve_*` methods manually — just annotate the fields you want auto-loaded:
 
 ```python
 from pydantic_resolve import DefineSubset
@@ -277,7 +277,13 @@ class TaskResponse(DefineSubset):
 
 ### Auto-Discover Relationships from ORM
 
-Instead of manually defining `__relationships__`, use `build_relationship` to auto-discover ORM relationships and generate DataLoaders. Supports **SQLAlchemy**, **Django**, and **Tortoise ORM**.
+The examples above define `__relationships__` by hand. In practice, your ORM already knows the relationships between tables. `build_relationship` reads ORM metadata and generates the corresponding loaders for you, eliminating duplicate definitions. Supports **SQLAlchemy**, **Django**, and **Tortoise ORM**.
+
+Note that DTOs are defined separately rather than auto-generated from ORM models. The considerations are:
+
+- **Entity is the primary definition layer.** Entities define the API contract independently of the data source. The ORM is just one possible backend.
+- **Auto-generated entities lose readability and static type checking.** Hand-written DTOs are explicit, IDE-friendly, and easy to understand.
+- **Entities can define more than ORM relationships.** You can add loaders that call RPC services, read from Redis, or combine multiple sources — things the ORM knows nothing about.
 
 ```python
 from pydantic_resolve import ErDiagram, config_resolver
