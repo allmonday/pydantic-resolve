@@ -372,17 +372,12 @@ async def test_dataloader_reused_for_multiple_dto_to_same_orm(
         name: str
         school_id: int
 
-    class StudentBizB(BaseModel):
-        model_config = ConfigDict(from_attributes=True)
-
-        id: int
-        name: str
-        school_id: int
+    class StudentBizB(StudentBizA):
+        pass
 
     entities = build_relationship(
         mappings=[
             Mapping(entity=StudentBizA, orm=StudentOrm),
-            Mapping(entity=StudentBizB, orm=StudentOrm),
             Mapping(entity=SchoolDTO, orm=SchoolOrm),
         ],
         session_factory=session_factory,

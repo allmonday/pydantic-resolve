@@ -4,7 +4,7 @@ import logging
 from typing import get_args, get_origin
 
 import pytest
-from pydantic import BaseModel, ConfigDict, ValidationError, computed_field
+from pydantic import BaseModel, ValidationError, computed_field
 from sqlalchemy import ForeignKeyConstraint, Integer, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from pydantic_resolve.contrib.sqlalchemy import build_relationship
@@ -201,29 +201,14 @@ def test_inspector_skips_default_and_computed_fields_in_dto_validation():
     assert students_rel.name == "students"
 
 
-class _SchoolLiteDTO(BaseModel):
-
-
-    id: int
-    name: str
-
-
-def test_inspector_allows_multiple_dto_to_same_orm_and_uses_first_as_primary_target():
-    entities = build_relationship(
-        mappings=[
-            Mapping(entity=StudentDTO, orm=StudentOrm),
-            Mapping(entity=_SchoolLiteDTO, orm=SchoolOrm),
-            Mapping(entity=SchoolDTO, orm=SchoolOrm),
-            Mapping(entity=CourseDTO, orm=CourseOrm),
-        ],
-        session_factory=_dummy_session_factory,
-    )
-
-    # Both DTO mappings for the same ORM should be allowed.
-    _find_entity(entities, _SchoolLiteDTO)
-    _find_entity(entities, SchoolDTO)
-
-    # Relationship target inference should use the first mapped DTO for SchoolOrm.
-    student_entity = _find_entity(entities, StudentDTO)
-    school_rel = _find_relationship(student_entity, "school")
-    assert school_rel.target is _SchoolLiteDTO
+def test_inspector_rejects_duplicate_orm_mapping():
+    with pytest.raises(ValueError, match="SchoolOrm is already mapped to"):
+        build_relationship(
+            mappings=[
+                Mapping(entity=StudentDTO, orm=StudentOrm),
+                Mapping(entity=SchoolDTO, orm=SchoolOrm),
+                Mapping(entity=SchoolDTO, orm=SchoolOrm),
+                Mapping(entity=CourseDTO, orm=CourseOrm),
+            ],
+            session_factory=_dummy_session_factory,
+        )
