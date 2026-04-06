@@ -68,6 +68,29 @@ def _inspect_orm_relationships(
     orm_filter_overrides: dict[type, list[Any]],
     default_filter: Callable[[type], list[Any]] | None,
 ) -> list[Relationship]:
+    # many_to_one (FK on self): field.many_to_one and not field.auto_created
+    #   e.g.  Task.owner_id -> User.id
+    #     class Task(models.Model):
+    #         owner = models.ForeignKey(User, on_delete=models.CASCADE)
+    #
+    # one_to_many (FK on target, reverse side): field.one_to_many
+    #   e.g.  User <- Task.owner (implicit reverse relation from ForeignKey)
+    #     class Task(models.Model):
+    #         owner = models.ForeignKey(User, on_delete=models.CASCADE)
+    #     # on User side: User.task_set  (reverse OneToMany)
+    #
+    # one_to_one (forward, FK on self): field.one_to_one and not field.auto_created
+    #   e.g.  User.profile_id -> Profile.id
+    #     class User(models.Model):
+    #         profile = models.OneToOneField(Profile, on_delete=models.CASCADE)
+    #
+    # one_to_one (reverse, auto_created): field.one_to_one and field.auto_created
+    #   e.g.  Profile <- User.profile (reverse side)
+    #
+    # many_to_many: field.many_to_many
+    #   e.g.  Student <-> Course
+    #     class Student(models.Model):
+    #         courses = models.ManyToManyField(Course)
     relationships: list[Relationship] = []
 
     for field in _iter_relation_fields(orm_kls):

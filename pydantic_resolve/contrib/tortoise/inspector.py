@@ -71,6 +71,27 @@ def _inspect_orm_relationships(
     orm_filter_overrides: dict[type, list[Any]],
     default_filter: Callable[[type], list[Any]] | None,
 ) -> list[Relationship]:
+    # fk_fields (many_to_one, FK on self): meta.fk_fields
+    #   e.g.  Task.owner_id -> User.id
+    #     class Task(Model):
+    #         owner = ForeignKeyField('models.User', related_name='tasks')
+    #
+    # backward_fk_fields (one_to_many, reverse side): meta.backward_fk_fields
+    #   e.g.  User <- Task.owner (reverse of ForeignKeyField)
+    #     # On User side: User.tasks (reverse OneToMany from Task.owner)
+    #
+    # o2o_fields (one_to_one, FK on self): meta.o2o_fields
+    #   e.g.  User.profile_id -> Profile.id
+    #     class User(Model):
+    #         profile = OneToOneField('models.Profile', related_name='user')
+    #
+    # backward_o2o_fields (one_to_one reverse): meta.backward_o2o_fields
+    #   e.g.  Profile <- User.profile (reverse of OneToOneField)
+    #
+    # m2m_fields (many_to_many): meta.m2m_fields
+    #   e.g.  Student <-> Course
+    #     class Student(Model):
+    #         courses = ManyToManyField('models.Course', related_name='students')
     meta = orm_kls._meta
     relationships: list[Relationship] = []
 

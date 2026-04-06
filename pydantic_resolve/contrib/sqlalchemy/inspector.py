@@ -71,6 +71,27 @@ def _inspect_orm_relationships(
     orm_filter_overrides: dict[type, list[Any]],
     default_filter: Callable[[type], list[Any]] | None,
 ) -> list[Relationship]:
+    # MANYTOONE: the FK column is on the *source* side (self).
+    #   e.g.  Task.owner_id -> User.id
+    #     class Task(Base):
+    #         owner_id = Column(Integer, ForeignKey('user.id'))
+    #         owner = relationship('User')          # MANYTOONE
+    #
+    # ONETOMANY: the FK column is on the *target* side.
+    #   e.g.  User <- Task.user_id
+    #     class User(Base):
+    #         tasks = relationship('Task', back_populates='user')  # ONETOMANY (uselist=True)
+    #   one-to-one variant (uselist=False):
+    #     class User(Base):
+    #         profile = relationship('Profile', uselist=False, back_populates='user')  # ONETOMANY (uselist=False)
+    #
+    # MANYTOMANY: requires a secondary (association) table.
+    #   e.g.  Student <-> Course via student_course
+    #     student_course = Table('student_course', Base.metadata,
+    #         Column('student_id', ForeignKey('student.id')),
+    #         Column('course_id',  ForeignKey('course.id')))
+    #     class Student(Base):
+    #         courses = relationship('Course', secondary=student_course)  # MANYTOMANY
     from sqlalchemy import inspect
     from sqlalchemy.orm import MANYTOONE, ONETOMANY, MANYTOMANY
 
