@@ -31,24 +31,18 @@ edit_uri: ""
 #       - pydantic-resolve: ./v1/changelog.md
 
 nav:
-  - Quick Start:
-      - Introduction: ./introduction.md
-      - Install: ./install.md
-      # - Use cases: ./use_case.md
-      # - Schema first: ./schema_first.md
-  - Features:
-      - Dataloader: ./dataloader.md
-      - ERD Driven Pattern: ./erd_driven.md
-      - Inherit and reuse: ./inherit_reuse.md
-      - Expose and collect: ./expose_and_collect.md
-      - Connect to UI: ./connect_to_ui.md
-      - GraphQL Support: ./graphql.md
-  - API:
-      - Reference: ./api.md
-      - Migration Guide: ./migration.md
-      - Change log: ./changelog.md
-  - Others:
-      - Why create it: ./why.md
+  - Guide:
+    - Overview: ./index.md
+    - Quick Start: ./quick_start.md
+    - Core API: ./core_api.md
+    - Post Processing: ./post_processing.md
+    - Cross-Layer Data Flow: ./cross_layer_data_flow.md
+    - ERD and AutoLoad: ./erd_and_autoload.md
+    - GraphQL and MCP: ./graphql_and_mcp.md
+  - Reference:
+    - Reference Bridge: ./reference_bridge.md
+    - Migration Guide: ./migration.md
+    - Change log: ./changelog.md
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -74,8 +68,15 @@ plugins:
           build: true
           link: "/pydantic-resolve/zh/"
           nav_translations:
+            Guide: "指南"
+            Overview: "总览"
             Quick Start: "快速开始"
-            Introduction: "简介"
+            Core API: "核心 API"
+            Post Processing: "后处理"
+            Cross-Layer Data Flow: "跨层数据流"
+            ERD and AutoLoad: "ERD 与 AutoLoad"
+            GraphQL and MCP: "GraphQL 与 MCP"
+            Reference Bridge: "延伸阅读"
             Use cases: "应用场景"
             Why create it: "为何写个新的库?"
             Schema first: "定义数据结构"
