@@ -79,28 +79,13 @@ Every page should extend the same example in this order:
 5. Replace repeated `resolve_*` wiring with `Relationship` and `AutoLoad`
 6. Reuse the same ERD for GraphQL and MCP
 
-## Terminology Rules
+## Terminology
 
-- Use `Resolver` for the traversal orchestrator.
-- Use `Loader(...)` for dependency declaration inside `resolve_*` methods.
-- Use `DataLoader` only when referring to batching behavior or `aiodataloader`.
-- Use `ERD` to mean application-layer relationship declarations, not only database diagrams.
-- In Chinese pages, keep code identifiers in English and translate only the surrounding explanation.
+- `Resolver` — the traversal orchestrator
+- `Loader(...)` — dependency declaration inside `resolve_*` methods
+- `DataLoader` — batching behavior or `aiodataloader`
+- `ERD` — application-layer relationship declarations (not limited to database diagrams)
 
-## Content Rules
+## Scope
 
-- Do not switch to unrelated examples such as `Company/Department/Employee` in the main path.
-- Do not introduce GraphQL before ERD is already established.
-- Do not present `post_*` as another data-loading hook.
-- Do not introduce `ExposeAs` or `Collector` before the reader already understands `resolve_*` and `post_*`.
-
-## Allowed Exceptions
-
-Breaking this contract is acceptable only when the page is explicitly outside the main path, for example:
-
-- API reference pages
-- migration notes
-- changelog entries
-- historical or motivational essays
-
-If a page breaks the scenario contract, it should say so explicitly.
+The main path uses this scenario exclusively. Pages outside the main path (API reference, migration notes, changelog, motivation) may use different examples when the topic requires it.

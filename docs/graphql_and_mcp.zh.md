@@ -4,7 +4,7 @@
 
 当 ERD 建好之后，GraphQL 和 MCP 就会变成“复用层”。它们建立在同一份模型图之上，而不是要求你再学第二套数据组装体系。
 
-要记住的 framing 是：GraphQL 与 MCP 是 ERD 的下游能力，不是 Core API 的替代品。
+GraphQL 与 MCP 是 ERD 的下游能力，不是 Core API 的替代品。
 
 ## GraphQL：在同一张图上增加根入口
 

@@ -2,7 +2,7 @@
 
 [中文版](./source_mapping.zh.md) | [docs](./index.md)
 
-This file maps the existing documentation into the new `docs/` structure. The goal is not to preserve the old split one-to-one. The goal is to turn overlapping material into one progressive path with cleaner hand-offs.
+This page maps the earlier `docs_old/` documentation into the current `docs/` structure. Overlapping material has been consolidated into one progressive path with cleaner hand-offs.
 
 ## Main Path Mapping
 
@@ -30,7 +30,7 @@ This file maps the existing documentation into the new `docs/` structure. The go
 | `docs_old/use_case.md` | appendix candidate | mine selectively | Useful positioning material, but not main path |
 | `docs_old/inherit_reuse.md` | advanced future page | postpone | Should not land before the main path stabilizes |
 
-## Page-by-Page Rewrite Intent
+## Page-by-Page Source Reference
 
 | docs page | Main source set | Rewrite intent |
 |---|---|---|
@@ -44,13 +44,6 @@ This file maps the existing documentation into the new `docs/` structure. The go
 | `graphql_and_mcp.md` | `README.md`, `docs_old/graphql.md` | show reuse of the same graph |
 | `reference_bridge.md` | `docs_old/api.md`, `docs_old/migration.md`, `docs_old/why.md`, `docs_old/connect_to_ui.md` | clarify where the tutorial path ends |
 
-## Rollout Rules
+## How to Use This File
 
-- Keep `docs_old/` untouched while the new `docs/` path continues to evolve.
-- Do not update `mkdocs.yml` until the main path reads cleanly from start to finish.
-- Keep English and Chinese files aligned by structure and links.
-- Treat the English text as the structural source of truth during iteration, then sync wording adjustments into the Chinese pages in the same wave.
-
-## How to Read This File
-
-Use this page as a migration matrix between the older topic split and the new progressive path. It is mainly useful when you are editing docs, aligning translations, or deciding where a topic belongs.
+This page provides a migration matrix between the earlier topic-based split and the current progressive path. Use it when you need to trace where a topic was moved or when aligning translations.

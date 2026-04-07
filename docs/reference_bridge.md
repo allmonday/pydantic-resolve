@@ -29,21 +29,10 @@ If you finished the main path and want a sensible next sequence, this order is u
 4. project motivation
 5. UI integration notes
 
-## What Still Lives in `docs_old/`
+## Additional Topics
 
-For now, the more reference-style material that has not been migrated yet still lives in `docs_old/`. `docs/` is focused on the new progressive learning path first.
-
-That means:
-
-- `docs/` is the new tutorial-oriented path
-- `docs_old/` still contains older reference and topic-based material
-
-## What May Move Later
-
-Future `docs/` iterations may absorb or reorganize topics such as:
+Beyond the references listed above, the following topics may be useful as your usage deepens:
 
 - inheritance and reuse patterns
 - framework-specific integration guides
 - API reference refinements
-
-But those topics should be moved only after the main path is already stable.

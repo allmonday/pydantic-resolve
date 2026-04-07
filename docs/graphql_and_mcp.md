@@ -4,7 +4,7 @@
 
 Once the ERD is in place, GraphQL and MCP become reuse layers. They build on the same model graph instead of asking you to learn a second data-assembly system.
 
-That is the framing to keep in mind: GraphQL and MCP are downstream of the ERD, not an alternative to the Core API.
+GraphQL and MCP are downstream of the ERD, not an alternative to the Core API.
 
 ## GraphQL: Add Root Entry Points to the Same Graph
 

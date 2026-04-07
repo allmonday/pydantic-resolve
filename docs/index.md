@@ -1,30 +1,41 @@
-# docs
+# pydantic-resolve
 
 [中文版](./index.zh.md)
 
-`docs/` is the new progressive documentation path for pydantic-resolve. It keeps the existing `docs/` directory untouched while we rebuild the learning experience around one scenario, one sequence, and clearer boundaries between tutorial material and reference material.
+**pydantic-resolve** is a declarative data assembly library for Pydantic. It eliminates N+1 queries with minimal code by combining the DataLoader pattern with Pydantic models. It also provides rich data transformation capabilities — including derived field computation, cross-layer data flow, and field subset filtering — covering the full pipeline from data loading to final response construction.
 
-The design rule is simple: start with one concrete endpoint-level N+1 problem, stay on the same business model while complexity grows, and only introduce automation once the manual model is already clear.
+The core idea: mark missing fields with `resolve_*`, compute derived values with `post_*`, and let the `Resolver` walk the tree. As your project grows, repeated relationship wiring can be consolidated into an ER Diagram with `AutoLoad`, which also powers GraphQL and MCP generation.
 
-## What This Path Optimizes For
+## What pydantic-resolve Gives You
 
-- Fast onboarding from one real response-model problem
-- One stable scenario: `Sprint -> Task -> User`
-- Explicit separation between learning path and long-lived reference docs
-- ERD, GraphQL, and MCP introduced as scaling and reuse steps, not entry points
+| Need | What you write | What the framework does |
+|------|----------------|-------------------------|
+| Load related data | `resolve_*` + `Loader(...)` | Batch lookups and map results back |
+| Compute derived fields | `post_*` | Run after descendants are fully resolved |
+| Share data across layers | `ExposeAs`, `SendTo`, `Collector` | Pass context down or aggregate data up |
+| Reuse relationship declarations | ER Diagram + `AutoLoad` | Centralize relationship wiring for many models |
 
-## Learning Flow
+## Who Is This For
+
+- **Backend developers** building nested response data in FastAPI or similar frameworks
+- **Teams** who want to solve N+1 queries without switching to GraphQL
+- **Projects** where the same entity relationships repeat across multiple endpoints
+- **Anyone** who wants Pydantic models to compose like self-contained components
+
+## Learning Path
 
 ```mermaid
-flowchart LR
-	a["One N+1 Problem"] --> b["Nested Tree with resolve_*"]
-	b --> c["Derived Fields with post_*"]
-	c --> d["Cross-Layer Flow"]
-	d --> e["ERD and AutoLoad"]
-	e --> f["GraphQL and MCP Reuse"]
+flowchart TB
+    a["One N+1 Problem<br/>resolve_*"] --> b["Nested Tree"]
+    b --> c["Derived Fields<br/>post_*"]
+    c --> d["Cross-Layer Flow<br/>ExposeAs / SendTo"]
+    d --> e["ERD + AutoLoad"]
+    e --> f["GraphQL / MCP"]
 ```
 
-## Read in This Order
+Every page in the Guide section uses the same business scenario: `Sprint` has many `Task`, each `Task` has one `owner`.
+
+### Guide (Tutorial Path)
 
 | Page | Main Question |
 |---|---|
@@ -33,54 +44,28 @@ flowchart LR
 | [Post Processing](./post_processing.md) | When should a field be computed in `post_*` instead of loaded in `resolve_*`? |
 | [Cross-Layer Data Flow](./cross_layer_data_flow.md) | How do parent and child nodes coordinate without hard-coded traversal logic? |
 | [ERD and AutoLoad](./erd_and_autoload.md) | When is it worth turning repeated relationship wiring into reusable ERD declarations? |
-| [GraphQL and MCP](./graphql_and_mcp.md) | How can the same ERD power external interfaces without creating a second mental model? |
-| [Reference Bridge](./reference_bridge.md) | Where should I go after the main path ends? |
 
-## Shared Scenario
+### Guides (Practical Topics)
 
-Every page in the main path uses the same business story:
+Once you understand the core model, these pages go deeper into specific areas:
 
-- `Sprint` has many `Task`
-- `Task` has one `owner`
-- `Sprint` derives `task_count` and `contributor_names`
-- `Sprint` can expose `sprint_name` downward to descendants
-- `Task.owner` can be collected upward as `contributors`
+| Page | Topic |
+|---|---|
+| [DataLoader Deep Dive](./dataloader_deep_dive.md) | How batching works, `build_object`/`build_list`, parameters, cloning |
+| [ERD with DefineSubset](./erd_define_subset.md) | Hide internal fields while keeping centralized relationships |
+| [ORM Integration](./orm_integration.md) | Auto-generate loaders from SQLAlchemy, Django, or Tortoise ORM |
+| [FastAPI Integration](./fastapi_integration.md) | Use Resolver in FastAPI endpoints with dependency injection |
+| [GraphQL Guide](./graphql_guide.md) | Generate and serve GraphQL from ERD |
+| [MCP Service](./mcp_service.md) | Expose GraphQL APIs to AI agents |
 
-For the full naming rules, see [Scenario Contract](./scenario_contract.md).
+### API Reference
 
-## What Is Deliberately Outside This Path
+Detailed signatures and parameters for all public APIs:
 
-The following material still matters, but should not interrupt a first read:
-
-- API reference
-- migration guide
-- changelog
-- project motivation and origin story
-- UI integration details
-- advanced side topics such as inheritance-heavy reuse patterns
-
-Those materials remain connected through [Reference Bridge](./reference_bridge.md).
-
-## How This Directory Relates to the Existing Docs
-
-`docs/` focuses on the progressive learning path, while `docs_old/` continues to hold the older topic-based material that has not been migrated yet.
-
-- `docs/` is organized around onboarding and concept order.
-- `docs_old/` still contains the earlier reference and topic-based pages.
-- English and Chinese pages in `docs/` follow the same structure.
-
-## Source Material
-
-The first pass of `docs/` is assembled from material that originally lived in:
-
-- `README.md`
-- `README.zh.md`
-- `docs_old/introduction.md`
-- `docs_old/install.md`
-- `docs_old/dataloader.md`
-- `docs_old/expose_and_collect.md`
-- `docs_old/erd_driven.md`
-- `docs_old/schema_first.md`
-- `docs_old/graphql.md`
-
-For the migration matrix, see [Source Mapping](./source_mapping.md).
+- [Resolver](./api_resolver.md) — traversal orchestrator
+- [DataLoader Utilities](./api_dataloader.md) — `Loader`, `build_object`, `build_list`
+- [Cross-Layer Annotations](./api_cross_layer.md) — `ExposeAs`, `SendTo`, `Collector`
+- [ER Diagram](./api_erd.md) — `base_entity`, `Relationship`, `ErDiagram`, `AutoLoad`
+- [DefineSubset](./api_subset.md) — `DefineSubset`, `SubsetConfig`
+- [GraphQL API](./api_graphql.md) — `GraphQLHandler`, `@query`, `@mutation`
+- [MCP API](./api_mcp.md) — `create_mcp_server`, `AppConfig`

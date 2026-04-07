@@ -79,28 +79,13 @@ raw_tasks = [
 5. 再把重复的 `resolve_*` 迁移到 `Relationship` + `AutoLoad`
 6. 最后复用同一份 ERD 到 GraphQL 与 MCP
 
-## 术语规则
+## 术语
 
-- `Resolver` 指遍历与调度的 orchestrator
-- `Loader(...)` 指 `resolve_*` 方法中的依赖声明
-- `DataLoader` 仅在讨论 batching 模式或 `aiodataloader` 时使用
-- `ERD` 指应用层的关系定义，而不只是数据库 ER 图
-- 中文页面中，代码标识符保持英文，翻译只发生在解释文字里
+- `Resolver` — 遍历与调度的 orchestrator
+- `Loader(...)` — `resolve_*` 方法中的依赖声明
+- `DataLoader` — 仅在讨论 batching 模式或 `aiodataloader` 时使用
+- `ERD` — 应用层的关系定义（不局限于数据库 ER 图）
 
-## 内容规则
+## 适用范围
 
-- 主路径中不要切到 `Company/Department/Employee` 之类不相关例子
-- 在 ERD 还没建立之前，不要先讲 GraphQL
-- 不要把 `post_*` 写成另一种数据加载钩子
-- 在读者还没理解 `resolve_*` 与 `post_*` 之前，不要先引入 `ExposeAs` 或 `Collector`
-
-## 可以破例的页面
-
-只有明确不属于主路径的页面可以打破这个约定，例如：
-
-- API 参考文档
-- 迁移说明
-- 变更记录
-- 历史和动机类文章
-
-如果某页打破 scenario 约定，应当在开头明确说明。
+主路径中的所有页面统一使用此 scenario。主路径之外的页面（API 参考、迁移说明、变更记录、项目动机等）可以根据主题需要使用不同的例子。
