@@ -107,6 +107,16 @@ def test_inspector_raises_when_required_dto_scalar_field_missing_in_orm(django_s
         build_relationship(mappings=[Mapping(entity=_SchoolDTOWithMissingRequiredField, orm=SchoolOrm)])
 
 
+class _SchoolDTOWithoutFromAttributes(BaseModel):
+    id: int
+    name: str
+
+
+def test_inspector_raises_when_mapping_entity_lacks_from_attributes(django_schema):
+    with pytest.raises(ValueError, match="from_attributes=True"):
+        build_relationship(mappings=[Mapping(entity=_SchoolDTOWithoutFromAttributes, orm=SchoolOrm)])
+
+
 class _SchoolDTOWithOptionalAndComputedFields(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

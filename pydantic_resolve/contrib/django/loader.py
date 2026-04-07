@@ -125,7 +125,7 @@ def create_many_to_one_loader(
 
             lookup = {getattr(row, self.target_remote_field_name): row for row in rows}
             return [
-                self.target_dto_kls.model_validate(lookup[key]) if key in lookup else None
+                lookup[key] if key in lookup else None
                 for key in keys
             ]
 
@@ -169,9 +169,7 @@ def create_one_to_many_loader(
 
             grouped = defaultdict(list)
             for row in rows:
-                grouped[getattr(row, self.target_relation_field_name)].append(
-                    self.target_dto_kls.model_validate(row)
-                )
+                grouped[getattr(row, self.target_relation_field_name)].append(row)
 
             return [grouped.get(key, []) for key in keys]
 
@@ -215,7 +213,7 @@ def create_reverse_one_to_one_loader(
 
             lookup = {getattr(row, self.target_relation_field_name): row for row in rows}
             return [
-                self.target_dto_kls.model_validate(lookup[key]) if key in lookup else None
+                lookup[key] if key in lookup else None
                 for key in keys
             ]
 
@@ -271,7 +269,7 @@ def create_many_to_many_loader(
             grouped = {}
             for row in source_rows:
                 grouped[getattr(row, self.source_match_field_name)] = [
-                    self.target_dto_kls.model_validate(item)
+                    item
                     for item in getattr(row, self.prefetch_attr, [])
                 ]
 

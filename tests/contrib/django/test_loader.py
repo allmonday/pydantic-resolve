@@ -35,8 +35,12 @@ async def test_create_many_to_one_loader(seeded_db):
 
     result = await loader_kls().load_many([1, 2, 999])
 
-    assert result[0] == SchoolDTO(id=1, name="School-A")
-    assert result[1] == SchoolDTO(id=2, name="School-B")
+    assert isinstance(result[0], SchoolOrm)
+    assert result[0].id == 1
+    assert result[0].name == "School-A"
+    assert isinstance(result[1], SchoolOrm)
+    assert result[1].id == 2
+    assert result[1].name == "School-B"
     assert result[2] is None
 
 
@@ -87,9 +91,15 @@ async def test_create_reverse_one_to_one_loader(seeded_db):
 
     result = await loader_kls().load_many([1, 2, 3, 999])
 
-    assert result[0] == StudentProfileDTO(id=100, student_id=1, nickname="ali")
+    assert isinstance(result[0], StudentProfileOrm)
+    assert result[0].id == 100
+    assert result[0].student_id == 1
+    assert result[0].nickname == "ali"
     assert result[1] is None
-    assert result[2] == StudentProfileDTO(id=300, student_id=3, nickname="cat")
+    assert isinstance(result[2], StudentProfileOrm)
+    assert result[2].id == 300
+    assert result[2].student_id == 3
+    assert result[2].nickname == "cat"
     assert result[3] is None
 
 
@@ -108,7 +118,9 @@ async def test_many_to_one_loader_applies_filters(seeded_db):
 
     result = await loader_kls().load_many([1, 99])
 
-    assert result[0] == SchoolDTO(id=1, name="School-A")
+    assert isinstance(result[0], SchoolOrm)
+    assert result[0].id == 1
+    assert result[0].name == "School-A"
     assert result[1] is None
 
 
@@ -201,6 +213,8 @@ async def test_many_to_one_loader_ignores_non_orm_dto_fields(seeded_db):
     loader = loader_kls()
     result = await loader.load_many([1, 999])
 
-    assert result[0] == SchoolWithExtraDTO(id=1, name="School-A")
+    assert isinstance(result[0], SchoolOrm)
+    assert result[0].id == 1
+    assert result[0].name == "School-A"
     assert result[1] is None
     assert set(loader._effective_query_fields) == {"id", "name"}

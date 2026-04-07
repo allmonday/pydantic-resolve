@@ -60,11 +60,9 @@ def _get_effective_query_fields(
     target_dto_kls: type,
     extra_fields: list[str] | None = None,
 ) -> list[str]:
-    # Always include all DTO fields to ensure model_validate can access every attribute.
-    # _query_meta may only contain a subset of fields from GraphQL field selection,
-    # which would cause load_only to defer non-selected columns and break model_validate.
-    dto_fields = _get_default_fields(target_dto_kls)
-    effective_fields = _dedupe_fields([*dto_fields, *(extra_fields or [])])
+    query_meta = getattr(loader, "_query_meta", None)
+    requested_fields = query_meta["fields"] if query_meta else _get_default_fields(target_dto_kls)
+    effective_fields = _dedupe_fields([*requested_fields, *(extra_fields or [])])
     loader._effective_query_fields = effective_fields
     return effective_fields
 
@@ -120,7 +118,7 @@ def create_many_to_one_loader(
 
             lookup = {getattr(row, self.target_remote_col_name): row for row in rows}
             return [
-                self.target_dto_kls.model_validate(lookup[k]) if k in lookup else None
+                lookup[k] if k in lookup else None
                 for k in keys
             ]
 
@@ -167,9 +165,7 @@ def create_one_to_many_loader(
 
             grouped = defaultdict(list)
             for row in rows:
-                grouped[getattr(row, self.target_fk_col_name)].append(
-                    self.target_dto_kls.model_validate(row)
-                )
+                grouped[getattr(row, self.target_fk_col_name)].append(row)
 
             return [grouped.get(k, []) for k in keys]
 
@@ -216,7 +212,7 @@ def create_reverse_one_to_one_loader(
 
             lookup = {getattr(row, self.target_fk_col_name): row for row in rows}
             return [
-                self.target_dto_kls.model_validate(lookup[k]) if k in lookup else None
+                lookup[k] if k in lookup else None
                 for k in keys
             ]
 
@@ -277,7 +273,7 @@ def create_many_to_many_loader(
                 target_rows = (await session.scalars(target_stmt)).all()
 
             target_map = {
-                getattr(row, self.target_match_col_name): self.target_dto_kls.model_validate(row)
+                getattr(row, self.target_match_col_name): row
                 for row in target_rows
             }
 
