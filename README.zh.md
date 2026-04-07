@@ -13,35 +13,33 @@
 
 ---
 
-**pydantic-resolve** 受 GraphQL 启发。它基于 DataLoader 构建与数据库无关的应用层实体关系图，提供丰富的数据组装和后处理能力，并能自动生成 GraphQL 查询和 MCP 服务。
+**pydantic-resolve** 用来基于 Pydantic 组装嵌套响应数据。最容易上手的方式分两步：先用 `resolve_*` 和 `post_*` 解决单个接口的数据拼装问题；只有当关系定义在多个模型之间反复出现时，再进入 ER Diagram + `AutoLoad`。同一份 ERD 后续还能继续用于 GraphQL 查询和 MCP 服务。
 
-## 为什么选择 pydantic-resolve？
+## 建议按这个顺序阅读
 
-**核心能力：**
+下面整篇 README 会始终复用同一个例子：
 
-| 特性 | 说明 |
-|------|------|
-| **自动批量加载** | DataLoader 自动消除 N+1 查询 |
-| **声明式组装** | 声明依赖关系，框架自动处理 |
-| **ER Diagram + AutoLoad** | 定义实体关系，自动解析关联数据 |
-| **GraphQL 支持** | 从 ERD 生成 Schema，动态模型查询 |
-| **MCP 集成** | 将 GraphQL API 暴露给 AI 代理，支持渐进式披露 |
+- `Sprint` 有多个 `Task`
+- `Task` 有一个 `owner`
+- 接口还需要 `task_count`、`contributors` 这类派生字段
 
-**一行代码获取嵌套数据：**
+概念的引入顺序是刻意安排的：
 
-```python
-class Task(BaseModel):
-    owner_id: int
-    owner: Optional[User] = None
+1. `resolve_*`：加载关联数据
+2. `post_*`：在嵌套数据就绪后计算字段
+3. `ExposeAs` / `SendTo`：当父子节点需要跨层协作时传递数据
+4. ER Diagram + `AutoLoad`：当关系定义开始重复时，把关系收敛到一个地方
 
-    def resolve_owner(self, loader=Loader(user_loader)):
-        return loader.load(self.owner_id)  # 就这么简单！
+如果你当前只是想解决几个接口上的 N+1 问题，读到 Core API 相关部分就够了。ERD 模式很有价值，但它不应该是入门第一站。
 
-# Resolver 自动将所有 owner 查询合并为一次批量查询
-result = await Resolver().resolve(tasks)
-```
+## pydantic-resolve 能解决什么
 
----
+| 需求 | 你写什么 | 框架负责什么 |
+|------|----------|--------------|
+| 加载关联数据 | `resolve_*` + `Loader(...)` | 批量查询并把结果映射回对应节点 |
+| 计算派生字段 | `post_*` | 在后代节点全部解析完成后执行 |
+| 跨层传递数据 | `ExposeAs`、`SendTo`、`Collector` | 向下传上下文，或向上聚合结果 |
+| 复用关系声明 | ER Diagram + `AutoLoad` | 将关系定义集中管理，供多个模型复用 |
 
 ## 快速开始
 
@@ -52,291 +50,322 @@ pip install pydantic-resolve
 pip install pydantic-resolve[mcp]  # 包含 MCP 支持
 ```
 
-### N+1 问题
+### Step 1：先用 `resolve_*` 解决一个 N+1 问题
+
+先看最小可用场景：每个 task 上有 `owner_id`，接口响应里想拿到完整的 `owner` 对象。
 
 ```python
-# 传统方式：1 + N 次查询
-for task in tasks:
-    task.owner = await get_user(task.owner_id)  # N 次查询！
+from typing import Optional
+
+from pydantic import BaseModel
+from pydantic_resolve import Loader, Resolver, build_object
+
+
+class UserView(BaseModel):
+    id: int
+    name: str
+
+
+async def user_loader(user_ids: list[int]):
+    users = await db.query(User).filter(User.id.in_(user_ids)).all()
+    return build_object(users, user_ids, lambda user: user.id)
+
+
+class TaskView(BaseModel):
+    id: int
+    title: str
+    owner_id: int
+    owner: Optional[UserView] = None
+
+    def resolve_owner(self, loader=Loader(user_loader)):
+        return loader.load(self.owner_id)
+
+
+tasks = [TaskView.model_validate(task) for task in raw_tasks]
+tasks = await Resolver().resolve(tasks)
 ```
 
-### pydantic-resolve 解决方案
+这就是整个库最核心的工作方式：
+
+- `owner` 当前缺数据，所以你声明如何加载它。
+- `user_loader` 会一次性收到所有被请求到的 `owner_id`。
+- `Resolver().resolve(...)` 负责遍历模型树并补全字段。
+
+一个很好用的心智模型是：**`resolve_*` 的含义就是“这个字段需要从当前节点之外拿数据”。**
+
+### Step 2：把同样的模式扩展到嵌套树
+
+现在再增加一层关系：`Sprint -> tasks`。由于 `TaskView` 已经知道怎么加载 `owner`，resolver 会继续递归往下处理。
 
 ```python
-from pydantic import BaseModel
-from typing import Optional, List
-from pydantic_resolve import Resolver, Loader, build_list
+from typing import List
 
-# 1. 定义 loader（批量查询）
-async def user_loader(ids: list[int]):
-    users = await db.query(User).filter(User.id.in_(ids)).all()
-    return build_list(users, ids, lambda u: u.id)
+from pydantic_resolve import build_list
+
 
 async def task_loader(sprint_ids: list[int]):
     tasks = await db.query(Task).filter(Task.sprint_id.in_(sprint_ids)).all()
-    return build_list(tasks, sprint_ids, lambda t: t.sprint_id)
+    return build_list(tasks, sprint_ids, lambda task: task.sprint_id)
 
-# 2. 定义带 resolve 方法的 schema
-class TaskResponse(BaseModel):
+
+class SprintView(BaseModel):
     id: int
     name: str
-    owner_id: int
+    tasks: List[TaskView] = []
 
-    owner: Optional[dict] = None
-    def resolve_owner(self, loader=Loader(user_loader)):
-        return loader.load(self.owner_id)
-
-class SprintResponse(BaseModel):
-    id: int
-    name: str
-
-    tasks: List[TaskResponse] = []
     def resolve_tasks(self, loader=Loader(task_loader)):
         return loader.load(self.id)
 
-# 3. Resolve - 框架自动处理批量查询
-@app.get("/sprints")
-async def get_sprints():
-    sprints = await get_sprint_data()
-    return await Resolver().resolve([SprintResponse.model_validate(s) for s in sprints])
+
+sprints = [SprintView.model_validate(sprint) for sprint in raw_sprints]
+sprints = await Resolver().resolve(sprints)
 ```
 
-**结果：** 每个 loader 只执行 1 次查询，无论数据深度如何。
+**结果：** 无论有多少个 sprint、多少个 task，每个 loader 都只需要执行一次查询。
 
----
+这也是为什么 `resolve_*` 是最适合的入门点。你不需要先学完整套概念，就能先获得实际收益。
 
-## 核心概念
+### Step 3：用 `post_*` 处理派生字段
 
-快速开始展示了完整流程。现在逐一拆解每个组成部分——`resolve_*` 加载关联数据、`post_*` 转换结果、Expose/Collect 处理跨层通信。理解这些之后，就能应对任何数据组装场景。
+`post_*` 往往是最容易让人困惑的部分。最简单的理解方式是：
 
-### Resolve：声明式数据加载
+- `resolve_*` 用来加载外部数据。
+- `post_*` 用来在当前子树已经组装完成之后，计算派生字段。
 
-传统代码中，数据获取是命令式的——遍历列表，逐个查询。pydantic-resolve 把它反过来：你只需声明每个字段需要什么数据，框架负责如何获取。
+在同一个 sprint 例子里，`task_count` 和 `contributor_names` 都不是从别的表直接查出来的；它们是基于已经解析完成的 `tasks` 和 `owner` 推导出来的。
 
 ```python
-class Task(BaseModel):
+class SprintView(BaseModel):
+    id: int
+    name: str
+    tasks: List[TaskView] = []
+    task_count: int = 0
+    contributor_names: list[str] = []
+
+    def resolve_tasks(self, loader=Loader(task_loader)):
+        return loader.load(self.id)
+
+    def post_task_count(self):
+        return len(self.tasks)
+
+    def post_contributor_names(self):
+        return sorted({task.owner.name for task in self.tasks if task.owner})
+```
+
+一个 sprint 上的执行顺序可以理解为：
+
+1. `resolve_tasks` 先把该 sprint 的 tasks 加载出来。
+2. 每个 `TaskView.resolve_owner` 再继续把 owner 加载出来。
+3. 等这些嵌套字段都准备好之后，才执行 `post_task_count` 和 `post_contributor_names`。
+
+关键点就在这里。`post_*` 不是另一种加载关联数据的方式，它的职责是对**已经拿到的数据**做收尾、汇总、格式化。
+
+可以用下面这个简单对照表来区分：
+
+| 问题 | `resolve_*` | `post_*` |
+|------|-------------|----------|
+| 需要外部 IO 吗？ | 是 | 通常不需要 |
+| 执行时后代节点已经准备好了吗？ | 没有 | 是 |
+| 适合做计数、求和、标签整理、格式化吗？ | 有时可以 | 非常适合 |
+| 返回值还会继续被递归 resolve 吗？ | 会 | 不会 |
+
+`post_*` 还可以接收 `context`、`parent`、`ancestor_context`、`collector` 等参数，但理解基础模式并不依赖这些高级能力。
+
+### Step 4：跨层数据流是进阶能力
+
+大部分用户第一次阅读时可以先跳过这一节。只有当父节点和子节点需要跨层协作、又不想写死相互引用时，再使用这些工具。
+
+- `ExposeAs`：把祖先数据向下传递
+- `SendTo` + `Collector`：把子孙数据向上汇总
+
+```python
+from typing import Annotated
+
+from pydantic_resolve import Collector, ExposeAs, SendTo
+
+
+class SprintView(BaseModel):
+    id: int
+    name: Annotated[str, ExposeAs('sprint_name')]
+    tasks: List[TaskView] = []
+    contributors: list[UserView] = []
+
+    def resolve_tasks(self, loader=Loader(task_loader)):
+        return loader.load(self.id)
+
+    def post_contributors(self, collector=Collector('contributors')):
+        return collector.values()
+
+
+class TaskView(BaseModel):
+    id: int
+    title: str
     owner_id: int
-    owner: Optional[User] = None
+    owner: Annotated[Optional[UserView], SendTo('contributors')] = None
+    full_title: str = ""
 
     def resolve_owner(self, loader=Loader(user_loader)):
         return loader.load(self.owner_id)
+
+    def post_full_title(self, ancestor_context):
+        return f"{ancestor_context['sprint_name']} / {self.title}"
 ```
 
-框架会：
-1. 收集所有 `owner_id` 值
-2. 合并为一次批量查询
-3. 将结果映射回正确的对象
+这类能力适合下面两种情况：
 
-### DataLoader：自动批量优化
+- 子节点需要祖先上下文，比如 sprint 名称、权限信息、租户配置。
+- 父节点需要聚合多个后代节点的结果，比如全部贡献者、全部标签。
 
-DataLoader 在同一个事件循环周期内自动合并多个请求：
+---
+
+## 什么时候值得引入 ER Diagram + AutoLoad
+
+到这里为止，Core API 已经足够实用。只有当你发现关系定义开始在多个响应模型里反复出现时，才值得继续往 ERD 模式走。
+
+一个很常见的信号是，你开始不断写出类似这些方法：
+
+- `TaskCard.resolve_owner`
+- `TaskDetail.resolve_owner`
+- `SprintBoard.resolve_tasks`
+- `SprintReport.resolve_tasks`
+
+这时问题已经不再是“这个字段怎么加载”，而是“关系定义的唯一事实来源应该放在哪里”。
+
+### 成本与收益
+
+| 问题 | 手写 Core API | ER Diagram + `AutoLoad` |
+|------|----------------|--------------------------|
+| 第一个接口上手速度 | 更快 | 更慢 |
+| 前期配置成本 | 低 | 中 |
+| 同一关系在多个模型里复用 | 容易重复 | 可以集中管理 |
+| 后续修改某条关系 | 要改多个 `resolve_*` | 改一处 ERD 声明即可 |
+| GraphQL / MCP 生成 | 需要单独处理 | 很自然地延伸出去 |
+
+ERD 模式确实要求你在前期多做一些整理：
+
+- 先定义实体类。
+- 显式声明关系。
+- 从和 resolver 相同的 `diagram` 里创建 `AutoLoad`。
+
+这些都是实际成本。但对应的收益也很直接：关系知识终于能收敛到一个地方。
+
+### 同一个例子换成 ERD 模式
+
+下面还是同一个 `Sprint -> Task -> User` 例子，只是把关系定义从响应模型中抽出来，放进 ER Diagram：
 
 ```python
-# 没有 DataLoader：100 个 task = 100 次 user 查询
-# 使用 DataLoader：100 个 task = 1 次 user 查询 (WHERE id IN (...))
+from typing import Annotated, Optional
 
-async def user_loader(user_ids: list[int]):
-    return await db.query(User).filter(User.id.in_(user_ids)).all()
-```
+from pydantic import BaseModel
+from pydantic_resolve import Relationship, base_entity, config_global_resolver
 
-### Post：解析后处理
 
-`resolve_*` 负责加载外部数据，但派生值怎么处理？比如 Sprint 响应需要根据已解析的 `tasks` 列表计算 `task_count`，订单响应需要根据 items 计算 `total_price`。`post_*` 就是为此设计的——它在所有嵌套 resolve 完成后、数据树组装完毕时执行。
+BaseEntity = base_entity()
 
-```python
-class SprintResponse(BaseModel):
-    tasks: List[TaskResponse] = []
+
+class UserEntity(BaseModel, BaseEntity):
+    id: int
+    name: str
+
+
+class TaskEntity(BaseModel, BaseEntity):
+    __relationships__ = [
+        Relationship(fk='owner_id', name='owner', target=UserEntity, loader=user_loader)
+    ]
+    id: int
+    title: str
+    owner_id: int
+
+
+class SprintEntity(BaseModel, BaseEntity):
+    __relationships__ = [
+        Relationship(fk='id', name='tasks', target=list[TaskEntity], loader=task_loader)
+    ]
+    id: int
+    name: str
+
+
+diagram = BaseEntity.get_diagram()
+AutoLoad = diagram.create_auto_load()
+config_global_resolver(diagram)
+
+
+class TaskView(TaskEntity):
+    owner: Annotated[Optional[UserEntity], AutoLoad()] = None
+
+
+class SprintView(SprintEntity):
+    tasks: Annotated[list[TaskView], AutoLoad()] = []
     task_count: int = 0
 
     def post_task_count(self):
         return len(self.tasks)
 ```
 
-`post_*` 方法在所有嵌套数据完全解析后执行，适用于：
-- 计算派生值（计数、求和、平均值）
-- 格式化或清洗已加载的数据
-- 聚合子集合的结果
+和 Core API 版本相比：
 
-```python
-class OrderResponse(BaseModel):
-    items: List[ItemResponse] = []
-    total_price: Decimal = Decimal('0')
+- `resolve_owner` 不见了。
+- `resolve_tasks` 不见了。
+- 关系定义集中到了一个地方。
+- `post_*` 的用法完全不变。
 
-    def post_total_price(self):
-        return sum(item.price for item in self.items)
-```
-
-`post_*` 方法还支持接收上下文参数（见下文 Expose & Collect）。
-
-### Expose & Collect：跨层数据流
-
-到目前为止，每个节点各自独立地解析数据。但在实际的嵌套结构中，节点之间经常需要跨层通信：子任务需要知道自己属于哪个 Sprint，父 Story 需要收集所有子任务的唯一贡献者。通过构造函数传参会造成紧耦合。pydantic-resolve 提供两种声明式机制，无需显式引用即可实现跨层通信：
-
-- **ExposeAs**：父节点向所有后代暴露数据（向下流动）
-- **SendTo + Collector**：子节点向父节点收集器发送数据（向上流动）
-
-这实现了清晰的分离 —— 父节点不需要知道子节点的结构，子节点也不需要显式的父节点引用。
-
-```python
-from pydantic_resolve import ExposeAs, Collector, SendTo
-from typing import Annotated
-
-# 1. 父节点 EXPOSE 数据给后代（向下流动）
-class Story(BaseModel):
-    name: Annotated[str, ExposeAs('story_name')]
-    tasks: List[Task] = []
-
-# 2. 子节点访问祖先上下文（无需显式父节点引用）
-class Task(BaseModel):
-    def post_full_path(self, ancestor_context):
-        return f"{ancestor_context['story_name']} / {self.name}"
-
-# 3. 子节点发送数据到父节点收集器（向上流动）
-class Task(BaseModel):
-    owner: Annotated[User, SendTo('contributors')] = None
-
-class Story(BaseModel):
-    contributors: List[User] = []
-    def post_contributors(self, collector=Collector('contributors')):
-        return collector.values()  # 自动去重的所有 task owner 列表
-```
-
-**使用场景：**
-- 向下传递配置/上下文（如用户权限、语言设置）
-- 向上聚合结果（如收集所有文章的唯一标签）
-
----
-
-## 声明式模式：ER Diagram + AutoLoad
-
-Core API 适用于少量 `resolve_*` 方法的场景。但随着项目规模增长——假设你有 User、Task、Sprint、Comment、Label 等互相关联的实体——你会发现自己在写大量相似的 resolve 方法，关系知识分散在各个 Response 类中。声明式模式通过在 ER Diagram 中集中定义关系、用 `AutoLoad` 自动生成 resolve 方法来解决这个问题。
-
-| | Core API | Declarative API |
-|--|----------|-----------------|
-| **做法** | 手写 `resolve_*` + 指定 `Loader` | 定义 ER Diagram + `AutoLoad` |
-| **控制度** | 完全控制 | 约定优于配置 |
-| **适合场景** | 简单项目、一次性数据加载 | 多实体关联、需要 GraphQL/MCP |
-| **关系定义** | 分散在各 Response 类中 | 集中在 ER Diagram 中 |
-
-Declarative API 的底层就是 Core API。`AutoLoad` 字段在运行时会生成等价的 `resolve_*` 方法，因此两种模式可以自由混用——在 Declarative Mode 下，你仍然可以使用 `post_*` 方法，也可以对某些字段回退到手写 `resolve_*`。
-
-### 定义实体和关系
-
-用 `base_entity()` 创建基类，在 `__relationships__` 中定义实体间关系：
-
-```python
-from pydantic import BaseModel
-from typing import Annotated, Optional
-from pydantic_resolve import base_entity, Relationship, config_global_resolver
-
-BaseEntity = base_entity()
-
-class UserEntity(BaseModel, BaseEntity):
-    id: int
-    name: str
-
-class TaskEntity(BaseModel, BaseEntity):
-    __relationships__ = [
-        # Loader 可以查询 Postgres、调用 RPC、或从 Redis 获取
-        # API 消费者不需要知道数据从哪来
-        Relationship(fk='owner_id', target=UserEntity, name='owner', loader=user_loader)
-    ]
-    id: int
-    name: str
-    owner_id: int  # 内部 FK，可以对 API 隐藏
-
-diagram = BaseEntity.get_diagram()
-AutoLoad = diagram.create_auto_load()
-config_global_resolver(diagram)
-```
-
-也可以用外部声明方式（`ErDiagram` + `Entity`），将关系定义与实体类分离。
-
-### 使用 AutoLoad
-
-有了 ER Diagram，就不需要手写 `resolve_*` 方法了——只需标注需要自动加载的字段：
+如果你还希望把 `owner_id` 这类内部 FK 字段从外部响应里隐藏掉，可以在 ERD 基础上叠加 `DefineSubset`：
 
 ```python
 from pydantic_resolve import DefineSubset
 
-class TaskResponse(TaskEntity):
-    owner: Annotated[Optional[UserEntity], AutoLoad()] = None
-    # AutoLoad 根据 TaskEntity 的 __relationships__ 自动生成 resolve_owner
 
-# 使用方式与 Core API 完全一致
-result = await Resolver().resolve(tasks)
-```
-
-用 `DefineSubset` 选择性暴露字段，隐藏内部 FK：
-
-```python
-class TaskResponse(DefineSubset):
-    __subset__ = (TaskEntity, ('id', 'name'))  # owner_id 被排除
+class TaskSummary(DefineSubset):
+    __subset__ = (TaskEntity, ('id', 'title'))
     owner: Annotated[Optional[UserEntity], AutoLoad()] = None
 ```
 
-### 从 ORM 自动发现关联关系
+### 如果 ORM 本身已经知道关系
 
-上面的示例手动定义了 `__relationships__`。实际上，你的 ORM 已经知道表之间的关联关系。`build_relationship` 读取 ORM 元数据，自动生成对应的 loader，避免重复定义。支持 **SQLAlchemy**、**Django** 和 **Tortoise ORM**。
-
-注意 DTO 是单独定义的，而非从 ORM 模型自动生成。考量如下：
-
-- **Entity 是优先定义的独立描述层。** 实体定义了 API 契约，不依赖于具体数据源，ORM 只是其中一种后端实现。
-- **自动生成的实体会丧失可读性和静态检查能力。** 手写 DTO 显式清晰，IDE 友好，便于理解。
-- **Entity 可以定义 ORM 之外的关系。** 你可以添加调用 RPC 服务、读取 Redis 或组合多个数据源的 loader，这些是 ORM 无法感知的。
+当你已经接受了 ERD 模式的思路，下一步就可以让 ORM 关系元数据直接参与进来，减少重复声明。
 
 ```python
-from pydantic_resolve import ErDiagram, config_resolver
-from pydantic_resolve.integration.sqlalchemy import build_relationship  # 或 .django / .tortoise
+from pydantic_resolve import ErDiagram
 from pydantic_resolve.integration.mapping import Mapping
+from pydantic_resolve.integration.sqlalchemy import build_relationship
 
-# 1. 将 DTO 映射到 ORM 模型
+
 entities = build_relationship(
     mappings=[
-        Mapping(entity=StudentDTO, orm=StudentOrm),
-        Mapping(entity=SchoolDTO, orm=SchoolOrm),
-        Mapping(entity=CourseDTO, orm=CourseOrm),
-    ],
-    session_factory=session_factory,  # SQLAlchemy / Django / Tortoise
-)
-
-# 2. 加入 ErDiagram
-diagram = ErDiagram(entities=[]).add_relationship(entities)
-AutoLoad = diagram.create_auto_load()
-MyResolver = config_resolver("MyResolver", er_diagram=diagram)
-
-# 3. 使用 AutoLoad — 关联数据自动加载
-class StudentView(StudentDTO):
-    school: Annotated[SchoolDTO | None, AutoLoad()] = None
-    courses: Annotated[list[CourseDTO], AutoLoad()] = []
-```
-
-`build_relationship` 检查 ORM 元数据，自动为 **多对一**、**一对多**、**多对多** 和 **一对一** 关系生成 loader。还支持筛选器：
-
-```python
-entities = build_relationship(
-    mappings=[
-        Mapping(entity=StudentDTO, orm=StudentOrm),
-        Mapping(entity=SchoolDTO, orm=SchoolOrm, filters=[]),  # 跳过默认筛选器
-        Mapping(entity=CourseDTO, orm=CourseOrm, filters=[CourseOrm.active.is_(True)]),
+        Mapping(entity=SprintEntity, orm=SprintORM),
+        Mapping(entity=TaskEntity, orm=TaskORM),
+        Mapping(entity=UserEntity, orm=UserORM),
     ],
     session_factory=session_factory,
-    default_filter=lambda cls: [cls.deleted.is_(False)],  # 全局默认筛选器
 )
+
+diagram = ErDiagram(entities=[]).add_relationship(entities)
+AutoLoad = diagram.create_auto_load()
+config_global_resolver(diagram)
 ```
 
-### 何时使用声明式模式
+`build_relationship` 支持 **SQLAlchemy**、**Django** 和 **Tortoise ORM**。这更适合作为后续优化步骤：当你的 ORM 元数据已经稳定，而且你不想再手写重复关系时，再引入它。
 
-**适合使用声明式模式的场景：**
-- 项目中有 3 个以上互相关联的实体
-- 需要生成 GraphQL schema 或 MCP 服务
-- 团队需要集中管理实体关系
-- 希望将 FK 字段从 API 契约中隐藏
+### 一个务实的演进路径
 
-**Core API 就足够的场景：**
-- 只有少量数据加载需求
-- 数据来源单一（如只用一个数据库）
-- 不需要 GraphQL 或 MCP
+1. 先在单个接口上手写 `resolve_*` 和 `post_*`。
+2. 当多个模型开始复用同一批关系时，再把关系收敛进 ERD。
+3. 当 ORM 已经成为事实来源时，再让 `build_relationship()` 去读取 ORM 元数据。
+
+### 什么时候用声明式模式
+
+**适合进入 ERD 模式的场景：**
+
+- 项目里有 3 个以上相关实体，并且这些关系会在多个响应模型中重复出现。
+- 团队需要一个可以共同讨论、共同维护的关系定义中心。
+- 你希望 GraphQL 和 MCP 也复用同一套模型关系。
+- 你希望隐藏 FK 字段，同时保留统一的关系声明。
+
+**继续停留在 Core API 更合适的场景：**
+
+- 当前只有少量数据加载需求。
+- 你希望每个接口都保持显式、直观。
+- 响应结构还在快速变化，暂时不值得抽象。
 
 [→ 完整 ERD 驱动指南](https://allmonday.github.io/pydantic-resolve/erd_driven/)
 
@@ -357,7 +386,7 @@ result = await handler.execute("{ users { id name posts { title } } }")
 
 ### MCP
 
-将 GraphQL API 暴露给 AI 代理（需要 `pip install pydantic-resolve[mcp]`）：
+将 GraphQL API 暴露给 AI 代理使用（需要 `pip install pydantic-resolve[mcp]`）：
 
 ```python
 from pydantic_resolve import AppConfig, create_mcp_server
@@ -370,7 +399,7 @@ mcp.run()
 
 ### 可视化
 
-使用 [fastapi-voyager](https://github.com/allmonday/fastapi-voyager) 进行交互式 ERD 探索：
+借助 [fastapi-voyager](https://github.com/allmonday/fastapi-voyager) 进行交互式 ERD 浏览：
 
 ```python
 from fastapi_voyager import create_voyager
@@ -384,12 +413,12 @@ app.mount('/voyager', create_voyager(app, er_diagram=diagram))
 
 | 特性 | GraphQL | pydantic-resolve |
 |------|---------|------------------|
-| **N+1 预防** | 手动 DataLoader 配置 | 内置自动批量加载 |
-| **类型安全** | 需要额外的 schema 文件 | 原生 Pydantic 类型 |
-| **学习曲线** | 陡峭（Schema、Resolvers、Loaders） | 平缓（只需要 Pydantic） |
-| **调试** | 复杂的内省 | 标准 Python 调试 |
-| **集成** | 需要专用服务器 | 可与任何框架集成 |
-| **查询灵活性** | 任何客户端可以查询任何内容 | 明确的 API 契约 |
+| **N+1 预防** | 手动配置 DataLoader | 内置自动批量加载 |
+| **类型安全** | 需要额外 schema 文件 | 直接使用 Pydantic 类型 |
+| **学习曲线** | 陡峭（Schema、Resolvers、Loaders） | 平缓（主要理解 Pydantic 模型） |
+| **调试** | 依赖复杂的内省机制 | 标准 Python 调试方式 |
+| **集成** | 需要专用服务器 | 可与任意框架配合 |
+| **查询灵活性** | 客户端几乎可以请求任意结构 | 由服务端明确给出 API 契约 |
 
 ---
 
@@ -398,6 +427,7 @@ app.mount('/voyager', create_voyager(app, er_diagram=diagram))
 - 📖 [完整文档](https://allmonday.github.io/pydantic-resolve/)
 - 🚀 [示例项目](https://github.com/allmonday/composition-oriented-development-pattern)
 - 🎮 [在线演示](https://www.fastapi-voyager.top/voyager/)
+- 🎮 [在线演示 - GraphQL](https://www.fastapi-voyager.top/graphql)
 - 📚 [API 参考](https://allmonday.github.io/pydantic-resolve/api/)
 
 ---
