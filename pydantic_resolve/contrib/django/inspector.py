@@ -124,8 +124,7 @@ def _inspect_orm_relationships(
                         target_remote_field_name=field.target_field.attname,
                         using=using,
                         filters=filters,
-                    ),
-                    load_many=False,
+                    )
                 )
             )
             continue
@@ -144,8 +143,7 @@ def _inspect_orm_relationships(
                         target_relation_field_name=field.field.attname,
                         using=using,
                         filters=filters,
-                    ),
-                    load_many=False,
+                    )
                 )
             )
             continue
@@ -164,8 +162,7 @@ def _inspect_orm_relationships(
                         target_remote_field_name=field.target_field.attname,
                         using=using,
                         filters=filters,
-                    ),
-                    load_many=False,
+                    )
                 )
             )
             continue
@@ -184,8 +181,7 @@ def _inspect_orm_relationships(
                         target_relation_field_name=field.field.attname,
                         using=using,
                         filters=filters,
-                    ),
-                    load_many=False,
+                    )
                 )
             )
             continue
@@ -204,8 +200,7 @@ def _inspect_orm_relationships(
                         target_dto_kls=target_dto,
                         using=using,
                         filters=filters,
-                    ),
-                    load_many=False,
+                    )
                 )
             )
 

@@ -58,10 +58,16 @@ def test_inspector_builds_relationship_for_reverse_one_to_one(django_schema):
 
     student_entity = _find_entity(entities, StudentDTO)
     profile_rel = _find_relationship(student_entity, "profile")
+    profile_entity = _find_entity(entities, StudentProfileDTO)
+    student_rel = _find_relationship(profile_entity, "student")
 
     assert profile_rel.fk == "id"
     assert profile_rel.target is StudentProfileDTO
     assert profile_rel.load_many is False
+
+    # Forward one-to-one branch: StudentProfileOrm.student -> StudentOrm
+    assert student_rel.fk == "student_id"
+    assert student_rel.target is StudentDTO
 
 
 def test_inspector_skips_unmapped_targets_with_warning(django_schema, caplog):

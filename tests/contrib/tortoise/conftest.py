@@ -34,6 +34,16 @@ class StudentOrm(Model):
         table = "student"
 
 
+class StudentProfileOrm(Model):
+    id = fields.IntField(primary_key=True)
+    student = fields.OneToOneField("models.StudentOrm", related_name="profile")
+    nickname = fields.CharField(max_length=100)
+    deleted = fields.BooleanField(default=False)
+
+    class Meta:
+        table = "student_profile"
+
+
 class CourseOrm(Model):
     id = fields.IntField(primary_key=True)
     title = fields.CharField(max_length=100)
@@ -63,6 +73,14 @@ class CourseDTO(BaseModel):
 
     id: int
     title: str
+
+
+class StudentProfileDTO(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    student_id: int
+    nickname: str
 
 
 @pytest.fixture

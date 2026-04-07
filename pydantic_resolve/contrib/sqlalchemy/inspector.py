@@ -203,8 +203,7 @@ def _inspect_orm_relationships(
                 fk=fk_field,
                 target=target_type,
                 name=rel.key,
-                loader=loader,
-                load_many=False,
+                loader=loader
             )
         )
 

@@ -9,7 +9,15 @@ from pydantic import BaseModel, ConfigDict, ValidationError, computed_field
 from pydantic_resolve.contrib.tortoise import build_relationship
 from pydantic_resolve.contrib.mapping import Mapping
 
-from .conftest import CourseDTO, CourseOrm, SchoolDTO, SchoolOrm, StudentDTO, StudentOrm
+from .conftest import (
+    CourseDTO,
+    CourseOrm,
+    SchoolDTO,
+    SchoolOrm,
+    StudentDTO,
+    StudentOrm,
+    StudentProfileOrm,
+)
 
 
 def _find_entity(entities, target_kls):
@@ -43,6 +51,38 @@ def test_inspector_builds_relationships_for_m2o_o2m_m2m(tortoise_db, orm_mapping
     assert get_origin(students_rel.target) is list
     assert get_args(students_rel.target)[0] is StudentDTO
     assert students_rel.load_many is False
+
+
+class _StudentProfileDTO(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    student_id: int
+    nickname: str
+
+
+def test_inspector_builds_relationships_for_o2o_and_reverse_o2o(tortoise_db):
+    entities = build_relationship(
+        mappings=[
+            Mapping(entity=StudentDTO, orm=StudentOrm),
+            Mapping(entity=SchoolDTO, orm=SchoolOrm),
+            Mapping(entity=CourseDTO, orm=CourseOrm),
+            Mapping(entity=_StudentProfileDTO, orm=StudentProfileOrm),
+        ]
+    )
+
+    student_entity = _find_entity(entities, StudentDTO)
+    profile_rel = _find_relationship(student_entity, "profile")
+    profile_entity = _find_entity(entities, _StudentProfileDTO)
+    student_rel = _find_relationship(profile_entity, "student")
+
+    # Reverse one-to-one branch: StudentOrm.profile <- StudentProfileOrm.student
+    assert profile_rel.fk == "id"
+    assert profile_rel.target is _StudentProfileDTO
+
+    # Forward one-to-one branch: StudentProfileOrm.student -> StudentOrm
+    assert student_rel.fk == "student_id"
+    assert student_rel.target is StudentDTO
 
 
 def test_inspector_skips_unmapped_targets_with_warning(tortoise_db, caplog):
