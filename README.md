@@ -9,11 +9,26 @@
 
 [中文版](./README.zh.md)
 
-![](./docs/images/features.png)
 
 ---
 
 **pydantic-resolve** helps you assemble nested response data with Pydantic models. The easiest way to learn it is in two stages: start with `resolve_*` and `post_*` for one endpoint, then move to ER Diagram + `AutoLoad` only when relationship wiring starts repeating across many models. The same ERD can also power GraphQL queries and MCP services.
+
+```mermaid
+flowchart TB
+    business["**Business Model**<br/>- Entity Relationships<br/>- Aggregate Root Methods"]
+    manual["**Manual Assembly**<br/>resolve / post / expose /<br/>collector ..."]
+    graphql["**Auto Generation**<br/>GraphQL"]
+    api["**Scenario**<br/>API Integration"]
+    mcp["**Scenario**<br/>MCP Service"]
+    ops["**Scenario**<br/>Query / Debug / Test /<br/>Admin UI"]
+
+    business --> manual
+    business --> graphql
+    manual --> api
+    graphql --> mcp
+    graphql --> ops
+```
 
 ## Read This README in Order
 

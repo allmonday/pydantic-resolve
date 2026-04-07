@@ -9,11 +9,26 @@
 
 [English](./README.md)
 
-![](./docs/images/features.png)
 
 ---
 
 **pydantic-resolve** 用来基于 Pydantic 组装嵌套响应数据。最容易上手的方式分两步：先用 `resolve_*` 和 `post_*` 解决单个接口的数据拼装问题；只有当关系定义在多个模型之间反复出现时，再进入 ER Diagram + `AutoLoad`。同一份 ERD 后续还能继续用于 GraphQL 查询和 MCP 服务。
+
+```mermaid
+flowchart TB
+    business["**业务模型**<br/>- 实体关系<br/>- 聚合根方法"]
+    manual["**手动组装**<br/>resolve / post / expose /<br/>collector ..."]
+    graphql["**自动生成**<br/>GraphQL"]
+    api["**场景**<br/>API 集成"]
+    mcp["**场景**<br/>MCP 服务"]
+    ops["**场景**<br/>查询 / 调试 / 测试 /<br/>管理后台"]
+
+    business --> manual
+    business --> graphql
+    manual --> api
+    graphql --> mcp
+    graphql --> ops
+```
 
 ## 建议按这个顺序阅读
 
