@@ -15,8 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from pydantic_resolve import ErDiagram, config_resolver
-from pydantic_resolve.contrib.sqlalchemy import build_relationship
-from pydantic_resolve.contrib.mapping import Mapping
+from pydantic_resolve.integration.sqlalchemy import build_relationship
+from pydantic_resolve.integration.mapping import Mapping
 
 
 # --- ORM Models (no DB FK constraints) ---

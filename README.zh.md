@@ -287,8 +287,8 @@ class TaskResponse(DefineSubset):
 
 ```python
 from pydantic_resolve import ErDiagram, config_resolver
-from pydantic_resolve.contrib.sqlalchemy import build_relationship  # 或 .django / .tortoise
-from pydantic_resolve.contrib.mapping import Mapping
+from pydantic_resolve.integration.sqlalchemy import build_relationship  # 或 .django / .tortoise
+from pydantic_resolve.integration.mapping import Mapping
 
 # 1. 将 DTO 映射到 ORM 模型
 entities = build_relationship(

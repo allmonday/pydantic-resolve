@@ -1,17 +1,24 @@
 from __future__ import annotations
 
+from asgiref.sync import sync_to_async
 import pytest
 from aiodataloader import DataLoader
+from django.db.models import Q
 from pydantic import BaseModel, ConfigDict
-from tortoise.expressions import Q
 
-from pydantic_resolve.contrib.tortoise.loader import (
+from pydantic_resolve.integration.django.loader import (
     create_many_to_many_loader,
     create_many_to_one_loader,
     create_one_to_many_loader,
+    create_reverse_one_to_one_loader,
 )
 
-from .conftest import CourseDTO, CourseOrm, SchoolDTO, SchoolOrm, StudentDTO, StudentOrm
+from tests.integration.django.dto import CourseDTO, SchoolDTO, StudentDTO, StudentProfileDTO
+from tests.integration.django.models import CourseOrm, SchoolOrm, StudentOrm, StudentProfileOrm
+
+
+async def _run_sync(fn):
+    return await sync_to_async(fn, thread_sensitive=True)()
 
 
 @pytest.mark.asyncio
@@ -26,8 +33,7 @@ async def test_create_many_to_one_loader(seeded_db):
 
     assert issubclass(loader_kls, DataLoader)
 
-    loader = loader_kls()
-    result = await loader.load_many([1, 2, 999])
+    result = await loader_kls().load_many([1, 2, 999])
 
     assert isinstance(result[0], SchoolOrm)
     assert result[0].id == 1
@@ -48,11 +54,10 @@ async def test_create_one_to_many_loader(seeded_db):
         target_relation_field_name="school_id",
     )
 
-    loader = loader_kls()
-    result = await loader.load_many([1, 2, 999])
+    result = await loader_kls().load_many([1, 2, 999])
 
-    assert sorted(s.name for s in result[0]) == ["Alice", "Bob"]
-    assert [s.name for s in result[1]] == ["Cathy"]
+    assert sorted(student.name for student in result[0]) == ["Alice", "Bob"]
+    assert [student.name for student in result[1]] == ["Cathy"]
     assert result[2] == []
 
 
@@ -66,18 +71,41 @@ async def test_create_many_to_many_loader(seeded_db):
         target_dto_kls=CourseDTO,
     )
 
-    loader = loader_kls()
-    result = await loader.load_many([1, 2, 3, 999])
+    result = await loader_kls().load_many([1, 2, 3, 999])
 
-    assert sorted(c.title for c in result[0]) == ["Math", "Science"]
-    assert [c.title for c in result[1]] == ["Science"]
+    assert sorted(course.title for course in result[0]) == ["Math", "Science"]
+    assert [course.title for course in result[1]] == ["Science"]
     assert result[2] == []
     assert result[3] == []
 
 
 @pytest.mark.asyncio
+async def test_create_reverse_one_to_one_loader(seeded_db):
+    loader_kls = create_reverse_one_to_one_loader(
+        source_orm_kls=StudentOrm,
+        rel_name="profile",
+        target_orm_kls=StudentProfileOrm,
+        target_dto_kls=StudentProfileDTO,
+        target_relation_field_name="student_id",
+    )
+
+    result = await loader_kls().load_many([1, 2, 3, 999])
+
+    assert isinstance(result[0], StudentProfileOrm)
+    assert result[0].id == 100
+    assert result[0].student_id == 1
+    assert result[0].nickname == "ali"
+    assert result[1] is None
+    assert isinstance(result[2], StudentProfileOrm)
+    assert result[2].id == 300
+    assert result[2].student_id == 3
+    assert result[2].nickname == "cat"
+    assert result[3] is None
+
+
+@pytest.mark.asyncio
 async def test_many_to_one_loader_applies_filters(seeded_db):
-    await SchoolOrm.create(id=99, name="Deleted-School", deleted=True)
+    await _run_sync(lambda: SchoolOrm.objects.create(id=99, name="Deleted-School", deleted=True))
 
     loader_kls = create_many_to_one_loader(
         source_orm_kls=StudentOrm,
@@ -98,8 +126,8 @@ async def test_many_to_one_loader_applies_filters(seeded_db):
 
 @pytest.mark.asyncio
 async def test_one_to_many_loader_applies_filters(seeded_db):
-    school = await SchoolOrm.get(id=1)
-    await StudentOrm.create(id=99, name="Ghost", school=school, deleted=True)
+    school = await _run_sync(lambda: SchoolOrm.objects.get(id=1))
+    await _run_sync(lambda: StudentOrm.objects.create(id=99, name="Ghost", school=school, deleted=True))
 
     loader_kls = create_one_to_many_loader(
         source_orm_kls=SchoolOrm,
@@ -111,14 +139,14 @@ async def test_one_to_many_loader_applies_filters(seeded_db):
     )
 
     result = await loader_kls().load_many([1])
-    assert sorted(s.name for s in result[0]) == ["Alice", "Bob"]
+    assert sorted(student.name for student in result[0]) == ["Alice", "Bob"]
 
 
 @pytest.mark.asyncio
 async def test_many_to_many_loader_applies_filters(seeded_db):
-    student = await StudentOrm.get(id=1)
-    course = await CourseOrm.create(id=99, title="Ghost", deleted=True)
-    await student.courses.add(course)
+    student = await _run_sync(lambda: StudentOrm.objects.get(id=1))
+    course = await _run_sync(lambda: CourseOrm.objects.create(id=99, title="Ghost", deleted=True))
+    await _run_sync(lambda: student.courses.add(course))
 
     loader_kls = create_many_to_many_loader(
         source_orm_kls=StudentOrm,
@@ -130,7 +158,7 @@ async def test_many_to_many_loader_applies_filters(seeded_db):
     )
 
     result = await loader_kls().load_many([1])
-    assert sorted(c.title for c in result[0]) == ["Math", "Science"]
+    assert sorted(course.title for course in result[0]) == ["Math", "Science"]
 
 
 def test_loader_factory_generates_unique_identity():

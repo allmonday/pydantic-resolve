@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict
 from tortoise import Tortoise, fields
 from tortoise.models import Model
 
-from pydantic_resolve.contrib.mapping import Mapping
+from pydantic_resolve.integration.mapping import Mapping
 
 
 class SchoolOrm(Model):
@@ -85,10 +85,10 @@ class StudentProfileDTO(BaseModel):
 
 @pytest.fixture
 async def tortoise_db(tmp_path) -> AsyncIterator[None]:
-    db_path = tmp_path / "tortoise_contrib.sqlite3"
+    db_path = tmp_path / "tortoise_integration.sqlite3"
     await Tortoise.init(
         db_url=f"sqlite://{db_path}",
-        modules={"models": ["tests.contrib.tortoise.conftest"]},
+        modules={"models": ["tests.integration.tortoise.conftest"]},
         _enable_global_fallback=True,
     )
     await Tortoise.generate_schemas()

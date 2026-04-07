@@ -19,7 +19,7 @@ from .conftest import (
 
 
 def _loader_module():
-    return importlib.import_module("pydantic_resolve.contrib.sqlalchemy.loader")
+    return importlib.import_module("pydantic_resolve.integration.sqlalchemy.loader")
 
 
 @pytest.mark.asyncio

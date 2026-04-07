@@ -13,7 +13,7 @@
 ## Usage Example
 
 ```python
-from pydantic_resolve.contrib.sqlalchemy import build_relationship
+from pydantic_resolve.integration.sqlalchemy import build_relationship
 
 # DTO definitions (Pydantic BaseModel, with from_attributes=True)
 class StudentDTO(BaseModel):
@@ -44,10 +44,10 @@ config_global_resolver(diagram)
 
 | File | Purpose |
 |------|---------|
-| `pydantic_resolve/contrib/__init__.py` | Empty, namespace package marker |
-| `pydantic_resolve/contrib/sqlalchemy/__init__.py` | Export `build_relationship` |
-| `pydantic_resolve/contrib/sqlalchemy/inspector.py` | ORM relationship inspection + `build_relationship` entry point |
-| `pydantic_resolve/contrib/sqlalchemy/loader.py` | `create_many_to_one_loader`, `create_one_to_many_loader`, `create_many_to_many_loader` factories |
+| `pydantic_resolve/integration/__init__.py` | Empty, namespace package marker |
+| `pydantic_resolve/integration/sqlalchemy/__init__.py` | Export `build_relationship` |
+| `pydantic_resolve/integration/sqlalchemy/inspector.py` | ORM relationship inspection + `build_relationship` entry point |
+| `pydantic_resolve/integration/sqlalchemy/loader.py` | `create_many_to_one_loader`, `create_one_to_many_loader`, `create_many_to_many_loader` factories |
 
 ### Modified Files
 
@@ -60,19 +60,19 @@ config_global_resolver(diagram)
 
 | File | Purpose |
 |------|---------|
-| `tests/contrib/__init__.py` | Empty |
-| `tests/contrib/sqlalchemy/__init__.py` | Empty |
-| `tests/contrib/sqlalchemy/conftest.py` | Async engine/session fixtures with aiosqlite |
-| `tests/contrib/sqlalchemy/test_inspector.py` | ORM inspection tests (including M2M) |
-| `tests/contrib/sqlalchemy/test_loader.py` | Loader generation + execution tests (including M2M) |
-| `tests/contrib/sqlalchemy/test_build_relationship.py` | End-to-end integration tests |
-| `tests/contrib/sqlalchemy/test_add_relationship.py` | ErDiagram.add_relationship merge tests |
+| `tests/integration/__init__.py` | Empty |
+| `tests/integration/sqlalchemy/__init__.py` | Empty |
+| `tests/integration/sqlalchemy/conftest.py` | Async engine/session fixtures with aiosqlite |
+| `tests/integration/sqlalchemy/test_inspector.py` | ORM inspection tests (including M2M) |
+| `tests/integration/sqlalchemy/test_loader.py` | Loader generation + execution tests (including M2M) |
+| `tests/integration/sqlalchemy/test_build_relationship.py` | End-to-end integration tests |
+| `tests/integration/sqlalchemy/test_add_relationship.py` | ErDiagram.add_relationship merge tests |
 
 ---
 
 ## Implementation Details
 
-### Step 1: `pydantic_resolve/contrib/sqlalchemy/loader.py`
+### Step 1: `pydantic_resolve/integration/sqlalchemy/loader.py`
 
 Three loader factory functions.
 
@@ -218,7 +218,7 @@ Notes:
 - All three loaders return **result list aligned with incoming keys** (`len(result) == len(keys)`).
 - ORM relationships should use `loader.load(fk)` path (do not rely on `relationship.load_many=True`).
 
-### Step 2: `pydantic_resolve/contrib/sqlalchemy/inspector.py`
+### Step 2: `pydantic_resolve/integration/sqlalchemy/inspector.py`
 
 Main entry point `build_relationship` + internal helpers.
 
@@ -308,7 +308,7 @@ Note: `sqlalchemy[asyncio]` is already in `[project.optional-dependencies.dev]`,
 4. **To-many relation target is always `list[TargetDTO]`**
 5. **Loader identity must be unique per relationship**: avoid cache key collision in loader manager
 6. **M2M metadata extraction uses `synchronize_pairs` + `secondary_synchronize_pairs`** (not `local_remote_pairs`)
-7. **Lazy SQLAlchemy import**: all `sqlalchemy` imports remain in `contrib/sqlalchemy/*`
+7. **Lazy SQLAlchemy import**: all `sqlalchemy` imports remain in `integration/sqlalchemy/*`
 8. **Scope bounded by mappings**: only process relationships where source/target ORM both have DTO mapping
 9. **Unsupported in v1**: composite FK, composite PK, and complex custom joins
 
@@ -325,10 +325,10 @@ Note: `sqlalchemy[asyncio]` is already in `[project.optional-dependencies.dev]`,
 
 ## Implementation Order
 
-1. Create `pydantic_resolve/contrib/__init__.py` (empty)
-2. Create `pydantic_resolve/contrib/sqlalchemy/loader.py` (three DataLoader class factories + identity helpers)
-3. Create `pydantic_resolve/contrib/sqlalchemy/inspector.py` (inspection + direction-based builder)
-4. Create `pydantic_resolve/contrib/sqlalchemy/__init__.py` (exports)
+1. Create `pydantic_resolve/integration/__init__.py` (empty)
+2. Create `pydantic_resolve/integration/sqlalchemy/loader.py` (three DataLoader class factories + identity helpers)
+3. Create `pydantic_resolve/integration/sqlalchemy/inspector.py` (inspection + direction-based builder)
+4. Create `pydantic_resolve/integration/sqlalchemy/__init__.py` (exports)
 5. Modify `pydantic_resolve/utils/er_diagram.py` (add `add_relationship`)
 6. Modify `pyproject.toml` (add sqlalchemy optional dep)
 7. Create tests:

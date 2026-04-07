@@ -6,7 +6,7 @@ class SchoolOrm(models.Model):
     deleted = models.BooleanField(default=False)
 
     class Meta:
-        app_label = "tests_contrib_django"
+        app_label = "tests_integration_django"
         db_table = "school"
 
 
@@ -20,7 +20,7 @@ class StudentOrm(models.Model):
     )
 
     class Meta:
-        app_label = "tests_contrib_django"
+        app_label = "tests_integration_django"
         db_table = "student"
 
 
@@ -33,7 +33,7 @@ class CourseOrm(models.Model):
     )
 
     class Meta:
-        app_label = "tests_contrib_django"
+        app_label = "tests_integration_django"
         db_table = "course"
 
 
@@ -47,5 +47,5 @@ class StudentProfileOrm(models.Model):
     deleted = models.BooleanField(default=False)
 
     class Meta:
-        app_label = "tests_contrib_django"
+        app_label = "tests_integration_django"
         db_table = "student_profile"

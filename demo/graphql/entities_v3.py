@@ -1,7 +1,7 @@
 """
 V3 Entity Definitions - SQLAlchemy ORM + build_relationship
 
-Uses SQLAlchemy ORM models with contrib/sqlalchemy's build_relationship
+Uses SQLAlchemy ORM models with integration/sqlalchemy's build_relationship
 to auto-generate relationship loaders from ORM declarations.
 
 Differences from V2:
@@ -31,8 +31,8 @@ from pydantic_resolve import (
     QueryConfig,
     config_global_resolver,
 )
-from pydantic_resolve.contrib.mapping import Mapping
-from pydantic_resolve.contrib.sqlalchemy import build_relationship
+from pydantic_resolve.integration.mapping import Mapping
+from pydantic_resolve.integration.sqlalchemy import build_relationship
 
 
 # =====================================

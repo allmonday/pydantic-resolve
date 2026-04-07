@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from typing import Optional
 
-from pydantic_resolve.contrib.mapping import Mapping
+from pydantic_resolve.integration.mapping import Mapping
 
 
 class Base(DeclarativeBase):

@@ -7,8 +7,8 @@ import pytest
 from pydantic import BaseModel, ConfigDict, ValidationError, computed_field
 from sqlalchemy import ForeignKeyConstraint, Integer, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from pydantic_resolve.contrib.sqlalchemy import build_relationship
-from pydantic_resolve.contrib.mapping import Mapping
+from pydantic_resolve.integration.sqlalchemy import build_relationship
+from pydantic_resolve.integration.mapping import Mapping
 
 from .conftest import CourseDTO, CourseOrm, SchoolDTO, SchoolOrm, StudentDTO, StudentOrm
 

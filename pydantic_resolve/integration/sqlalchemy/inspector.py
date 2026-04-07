@@ -3,8 +3,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable
 
-from pydantic_resolve.contrib.mapping import Mapping, normalize_mappings
-from pydantic_resolve.contrib.sqlalchemy.loader import (
+from pydantic_resolve.integration.mapping import Mapping, normalize_mappings
+from pydantic_resolve.integration.sqlalchemy.loader import (
     create_many_to_many_loader,
     create_many_to_one_loader,
     create_one_to_many_loader,

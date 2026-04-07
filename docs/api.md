@@ -555,8 +555,8 @@ Merge rules for entities with the same `kls`:
 Entities with a new `kls` are appended.
 
 ```python
-from pydantic_resolve.contrib.sqlalchemy import build_relationship
-from pydantic_resolve.contrib.mapping import Mapping
+from pydantic_resolve.integration.sqlalchemy import build_relationship
+from pydantic_resolve.integration.mapping import Mapping
 
 # Inline-defined diagram
 BaseEntity = base_entity()
@@ -579,9 +579,9 @@ merged_diagram = diagram.add_relationship(sa_entities)
 ```
 
 
-## ORM Integration (contrib)
+## ORM Integration
 
-The `pydantic_resolve.contrib` module auto-generates `Relationship` + `DataLoader` from ORM model definitions, eliminating hand-written loaders.
+The `pydantic_resolve.integration` module auto-generates `Relationship` + `DataLoader` from ORM model definitions, eliminating hand-written loaders.
 
 ### Installation
 
@@ -596,7 +596,7 @@ pip install pydantic-resolve[tortoise]     # Tortoise ORM
 `Mapping` is a dataclass that maps a Pydantic DTO to an ORM model.
 
 ```python
-from pydantic_resolve.contrib.mapping import Mapping
+from pydantic_resolve.integration.mapping import Mapping
 
 Mapping(
     entity=TaskDTO,           # Pydantic model
@@ -618,7 +618,7 @@ Inspects ORM relationships and generates `list[Entity]` with matching `Relations
 **SQLAlchemy:**
 
 ```python
-from pydantic_resolve.contrib.sqlalchemy import build_relationship
+from pydantic_resolve.integration.sqlalchemy import build_relationship
 
 entities = build_relationship(
     mappings=[
@@ -633,7 +633,7 @@ entities = build_relationship(
 **Django:**
 
 ```python
-from pydantic_resolve.contrib.django import build_relationship
+from pydantic_resolve.integration.django import build_relationship
 
 entities = build_relationship(
     mappings=[
@@ -647,7 +647,7 @@ entities = build_relationship(
 **Tortoise:**
 
 ```python
-from pydantic_resolve.contrib.tortoise import build_relationship
+from pydantic_resolve.integration.tortoise import build_relationship
 
 entities = build_relationship(
     mappings=[
@@ -697,8 +697,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from pydantic_resolve import (
     Entity, ErDiagram, QueryConfig, config_global_resolver, base_entity,
 )
-from pydantic_resolve.contrib.mapping import Mapping
-from pydantic_resolve.contrib.sqlalchemy import build_relationship
+from pydantic_resolve.integration.mapping import Mapping
+from pydantic_resolve.integration.sqlalchemy import build_relationship
 
 # --- ORM Models ---
 class Base(DeclarativeBase):

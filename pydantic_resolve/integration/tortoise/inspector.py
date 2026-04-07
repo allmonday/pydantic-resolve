@@ -3,14 +3,14 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable
 
-from pydantic_resolve.contrib.tortoise.loader import (
+from pydantic_resolve.integration.tortoise.loader import (
     create_many_to_many_loader,
     create_many_to_one_loader,
     create_one_to_many_loader,
     create_reverse_one_to_one_loader,
 )
 from pydantic_resolve.utils.er_diagram import Entity, Relationship
-from pydantic_resolve.contrib.mapping import Mapping, normalize_mappings
+from pydantic_resolve.integration.mapping import Mapping, normalize_mappings
 
 logger = logging.getLogger(__name__)
 

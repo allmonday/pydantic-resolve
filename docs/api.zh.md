@@ -492,8 +492,8 @@ class CommentResponse(BaseModel):
 新 `kls` 的 Entity 会被追加。
 
 ```python
-from pydantic_resolve.contrib.sqlalchemy import build_relationship
-from pydantic_resolve.contrib.mapping import Mapping
+from pydantic_resolve.integration.sqlalchemy import build_relationship
+from pydantic_resolve.integration.mapping import Mapping
 
 # 内联定义的 diagram
 BaseEntity = base_entity()
@@ -516,9 +516,9 @@ merged_diagram = diagram.add_relationship(sa_entities)
 ```
 
 
-## ORM 集成（contrib）
+## ORM 集成
 
-`pydantic_resolve.contrib` 模块可以从 ORM 模型定义自动生成 `Relationship` + `DataLoader`，无需手写 loader。
+`pydantic_resolve.integration` 模块可以从 ORM 模型定义自动生成 `Relationship` + `DataLoader`，无需手写 loader。
 
 ### 安装
 
@@ -533,7 +533,7 @@ pip install pydantic-resolve[tortoise]     # Tortoise ORM
 `Mapping` 是一个数据类，将 Pydantic DTO 映射到 ORM 模型。
 
 ```python
-from pydantic_resolve.contrib.mapping import Mapping
+from pydantic_resolve.integration.mapping import Mapping
 
 Mapping(
     entity=TaskDTO,           # Pydantic 模型
@@ -555,7 +555,7 @@ Mapping(
 **SQLAlchemy：**
 
 ```python
-from pydantic_resolve.contrib.sqlalchemy import build_relationship
+from pydantic_resolve.integration.sqlalchemy import build_relationship
 
 entities = build_relationship(
     mappings=[
@@ -570,7 +570,7 @@ entities = build_relationship(
 **Django：**
 
 ```python
-from pydantic_resolve.contrib.django import build_relationship
+from pydantic_resolve.integration.django import build_relationship
 
 entities = build_relationship(
     mappings=[
@@ -584,7 +584,7 @@ entities = build_relationship(
 **Tortoise：**
 
 ```python
-from pydantic_resolve.contrib.tortoise import build_relationship
+from pydantic_resolve.integration.tortoise import build_relationship
 
 entities = build_relationship(
     mappings=[
@@ -634,8 +634,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from pydantic_resolve import (
     Entity, ErDiagram, QueryConfig, config_global_resolver, base_entity,
 )
-from pydantic_resolve.contrib.mapping import Mapping
-from pydantic_resolve.contrib.sqlalchemy import build_relationship
+from pydantic_resolve.integration.mapping import Mapping
+from pydantic_resolve.integration.sqlalchemy import build_relationship
 
 # --- ORM 模型 ---
 class Base(DeclarativeBase):

@@ -2,7 +2,7 @@
 
 ## v4 to v5
 
-v5.0 introduces one breaking rename and a new ORM integration module (`contrib`).
+v5.0 introduces one breaking rename and a new ORM integration module (`integration`).
 
 ### 1. `ErDiagram.configs` → `ErDiagram.entities`
 
@@ -24,7 +24,7 @@ If you use `base_entity()` with `__relationships__`, no change is needed — `ge
 
 ### 2. ORM relationship auto-discovery (new)
 
-The new `pydantic_resolve.contrib` module generates `Relationship` + `DataLoader` directly from ORM model definitions, eliminating hand-written loaders.
+The new `pydantic_resolve.integration` module generates `Relationship` + `DataLoader` directly from ORM model definitions, eliminating hand-written loaders.
 
 Install the ORM extra:
 
@@ -35,8 +35,8 @@ pip install pydantic-resolve[sqlalchemy]   # or [django] or [tortoise]
 Usage (SQLAlchemy example):
 
 ```python
-from pydantic_resolve.contrib.sqlalchemy import build_relationship
-from pydantic_resolve.contrib.mapping import Mapping
+from pydantic_resolve.integration.sqlalchemy import build_relationship
+from pydantic_resolve.integration.mapping import Mapping
 
 # Define Pydantic DTOs that mirror your ORM models
 class UserDTO(BaseModel):

@@ -53,8 +53,8 @@ class UserOrm(Base):
 将 DTO 映射到 ORM 模型，框架自动读取 ORM 元数据生成 DataLoader：
 
 ```python
-from pydantic_resolve.contrib.sqlalchemy import build_relationship
-from pydantic_resolve.contrib.mapping import Mapping
+from pydantic_resolve.integration.sqlalchemy import build_relationship
+from pydantic_resolve.integration.mapping import Mapping
 
 relationship_entities = build_relationship(
     mappings=[

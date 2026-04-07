@@ -287,8 +287,8 @@ Note that DTOs are defined separately rather than auto-generated from ORM models
 
 ```python
 from pydantic_resolve import ErDiagram, config_resolver
-from pydantic_resolve.contrib.sqlalchemy import build_relationship  # or .django / .tortoise
-from pydantic_resolve.contrib.mapping import Mapping
+from pydantic_resolve.integration.sqlalchemy import build_relationship  # or .django / .tortoise
+from pydantic_resolve.integration.mapping import Mapping
 
 # 1. Map DTOs to ORM models
 entities = build_relationship(

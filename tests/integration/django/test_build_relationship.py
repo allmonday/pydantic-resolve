@@ -8,11 +8,11 @@ from django.db.models import Q
 from pydantic import BaseModel, ConfigDict
 
 from pydantic_resolve import ErDiagram, config_resolver
-from pydantic_resolve.contrib.django import build_relationship
-from pydantic_resolve.contrib.mapping import Mapping
+from pydantic_resolve.integration.django import build_relationship
+from pydantic_resolve.integration.mapping import Mapping
 
-from tests.contrib.django.dto import CourseDTO, SchoolDTO, StudentDTO
-from tests.contrib.django.models import CourseOrm, SchoolOrm, StudentOrm
+from tests.integration.django.dto import CourseDTO, SchoolDTO, StudentDTO
+from tests.integration.django.models import CourseOrm, SchoolOrm, StudentOrm
 
 
 async def _run_sync(fn):

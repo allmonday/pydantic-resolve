@@ -11,15 +11,15 @@
 **BREAKING CHANGES** — `ErDiagram.configs` renamed to `ErDiagram.entities`. See [Migration Guide](./migration.md) for details.
 
 - feat:
-  - **ORM relationship auto-discovery**: new `pydantic_resolve/contrib` module generates `Relationship` + `DataLoader` from SQLAlchemy, Django, Tortoise ORM model definitions, eliminating hand-written loaders
-    - `pydantic_resolve.contrib.sqlalchemy` (`pip install pydantic-resolve[sqlalchemy]`)
-    - `pydantic_resolve.contrib.django` (`pip install pydantic-resolve[django]`)
-    - `pydantic_resolve.contrib.tortoise` (`pip install pydantic-resolve[tortoise]`)
+  - **ORM relationship auto-discovery**: new `pydantic_resolve/integration` module generates `Relationship` + `DataLoader` from SQLAlchemy, Django, Tortoise ORM model definitions, eliminating hand-written loaders
+    - `pydantic_resolve.integration.sqlalchemy` (`pip install pydantic-resolve[sqlalchemy]`)
+    - `pydantic_resolve.integration.django` (`pip install pydantic-resolve[django]`)
+    - `pydantic_resolve.integration.tortoise` (`pip install pydantic-resolve[tortoise]`)
   - Each ORM adapter supports: Many-to-One, One-to-Many, One-to-One, Reverse One-to-One, Many-to-Many
   - Generated loaders leverage `_query_meta` for field projection (`load_only` / `only`)
   - Per-mapping `filters` and `default_filter` for query filtering
   - DTO required-field validation against ORM scalar fields at setup time
-  - **`Mapping` dataclass** (`contrib.mapping`): unified ORM-to-DTO mapping descriptor
+  - **`Mapping` dataclass** (`integration.mapping`): unified ORM-to-DTO mapping descriptor
   - **`ErDiagram.add_relationship()`**: merge ORM-generated entities into existing ErDiagram, with duplicate detection by relationship/query/mutation name
 - break:
   - **`ErDiagram.configs` → `ErDiagram.entities`**: parameter renamed; all internal consumers updated

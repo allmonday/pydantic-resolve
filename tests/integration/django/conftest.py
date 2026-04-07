@@ -8,10 +8,10 @@ import pytest
 from django.conf import settings
 from django.db import connection, connections
 
-from tests.contrib.django.dto import CourseDTO, SchoolDTO, StudentDTO
-from pydantic_resolve.contrib.mapping import Mapping
+from tests.integration.django.dto import CourseDTO, SchoolDTO, StudentDTO
+from pydantic_resolve.integration.mapping import Mapping
 
-DB_PATH = Path(tempfile.gettempdir()) / "pydantic_resolve_django_contrib.sqlite3"
+DB_PATH = Path(tempfile.gettempdir()) / "pydantic_resolve_django_integration.sqlite3"
 
 if DB_PATH.exists():
     DB_PATH.unlink()
@@ -26,16 +26,16 @@ if not settings.configured:
         },
         INSTALLED_APPS=[
             "django.contrib.contenttypes",
-            "tests.contrib.django.apps.DjangoContribTestAppConfig",
+            "tests.integration.django.apps.DjangoIntegrationTestAppConfig",
         ],
-        SECRET_KEY="django-contrib-test",
+        SECRET_KEY="django-integration-test",
         DEFAULT_AUTO_FIELD="django.db.models.AutoField",
         USE_TZ=True,
     )
 
 django.setup()
 
-from tests.contrib.django.models import CourseOrm, SchoolOrm, StudentOrm, StudentProfileOrm  # noqa: E402
+from tests.integration.django.models import CourseOrm, SchoolOrm, StudentOrm, StudentProfileOrm  # noqa: E402
 
 
 @pytest.fixture(scope="session")

@@ -5,10 +5,10 @@ from typing import Annotated
 import pytest
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
-from pydantic_resolve.contrib.sqlalchemy import build_relationship
+from pydantic_resolve.integration.sqlalchemy import build_relationship
 
 from pydantic_resolve import ErDiagram, config_resolver
-from pydantic_resolve.contrib.mapping import Mapping
+from pydantic_resolve.integration.mapping import Mapping
 
 from .conftest import (
     CourseDTO,
