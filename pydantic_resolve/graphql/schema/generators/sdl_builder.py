@@ -176,7 +176,10 @@ class SDLBuilder(SchemaGenerator):
                         continue
                     field_name = rel.name
                     gql_type = self._map_python_type_to_gql(rel.target)
-                    fields.append(f"  {field_name}: {gql_type}")
+                    if rel.description:
+                        fields.append(f'  """{rel.description}"""\n  {field_name}: {gql_type}')
+                    else:
+                        fields.append(f"  {field_name}: {gql_type}")
 
         return f"type {entity_cfg.kls.__name__} {{\n" + "\n".join(fields) + "\n}"
 

@@ -30,7 +30,7 @@ class SchoolOrm(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String)
     deleted: Mapped[bool] = mapped_column(Boolean, default=False)
-    students: Mapped[list["StudentOrm"]] = relationship(back_populates="school")
+    students: Mapped[list["StudentOrm"]] = relationship(back_populates="school", doc="Students enrolled in this school")
 
 
 class StudentOrm(Base):
@@ -41,13 +41,15 @@ class StudentOrm(Base):
     deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     school_id: Mapped[int] = mapped_column(ForeignKey("school.id"))
 
-    school: Mapped[SchoolOrm] = relationship(back_populates="students")
+    school: Mapped[SchoolOrm] = relationship(back_populates="students", doc="The school this student belongs to")
     courses: Mapped[list["CourseOrm"]] = relationship(
         secondary=student_course,
         back_populates="students",
+        doc="Courses this student is enrolled in",
     )
     profile: Mapped[Optional["StudentProfileOrm"]] = relationship(
-        back_populates="student", uselist=False
+        back_populates="student", uselist=False,
+        doc="Student profile information",
     )
 
 
@@ -71,6 +73,7 @@ class CourseOrm(Base):
     students: Mapped[list[StudentOrm]] = relationship(
         secondary=student_course,
         back_populates="courses",
+        doc="Students enrolled in this course",
     )
 
 

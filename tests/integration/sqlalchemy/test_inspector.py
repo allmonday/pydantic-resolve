@@ -60,6 +60,28 @@ def test_inspector_builds_relationships_for_m2o_o2m_m2m(orm_mappings):
     assert students_rel.load_many is False
 
 
+def test_inspector_extracts_description_from_relationship_doc(orm_mappings):
+    entities = build_relationship(
+        mappings=orm_mappings,
+        session_factory=_dummy_session_factory,
+    )
+
+    student_entity = _find_entity(entities, StudentDTO)
+    school_rel = _find_relationship(student_entity, "school")
+    courses_rel = _find_relationship(student_entity, "courses")
+
+    assert school_rel.description == "The school this student belongs to"
+    assert courses_rel.description == "Courses this student is enrolled in"
+
+    school_entity = _find_entity(entities, SchoolDTO)
+    students_rel = _find_relationship(school_entity, "students")
+    assert students_rel.description == "Students enrolled in this school"
+
+    course_entity = _find_entity(entities, CourseDTO)
+    course_students_rel = _find_relationship(course_entity, "students")
+    assert course_students_rel.description == "Students enrolled in this course"
+
+
 def test_inspector_skips_unmapped_targets_with_warning(caplog):
     with caplog.at_level(logging.WARNING):
         entities = build_relationship(

@@ -37,6 +37,7 @@ class Relationship(BaseModel):
     fk_none_default_factory: Callable[[], Any] | None = None
     load_many: bool = False
     load_many_fn: Callable[[Any], Any] | None = None
+    description: str | None = None
 
     @model_validator(mode="after")
     def _validate_defaults(self) -> "Relationship":

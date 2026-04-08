@@ -457,7 +457,7 @@ class IntrospectionGenerator(SchemaGenerator):
 
                     fields.append({
                         "name": field_name,
-                        "description": None,
+                        "description": rel.description,
                         "args": [],
                         "type": type_def,
                         "isDeprecated": False,
