@@ -2,9 +2,7 @@
 
 [English](./post_processing.md)
 
-`resolve_*` 加载缺失数据。`post_*` 用于当前子树已经组装后应该发生的所有事情。
-
-这种区别很重要。如果读者不能及早理解它，`post_*` 很快就会开始像第二个神秘加载钩子。它不是。
+`resolve_*` 加载缺失的数据。`post_*` 在当前子树组装完成后执行，用于对已有数据进行转换、聚合或格式化。
 
 ## 扩展相同的 Sprint 示例
 
@@ -177,18 +175,12 @@ class OrderView(BaseModel):
 
 ## `post_*` 不适用于什么
 
-避免将 `post_*` 用作隐藏的关系加载器。如果字段需要外部数据，请将该行为保留在 `resolve_*` 中。
-
-这种分离使代码可读：
+建议将数据加载放在 `resolve_*`，数据转换放在 `post_*`。这种分离使代码可读：
 
 - `resolve_*` 回答：**缺失数据从哪里来？**
 - `post_*` 回答：**数据准备好后我们用它做什么？**
 
 ```python
-# 坏：在 post_* 中加载数据
-def post_owner(self, loader=Loader(user_loader)):  # 不要这样做
-    return loader.load(self.owner_id)
-
 # 好：在 resolve_* 中加载，在 post_* 中转换
 def resolve_owner(self, loader=Loader(user_loader)):
     return loader.load(self.owner_id)
@@ -196,6 +188,8 @@ def resolve_owner(self, loader=Loader(user_loader)):
 def post_owner_display(self):
     return f"{self.owner.name} ({self.owner.email})"
 ```
+
+如果一个字段的主要目的是加载外部数据，`resolve_*` 是正确的位置——尽管 `post_*` 在技术上支持 `loader`（见下文）。
 
 ## post_* 参数
 
@@ -264,6 +258,34 @@ class SprintView(BaseModel):
 
     def post_contributors(self, collector=Collector('contributors')):
         return collector.values()
+```
+
+### loader
+
+`post_*` 也支持 `Loader` 参数——与 `resolve_*` 中使用的相同。这是一个有效的逃生出口，但除非有明确理由，否则不要使用。
+
+需要注意两点：
+
+1. `post_*` 中通过 `loader` 加载的数据**不会递归解析**。如果加载结果包含 `resolve_*` 或 `post_*` 方法，它们不会被执行。
+2. 加载的数据到达较晚——同一对象上的其他 `post_*` 方法无法依赖它。
+
+典型的合理场景：加载 key 本身来自已解析的字段。
+
+```python
+class TaskView(BaseModel):
+    id: int
+    title: str
+    owner_id: int
+    owner: Optional[UserView] = None
+    department_name: str = ""
+
+    def resolve_owner(self, loader=Loader(user_loader)):
+        return loader.load(self.owner_id)
+
+    def post_department_name(self, loader=Loader(department_loader)):
+        # owner.department_id 只有在 resolve_owner 之后才可用
+        if self.owner:
+            return loader.load(self.owner.department_id)
 ```
 
 ## post_default_handler

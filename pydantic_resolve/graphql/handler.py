@@ -18,6 +18,7 @@ from pydantic_resolve.graphql.introspection import IntrospectionHelper
 from pydantic_resolve.graphql.query_parser import QueryParser
 from pydantic_resolve.graphql.response_builder import ResponseBuilder
 from pydantic_resolve.graphql.schema_builder import SchemaBuilder
+from pydantic_resolve.graphql.graphiql import get_graphiql_html
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +166,22 @@ class GraphQLHandler:
             return return_annotation
 
         return None
+
+    def get_graphiql_html(
+        self,
+        endpoint: str = "/graphql",
+        title: str = "GraphiQL",
+    ) -> str:
+        """Return an HTML page hosting the GraphiQL IDE.
+
+        Args:
+            endpoint: URL of the GraphQL query endpoint (POST).
+            title: Browser tab title.
+
+        Returns:
+            Complete HTML string suitable for an ``HTMLResponse``.
+        """
+        return get_graphiql_html(endpoint=endpoint, title=title)
 
     async def execute(
         self,

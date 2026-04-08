@@ -266,10 +266,16 @@ result = await handler.execute(
 
 ```python
 from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
 from pydantic_resolve.graphql import GraphQLHandler
 
 app = FastAPI()
 handler = GraphQLHandler(diagram)
+
+
+@app.get("/graphql", response_class=HTMLResponse)
+async def graphiql_playground():
+    return handler.get_graphiql_html()
 
 
 @app.post("/graphql")
@@ -279,6 +285,14 @@ async def graphql_endpoint(request: Request):
     variables = body.get("variables", {})
     result = await handler.execute(query, variables=variables)
     return {"data": result}
+```
+
+`GET /graphql` 提供带有 Schema 浏览器和查询历史的交互式 GraphiQL IDE。`POST /graphql` 处理查询执行。
+
+默认端点为 `/graphql`。如需使用其他路径，传入 `get_graphiql_html`：
+
+```python
+handler.get_graphiql_html(endpoint="/api/graphql", title="My API")
 ```
 
 ## 工作原理

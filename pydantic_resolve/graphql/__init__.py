@@ -17,6 +17,7 @@ try:
     from .types import FieldSelection, ParsedQuery
     from .exceptions import QueryParseError, GraphQLError
     from .handler import GraphQLHandler
+    from .graphiql import get_graphiql_html
 
     CORE_AVAILABLE = True
 except ImportError as e:
@@ -40,6 +41,7 @@ if CORE_AVAILABLE:
         'ParsedQuery',
         'QueryParseError',
         'GraphQLError',
+        'get_graphiql_html',
     ]
 else:
     __all__ = []

@@ -2,9 +2,7 @@
 
 [中文版](./post_processing.zh.md)
 
-`resolve_*` loads missing data. `post_*` is for everything that should happen **after** the current subtree is already assembled.
-
-This distinction matters. If the reader does not understand it early, `post_*` quickly starts to look like a second, mysterious loading hook. It is not.
+`resolve_*` loads missing data. `post_*` runs after the current subtree is fully assembled — it transforms, aggregates, or formats data that is already in place.
 
 ## Extend the Same Sprint Example
 
@@ -177,18 +175,12 @@ class OrderView(BaseModel):
 
 ## What `post_*` Is Not For
 
-Avoid using `post_*` as a hidden relationship loader. If a field needs external data, keep that behavior in `resolve_*`.
-
-That separation keeps the code readable:
+Prefer keeping data loading in `resolve_*` and data transformation in `post_*`. That separation keeps the code readable:
 
 - `resolve_*` answers: **where does the missing data come from?**
 - `post_*` answers: **what do we do with the data after it is ready?**
 
 ```python
-# BAD: loading data in post_*
-def post_owner(self, loader=Loader(user_loader)):  # don't do this
-    return loader.load(self.owner_id)
-
 # GOOD: load in resolve_*, transform in post_*
 def resolve_owner(self, loader=Loader(user_loader)):
     return loader.load(self.owner_id)
@@ -196,6 +188,8 @@ def resolve_owner(self, loader=Loader(user_loader)):
 def post_owner_display(self):
     return f"{self.owner.name} ({self.owner.email})"
 ```
+
+If a field's primary purpose is to load external data, `resolve_*` is the right place — even though `post_*` technically supports `loader` (see below).
 
 ## post_* Parameters
 
@@ -264,6 +258,34 @@ class SprintView(BaseModel):
 
     def post_contributors(self, collector=Collector('contributors')):
         return collector.values()
+```
+
+### loader
+
+`post_*` also accepts `Loader` — the same parameter used in `resolve_*`. This is a valid escape hatch, but avoid it unless you have a clear reason.
+
+Two things to keep in mind:
+
+1. Data loaded in `post_*` is **not resolved recursively**. If the loaded result contains `resolve_*` or `post_*` methods, they will not run.
+2. The loaded data arrives late — other `post_*` methods on the same object cannot depend on it.
+
+Typical legitimate use: loading supplemental data where the load key itself comes from a resolved field.
+
+```python
+class TaskView(BaseModel):
+    id: int
+    title: str
+    owner_id: int
+    owner: Optional[UserView] = None
+    department_name: str = ""
+
+    def resolve_owner(self, loader=Loader(user_loader)):
+        return loader.load(self.owner_id)
+
+    def post_department_name(self, loader=Loader(department_loader)):
+        # owner.department_id is only available after resolve_owner
+        if self.owner:
+            return loader.load(self.owner.department_id)
 ```
 
 ## post_default_handler

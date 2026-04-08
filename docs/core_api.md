@@ -239,13 +239,6 @@ tasks = await Resolver(debug=True).resolve(tasks)
 
 Or enable globally: `export PYDANTIC_RESOLVE_DEBUG=true`
 
-### ensure_type
-
-Validate that returned values match the field's type annotation. Useful during development:
-
-```python
-tasks = await Resolver(ensure_type=True).resolve(tasks)
-```
 
 ## Async vs Sync resolve_*
 
@@ -286,7 +279,6 @@ class SprintView(BaseModel):
         return tasks
 ```
 
-Note: when using async, you can also set other fields directly via `self.field = value`.
 
 ## Common Patterns
 
@@ -327,14 +319,6 @@ Manual Core API is often enough when:
 
 At this stage, explicitness is a feature, not a limitation.
 
-## What This Page Does Not Add Yet
-
-This page intentionally stops before derived fields. Right now we only load related data. We are not yet computing fields such as:
-
-- `task_count`
-- `contributor_names`
-
-Those belong to the next concept layer.
 
 ## Next
 

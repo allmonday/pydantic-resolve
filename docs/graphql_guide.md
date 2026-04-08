@@ -266,10 +266,16 @@ Serve GraphQL alongside REST endpoints:
 
 ```python
 from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
 from pydantic_resolve.graphql import GraphQLHandler
 
 app = FastAPI()
 handler = GraphQLHandler(diagram)
+
+
+@app.get("/graphql", response_class=HTMLResponse)
+async def graphiql_playground():
+    return handler.get_graphiql_html()
 
 
 @app.post("/graphql")
@@ -279,6 +285,14 @@ async def graphql_endpoint(request: Request):
     variables = body.get("variables", {})
     result = await handler.execute(query, variables=variables)
     return {"data": result}
+```
+
+`GET /graphql` serves an interactive GraphiQL IDE with schema explorer and query history. `POST /graphql` handles query execution.
+
+The default endpoint is `/graphql`. To use a different path, pass it to `get_graphiql_html`:
+
+```python
+handler.get_graphiql_html(endpoint="/api/graphql", title="My API")
 ```
 
 ## How It Works

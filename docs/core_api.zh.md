@@ -239,13 +239,6 @@ tasks = await Resolver(debug=True).resolve(tasks)
 
 或全局启用：`export PYDANTIC_RESOLVE_DEBUG=true`
 
-### ensure_type
-
-验证返回值是否与字段的类型注释匹配。在开发期间很有用：
-
-```python
-tasks = await Resolver(ensure_type=True).resolve(tasks)
-```
 
 ## 异步 vs 同步 resolve_*
 
@@ -286,8 +279,6 @@ class SprintView(BaseModel):
         return tasks
 ```
 
-注意：使用异步时，你也可以通过 `self.field = value` 直接设置其他字段。
-
 ## 常见模式
 
 ### 模式：加载和转换
@@ -327,14 +318,6 @@ def resolve_display_name(self):
 
 在这个阶段，显式性是一个特性，而不是限制。
 
-## 本页尚未添加的内容
-
-本页有意在派生字段之前停止。现在我们只加载相关数据。我们还没有计算诸如此类的字段：
-
-- `task_count`
-- `contributor_names`
-
-这些属于下一个概念层。
 
 ## 下一步
 
