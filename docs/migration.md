@@ -2,7 +2,7 @@
 
 ## v4 to v5
 
-v5.0 introduces one breaking rename and a new ORM integration module (`integration`).
+v5.0 introduces one breaking rename. New features (ORM integration, GraphiQL, MCP schema) are additive and documented separately.
 
 ### 1. `ErDiagram.configs` → `ErDiagram.entities`
 
@@ -22,69 +22,16 @@ diagram = ErDiagram(entities=[
 
 If you use `base_entity()` with `__relationships__`, no change is needed — `get_diagram()` is updated internally.
 
-### 2. ORM relationship auto-discovery (new)
+### 2. Forward references can use module-path syntax
 
-The new `pydantic_resolve.integration` module generates `Relationship` + `DataLoader` directly from ORM model definitions, eliminating hand-written loaders.
-
-Install the ORM extra:
-
-```bash
-pip install pydantic-resolve[sqlalchemy]   # or [django] or [tortoise]
-```
-
-Usage (SQLAlchemy example):
+If you previously relied on same-module ordering or local `setattr(...)` workarounds for ER Diagram targets, you can now write forward refs as `'package.module:ClassName'`.
 
 ```python
-from pydantic_resolve.integration.sqlalchemy import build_relationship
-from pydantic_resolve.integration.mapping import Mapping
-
-# Define Pydantic DTOs that mirror your ORM models
-class UserDTO(BaseModel):
-    id: int
-    name: str
-
-class TaskDTO(BaseModel):
-    id: int
-    name: str
-    owner_id: int
-
-# build_relationship inspects ORM relationships and generates loaders
-sa_entities = build_relationship(
-    mappings=[
-        Mapping(entity=UserDTO, orm=UserORM),
-        Mapping(entity=TaskDTO, orm=TaskORM),
-    ],
-    session_factory=async_session_factory,
-)
-
-# Merge into your ErDiagram
-diagram = BaseEntity.get_diagram()
-merged_diagram = diagram.add_relationship(sa_entities)
+Relationship(fk='owner_id', target='app.dto.user:UserDTO', name='owner')
+Relationship(fk='id', target=list['app.dto.post:PostDTO'], name='posts')
 ```
 
-Supported relationship types per ORM:
-
-| Relationship | SQLAlchemy | Django | Tortoise |
-|-------------|-----------|--------|----------|
-| Many-to-One | yes | yes | yes |
-| One-to-Many | yes | yes | yes |
-| One-to-One (forward) | yes | yes | yes |
-| Reverse One-to-One | yes | yes | yes |
-| Many-to-Many | yes | yes | yes |
-
-Optional per-mapping filters:
-
-```python
-Mapping(entity=TaskDTO, orm=TaskORM, filters=[TaskORM.status == 'active'])
-```
-
-### 3. `ErDiagram.add_relationship()` (new)
-
-Merge ORM-generated entities into an existing `ErDiagram`. Duplicate relationship names, query names, or mutation names within the same entity class raise `ValueError`.
-
-```python
-merged = diagram.add_relationship(sa_entities)
-```
+This is optional and backward compatible.
 
 ---
 

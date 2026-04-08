@@ -76,22 +76,32 @@ class CommentORM(Base):
 
 ### 2. 定义 Pydantic DTO
 
+DTO 必须启用 `from_attributes`：
+
+**原因：** 生成的 loader 通过 ORM 查询数据库并返回 ORM 实例，`model_validate` 需要 `from_attributes=True` 才能将这些实例转换为 DTO。此外，`_query_meta` 优化会根据 DTO 声明的字段名生成 `load_only` 子句——只查询 DTO 实际声明的列。如果未启用 `from_attributes`，即使查询已优化，转换步骤也会失败。
+
 ```python
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class UserDTO(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
 
 
 class PostDTO(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     title: str
     author_id: int
 
 
 class CommentDTO(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     content: str
     post_id: int

@@ -19,8 +19,12 @@
   - Generated loaders leverage `_query_meta` for field projection (`load_only` / `only`)
   - Per-mapping `filters` and `default_filter` for query filtering
   - DTO required-field validation against ORM scalar fields at setup time
-  - **`Mapping` dataclass** (`integration.mapping`): unified ORM-to-DTO mapping descriptor
+  - **`Mapping` descriptor** (`integration.mapping`): unified ORM-to-DTO mapping descriptor
   - **`ErDiagram.add_relationship()`**: merge ORM-generated entities into existing ErDiagram, with duplicate detection by relationship/query/mutation name
+  - **Built-in GraphiQL page helper**: export `get_graphiql_html()` from `pydantic_resolve.graphql` and add `GraphQLHandler.get_graphiql_html()` for serving a ready-to-use GraphiQL IDE alongside the GraphQL endpoint
+  - **MCP full-schema tool**: multi-app MCP servers now expose `get_full_schema(app_name, response_type='sdl'|'introspection')` to fetch the entire schema in one call
+  - **ORM-first GraphQL response validation**: dynamic response models now preserve entity `from_attributes=True` or enable it via `enable_from_attribute_in_type_adapter`, and relationship fields use a synthetic `validation_alias` to avoid premature lazy-loading of ORM relationships before `AutoLoad` runs
+  - **Forward-ref module path syntax**: `base_entity()` now resolves relationship targets written as `'package.module:ClassName'` and `list['package.module:ClassName']`, reducing same-module ordering constraints
 - break:
   - **`ErDiagram.configs` → `ErDiagram.entities`**: parameter renamed; all internal consumers updated
 

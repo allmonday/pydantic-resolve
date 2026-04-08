@@ -76,22 +76,32 @@ class CommentORM(Base):
 
 ### 2. Define Pydantic DTOs
 
+DTOs must enable `from_attributes`:
+
+**Why:** Generated loaders query the database through the ORM and return ORM instances. Pydantic's `model_validate` needs `from_attributes=True` to convert those instances into DTOs. Additionally, the `_query_meta` optimization uses DTO field names to generate `load_only` clauses — only the columns the DTO actually declares are fetched from the database. Without `from_attributes`, the conversion step would fail even though the query is already optimized.
+
 ```python
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class UserDTO(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
 
 
 class PostDTO(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     title: str
     author_id: int
 
 
 class CommentDTO(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     content: str
     post_id: int
