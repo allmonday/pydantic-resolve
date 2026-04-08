@@ -10,7 +10,7 @@ from pydantic_resolve import Loader
 Loader(loader_fn: Callable)
 ```
 
-Declares a DataLoader dependency inside `resolve_*` method signatures. Alias for `LoaderDepend` (both names work identically).
+Declares a DataLoader dependency inside `resolve_*` method signatures.
 
 ```python
 def resolve_owner(self, loader=Loader(user_loader)):
@@ -69,7 +69,7 @@ ClosedLoader = copy_dataloader_kls('ClosedLoader', OfficeLoader)
 ## Empty Loader Generators
 
 ```python
-from pydantic_resolve import (
+from pydantic_resolve.utils.dataloader import (
     generate_strict_empty_loader,
     generate_list_empty_loader,
     generate_single_empty_loader,

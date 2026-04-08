@@ -23,16 +23,15 @@ handler = GraphQLHandler(
 ```python
 result = await handler.execute(
     query: str,
-    variables: dict | None = None,
 ) -> dict
 ```
 
-执行 GraphQL 查询字符串并以字典形式返回结果。
+执行 GraphQL 查询字符串，并返回 GraphQL 风格的响应字典。
 
 ```python
 result = await handler.execute("""
 {
-    sprints {
+    sprintEntityGetAll {
         id
         name
         tasks {
@@ -44,13 +43,24 @@ result = await handler.execute("""
 """)
 ```
 
+返回值遵循 GraphQL 响应结构：
+
+```python
+{
+    "data": {
+        "sprintEntityGetAll": [...]
+    },
+    "errors": None,
+}
+```
+
 ## SchemaBuilder
 
 ```python
 from pydantic_resolve.graphql import SchemaBuilder
 
 builder = SchemaBuilder(er_diagram)
-schema = builder.build()  # 返回 GraphQL schema 对象
+sdl = builder.build_schema()  # 返回 GraphQL SDL 字符串
 ```
 
 对生成的 GraphQL schema 的底层访问。大多数用户应该使用 `GraphQLHandler`。
@@ -61,16 +71,15 @@ schema = builder.build()  # 返回 GraphQL schema 对象
 from pydantic_resolve import query
 
 class MyEntity(BaseModel, BaseEntity):
-    @query(name='items')
+    @query
     async def get_all(cls, limit: int = 20) -> list['MyEntity']:
         return await fetch_items(limit)
 ```
 
 将方法注册为 GraphQL 查询根字段的装饰器。必须用在 Pydantic 实体类内部，不能装饰独立函数。
 
-| 参数 | 类型 | 描述 |
-|-----------|------|-------------|
-| `name` | `str \| None` | GraphQL 字段名。默认为方法名。 |
+操作名会根据实体名和方法名自动生成。
+如果你需要覆盖生成字段中的“方法名部分”，请使用 `QueryConfig(name=...)`。
 
 ## @mutation
 
@@ -78,12 +87,15 @@ class MyEntity(BaseModel, BaseEntity):
 from pydantic_resolve import mutation
 
 class MyEntity(BaseModel, BaseEntity):
-    @mutation(name='createItem')
+    @mutation
     async def create(cls, name: str) -> 'MyEntity':
         return await create_item(name)
 ```
 
 将方法注册为 GraphQL 变更根字段的装饰器。必须用在 Pydantic 实体类内部，不能装饰独立函数。
+
+操作名会根据实体名和方法名自动生成。
+如果你需要覆盖生成字段中的“方法名部分”，请使用 `MutationConfig(name=...)`。
 
 ## QueryConfig
 
@@ -102,7 +114,7 @@ QueryConfig(
 | 参数 | 类型 | 描述 |
 |-----------|------|-------------|
 | `method` | `Callable` | 异步函数。第一个参数是 `cls`，后面是 GraphQL 参数。 |
-| `name` | `str \| None` | GraphQL 字段名。默认为函数名。 |
+| `name` | `str \| None` | 覆盖生成 GraphQL 字段中的方法名部分。 |
 | `description` | `str \| None` | 生成 schema 中的字段描述。 |
 
 ```python
@@ -138,7 +150,7 @@ MutationConfig(
 | 参数 | 类型 | 描述 |
 |-----------|------|-------------|
 | `method` | `Callable` | 异步函数。第一个参数是 `cls`，后面是 GraphQL 参数。 |
-| `name` | `str \| None` | GraphQL 字段名。默认为函数名。 |
+| `name` | `str \| None` | 覆盖生成 GraphQL 字段中的方法名部分。 |
 | `description` | `str \| None` | 生成 schema 中的字段描述。 |
 
 ```python

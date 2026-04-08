@@ -59,7 +59,7 @@ print(resolver.loader_instance_cache)
 ```python
 from pydantic_resolve import config_global_resolver
 
-config_global_resolver(er_diagram: ErDiagram) -> None
+config_global_resolver(er_diagram: ErDiagram | None = None) -> None
 ```
 
 Injects an ERD into the default `Resolver` class globally. After calling this, `Resolver()` will use the ERD for `AutoLoad` resolution.
@@ -69,7 +69,10 @@ Injects an ERD into the default `Resolver` class globally. After calling this, `
 ```python
 from pydantic_resolve import config_resolver
 
-CustomResolver = config_resolver(name: str, er_diagram: ErDiagram) -> type[Resolver]
+CustomResolver = config_resolver(
+    name: str | None = None,
+    er_diagram: ErDiagram | None = None,
+) -> type[Resolver]
 ```
 
 Creates a new Resolver class with specific ERD configuration. Use this when you need multiple resolver configurations in the same process.

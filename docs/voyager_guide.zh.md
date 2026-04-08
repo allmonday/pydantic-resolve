@@ -41,17 +41,17 @@ from fastapi_voyager import create_voyager
 from pydantic_resolve import ErDiagram, Entity, Relationship
 
 diagram = ErDiagram(
-    configs=[
+    entities=[
         Entity(
             kls=SprintEntity,
             relationships=[
-                Relationship(field='id', target_kls=list[TaskEntity], loader=task_loader),
+                Relationship(fk='id', target=list[TaskEntity], name='tasks', loader=task_loader),
             ],
         ),
         Entity(
             kls=TaskEntity,
             relationships=[
-                Relationship(field='owner_id', target_kls=UserEntity, loader=user_loader),
+                Relationship(fk='owner_id', target=UserEntity, name='owner', loader=user_loader),
             ],
         ),
     ],

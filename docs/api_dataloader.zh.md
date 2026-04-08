@@ -10,7 +10,7 @@ from pydantic_resolve import Loader
 Loader(loader_fn: Callable)
 ```
 
-在 `resolve_*` 方法签名中声明 DataLoader 依赖。是 `LoaderDepend` 的别名（两者功能相同）。
+在 `resolve_*` 方法签名中声明 DataLoader 依赖。
 
 ```python
 def resolve_owner(self, loader=Loader(user_loader)):
@@ -69,7 +69,7 @@ ClosedLoader = copy_dataloader_kls('ClosedLoader', OfficeLoader)
 ## 空 Loader 生成器
 
 ```python
-from pydantic_resolve import (
+from pydantic_resolve.utils.dataloader import (
     generate_strict_empty_loader,
     generate_list_empty_loader,
     generate_single_empty_loader,

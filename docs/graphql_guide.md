@@ -29,7 +29,6 @@ from pydantic_resolve import (
     base_entity,
     build_list,
     build_object,
-    config_global_resolver,
     query,
 )
 
@@ -91,7 +90,6 @@ class SprintEntity(BaseModel, BaseEntity):
 
 
 diagram = BaseEntity.get_diagram()
-config_global_resolver(diagram)
 ```
 
 ### 2. Execute Queries
@@ -119,7 +117,7 @@ result = await handler.execute("""
 """)
 
 print(result)
-# {'sprintEntityGetAll': [
+# {'data': {'sprintEntityGetAll': [
 #     {'id': 1, 'name': 'Sprint 24', 'tasks': [
 #         {'id': 10, 'title': 'Design docs', 'owner': {'id': 7, 'name': 'Ada'}},
 #         {'id': 11, 'title': 'Refine examples', 'owner': {'id': 8, 'name': 'Bob'}},
@@ -127,7 +125,7 @@ print(result)
 #     {'id': 2, 'name': 'Sprint 25', 'tasks': [
 #         {'id': 12, 'title': 'Write tests', 'owner': {'id': 7, 'name': 'Ada'}},
 #     ]},
-# ]}
+# ]}, 'errors': None}
 ```
 
 ## Adding Mutations
@@ -247,14 +245,8 @@ handler = GraphQLHandler(
     enable_from_attribute_in_type_adapter=False,  # optional
 )
 
-# Execute a query
+# Execute a query string directly
 result = await handler.execute(query_string)
-
-# Execute with variables
-result = await handler.execute(
-    query_string,
-    variables={"limit": 10}
-)
 ```
 
 | Parameter | Type | Description |
@@ -284,9 +276,8 @@ async def graphiql_playground():
 async def graphql_endpoint(request: Request):
     body = await request.json()
     query = body.get("query", "")
-    variables = body.get("variables", {})
-    result = await handler.execute(query, variables=variables)
-    return {"data": result}
+    result = await handler.execute(query)
+    return result
 ```
 
 `GET /graphql` serves an interactive GraphiQL IDE with schema explorer and query history. `POST /graphql` handles query execution.

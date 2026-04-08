@@ -39,7 +39,7 @@ class SprintEntity(BaseModel, BaseEntity):
     id: int
     name: str
 
-    @query(name='sprints')
+    @query
     async def get_all(cls, limit: int = 20) -> list['SprintEntity']:
         return await fetch_sprints(limit)
 
@@ -69,7 +69,7 @@ result = await handler.execute(
 
 ### 一个实用说明
 
-实际的 GraphQL 根字段名来自你的 `@query(...)` 或 `QueryConfig(...)` 配置。这里真正重要的点不是装饰器本身，而是嵌套关系图仍然来自同一份 ERD。
+实际的 GraphQL 根字段名默认来自实体名和方法名的自动组合；如果需要覆盖其中的方法名部分，可以使用 `QueryConfig(...)` 或 `MutationConfig(...)`。这里真正重要的点不是装饰器本身，而是嵌套关系图仍然来自同一份 ERD。
 
 如果你更喜欢外部配置而不是装饰器，也可以用 `QueryConfig` 和 `MutationConfig` 在类之外定义相同的根操作。
 

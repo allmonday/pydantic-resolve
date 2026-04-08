@@ -23,16 +23,15 @@ handler = GraphQLHandler(
 ```python
 result = await handler.execute(
     query: str,
-    variables: dict | None = None,
 ) -> dict
 ```
 
-Execute a GraphQL query string and return the result as a dict.
+Execute a GraphQL query string and return a GraphQL-style response dict.
 
 ```python
 result = await handler.execute("""
 {
-    sprints {
+    sprintEntityGetAll {
         id
         name
         tasks {
@@ -44,13 +43,24 @@ result = await handler.execute("""
 """)
 ```
 
+The return value follows GraphQL response shape:
+
+```python
+{
+    "data": {
+        "sprintEntityGetAll": [...]
+    },
+    "errors": None,
+}
+```
+
 ## SchemaBuilder
 
 ```python
 from pydantic_resolve.graphql import SchemaBuilder
 
 builder = SchemaBuilder(er_diagram)
-schema = builder.build()  # Returns a GraphQL schema object
+sdl = builder.build_schema()  # Returns the GraphQL SDL string
 ```
 
 Low-level access to the generated GraphQL schema. Most users should use `GraphQLHandler` instead.
@@ -61,16 +71,15 @@ Low-level access to the generated GraphQL schema. Most users should use `GraphQL
 from pydantic_resolve import query
 
 class MyEntity(BaseModel, BaseEntity):
-    @query(name='items')
+    @query
     async def get_all(cls, limit: int = 20) -> list['MyEntity']:
         return await fetch_items(limit)
 ```
 
 Decorator that registers a method as a GraphQL query root field. Must be used inside a Pydantic entity class — it cannot decorate standalone functions.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `name` | `str \| None` | GraphQL field name. Defaults to method name. |
+The operation name is generated automatically from entity name + method name.
+Use `QueryConfig(name=...)` when you need to override the method-name part of the generated GraphQL field.
 
 ## @mutation
 
@@ -78,12 +87,15 @@ Decorator that registers a method as a GraphQL query root field. Must be used in
 from pydantic_resolve import mutation
 
 class MyEntity(BaseModel, BaseEntity):
-    @mutation(name='createItem')
+    @mutation
     async def create(cls, name: str) -> 'MyEntity':
         return await create_item(name)
 ```
 
 Decorator that registers a method as a GraphQL mutation root field. Must be used inside a Pydantic entity class — it cannot decorate standalone functions.
+
+The operation name is generated automatically from entity name + method name.
+Use `MutationConfig(name=...)` when you need to override the method-name part of the generated GraphQL field.
 
 ## QueryConfig
 
@@ -102,7 +114,7 @@ External alternative to `@query`. Define query functions outside entity classes 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `method` | `Callable` | Async function. First argument is `cls`, followed by GraphQL arguments. |
-| `name` | `str \| None` | GraphQL field name. Defaults to function name. |
+| `name` | `str \| None` | Override for the method-name part of the generated GraphQL field. |
 | `description` | `str \| None` | Field description in the generated schema. |
 
 ```python
@@ -138,7 +150,7 @@ External alternative to `@mutation`. Define mutation functions outside entity cl
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `method` | `Callable` | Async function. First argument is `cls`, followed by GraphQL arguments. |
-| `name` | `str \| None` | GraphQL field name. Defaults to function name. |
+| `name` | `str \| None` | Override for the method-name part of the generated GraphQL field. |
 | `description` | `str \| None` | Field description in the generated schema. |
 
 ```python

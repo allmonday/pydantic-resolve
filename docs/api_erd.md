@@ -165,14 +165,13 @@ class SprintEntity(BaseModel, BaseEntity):
     id: int
     name: str
 
-    @query(name='sprints')
+    @query
     async def get_all(cls, limit: int = 20) -> list['SprintEntity']:
         return await fetch_sprints(limit)
 ```
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `name` | `str \| None` | GraphQL field name. Defaults to method name. |
+The GraphQL field name is generated automatically from entity name + method name.
+Use `QueryConfig(name=...)` to override the method-name part when needed.
 
 ## @mutation Decorator
 
@@ -185,11 +184,10 @@ class SprintEntity(BaseModel, BaseEntity):
     id: int
     name: str
 
-    @mutation(name='createSprint')
+    @mutation
     async def create(cls, name: str) -> 'SprintEntity':
         return await db.create_sprint(name=name)
 ```
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `name` | `str \| None` | GraphQL field name. Defaults to method name. |
+The GraphQL field name is generated automatically from entity name + method name.
+Use `MutationConfig(name=...)` to override the method-name part when needed.

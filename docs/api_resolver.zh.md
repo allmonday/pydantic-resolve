@@ -59,7 +59,7 @@ print(resolver.loader_instance_cache)
 ```python
 from pydantic_resolve import config_global_resolver
 
-config_global_resolver(er_diagram: ErDiagram) -> None
+config_global_resolver(er_diagram: ErDiagram | None = None) -> None
 ```
 
 将 ERD 全局注入到默认的 `Resolver` 类中。调用此函数后，`Resolver()` 将使用该 ERD 进行 `AutoLoad` 解析。
@@ -69,7 +69,10 @@ config_global_resolver(er_diagram: ErDiagram) -> None
 ```python
 from pydantic_resolve import config_resolver
 
-CustomResolver = config_resolver(name: str, er_diagram: ErDiagram) -> type[Resolver]
+CustomResolver = config_resolver(
+    name: str | None = None,
+    er_diagram: ErDiagram | None = None,
+) -> type[Resolver]
 ```
 
 创建具有特定 ERD 配置的新 Resolver 类。当需要在同一进程中使用多个 resolver 配置时使用。

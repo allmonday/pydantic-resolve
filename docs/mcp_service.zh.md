@@ -109,7 +109,6 @@ from pydantic_resolve import (
     base_entity,
     build_list,
     build_object,
-    config_global_resolver,
     create_mcp_server,
 )
 
@@ -142,7 +141,6 @@ class BlogEntity(BaseModel, BaseEntity):
 
 # --- 配置 ---
 diagram = BaseEntity.get_diagram()
-config_global_resolver(diagram)
 
 
 # --- MCP 服务器 ---
@@ -159,6 +157,8 @@ mcp = create_mcp_server(
 
 mcp.run(transport="streamable-http", port=8080)
 ```
+
+`create_mcp_server()` 会在内部创建隔离的 GraphQL handler，因此这套配置本身不需要 `config_global_resolver(diagram)`，除非你还打算在别处直接调用 `Resolver()`。
 
 ## 下一步
 

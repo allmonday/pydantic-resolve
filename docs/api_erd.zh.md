@@ -165,14 +165,13 @@ class SprintEntity(BaseModel, BaseEntity):
     id: int
     name: str
 
-    @query(name='sprints')
+    @query
     async def get_all(cls, limit: int = 20) -> list['SprintEntity']:
         return await fetch_sprints(limit)
 ```
 
-| 参数 | 类型 | 描述 |
-|-----------|------|-------------|
-| `name` | `str \| None` | GraphQL 字段名。默认为方法名。 |
+GraphQL 字段名会根据实体名和方法名自动生成。
+如果需要覆盖其中的方法名部分，请使用 `QueryConfig(name=...)`。
 
 ## @mutation 装饰器
 
@@ -185,11 +184,10 @@ class SprintEntity(BaseModel, BaseEntity):
     id: int
     name: str
 
-    @mutation(name='createSprint')
+    @mutation
     async def create(cls, name: str) -> 'SprintEntity':
         return await db.create_sprint(name=name)
 ```
 
-| 参数 | 类型 | 描述 |
-|-----------|------|-------------|
-| `name` | `str \| None` | GraphQL 字段名。默认为方法名。 |
+GraphQL 字段名会根据实体名和方法名自动生成。
+如果需要覆盖其中的方法名部分，请使用 `MutationConfig(name=...)`。

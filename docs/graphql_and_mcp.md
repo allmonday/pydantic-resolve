@@ -39,7 +39,7 @@ class SprintEntity(BaseModel, BaseEntity):
 		id: int
 		name: str
 
-		@query(name='sprints')
+		@query
 		async def get_all(cls, limit: int = 20) -> list['SprintEntity']:
 				return await fetch_sprints(limit)
 
@@ -69,7 +69,7 @@ result = await handler.execute(
 
 ### Practical Note
 
-The exact GraphQL root field names come from your `@query(...)` or `QueryConfig(...)` definitions. The important idea here is not the decorator itself; it is that the nested relationship graph still comes from the same ERD.
+The exact GraphQL root field names come from the generated entity+method naming rule, unless you override the method-name part with `QueryConfig(...)` or `MutationConfig(...)`. The important idea here is not the decorator itself; it is that the nested relationship graph still comes from the same ERD.
 
 If you prefer external configuration instead of decorators, `QueryConfig` and `MutationConfig` can define the same root operations outside the entity classes.
 
