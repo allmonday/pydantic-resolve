@@ -162,27 +162,78 @@ mutation {
 
 ## External Configuration with QueryConfig / MutationConfig
 
-If you prefer not to use decorators, define queries externally:
+`@query` and `@mutation` decorators bind root fields directly to entity classes. If you prefer to keep query/mutation logic separate from entity definitions — or your query functions live in a different module — use `QueryConfig` and `MutationConfig` instead.
+
+### QueryConfig
 
 ```python
-from pydantic_resolve import Entity, QueryConfig, MutationConfig
+from pydantic_resolve import QueryConfig
 
-async def get_all_sprints(limit: int = 20):
+QueryConfig(
+    method: Callable,           # async function, first arg is `cls`
+    name: str | None = None,    # GraphQL field name, defaults to function name
+    description: str | None = None,  # Field description in schema
+)
+```
+
+The `method` receives `cls` as its first argument (like a classmethod), followed by any GraphQL arguments:
+
+```python
+async def get_all_sprints(cls, limit: int = 20) -> list[SprintEntity]:
     return [SprintEntity(**s) for s in SPRINTS[:limit]]
 
-async def create_sprint(name: str):
+async def get_sprint_by_id(cls, id: int) -> SprintEntity | None:
+    return SprintEntity(**SPRINTS.get(id, {}))
+```
+
+### MutationConfig
+
+```python
+from pydantic_resolve import MutationConfig
+
+MutationConfig(
+    method: Callable,           # async function, first arg is `cls`
+    name: str | None = None,    # GraphQL field name, defaults to function name
+    description: str | None = None,  # Field description in schema
+)
+```
+
+```python
+async def create_sprint(cls, name: str) -> SprintEntity:
     sprint = await db.create_sprint(name=name)
     return SprintEntity.model_validate(sprint)
+```
+
+### Wiring into ErDiagram
+
+Attach `QueryConfig` and `MutationConfig` to an `Entity` inside `ErDiagram`:
+
+```python
+from pydantic_resolve import Entity, ErDiagram
 
 diagram = ErDiagram(entities=[
     Entity(
         kls=SprintEntity,
         relationships=[...],
-        queries=[QueryConfig(method=get_all_sprints, name='sprints')],
-        mutations=[MutationConfig(method=create_sprint, name='createSprint')],
+        queries=[
+            QueryConfig(method=get_all_sprints, name='sprints'),
+            QueryConfig(method=get_sprint_by_id, name='sprint'),
+        ],
+        mutations=[
+            MutationConfig(method=create_sprint, name='createSprint'),
+        ],
     ),
 ])
 ```
+
+### Decorator vs Config: When to Use Which
+
+| Aspect | `@query` / `@mutation` | `QueryConfig` / `MutationConfig` |
+|--------|----------------------|----------------------------------|
+| Definition location | Inside entity class | Outside, in any module |
+| Coupling | Tight (query lives with entity) | Loose (query lives separately) |
+| Multiple queries per entity | One method each | List of configs |
+| Use case | Simple projects, colocation preferred | Shared entities, multi-module projects |
 
 ## GraphQLHandler
 
@@ -228,16 +279,6 @@ async def graphql_endpoint(request: Request):
     variables = body.get("variables", {})
     result = await handler.execute(query, variables=variables)
     return {"data": result}
-```
-
-## Voyager Visualization
-
-Use [fastapi-voyager](https://github.com/allmonday/fastapi-voyager) for interactive ERD exploration:
-
-```python
-from fastapi_voyager import create_voyager
-
-app.mount('/voyager', create_voyager(app, er_diagram=diagram))
 ```
 
 ## How It Works

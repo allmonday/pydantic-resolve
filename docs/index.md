@@ -33,7 +33,13 @@ flowchart TB
     e --> f["GraphQL / MCP"]
 ```
 
-Every page in the Guide section uses the same business scenario: `Sprint` has many `Task`, each `Task` has one `owner`.
+Every page in the Guide section uses the same business scenario:
+
+```mermaid
+erDiagram 
+    Sprint ||--o{ Task : "has many"
+    Task }o--|| User : "owner"
+```
 
 ### Guide (Tutorial Path)
 
@@ -45,7 +51,7 @@ Every page in the Guide section uses the same business scenario: `Sprint` has ma
 | [Cross-Layer Data Flow](./cross_layer_data_flow.md) | How do parent and child nodes coordinate without hard-coded traversal logic? |
 | [ERD and AutoLoad](./erd_and_autoload.md) | When is it worth turning repeated relationship wiring into reusable ERD declarations? |
 
-### Guides (Practical Topics)
+### Advanced Topics
 
 Once you understand the core model, these pages go deeper into specific areas:
 

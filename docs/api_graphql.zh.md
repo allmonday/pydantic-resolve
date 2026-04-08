@@ -66,7 +66,7 @@ class MyEntity(BaseModel, BaseEntity):
         return await fetch_items(limit)
 ```
 
-将方法注册为 GraphQL 查询根字段的装饰器。
+将方法注册为 GraphQL 查询根字段的装饰器。必须用在 Pydantic 实体类内部，不能装饰独立函数。
 
 | 参数 | 类型 | 描述 |
 |-----------|------|-------------|
@@ -83,4 +83,73 @@ class MyEntity(BaseModel, BaseEntity):
         return await create_item(name)
 ```
 
-将方法注册为 GraphQL 变更根字段的装饰器。
+将方法注册为 GraphQL 变更根字段的装饰器。必须用在 Pydantic 实体类内部，不能装饰独立函数。
+
+## QueryConfig
+
+```python
+from pydantic_resolve import QueryConfig
+
+QueryConfig(
+    method: Callable,
+    name: str | None = None,
+    description: str | None = None,
+)
+```
+
+`@query` 的外部替代方案。在实体类之外定义查询函数，通过 `Entity` 的 `queries` 列表接入。
+
+| 参数 | 类型 | 描述 |
+|-----------|------|-------------|
+| `method` | `Callable` | 异步函数。第一个参数是 `cls`，后面是 GraphQL 参数。 |
+| `name` | `str \| None` | GraphQL 字段名。默认为函数名。 |
+| `description` | `str \| None` | 生成 schema 中的字段描述。 |
+
+```python
+async def get_all_sprints(cls, limit: int = 20) -> list[SprintEntity]:
+    return [SprintEntity(**s) for s in SPRINTS[:limit]]
+
+async def get_sprint_by_id(cls, id: int) -> SprintEntity | None:
+    return SprintEntity(**SPRINTS.get(id, {}))
+
+Entity(
+    kls=SprintEntity,
+    queries=[
+        QueryConfig(method=get_all_sprints, name='sprints'),
+        QueryConfig(method=get_sprint_by_id, name='sprint'),
+    ],
+)
+```
+
+## MutationConfig
+
+```python
+from pydantic_resolve import MutationConfig
+
+MutationConfig(
+    method: Callable,
+    name: str | None = None,
+    description: str | None = None,
+)
+```
+
+`@mutation` 的外部替代方案。在实体类之外定义变更函数，通过 `Entity` 的 `mutations` 列表接入。
+
+| 参数 | 类型 | 描述 |
+|-----------|------|-------------|
+| `method` | `Callable` | 异步函数。第一个参数是 `cls`，后面是 GraphQL 参数。 |
+| `name` | `str \| None` | GraphQL 字段名。默认为函数名。 |
+| `description` | `str \| None` | 生成 schema 中的字段描述。 |
+
+```python
+async def create_sprint(cls, name: str) -> SprintEntity:
+    sprint = await db.create_sprint(name=name)
+    return SprintEntity.model_validate(sprint)
+
+Entity(
+    kls=SprintEntity,
+    mutations=[
+        MutationConfig(method=create_sprint, name='createSprint'),
+    ],
+)
+```

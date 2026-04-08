@@ -162,27 +162,78 @@ mutation {
 
 ## 使用 QueryConfig / MutationConfig 的外部配置
 
-如果你不想使用装饰器，可以外部定义查询：
+`@query` 和 `@mutation` 装饰器将根字段直接绑定到实体类内部。如果你希望将查询/变更逻辑与实体定义分离——或者查询函数位于不同模块——可以使用 `QueryConfig` 和 `MutationConfig`。
+
+### QueryConfig
 
 ```python
-from pydantic_resolve import Entity, QueryConfig, MutationConfig
+from pydantic_resolve import QueryConfig
 
-async def get_all_sprints(limit: int = 20):
+QueryConfig(
+    method: Callable,           # 异步函数，第一个参数是 `cls`
+    name: str | None = None,    # GraphQL 字段名，默认为函数名
+    description: str | None = None,  # schema 中的字段描述
+)
+```
+
+`method` 的第一个参数接收 `cls`（类似 classmethod），后面是任意 GraphQL 参数：
+
+```python
+async def get_all_sprints(cls, limit: int = 20) -> list[SprintEntity]:
     return [SprintEntity(**s) for s in SPRINTS[:limit]]
 
-async def create_sprint(name: str):
+async def get_sprint_by_id(cls, id: int) -> SprintEntity | None:
+    return SprintEntity(**SPRINTS.get(id, {}))
+```
+
+### MutationConfig
+
+```python
+from pydantic_resolve import MutationConfig
+
+MutationConfig(
+    method: Callable,           # 异步函数，第一个参数是 `cls`
+    name: str | None = None,    # GraphQL 字段名，默认为函数名
+    description: str | None = None,  # schema 中的字段描述
+)
+```
+
+```python
+async def create_sprint(cls, name: str) -> SprintEntity:
     sprint = await db.create_sprint(name=name)
     return SprintEntity.model_validate(sprint)
+```
+
+### 接入 ErDiagram
+
+将 `QueryConfig` 和 `MutationConfig` 附加到 `ErDiagram` 中的 `Entity` 上：
+
+```python
+from pydantic_resolve import Entity, ErDiagram
 
 diagram = ErDiagram(entities=[
     Entity(
         kls=SprintEntity,
         relationships=[...],
-        queries=[QueryConfig(method=get_all_sprints, name='sprints')],
-        mutations=[MutationConfig(method=create_sprint, name='createSprint')],
+        queries=[
+            QueryConfig(method=get_all_sprints, name='sprints'),
+            QueryConfig(method=get_sprint_by_id, name='sprint'),
+        ],
+        mutations=[
+            MutationConfig(method=create_sprint, name='createSprint'),
+        ],
     ),
 ])
 ```
+
+### 装饰器 vs Config：何时用哪个
+
+| 方面 | `@query` / `@mutation` | `QueryConfig` / `MutationConfig` |
+|--------|----------------------|----------------------------------|
+| 定义位置 | 实体类内部 | 外部，可以在任意模块 |
+| 耦合度 | 紧密（查询与实体放在一起） | 松散（查询与实体分离） |
+| 每个实体的多个查询 | 每个方法一个 | 配置列表 |
+| 适用场景 | 简单项目，偏好放在一起 | 共享实体、多模块项目 |
 
 ## GraphQLHandler
 
@@ -228,16 +279,6 @@ async def graphql_endpoint(request: Request):
     variables = body.get("variables", {})
     result = await handler.execute(query, variables=variables)
     return {"data": result}
-```
-
-## Voyager 可视化
-
-使用 [fastapi-voyager](https://github.com/allmonday/fastapi-voyager) 进行交互式 ERD 浏览：
-
-```python
-from fastapi_voyager import create_voyager
-
-app.mount('/voyager', create_voyager(app, er_diagram=diagram))
 ```
 
 ## 工作原理

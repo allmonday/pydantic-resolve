@@ -156,18 +156,40 @@ MutationConfig(
 
 ## @query 装饰器
 
+必须作为方法装饰器**用在 Pydantic 实体类内部**，不能装饰独立函数。
+
 ```python
 from pydantic_resolve import query
 
-@query(name: str | None = None)
-async def get_all(cls, **kwargs) -> list[Entity]: ...
+class SprintEntity(BaseModel, BaseEntity):
+    id: int
+    name: str
+
+    @query(name='sprints')
+    async def get_all(cls, limit: int = 20) -> list['SprintEntity']:
+        return await fetch_sprints(limit)
 ```
 
+| 参数 | 类型 | 描述 |
+|-----------|------|-------------|
+| `name` | `str \| None` | GraphQL 字段名。默认为方法名。 |
+
 ## @mutation 装饰器
+
+必须作为方法装饰器**用在 Pydantic 实体类内部**，不能装饰独立函数。
 
 ```python
 from pydantic_resolve import mutation
 
-@mutation(name: str | None = None)
-async def create(cls, **kwargs) -> Entity: ...
+class SprintEntity(BaseModel, BaseEntity):
+    id: int
+    name: str
+
+    @mutation(name='createSprint')
+    async def create(cls, name: str) -> 'SprintEntity':
+        return await db.create_sprint(name=name)
 ```
+
+| 参数 | 类型 | 描述 |
+|-----------|------|-------------|
+| `name` | `str \| None` | GraphQL 字段名。默认为方法名。 |

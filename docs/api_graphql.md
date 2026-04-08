@@ -66,7 +66,7 @@ class MyEntity(BaseModel, BaseEntity):
         return await fetch_items(limit)
 ```
 
-Decorator that registers a method as a GraphQL query root field.
+Decorator that registers a method as a GraphQL query root field. Must be used inside a Pydantic entity class — it cannot decorate standalone functions.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -83,4 +83,73 @@ class MyEntity(BaseModel, BaseEntity):
         return await create_item(name)
 ```
 
-Decorator that registers a method as a GraphQL mutation root field.
+Decorator that registers a method as a GraphQL mutation root field. Must be used inside a Pydantic entity class — it cannot decorate standalone functions.
+
+## QueryConfig
+
+```python
+from pydantic_resolve import QueryConfig
+
+QueryConfig(
+    method: Callable,
+    name: str | None = None,
+    description: str | None = None,
+)
+```
+
+External alternative to `@query`. Define query functions outside entity classes and wire them into `Entity` via the `queries` list.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `method` | `Callable` | Async function. First argument is `cls`, followed by GraphQL arguments. |
+| `name` | `str \| None` | GraphQL field name. Defaults to function name. |
+| `description` | `str \| None` | Field description in the generated schema. |
+
+```python
+async def get_all_sprints(cls, limit: int = 20) -> list[SprintEntity]:
+    return [SprintEntity(**s) for s in SPRINTS[:limit]]
+
+async def get_sprint_by_id(cls, id: int) -> SprintEntity | None:
+    return SprintEntity(**SPRINTS.get(id, {}))
+
+Entity(
+    kls=SprintEntity,
+    queries=[
+        QueryConfig(method=get_all_sprints, name='sprints'),
+        QueryConfig(method=get_sprint_by_id, name='sprint'),
+    ],
+)
+```
+
+## MutationConfig
+
+```python
+from pydantic_resolve import MutationConfig
+
+MutationConfig(
+    method: Callable,
+    name: str | None = None,
+    description: str | None = None,
+)
+```
+
+External alternative to `@mutation`. Define mutation functions outside entity classes and wire them into `Entity` via the `mutations` list.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `method` | `Callable` | Async function. First argument is `cls`, followed by GraphQL arguments. |
+| `name` | `str \| None` | GraphQL field name. Defaults to function name. |
+| `description` | `str \| None` | Field description in the generated schema. |
+
+```python
+async def create_sprint(cls, name: str) -> SprintEntity:
+    sprint = await db.create_sprint(name=name)
+    return SprintEntity.model_validate(sprint)
+
+Entity(
+    kls=SprintEntity,
+    mutations=[
+        MutationConfig(method=create_sprint, name='createSprint'),
+    ],
+)
+```

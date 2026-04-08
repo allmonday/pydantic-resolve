@@ -156,18 +156,40 @@ MutationConfig(
 
 ## @query Decorator
 
+Must be used as a method decorator **inside a Pydantic entity class**. It cannot decorate standalone functions.
+
 ```python
 from pydantic_resolve import query
 
-@query(name: str | None = None)
-async def get_all(cls, **kwargs) -> list[Entity]: ...
+class SprintEntity(BaseModel, BaseEntity):
+    id: int
+    name: str
+
+    @query(name='sprints')
+    async def get_all(cls, limit: int = 20) -> list['SprintEntity']:
+        return await fetch_sprints(limit)
 ```
 
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `str \| None` | GraphQL field name. Defaults to method name. |
+
 ## @mutation Decorator
+
+Must be used as a method decorator **inside a Pydantic entity class**. It cannot decorate standalone functions.
 
 ```python
 from pydantic_resolve import mutation
 
-@mutation(name: str | None = None)
-async def create(cls, **kwargs) -> Entity: ...
+class SprintEntity(BaseModel, BaseEntity):
+    id: int
+    name: str
+
+    @mutation(name='createSprint')
+    async def create(cls, name: str) -> 'SprintEntity':
+        return await db.create_sprint(name=name)
 ```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `str \| None` | GraphQL field name. Defaults to method name. |

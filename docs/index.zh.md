@@ -33,7 +33,13 @@ flowchart TB
     e --> f["GraphQL / MCP"]
 ```
 
-指南部分的每一页都复用同一套业务场景：`Sprint` 有多个 `Task`，每个 `Task` 有一个 `owner`。
+指南部分的每一页都复用同一套业务场景：
+
+```mermaid
+erDiagram
+    Sprint ||--o{ Task : "has many"
+    Task }o--|| User : "owner"
+```
 
 ### 指南（教程路径）
 
@@ -45,7 +51,7 @@ flowchart TB
 | [跨层数据流](./cross_layer_data_flow.zh.md) | 父子节点如何在不手写遍历逻辑的情况下协作？ |
 | [ERD 与 AutoLoad](./erd_and_autoload.zh.md) | 什么时候值得把重复的关系声明提升为 ERD？ |
 
-### 实用指南
+### 进阶指南
 
 理解核心模型后，这些页面深入具体领域：
 
