@@ -18,7 +18,7 @@ flowchart LR
 
 ### 1. 定义带有查询的实体
 
-使用 `@query` 装饰器添加根入口点：
+使用 `@query` 装饰器添加根入口点。GraphQL 操作名自动生成为 `entityPrefix + MethodCamel`（例如 `SprintEntity.get_all` → `sprintEntityGetAll`）：
 
 ```python
 from typing import Annotated, Optional
@@ -85,7 +85,7 @@ class SprintEntity(BaseModel, BaseEntity):
     id: int
     name: str
 
-    @query(name='sprints')
+    @query
     async def get_all(cls, limit: int = 20) -> list['SprintEntity']:
         return [SprintEntity(**s) for s in SPRINTS[:limit]]
 
@@ -103,7 +103,7 @@ handler = GraphQLHandler(diagram)
 
 result = await handler.execute("""
 {
-    sprints {
+    sprintEntityGetAll {
         id
         name
         tasks {
@@ -119,7 +119,7 @@ result = await handler.execute("""
 """)
 
 print(result)
-# {'sprints': [
+# {'sprintEntityGetAll': [
 #     {'id': 1, 'name': 'Sprint 24', 'tasks': [
 #         {'id': 10, 'title': 'Design docs', 'owner': {'id': 7, 'name': 'Ada'}},
 #         {'id': 11, 'title': 'Refine examples', 'owner': {'id': 8, 'name': 'Bob'}},
@@ -141,7 +141,7 @@ class SprintEntity(BaseModel, BaseEntity):
     id: int
     name: str
 
-    @mutation(name='createSprint')
+    @mutation
     async def create(cls, name: str) -> 'SprintEntity':
         sprint = await db.create_sprint(name=name)
         return SprintEntity.model_validate(sprint)
@@ -152,7 +152,7 @@ class SprintEntity(BaseModel, BaseEntity):
 ```python
 result = await handler.execute("""
 mutation {
-    createSprint(name: "Sprint 26") {
+    sprintEntityCreate(name: "Sprint 26") {
         id
         name
     }
@@ -171,10 +171,12 @@ from pydantic_resolve import QueryConfig
 
 QueryConfig(
     method: Callable,           # 异步函数，第一个参数是 `cls`
-    name: str | None = None,    # GraphQL 字段名，默认为函数名
+    name: str | None = None,    # 覆盖操作名中的方法名部分
     description: str | None = None,  # schema 中的字段描述
 )
 ```
+
+最终的 GraphQL 操作名始终为 `entityPrefix + MethodCamel`（例如 `SprintEntity` + `get_all` → `sprintEntityGetAll`）。`name` 参数仅覆盖方法名部分：`name='sprints'` → `sprintEntitySprints`。
 
 `method` 的第一个参数接收 `cls`（类似 classmethod），后面是任意 GraphQL 参数：
 
@@ -193,7 +195,7 @@ from pydantic_resolve import MutationConfig
 
 MutationConfig(
     method: Callable,           # 异步函数，第一个参数是 `cls`
-    name: str | None = None,    # GraphQL 字段名，默认为函数名
+    name: str | None = None,    # 覆盖操作名中的方法名部分
     description: str | None = None,  # schema 中的字段描述
 )
 ```
@@ -216,11 +218,11 @@ diagram = ErDiagram(entities=[
         kls=SprintEntity,
         relationships=[...],
         queries=[
-            QueryConfig(method=get_all_sprints, name='sprints'),
-            QueryConfig(method=get_sprint_by_id, name='sprint'),
+            QueryConfig(method=get_all_sprints),          # → sprintEntityGetAllSprints
+            QueryConfig(method=get_sprint_by_id, name='sprint'),  # → sprintEntitySprint
         ],
         mutations=[
-            MutationConfig(method=create_sprint, name='createSprint'),
+            MutationConfig(method=create_sprint),         # → sprintEntityCreateSprint
         ],
     ),
 ])
@@ -304,7 +306,7 @@ handler.get_graphiql_html(endpoint="/api/graphql", title="My API")
 
 ```mermaid
 flowchart TB
-    Q["客户端查询<br/>{ sprints { tasks { owner } } }"]
+    Q["客户端查询<br/>{ sprintEntityGetAll { tasks { owner } } }"]
     P["查询解析器"]
     R["Resolver + DataLoader"]
     D["DataLoader 批量调用"]

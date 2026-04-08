@@ -18,7 +18,7 @@ flowchart LR
 
 ### 1. Define Entities with Queries
 
-Use the `@query` decorator to add root entry points:
+Use the `@query` decorator to add root entry points. The GraphQL operation name is auto-generated as `entityPrefix + MethodCamel` (e.g., `SprintEntity.get_all` → `sprintEntityGetAll`):
 
 ```python
 from typing import Annotated, Optional
@@ -85,7 +85,7 @@ class SprintEntity(BaseModel, BaseEntity):
     id: int
     name: str
 
-    @query(name='sprints')
+    @query
     async def get_all(cls, limit: int = 20) -> list['SprintEntity']:
         return [SprintEntity(**s) for s in SPRINTS[:limit]]
 
@@ -103,7 +103,7 @@ handler = GraphQLHandler(diagram)
 
 result = await handler.execute("""
 {
-    sprints {
+    sprintEntityGetAll {
         id
         name
         tasks {
@@ -119,7 +119,7 @@ result = await handler.execute("""
 """)
 
 print(result)
-# {'sprints': [
+# {'sprintEntityGetAll': [
 #     {'id': 1, 'name': 'Sprint 24', 'tasks': [
 #         {'id': 10, 'title': 'Design docs', 'owner': {'id': 7, 'name': 'Ada'}},
 #         {'id': 11, 'title': 'Refine examples', 'owner': {'id': 8, 'name': 'Bob'}},
@@ -141,7 +141,7 @@ class SprintEntity(BaseModel, BaseEntity):
     id: int
     name: str
 
-    @mutation(name='createSprint')
+    @mutation
     async def create(cls, name: str) -> 'SprintEntity':
         sprint = await db.create_sprint(name=name)
         return SprintEntity.model_validate(sprint)
@@ -152,7 +152,7 @@ Execute:
 ```python
 result = await handler.execute("""
 mutation {
-    createSprint(name: "Sprint 26") {
+    sprintEntityCreate(name: "Sprint 26") {
         id
         name
     }
@@ -171,10 +171,12 @@ from pydantic_resolve import QueryConfig
 
 QueryConfig(
     method: Callable,           # async function, first arg is `cls`
-    name: str | None = None,    # GraphQL field name, defaults to function name
+    name: str | None = None,    # Override for method-name part of the operation
     description: str | None = None,  # Field description in schema
 )
 ```
+
+The final GraphQL operation name is always `entityPrefix + MethodCamel` (e.g., `SprintEntity` + `get_all` → `sprintEntityGetAll`). The `name` parameter overrides the method-name part only: `name='sprints'` → `sprintEntitySprints`.
 
 The `method` receives `cls` as its first argument (like a classmethod), followed by any GraphQL arguments:
 
@@ -193,7 +195,7 @@ from pydantic_resolve import MutationConfig
 
 MutationConfig(
     method: Callable,           # async function, first arg is `cls`
-    name: str | None = None,    # GraphQL field name, defaults to function name
+    name: str | None = None,    # Override for method-name part of the operation
     description: str | None = None,  # Field description in schema
 )
 ```
@@ -216,11 +218,11 @@ diagram = ErDiagram(entities=[
         kls=SprintEntity,
         relationships=[...],
         queries=[
-            QueryConfig(method=get_all_sprints, name='sprints'),
-            QueryConfig(method=get_sprint_by_id, name='sprint'),
+            QueryConfig(method=get_all_sprints),          # → sprintEntityGetAllSprints
+            QueryConfig(method=get_sprint_by_id, name='sprint'),  # → sprintEntitySprint
         ],
         mutations=[
-            MutationConfig(method=create_sprint, name='createSprint'),
+            MutationConfig(method=create_sprint),         # → sprintEntityCreateSprint
         ],
     ),
 ])
@@ -304,7 +306,7 @@ handler.get_graphiql_html(endpoint="/api/graphql", title="My API")
 
 ```mermaid
 flowchart TB
-    Q["Client Query<br/>{ sprints { tasks { owner } } }"]
+    Q["Client Query<br/>{ sprintEntityGetAll { tasks { owner } } }"]
     P["Query Parser"]
     R["Resolver + DataLoader"]
     D["DataLoader batch calls"]
