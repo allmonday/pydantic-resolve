@@ -279,11 +279,11 @@ class IntrospectionGenerator(SchemaGenerator):
             return  # Already collected
 
         # Collect entities from ERD
-        for entity_cfg in self.er_diagram.configs:
+        for entity_cfg in self.er_diagram.entities:
             self._collected_types[entity_cfg.kls.__name__] = entity_cfg.kls
 
         # Collect types from Relationship.target (similar to SDLBuilder)
-        for entity_cfg in self.er_diagram.configs:
+        for entity_cfg in self.er_diagram.entities:
             for rel in entity_cfg.relationships:
                 if isinstance(rel, Relationship):
                     # get_core_types handles list[T] and Optional[T] unwrapping
@@ -416,7 +416,7 @@ class IntrospectionGenerator(SchemaGenerator):
 
         # Get entity config for relationship filtering
         entity_cfg = None
-        for cfg in self.er_diagram.configs:
+        for cfg in self.er_diagram.entities:
             if cfg.kls == entity:
                 entity_cfg = cfg
                 break

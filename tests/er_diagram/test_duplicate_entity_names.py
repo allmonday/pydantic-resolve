@@ -24,7 +24,7 @@ def test_duplicate_entity_names_raises_error():
     UserEntityB.__module__ = "module_b.user"
 
     with pytest.raises(ValueError) as exc_info:
-        ErDiagram(configs=[
+        ErDiagram(entities=[
             Entity(kls=UserEntityA, relationships=[]),
             Entity(kls=UserEntityB, relationships=[]),
         ])
@@ -46,11 +46,11 @@ def test_different_entity_names_works():
         title: str
 
     # Should not raise any error
-    diagram = ErDiagram(configs=[
+    diagram = ErDiagram(entities=[
         Entity(kls=UserEntity, relationships=[]),
         Entity(kls=PostEntity, relationships=[]),
     ])
-    assert len(diagram.configs) == 2
+    assert len(diagram.entities) == 2
 
 
 def test_same_class_twice_raises_error():
@@ -61,7 +61,7 @@ def test_same_class_twice_raises_error():
         name: str
 
     with pytest.raises(ValueError) as exc_info:
-        ErDiagram(configs=[
+        ErDiagram(entities=[
             Entity(kls=UserEntity, relationships=[]),
             Entity(kls=UserEntity, relationships=[]),
         ])

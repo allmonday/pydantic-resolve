@@ -298,7 +298,7 @@ class Story(BaseModel):
     owner_id: int
 
 # Declare entity relationships centrally
-diagram = ErDiagram(configs=[
+diagram = ErDiagram(entities=[
     Entity(
         kls=Story,
         relationships=[

@@ -1,16 +1,16 @@
-# GraphQL Framework Integration Guide
+# GraphQL 框架集成指南
 
-## Overview
+## 概述
 
-`pydantic-resolve` provides `GraphQLHandler` as a framework-agnostic core for executing GraphQL queries. This guide shows how to integrate it with various web frameworks.
+`pydantic-resolve` 提供了框架无关的 `GraphQLHandler` 核心来执行 GraphQL 查询。本指南展示如何将其集成到各种 Web 框架中。
 
-## Defining Entities and Queries/Mutations
+## 定义实体和查询/变更
 
-pydantic-resolve supports two configuration methods for defining entities and their GraphQL operations.
+pydantic-resolve 支持两种配置方式来定义实体及其 GraphQL 操作。
 
-### Method 1: BaseEntity with Decorators
+### 方式一：BaseEntity + 装饰器
 
-Define entities that inherit from `BaseEntity`, using decorators for queries and mutations:
+定义继承自 `BaseEntity` 的实体，使用装饰器来声明查询和变更：
 
 ```python
 from pydantic import BaseModel
@@ -36,30 +36,30 @@ class UserEntity(BaseModel, BaseEntity):
     async def create(cls, name: str, email: str) -> 'UserEntity':
         return await create_user(name, email)
 
-# Use BaseEntity.get_diagram() to get ErDiagram
+# 使用 BaseEntity.get_diagram() 获取 ErDiagram
 handler = GraphQLHandler(BaseEntity.get_diagram())
 ```
 
-### Method 2: ErDiagram with QueryConfig/MutationConfig
+### 方式二：ErDiagram + QueryConfig/MutationConfig
 
-Define plain Pydantic models and configure them externally:
+定义纯 Pydantic 模型，在外部进行配置：
 
 ```python
 from pydantic import BaseModel
 from typing import List, Optional
 from pydantic_resolve import Entity, ErDiagram, QueryConfig, MutationConfig, Relationship
 
-class UserEntity(BaseModel):  # Only BaseModel, no BaseEntity
+class UserEntity(BaseModel):  # 仅继承 BaseModel，不继承 BaseEntity
     id: int
     name: str
     email: str
 
-# Standalone query function (no cls parameter needed)
+# 独立的查询函数（无需 cls 参数）
 async def get_all_users(limit: int = 10) -> List[UserEntity]:
     return await fetch_users(limit)
 
-# Create ErDiagram with configuration
-diagram = ErDiagram(configs=[
+# 创建 ErDiagram 并配置
+diagram = ErDiagram(entities=[
     Entity(
         kls=UserEntity,
         relationships=[
@@ -67,10 +67,10 @@ diagram = ErDiagram(configs=[
                          loader=user_posts_loader, name='myposts')
         ],
         queries=[
-            QueryConfig(method=get_all_users, name='users', description='Get all users'),
+            QueryConfig(method=get_all_users, name='users', description='获取所有用户'),
         ],
         mutations=[
-            MutationConfig(method=create_user, name='createUser', description='Create user'),
+            MutationConfig(method=create_user, name='createUser', description='创建用户'),
         ]
     ),
 ])
@@ -78,74 +78,74 @@ diagram = ErDiagram(configs=[
 handler = GraphQLHandler(diagram)
 ```
 
-### Comparison
+### 对比
 
-| Feature | BaseEntity + Decorators | ErDiagram + Config |
-|---------|------------------------|-------------------|
-| Class inheritance | `BaseModel, BaseEntity` | `BaseModel` only |
-| Query/Mutation location | Inside class | External functions |
-| cls parameter | Required in methods | Not needed |
-| Configuration style | Decorators | Explicit config objects |
-| Best for | Self-contained entities | Separating concerns |
+| 特性 | BaseEntity + 装饰器 | ErDiagram + Config |
+|-----|-------------------|-------------------|
+| 类继承 | `BaseModel, BaseEntity` | 仅 `BaseModel` |
+| 查询/变更位置 | 类内部 | 外部函数 |
+| cls 参数 | 方法中必需 | 不需要 |
+| 配置风格 | 装饰器 | 显式配置对象 |
+| 适用场景 | 自包含实体 | 关注点分离 |
 
-## Key Concepts
+## 核心概念
 
 ### field_name
 
-Defines the GraphQL field name for nested queries:
+定义嵌套查询的 GraphQL 字段名：
 
 ```python
 Relationship(
-    fk='author_id',           # FK field in entity
-    target=UserEntity,       # Target entity
-    loader=user_loader,          # DataLoader function
-    name='author'          # GraphQL field name
+    fk='author_id',           # 实体中的外键字段
+    target=UserEntity,       # 目标实体
+    loader=user_loader,          # DataLoader 函数
+    name='author'  # GraphQL 字段名
 )
 ```
 
-This allows queries like:
+这允许如下查询：
 ```graphql
 {
   posts {
     title
-    author { name }  # Uses field_name
+    author { name }  # 使用 field_name
   }
 }
 ```
 
-**Note:** `field_name` must not conflict with existing scalar fields in the entity.
+**注意：** `field_name` 不能与实体中已有的标量字段冲突。
 
-### @query Decorator
+### @query 装饰器
 
-Marks a class method as a GraphQL root query:
+将类方法标记为 GraphQL 根查询：
 
 ```python
-@query(name='users', description='Get all users')
+@query(name='users', description='获取所有用户')
 async def get_all(cls, limit: int = 10) -> List['UserEntity']:
     return await fetch_users(limit)
 ```
 
-- Method is automatically converted to classmethod
-- `name`: GraphQL query name (defaults to camelCase of method name)
-- `description`: GraphQL schema description
+- 方法自动转换为类方法
+- `name`：GraphQL 查询名称（默认为方法名的驼峰形式）
+- `description`：GraphQL schema 描述
 
-### @mutation Decorator
+### @mutation 装饰器
 
-Marks a class method as a GraphQL mutation:
+将类方法标记为 GraphQL 变更：
 
 ```python
-@mutation(name='createUser', description='Create a new user')
+@mutation(name='createUser', description='创建新用户')
 async def create_user(cls, name: str, email: str) -> 'UserEntity':
     return await create_user_in_db(name, email)
 ```
 
-- Return type determines GraphQL output type
-- `Optional[T]` -> nullable, `T` -> non-null
-- `list[T]` -> `[T!]!` (non-null list of non-null items)
+- 返回类型决定 GraphQL 输出类型
+- `Optional[T]` -> 可空，`T` -> 非空
+- `list[T]` -> `[T!]!`（非空列表，元素非空）
 
 ## GraphQLHandler API
 
-### Constructor
+### 构造函数
 
 ```python
 from pydantic_resolve.graphql import GraphQLHandler
@@ -156,7 +156,7 @@ handler = GraphQLHandler(
 )
 ```
 
-### Execute Query
+### 执行查询
 
 ```python
 result = await handler.execute(
@@ -164,15 +164,15 @@ result = await handler.execute(
 ) -> Dict[str, Any]
 ```
 
-**Returns**:
+**返回值**:
 ```python
 {
-    'data': {...},  # Response data or None
-    'errors': [...]  # List of errors or None
+    'data': {...},  # 响应数据或 None
+    'errors': [...]  # 错误列表或 None
 }
 ```
 
-## Framework Integrations
+## 框架集成
 
 ### 1. FastAPI
 
@@ -184,27 +184,27 @@ from typing import Optional, Dict, Any
 from pydantic_resolve import base_entity, config_global_resolver
 from pydantic_resolve.graphql import GraphQLHandler, SchemaBuilder
 
-# Initialize
+# 初始化
 BaseEntity = base_entity()
 config_global_resolver(BaseEntity.get_diagram())
 
 app = FastAPI()
 
-# Create handler and schema builder
+# 创建 handler 和 schema builder
 handler = GraphQLHandler(BaseEntity.get_diagram())
 schema_builder = SchemaBuilder(BaseEntity.get_diagram())
 
-# Define request model
+# 定义请求模型
 class GraphQLRequest(BaseModel):
     query: str
     operationName: Optional[str] = None
 
-# Create router
+# 创建路由
 router = APIRouter()
 
 @router.post("/graphql")
 async def graphql_endpoint(req: GraphQLRequest):
-    """GraphQL query endpoint"""
+    """GraphQL 查询端点"""
     result = await handler.execute(
         query=req.query,
     )
@@ -212,7 +212,7 @@ async def graphql_endpoint(req: GraphQLRequest):
 
 @router.get("/schema", response_class=None)
 async def graphql_schema():
-    """GraphQL Schema endpoint (SDL format)"""
+    """GraphQL Schema 端点（SDL 格式）"""
     schema_sdl = schema_builder.build_schema()
     return PlainTextResponse(
         content=schema_sdl,
@@ -232,7 +232,7 @@ from starlette.requests import Request
 from pydantic_resolve import base_entity, config_global_resolver
 from pydantic_resolve.graphql import GraphQLHandler, SchemaBuilder
 
-# Initialize
+# 初始化
 BaseEntity = base_entity()
 config_global_resolver(BaseEntity.get_diagram())
 
@@ -240,7 +240,7 @@ handler = GraphQLHandler(BaseEntity.get_diagram())
 schema_builder = SchemaBuilder(BaseEntity.get_diagram())
 
 async def graphql_endpoint(request: Request):
-    """GraphQL query endpoint"""
+    """GraphQL 查询端点"""
     data = await request.json()
     result = await handler.execute(
         query=data.get('query'),
@@ -248,7 +248,7 @@ async def graphql_endpoint(request: Request):
     return JSONResponse(result)
 
 async def schema_endpoint(request):
-    """GraphQL Schema endpoint"""
+    """GraphQL Schema 端点"""
     schema_sdl = schema_builder.build_schema()
     return PlainTextResponse(schema_sdl)
 
@@ -267,7 +267,7 @@ from flask import Flask, request, jsonify, Response
 from pydantic_resolve import base_entity, config_global_resolver
 from pydantic_resolve.graphql import GraphQLHandler, SchemaBuilder
 
-# Initialize
+# 初始化
 BaseEntity = base_entity()
 config_global_resolver(BaseEntity.get_diagram())
 
@@ -277,7 +277,7 @@ schema_builder = SchemaBuilder(BaseEntity.get_diagram())
 
 @app.route('/graphql', methods=['POST'])
 def graphql_endpoint():
-    """GraphQL query endpoint"""
+    """GraphQL 查询端点"""
     data = request.get_json()
     result = await handler.execute(
         query=data.get('query'),
@@ -286,7 +286,7 @@ def graphql_endpoint():
 
 @app.route('/schema', methods=['GET'])
 def schema_endpoint():
-    """GraphQL Schema endpoint"""
+    """GraphQL Schema 端点"""
     schema_sdl = schema_builder.build_schema()
     return Response(schema_sdl, mimetype='text/plain')
 ```
@@ -301,7 +301,7 @@ import json
 from pydantic_resolve import base_entity, config_global_resolver
 from pydantic_resolve.graphql import GraphQLHandler, SchemaBuilder
 
-# Initialize
+# 初始化
 BaseEntity = base_entity()
 config_global_resolver(BaseEntity.get_diagram())
 
@@ -311,7 +311,7 @@ schema_builder = SchemaBuilder(BaseEntity.get_diagram())
 @csrf_exempt
 @require_http_methods(["POST"])
 def graphql_endpoint(request):
-    """GraphQL query endpoint"""
+    """GraphQL 查询端点"""
     if request.method == 'POST':
         data = json.loads(request.body)
         result = await handler.execute(
@@ -321,7 +321,7 @@ def graphql_endpoint(request):
     return JsonResponse({'error': 'Only POST allowed'}, status=405)
 
 def schema_endpoint(request):
-    """GraphQL Schema endpoint"""
+    """GraphQL Schema 端点"""
     schema_sdl = schema_builder.build_schema()
     return HttpResponse(schema_sdl, content_type='text/plain')
 ```
@@ -334,7 +334,7 @@ import tornado.ioloop
 from pydantic_resolve import base_entity, config_global_resolver
 from pydantic_resolve.graphql import GraphQLHandler, SchemaBuilder
 
-# Initialize
+# 初始化
 BaseEntity = base_entity()
 config_global_resolver(BaseEntity.get_diagram())
 
@@ -343,7 +343,7 @@ schema_builder = SchemaBuilder(BaseEntity.get_diagram())
 
 class GraphQLEndpoint(tornado.web.RequestHandler):
     async def post(self):
-        """GraphQL query endpoint"""
+        """GraphQL 查询端点"""
         data = tornado.escape.json_decode(self.request.body)
         result = await handler.execute(
             query=data.get('query'),
@@ -352,7 +352,7 @@ class GraphQLEndpoint(tornado.web.RequestHandler):
 
 class SchemaEndpoint(tornado.web.RequestHandler):
     def get(self):
-        """GraphQL Schema endpoint"""
+        """GraphQL Schema 端点"""
         schema_sdl = schema_builder.build_schema()
         self.set_header('Content-Type', 'text/plain')
         self.write(schema_sdl)
@@ -369,9 +369,9 @@ if __name__ == '__main__':
     tornado.ioloop.IOLoop.current().start()
 ```
 
-## Advanced Usage
+## 高级用法
 
-### Custom Response Formatting
+### 自定义响应格式
 
 ```python
 from fastapi.responses import JSONResponse
@@ -382,14 +382,14 @@ async def graphql_endpoint(req: GraphQLRequest):
         query=req.query,
     )
 
-    # Add custom headers
+    # 添加自定义 headers
     return JSONResponse(
         content=result,
         headers={'X-Custom-Header': 'value'}
     )
 ```
 
-### Error Handling
+### 错误处理
 
 ```python
 @router.post("/graphql")
@@ -406,7 +406,7 @@ async def graphql_endpoint(req: GraphQLRequest):
         }
 ```
 
-### Authentication
+### 身份认证
 
 ```python
 from fastapi import Depends, HTTPException
@@ -419,7 +419,7 @@ async def graphql_endpoint(
     req: GraphQLRequest,
     auth: str = Depends(security)
 ):
-    # Validate token
+    # 验证 token
     if not is_valid_token(auth.credentials):
         raise HTTPException(status_code=401)
 
@@ -429,13 +429,13 @@ async def graphql_endpoint(
     return result
 ```
 
-### Request Context
+### 请求上下文
 
 ```python
 from pydantic_resolve import Resolver
 
 async def graphql_endpoint(req: GraphQLRequest):
-    # Pass context to resolver
+    # 将 context 传递给 resolver
     resolver = Resolver(context={'user_id': get_user_id(req)})
 
     handler = GraphQLHandler(
@@ -449,8 +449,8 @@ async def graphql_endpoint(req: GraphQLRequest):
     return result
 ```
 
-## See Also
+## 相关资源
 
 - [GraphQL Demo](https://github.com/allmonday/pydantic-resolve/tree/main/demo/graphql)
-- [Chinese Documentation](./graphql.zh.md)
-- [API Reference](https://allmonday.github.io/pydantic-resolve/api/)
+- [英文文档](./graphql.md)
+- [API 参考](https://allmonday.github.io/pydantic-resolve/api/)

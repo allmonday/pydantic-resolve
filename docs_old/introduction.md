@@ -66,7 +66,7 @@ It provides two ways to define the diagram. The first is a standalone definition
 
 ```python
 diagram = ErDiagram(
-	configs=[
+	entities=[
 		Entity(
 			kls=Team,
 			relationships=[
@@ -246,7 +246,7 @@ Then define the ER diagram via an explicit declaration.
 
 ```python
 diagram = ErDiagram(
-	configs=[
+	entities=[
 		Entity(
 			kls=Story,
 			relationships=[

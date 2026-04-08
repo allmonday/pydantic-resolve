@@ -74,7 +74,7 @@ class ResponseBuilder:
                            Allows loaders to return Pydantic instances instead of dictionaries.
         """
         self.er_diagram = er_diagram
-        self.entity_map = {cfg.kls: cfg for cfg in er_diagram.configs}
+        self.entity_map = {cfg.kls: cfg for cfg in er_diagram.entities}
         self.resolver_class = resolver_class
         self.enable_from_attribute_in_type_adapter = enable_from_attribute_in_type_adapter
         self._create_auto_load = er_diagram.create_auto_load()
@@ -467,6 +467,17 @@ class ResponseBuilder:
             1. Extract PostEntity from list[PostEntity]
             2. Recursively build PostResponse model
             3. Wrap with Annotated[..., AutoLoad()]
+            4. Assign a synthetic validation_alias so model_validate(from_attributes=True)
+                does not read the relationship attribute from ORM objects before AutoLoad runs.
+
+            Why validation_alias is needed:
+                - ORM-first loaders now return ORM instances directly.
+                - Relationship attributes may be lazy-loaded and require an active Session.
+                - Dynamic response model validation happens before relationship AutoLoad resolution.
+                - If Pydantic reads relationship attrs at this stage, detached instances can raise
+                    DetachedInstanceError.
+                - Using a synthetic validation_alias makes Pydantic fall back to field defaults
+                    (None / []), and Resolver fills the real relationship values in AutoLoad phase.
 
         Output:
             (Annotated[List[PostResponse], AutoLoad()], [])
@@ -474,12 +485,23 @@ class ResponseBuilder:
         """
         target_kls = relationship.target
         origin = get_origin(target_kls)
+        validation_alias = f"__pydantic_resolve_skip_{relationship.name}"
 
         # Handle scalar targets (str, int, etc.) — skip recursive model building
         if self._is_scalar_relationship(relationship):
             _AutoLoad = self._create_auto_load
             base_type = Annotated[Optional[target_kls], _AutoLoad()]
-            return self._apply_alias((base_type, None), selection.alias)
+            return (
+                base_type,
+                Field(
+                    default=None,
+                    validation_alias=validation_alias,
+                    serialization_alias=selection.alias,
+                ) if selection.alias else Field(
+                    default=None,
+                    validation_alias=validation_alias,
+                ),
+            )
 
         # Extract actual entity type
         actual_entity = self._extract_entity_type(target_kls)
@@ -495,12 +517,26 @@ class ResponseBuilder:
         _AutoLoad = self._create_auto_load
         if origin is list:
             base_type = Annotated[List[nested_model], _AutoLoad()]
-            default = []
+            field = Field(
+                default_factory=list,
+                validation_alias=validation_alias,
+                serialization_alias=selection.alias,
+            ) if selection.alias else Field(
+                default_factory=list,
+                validation_alias=validation_alias,
+            )
         else:
             base_type = Annotated[Optional[nested_model], _AutoLoad()]
-            default = None
+            field = Field(
+                default=None,
+                validation_alias=validation_alias,
+                serialization_alias=selection.alias,
+            ) if selection.alias else Field(
+                default=None,
+                validation_alias=validation_alias,
+            )
 
-        return self._apply_alias((base_type, default), selection.alias)
+        return (base_type, field)
 
     def _is_scalar_relationship(self, relationship: Relationship) -> bool:
         """Check if a relationship targets a scalar type (not a BaseModel)."""
@@ -552,6 +588,11 @@ class ResponseBuilder:
         except Exception:
             return {}
 
+    def _is_entity_from_attributes_enabled(self, entity: type) -> bool:
+        if not safe_issubclass(entity, BaseModel):
+            return False
+        return bool(entity.model_config.get("from_attributes"))
+
     def _create_model(
         self,
         entity: type,
@@ -590,9 +631,13 @@ class ResponseBuilder:
 
         # Create model with config to serialize enums as their names (GraphQL convention)
         # Enable from_attributes to allow Pydantic instances as input (for nested relationships)
+        enable_from_attributes = (
+            self.enable_from_attribute_in_type_adapter
+            or self._is_entity_from_attributes_enabled(entity)
+        )
         config = ConfigDict(
             use_enum_values=False,
-            from_attributes=self.enable_from_attribute_in_type_adapter
+            from_attributes=enable_from_attributes
         )
 
         dynamic_model = create_model(

@@ -191,7 +191,7 @@ def test_validate_unique_field_name_in_relationships():
     diagram = BASE_ENTITY.get_diagram()
 
     # Check each entity config for unique field_name
-    for entity_cfg in diagram.configs:
+    for entity_cfg in diagram.entities:
         field_names = [rel.name for rel in entity_cfg.relationships]
 
         # Check for duplicates
@@ -208,7 +208,7 @@ def test_field_name_matches_loadby_field():
     diagram = BASE_ENTITY.get_diagram()
 
     # Get the Biz entity config
-    biz_config = next(cfg for cfg in diagram.configs if cfg.kls.__name__ == 'Biz')
+    biz_config = next(cfg for cfg in diagram.entities if cfg.kls.__name__ == 'Biz')
 
     # Extract field_names from relationships
     relationship_field_names = {rel.name for rel in biz_config.relationships}

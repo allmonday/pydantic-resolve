@@ -11,14 +11,12 @@ from typing import Optional
 from pydantic_resolve import config_global_resolver
 from pydantic_resolve import GraphQLHandler, SchemaBuilder
 
-# from demo.graphql.entities import BaseEntity
-from demo.graphql.entities_v2 import diagram_v2
+from demo.graphql.entities_v3 import diagram_v3, init_db_v3
 
-# diagram = BaseEntity.get_diagram()  # 获取 V1 实体图
-diagram = diagram_v2
+diagram = diagram_v3
 
 # 创建 FastAPI 应用
-app = FastAPI(diagram = diagram,  # 获取 V1 实体图
+app = FastAPI(diagram=diagram,
     title="Pydantic Resolve GraphQL Demo",
     description="演示 pydantic-resolve 的 GraphQL 查询功能",
     version="1.0.0"
@@ -36,6 +34,12 @@ app.add_middleware(
 # 配置全局 resolver
 config_global_resolver(diagram)
 
+
+@app.on_event("startup")
+async def startup():
+    """Initialize database tables and seed data."""
+    await init_db_v3()
+
 # 创建 GraphQL handler 和 schema builder
 handler = GraphQLHandler(diagram, enable_from_attribute_in_type_adapter=True)
 schema_builder = SchemaBuilder(diagram)
@@ -46,73 +50,8 @@ class GraphQLRequest(BaseModel):
     operationName: Optional[str] = None
 
 
-# GraphiQL Playground HTML
-GRAPHIQL_HTML = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>GraphiQL - Pydantic Resolve Demo</title>
-  <style>
-    body { margin: 0; }
-    #graphiql { height: 100dvh; }
-    .loading {
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 2rem;
-    }
-  </style>
-  <link rel="stylesheet" href="https://esm.sh/graphiql/dist/style.css" />
-  <link rel="stylesheet" href="https://esm.sh/@graphiql/plugin-explorer/dist/style.css" />
-  <script type="importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react@19.1.0",
-        "react/jsx-runtime": "https://esm.sh/react@19.1.0/jsx-runtime",
-        "react-dom": "https://esm.sh/react-dom@19.1.0",
-        "react-dom/client": "https://esm.sh/react-dom@19.1.0/client",
-        "@emotion/is-prop-valid": "data:text/javascript,",
-        "graphiql": "https://esm.sh/graphiql?standalone&external=react,react-dom,@graphiql/react,graphql",
-        "graphiql/": "https://esm.sh/graphiql/",
-        "@graphiql/plugin-explorer": "https://esm.sh/@graphiql/plugin-explorer?standalone&external=react,@graphiql/react,graphql",
-        "@graphiql/react": "https://esm.sh/@graphiql/react?standalone&external=react,react-dom,graphql,@emotion/is-prop-valid",
-        "@graphiql/toolkit": "https://esm.sh/@graphiql/toolkit?standalone&external=graphql",
-        "graphql": "https://esm.sh/graphql@16.11.0"
-      }
-    }
-  </script>
-</head>
-<body>
-  <div id="graphiql">
-    <div class="loading">Loading…</div>
-  </div>
-  <script type="module">
-    import React from 'react';
-    import ReactDOM from 'react-dom/client';
-    import { GraphiQL, HISTORY_PLUGIN } from 'graphiql';
-    import { createGraphiQLFetcher } from '@graphiql/toolkit';
-    import { explorerPlugin } from '@graphiql/plugin-explorer';
-
-    const fetcher = createGraphiQLFetcher({ url: '/graphql' });
-    const plugins = [HISTORY_PLUGIN, explorerPlugin()];
-
-    function App() {
-      return React.createElement(GraphiQL, {
-        fetcher: fetcher,
-        plugins: plugins,
-      });
-    }
-
-    const container = document.getElementById('graphiql');
-    const root = ReactDOM.createRoot(container);
-    root.render(React.createElement(App));
-  </script>
-</body>
-</html>
-"""
+# GraphiQL Playground HTML (provided by library)
+GRAPHIQL_HTML = handler.get_graphiql_html(title="GraphiQL - Pydantic Resolve Demo")
 
 
 # 创建 GraphQL 路由

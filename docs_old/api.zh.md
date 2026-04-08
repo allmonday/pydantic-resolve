@@ -251,7 +251,7 @@ Entity(
 from pydantic_resolve import ErDiagram
 
 ErDiagram(
-    configs=[
+    entities=[
         Entity(kls=Comment, relationships=[...]),
         Entity(kls=User, relationships=[...])
     ],
@@ -261,7 +261,7 @@ ErDiagram(
 
 **参数：**
 
-- `configs` (list[Entity]): 实体定义列表
+- `entities` (list[Entity]): 实体定义列表
 - `description` (str | None): 可选的图表描述
 
 **使用方法：**
@@ -409,7 +409,7 @@ MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 ```python
 from pydantic_resolve import config_resolver, ErDiagram, Entity
 
-diagram = ErDiagram(configs=[...])
+diagram = ErDiagram(entities=[...])
 CustomResolver = config_resolver('CustomResolver', er_diagram=diagram)
 
 result = await CustomResolver().resolve(data)
@@ -478,6 +478,225 @@ class CommentResponse(BaseModel):
     # 字段名匹配 Relationship.name
     author: Annotated[Optional[User], AutoLoad()] = None
     moderator: Annotated[Optional[User], AutoLoad()] = None
+```
+
+#### ErDiagram.add_relationship()
+
+将外部生成的 entities（如从 ORM 检查生成的）合并到现有 `ErDiagram` 中。返回一个新的 `ErDiagram` 实例。
+
+对于相同 `kls` 的 Entity，合并规则如下：
+- **relationships**：按 `name` 合并（重复则抛出 `ValueError`）
+- **queries**：按方法名合并（重复则抛出 `ValueError`）
+- **mutations**：按方法名合并（重复则抛出 `ValueError`）
+
+新 `kls` 的 Entity 会被追加。
+
+```python
+from pydantic_resolve.integration.sqlalchemy import build_relationship
+from pydantic_resolve.integration.mapping import Mapping
+
+# 内联定义的 diagram
+BaseEntity = base_entity()
+class UserEntity(BaseModel, BaseEntity):
+    id: int
+    name: str
+
+diagram = BaseEntity.get_diagram()
+
+# ORM 生成的 entities
+sa_entities = build_relationship(
+    mappings=[
+        Mapping(entity=TaskDTO, orm=TaskORM),
+    ],
+    session_factory=async_session_factory,
+)
+
+# 合并
+merged_diagram = diagram.add_relationship(sa_entities)
+```
+
+
+## ORM 集成
+
+`pydantic_resolve.integration` 模块可以从 ORM 模型定义自动生成 `Relationship` + `DataLoader`，无需手写 loader。
+
+### 安装
+
+```bash
+pip install pydantic-resolve[sqlalchemy]   # SQLAlchemy
+pip install pydantic-resolve[django]       # Django
+pip install pydantic-resolve[tortoise]     # Tortoise ORM
+```
+
+### Mapping
+
+`Mapping` 是一个数据类，将 Pydantic DTO 映射到 ORM 模型。
+
+```python
+from pydantic_resolve.integration.mapping import Mapping
+
+Mapping(
+    entity=TaskDTO,           # Pydantic 模型
+    orm=TaskORM,              # ORM 模型
+    filters=[TaskORM.active == True],  # 可选的过滤条件
+)
+```
+
+**参数：**
+
+- `entity` (type): Pydantic DTO 类
+- `orm` (type): ORM 模型类
+- `filters` (list | None): 针对该目标的 ORM 过滤表达式
+
+### build_relationship()
+
+检查 ORM 关系定义，生成包含对应 `Relationship` 和 `DataLoader` 的 `list[Entity]`。
+
+**SQLAlchemy：**
+
+```python
+from pydantic_resolve.integration.sqlalchemy import build_relationship
+
+entities = build_relationship(
+    mappings=[
+        Mapping(entity=UserDTO, orm=UserORM),
+        Mapping(entity=PostDTO, orm=PostORM),
+        Mapping(entity=CommentDTO, orm=CommentORM),
+    ],
+    session_factory=async_session_factory,
+)
+```
+
+**Django：**
+
+```python
+from pydantic_resolve.integration.django import build_relationship
+
+entities = build_relationship(
+    mappings=[
+        Mapping(entity=UserDTO, orm=UserORM),
+        Mapping(entity=PostDTO, orm=PostORM),
+    ],
+    using='default',  # 可选的数据库别名
+)
+```
+
+**Tortoise：**
+
+```python
+from pydantic_resolve.integration.tortoise import build_relationship
+
+entities = build_relationship(
+    mappings=[
+        Mapping(entity=UserDTO, orm=UserORM),
+    ],
+)
+```
+
+**通用参数：**
+
+| 参数 | SQLAlchemy | Django | Tortoise |
+|------|-----------|--------|----------|
+| `mappings` | `list[Mapping]` | `list[Mapping]` | `list[Mapping]` |
+| `session_factory` | `Callable` | — | — |
+| `using` | — | `Any` | — |
+| `default_filter` | `Callable` | `Callable` | — |
+
+**`session_factory`**（SQLAlchemy）：返回 async `AsyncSession` 实例的可调用对象。
+
+**`using`**（Django）：数据库别名或返回别名的可调用对象。传递给 `QuerySet.using()`。
+
+**`default_filter`**（SQLAlchemy、Django）：`Callable[[type], list]` — 接收目标 ORM 类并返回过滤表达式。除非 Mapping 级别覆盖，否则应用于所有目标。
+
+### 支持的关系类型
+
+| 关系 | SQLAlchemy | Django | Tortoise |
+|------|-----------|--------|----------|
+| Many-to-One | 支持 | 支持 | 支持 |
+| One-to-Many | 支持 | 支持 | 支持 |
+| One-to-One（正向） | 支持 | 支持 | 支持 |
+| Reverse One-to-One | 支持 | 支持 | 支持 |
+| Many-to-Many | 支持 | 支持 | 支持 |
+
+**限制：**
+- SQLAlchemy：不支持复合外键（抛出 `NotImplementedError`）
+- SQLAlchemy：不支持没有显式 `secondary` 表的 `MANYTOMANY`
+- 未映射的 ORM 目标会被跳过并输出警告
+
+### 完整示例（SQLAlchemy）
+
+```python
+from pydantic import BaseModel
+from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from pydantic_resolve import (
+    Entity, ErDiagram, QueryConfig, config_global_resolver, base_entity,
+)
+from pydantic_resolve.integration.mapping import Mapping
+from pydantic_resolve.integration.sqlalchemy import build_relationship
+
+# --- ORM 模型 ---
+class Base(DeclarativeBase):
+    pass
+
+class UserORM(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String)
+    posts: Mapped[list["PostORM"]] = relationship(back_populates="author")
+
+class PostORM(Base):
+    __tablename__ = "posts"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String)
+    author_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    author: Mapped["UserORM"] = relationship(back_populates="posts")
+
+# --- DTO ---
+class UserDTO(BaseModel):
+    id: int
+    name: str
+
+class PostDTO(BaseModel):
+    id: int
+    title: str
+    author_id: int
+
+# --- 构建 ---
+engine = create_async_engine("sqlite+aiosqlite://")
+session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+entities = build_relationship(
+    mappings=[
+        Mapping(entity=UserDTO, orm=UserORM),
+        Mapping(entity=PostDTO, orm=PostORM),
+    ],
+    session_factory=session_factory,
+)
+
+diagram = ErDiagram(entities=entities)
+config_global_resolver(diagram)
+```
+
+生成的 loader 特性：
+- 使用 `load_only` / `only` 仅选取 DTO 所需的列
+- 应用 Mapping 级或默认过滤条件
+- 通过 `model_validate` 将 ORM 行转换为 DTO
+
+### DTO 校验
+
+`build_relationship` 会校验 DTO 的所有必填字段是否在 ORM 标量列中存在。如果必填的 DTO 字段在 ORM 中没有对应的列，会在启动时抛出 `ValueError`：
+
+```python
+class TaskDTO(BaseModel):
+    id: int
+    name: str
+    priority: str  # ORM 中不存在 → ValueError
+
+# ValueError: Required DTO fields not found in ORM scalar fields
+# for mapping TaskDTO -> TaskORM: priority
 ```
 
 

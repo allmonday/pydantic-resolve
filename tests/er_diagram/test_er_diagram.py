@@ -97,7 +97,7 @@ class FooNameLoader(DataLoader):
 
 
 diagram = ErDiagram(
-    configs=[
+    entities=[
         Entity(kls=Biz, relationships=[
             Relationship(fk='user_id', name='user', target=User, loader=UserLoader),
             Relationship(fk='user_id_str', name='user_2', fk_fn=int, target=User, loader=UserLoader),

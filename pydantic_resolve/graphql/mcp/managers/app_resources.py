@@ -38,7 +38,7 @@ class AppResources:
         Returns:
             Set of entity class names
         """
-        return {cfg.kls.__name__ for cfg in self.handler.er_diagram.configs}
+        return {cfg.kls.__name__ for cfg in self.handler.er_diagram.entities}
 
     @property
     def query_names(self) -> Set[str]:

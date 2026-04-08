@@ -248,7 +248,7 @@ async def create_user_with_input(input: CreateUserInput) -> UserEntityV2:
 async def temp_loader(ids: List[int]):
     return ids
 
-diagram_v2 = ErDiagram(configs=[
+diagram_v2 = ErDiagram(entities=[
     Entity(
         kls=UserEntityV2,
         relationships=[

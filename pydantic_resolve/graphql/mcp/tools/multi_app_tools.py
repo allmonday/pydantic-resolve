@@ -3,7 +3,7 @@
 This module provides MCP tools that implement progressive disclosure for GraphQL APIs.
 The tools are organized in 4 layers:
 - Layer 0: Application discovery (list_apps)
-- Layer 1: Operation listing (list_queries, list_mutations)
+- Layer 1: Operation listing (list_queries, list_mutations, get_full_schema)
 - Layer 2: Schema details (get_query_schema, get_mutation_schema)
 - Layer 3: Execution (graphql_query, graphql_mutation)
 """
@@ -26,14 +26,15 @@ if TYPE_CHECKING:
 def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None:
     """Register all multi-app MCP tools with the FastMCP server.
 
-    This function registers 7 tools that implement progressive disclosure:
+    This function registers 8 tools that implement progressive disclosure:
     1. list_apps - Discover available applications
     2. list_queries - List query operations for an app
     3. list_mutations - List mutation operations for an app
-    4. get_query_schema - Get detailed schema for a query
-    5. get_mutation_schema - Get detailed schema for a mutation
-    6. graphql_query - Execute a GraphQL query
-    7. graphql_mutation - Execute a GraphQL mutation
+    4. get_full_schema - Get complete schema for an app
+    5. get_query_schema - Get detailed schema for a query
+    6. get_mutation_schema - Get detailed schema for a mutation
+    7. graphql_query - Execute a GraphQL query
+    8. graphql_mutation - Execute a GraphQL mutation
 
     Args:
         mcp: The FastMCP server instance
@@ -157,6 +158,42 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
                 f"Or use graphql_mutation to execute."
             )
             return result
+        except ValueError as e:
+            return create_error_response(str(e), MCPErrors.APP_NOT_FOUND)
+        except Exception as e:
+            return create_error_response(str(e), MCPErrors.INTERNAL_ERROR)
+
+    # Layer 1: Full schema (for global view)
+    @mcp.tool()
+    def get_full_schema(app_name: str, response_type: str = "sdl") -> Dict[str, Any]:
+        """Get the complete GraphQL schema for an application.
+
+        Returns all types (entities, inputs, enums) and all operations
+        (queries and mutations) in one call. Use this when you need a
+        full overview of the API instead of exploring operation by operation.
+
+        Args:
+            app_name: Name of the application (required)
+            response_type: Response format - "sdl" or "introspection" (default: "sdl")
+
+        Returns:
+            Dictionary with complete schema information
+
+        Examples:
+            get_full_schema(app_name="blog", response_type="sdl")
+            get_full_schema(app_name="blog", response_type="introspection")
+        """
+        try:
+            app = manager.get_app(app_name)
+
+            if response_type == "sdl":
+                sdl = app.sdl_builder.generate()
+                return create_success_response({"sdl": sdl})
+
+            # introspection format
+            introspection_data = app.introspection_helper.introspection
+            return create_success_response({"introspection": introspection_data})
+
         except ValueError as e:
             return create_error_response(str(e), MCPErrors.APP_NOT_FOUND)
         except Exception as e:

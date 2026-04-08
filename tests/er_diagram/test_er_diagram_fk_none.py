@@ -43,7 +43,7 @@ class BarLoader(DataLoader):
         return [bar_map.get(k, []) for k in keys]
 
 diagram = ErDiagram(
-    configs=[
+    entities=[
         Entity(kls=Biz, relationships=[
             Relationship(fk='user_id', name='user', target=User, loader=UserLoader),
             Relationship(fk='id', name='bars', target=list[Bar], fk_none_default_factory=list, loader=BarLoader),

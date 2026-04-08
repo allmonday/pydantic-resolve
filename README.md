@@ -9,39 +9,52 @@
 
 [中文版](./README.zh.md)
 
-![](./docs/images/features.png)
 
 ---
 
-**pydantic-resolve** is inspired by GraphQL. It builds database-independent application-layer Entity Relationship Diagrams using DataLoader, providing rich data assembly and post-processing capabilities. It can also auto-generate GraphQL queries and MCP services.
+**pydantic-resolve** helps you assemble nested response data with Pydantic models. The easiest way to learn it is in two stages: start with `resolve_*` and `post_*` for one endpoint, then move to ER Diagram + `AutoLoad` only when relationship wiring starts repeating across many models. The same ERD can also power GraphQL queries and MCP services.
 
-## Why pydantic-resolve?
+```mermaid
+flowchart TB
+    business["**Business Model**<br/>- Entity Relationships<br/>- Aggregate Root Methods"]
+    manual["**Manual Assembly**<br/>resolve / post / expose /<br/>collector ..."]
+    graphql["**Auto Generation**<br/>GraphQL"]
+    api["**Scenario**<br/>API Integration"]
+    mcp["**Scenario**<br/>MCP Service"]
+    ops["**Scenario**<br/>Query / Debug / Test /<br/>Admin UI"]
 
-**Core capabilities:**
-
-| Feature | What it does |
-|---------|--------------|
-| **Automatic Batching** | DataLoader eliminates N+1 queries automatically |
-| **Declarative Assembly** | Declare dependencies, framework handles the rest |
-| **ER Diagram + AutoLoad** | Define entity relationships, auto-resolve related data |
-| **GraphQL Support** | Generate schema from ERD, query with dynamic models |
-| **MCP Integration** | Expose GraphQL APIs to AI agents with progressive disclosure |
-
-**One line to fetch nested data:**
-
-```python
-class Task(BaseModel):
-    owner_id: int
-    owner: Optional[User] = None
-
-    def resolve_owner(self, loader=Loader(user_loader)):
-        return loader.load(self.owner_id)  # That's it!
-
-# Resolver automatically batches all owner lookups into one query
-result = await Resolver().resolve(tasks)
+    business --> manual
+    business --> graphql
+    manual --> api
+    graphql --> mcp
+    graphql --> ops
 ```
 
----
+## Read This README in Order
+
+We will reuse one example from start to finish:
+
+- `Sprint` has many `Task`
+- `Task` has one `owner`
+- The API also wants derived fields such as `task_count` and `contributors`
+
+The concepts appear in this order on purpose:
+
+1. `resolve_*`: fetch related data
+2. `post_*`: compute fields after nested data is ready
+3. `ExposeAs` / `SendTo`: pass data across layers when parent and child need to coordinate
+4. ER Diagram + `AutoLoad`: remove repeated relationship wiring once the model graph grows
+
+If you only need to solve a few endpoint-level N+1 issues, stop after the Core API sections. ERD mode is useful, but it is not the entry point.
+
+## What pydantic-resolve Gives You
+
+| Need | What you write | What the framework does |
+|------|----------------|-------------------------|
+| Load related data | `resolve_*` + `Loader(...)` | Batch lookups and map results back |
+| Compute derived fields | `post_*` | Run after descendants are fully resolved |
+| Share data across layers | `ExposeAs`, `SendTo`, `Collector` | Pass context down or aggregate data up |
+| Reuse relationship declarations | ER Diagram + `AutoLoad` | Centralize relationship wiring for many models |
 
 ## Quick Start
 
@@ -52,212 +65,322 @@ pip install pydantic-resolve
 pip install pydantic-resolve[mcp]  # with MCP support
 ```
 
-### The N+1 Problem
+### Step 1: Solve One N+1 Problem with `resolve_*`
+
+Start with the smallest useful case: each task has an `owner_id`, and you want an `owner` object on the response model.
 
 ```python
-# Traditional: 1 + N queries
-for task in tasks:
-    task.owner = await get_user(task.owner_id)  # N queries!
+from typing import Optional
+
+from pydantic import BaseModel
+from pydantic_resolve import Loader, Resolver, build_object
+
+
+class UserView(BaseModel):
+    id: int
+    name: str
+
+
+async def user_loader(user_ids: list[int]):
+    users = await db.query(User).filter(User.id.in_(user_ids)).all()
+    return build_object(users, user_ids, lambda user: user.id)
+
+
+class TaskView(BaseModel):
+    id: int
+    title: str
+    owner_id: int
+    owner: Optional[UserView] = None
+
+    def resolve_owner(self, loader=Loader(user_loader)):
+        return loader.load(self.owner_id)
+
+
+tasks = [TaskView.model_validate(task) for task in raw_tasks]
+tasks = await Resolver().resolve(tasks)
 ```
 
-### The pydantic-resolve Solution
+That is the core idea of the library:
+
+- `owner` is missing data, so you describe how to fetch it.
+- `user_loader` receives all requested `owner_id` values together.
+- `Resolver().resolve(...)` walks the model tree and fills the field.
+
+A useful mental model is: **`resolve_*` means "this field needs data from outside the current node."**
+
+### Step 2: Compose the Same Pattern for Nested Trees
+
+Now add one more relationship: `Sprint -> tasks`. `TaskView` already knows how to load `owner`, so the resolver can keep walking the tree recursively.
 
 ```python
-from pydantic import BaseModel
-from typing import Optional, List
-from pydantic_resolve import Resolver, Loader, build_list
+from typing import List
 
-# 1. Define your loaders (batch queries)
-async def user_loader(ids: list[int]):
-    users = await db.query(User).filter(User.id.in_(ids)).all()
-    return build_list(users, ids, lambda u: u.id)
+from pydantic_resolve import build_list
+
 
 async def task_loader(sprint_ids: list[int]):
     tasks = await db.query(Task).filter(Task.sprint_id.in_(sprint_ids)).all()
-    return build_list(tasks, sprint_ids, lambda t: t.sprint_id)
+    return build_list(tasks, sprint_ids, lambda task: task.sprint_id)
 
-# 2. Define your schema with resolve methods
-class TaskResponse(BaseModel):
+
+class SprintView(BaseModel):
     id: int
     name: str
-    owner_id: int
+    tasks: List[TaskView] = []
 
-    owner: Optional[dict] = None
-    def resolve_owner(self, loader=Loader(user_loader)):
-        return loader.load(self.owner_id)
-
-class SprintResponse(BaseModel):
-    id: int
-    name: str
-
-    tasks: List[TaskResponse] = []
     def resolve_tasks(self, loader=Loader(task_loader)):
         return loader.load(self.id)
 
-# 3. Resolve - framework handles batching automatically
-@app.get("/sprints")
-async def get_sprints():
-    sprints = await get_sprint_data()
-    return await Resolver().resolve([SprintResponse.model_validate(s) for s in sprints])
+
+sprints = [SprintView.model_validate(sprint) for sprint in raw_sprints]
+sprints = await Resolver().resolve(sprints)
 ```
 
-**Result:** 1 query per loader, regardless of data depth.
+**Result:** one query per loader, regardless of how many sprints or tasks you load.
 
----
+This is why `resolve_*` is the best place to start. You can get value from the library before learning any advanced features.
 
-## Core Concepts
+### Step 3: Add Derived Fields with `post_*`
 
-### Resolve: Declarative Data Loading
+`post_*` is the part that usually feels abstract at first. The simplest way to read it is this:
 
-Instead of imperative data fetching, declare what you need:
+- Use `resolve_*` when the field needs external data.
+- Use `post_*` when the field can be computed after the current subtree is already assembled.
+
+In the same sprint example, `task_count` and `contributor_names` are not fetched from another table. They are derived from already resolved `tasks` and `owner`.
 
 ```python
-class Task(BaseModel):
+class SprintView(BaseModel):
+    id: int
+    name: str
+    tasks: List[TaskView] = []
+    task_count: int = 0
+    contributor_names: list[str] = []
+
+    def resolve_tasks(self, loader=Loader(task_loader)):
+        return loader.load(self.id)
+
+    def post_task_count(self):
+        return len(self.tasks)
+
+    def post_contributor_names(self):
+        return sorted({task.owner.name for task in self.tasks if task.owner})
+```
+
+Execution order for one sprint looks like this:
+
+1. `resolve_tasks` loads the sprint's tasks.
+2. Each `TaskView.resolve_owner` loads its owner.
+3. `post_task_count` and `post_contributor_names` run after those nested fields are ready.
+
+That timing is the key idea. `post_*` is not another way to fetch nested data. It is the place to **finalize**, **summarize**, or **clean up** data that is already available.
+
+A short rule of thumb:
+
+| Question | `resolve_*` | `post_*` |
+|----------|-------------|----------|
+| Needs external IO? | Yes | Usually no |
+| Runs before descendants are ready? | Yes | No |
+| Good for counts, sums, labels, formatting? | Sometimes | Yes |
+| Return value gets resolved again? | Yes | No |
+
+`post_*` can also accept `context`, `parent`, `ancestor_context`, and `collector`, but you do not need those to understand the basic pattern.
+
+### Step 4: Advanced Cross-Layer Flow
+
+Most users can skip this on the first read. Reach for these tools only when parent and child nodes need to coordinate without hard-coding references to each other.
+
+- `ExposeAs`: send ancestor data downward
+- `SendTo` + `Collector`: send child data upward
+
+```python
+from typing import Annotated
+
+from pydantic_resolve import Collector, ExposeAs, SendTo
+
+
+class SprintView(BaseModel):
+    id: int
+    name: Annotated[str, ExposeAs('sprint_name')]
+    tasks: List[TaskView] = []
+    contributors: list[UserView] = []
+
+    def resolve_tasks(self, loader=Loader(task_loader)):
+        return loader.load(self.id)
+
+    def post_contributors(self, collector=Collector('contributors')):
+        return collector.values()
+
+
+class TaskView(BaseModel):
+    id: int
+    title: str
     owner_id: int
-    owner: Optional[User] = None
+    owner: Annotated[Optional[UserView], SendTo('contributors')] = None
+    full_title: str = ""
 
     def resolve_owner(self, loader=Loader(user_loader)):
         return loader.load(self.owner_id)
+
+    def post_full_title(self, ancestor_context):
+        return f"{ancestor_context['sprint_name']} / {self.title}"
 ```
 
-The framework:
-1. Collects all `owner_id` values
-2. Batches them into one query
-3. Maps results back to correct objects
+Use this only when the shape of the tree matters:
 
-### DataLoader: Automatic Batching
-
-DataLoader batches multiple requests within the same event loop tick:
-
-```python
-# Without DataLoader: 100 tasks = 100 user queries
-# With DataLoader: 100 tasks = 1 user query (WHERE id IN (...))
-
-async def user_loader(user_ids: list[int]):
-    return await db.query(User).filter(User.id.in_(user_ids)).all()
-```
-
-### Expose & Collect: Cross-layer Data Flow
-
-In nested data structures, parent and child nodes often need to share data. Traditional approaches require explicit parameter passing or tight coupling. pydantic-resolve provides two declarative mechanisms:
-
-- **ExposeAs**: Parent nodes expose data to all descendants (downward flow)
-- **SendTo + Collector**: Child nodes send data to parent collectors (upward flow)
-
-This creates a clean separation — parent doesn't need to know child's structure, and child doesn't need explicit parent references.
-
-```python
-from pydantic_resolve import ExposeAs, Collector, SendTo
-from typing import Annotated
-
-# 1. Parent EXPOSES data to descendants (downward flow)
-class Story(BaseModel):
-    name: Annotated[str, ExposeAs('story_name')]
-    tasks: List[Task] = []
-
-# 2. Child ACCESSES ancestor context (no explicit parent reference needed)
-class Task(BaseModel):
-    def post_full_path(self, ancestor_context):
-        return f"{ancestor_context['story_name']} / {self.name}"
-
-# 3. Child SENDS data to parent collector (upward flow)
-class Task(BaseModel):
-    owner: Annotated[User, SendTo('contributors')] = None
-
-class Story(BaseModel):
-    contributors: List[User] = []
-    def post_contributors(self, collector=Collector('contributors')):
-        return collector.values()  # Auto-deduplicated list of all task owners
-```
-
-**Use cases:**
-- Pass configuration/context down to nested objects (e.g., user permissions, locale)
-- Aggregate results up from nested objects (e.g., collect all unique tags from posts)
+- A child needs ancestor context, such as a sprint name or permissions.
+- A parent needs to aggregate values from many descendants, such as all contributors or tags.
 
 ---
 
-## Declarative Mode: ER Diagram + AutoLoad
+## When ER Diagram + AutoLoad Becomes Worth It
 
-Quick Start and Core Concepts demonstrate pydantic-resolve's **Core API**: writing `resolve_*` methods and manually specifying Loaders. For simple use cases, this is sufficient.
+Up to this point, the Core API is enough. Stay there until relationship declarations start repeating across many response models.
 
-When a project involves multiple interrelated entities, pydantic-resolve offers a **Declarative API**: define entity relationships and default loaders in an ER Diagram, then use `AutoLoad` to auto-generate the corresponding resolve methods.
+A common signal is when you see the same relation described again and again:
 
-Declarative API is built on top of Core API. `AutoLoad` fields generate equivalent `resolve_*` methods at runtime, so both modes can be freely mixed — you can still use `post_*` methods in Declarative Mode, or fall back to hand-written `resolve_*` for specific fields.
+- `TaskCard.resolve_owner`
+- `TaskDetail.resolve_owner`
+- `SprintBoard.resolve_tasks`
+- `SprintReport.resolve_tasks`
 
-| | Core API | Declarative API |
-|--|----------|-----------------|
-| **Approach** | Hand-write `resolve_*` + specify `Loader` | Define ER Diagram + `AutoLoad` |
-| **Control** | Full control | Convention over configuration |
-| **Best for** | Simple projects, one-off data loading | Multiple related entities, GraphQL/MCP needed |
-| **Relationships** | Scattered across Response classes | Centralized in ER Diagram |
+At that point, the problem is no longer "how do I load this field?" but "where is the source of truth for relationships?"
 
-### Define Entities and Relationships
+### Cost vs Benefit
 
-Create a base class with `base_entity()`, then define relationships in `__relationships__`:
+| Question | Hand-written Core API | ER Diagram + `AutoLoad` |
+|----------|------------------------|--------------------------|
+| First endpoint | Faster | Slower |
+| Upfront setup | Low | Medium |
+| Reusing the same relation in many models | Repetitive | Centralized |
+| Changing a relationship later | Update many `resolve_*` methods | Update one ERD declaration |
+| GraphQL / MCP generation | Separate work | Natural extension |
+
+ERD mode asks for more discipline up front:
+
+- Define entity classes.
+- Declare relationships explicitly.
+- Create `AutoLoad` from the same `diagram` used by the resolver.
+
+That setup cost is real. The payoff is that relationship knowledge moves into one place.
+
+### The Same Example in ERD Mode
+
+Here is the same `Sprint -> Task -> User` example after moving relationship wiring into an ER Diagram:
 
 ```python
-from pydantic import BaseModel
 from typing import Annotated, Optional
-from pydantic_resolve import base_entity, Relationship, config_global_resolver
+
+from pydantic import BaseModel
+from pydantic_resolve import Relationship, base_entity, config_global_resolver
+
 
 BaseEntity = base_entity()
+
 
 class UserEntity(BaseModel, BaseEntity):
     id: int
     name: str
 
+
 class TaskEntity(BaseModel, BaseEntity):
     __relationships__ = [
-        # Loader can query Postgres, call RPC, or fetch from Redis
-        # API consumers don't need to know where data comes from
-        Relationship(fk='owner_id', target=UserEntity, name='owner', loader=user_loader)
+        Relationship(fk='owner_id', name='owner', target=UserEntity, loader=user_loader)
+    ]
+    id: int
+    title: str
+    owner_id: int
+
+
+class SprintEntity(BaseModel, BaseEntity):
+    __relationships__ = [
+        Relationship(fk='id', name='tasks', target=list[TaskEntity], loader=task_loader)
     ]
     id: int
     name: str
-    owner_id: int  # Internal FK, can be hidden from API
+
 
 diagram = BaseEntity.get_diagram()
 AutoLoad = diagram.create_auto_load()
 config_global_resolver(diagram)
+
+
+class TaskView(TaskEntity):
+    owner: Annotated[Optional[UserEntity], AutoLoad()] = None
+
+
+class SprintView(SprintEntity):
+    tasks: Annotated[list[TaskView], AutoLoad()] = []
+    task_count: int = 0
+
+    def post_task_count(self):
+        return len(self.tasks)
 ```
 
-You can also use external declaration (`ErDiagram` + `Entity`) to separate relationship definitions from entity classes.
+Compared with the Core API version:
 
-### Use AutoLoad
+- `resolve_owner` disappears.
+- `resolve_tasks` disappears.
+- The relationship definitions live in one place.
+- `post_*` still works exactly the same.
 
-After defining the ER Diagram, annotate fields with `AutoLoad()` in Response models:
+If you want to hide internal FK fields such as `owner_id`, add `DefineSubset` on top of the ERD setup:
 
 ```python
 from pydantic_resolve import DefineSubset
 
-class TaskResponse(TaskEntity):
-    owner: Annotated[Optional[UserEntity], AutoLoad()] = None
-    # AutoLoad generates resolve_owner based on TaskEntity's __relationships__
 
-# Usage is identical to Core API
-result = await Resolver().resolve(tasks)
+class TaskSummary(DefineSubset):
+    __subset__ = (TaskEntity, ('id', 'title'))
+    owner: Annotated[Optional[UserEntity], AutoLoad()] = None
 ```
 
-Use `DefineSubset` to selectively expose fields and hide internal FKs:
+### If Your ORM Already Knows the Relationships
+
+Once ERD mode makes sense conceptually, you can let the ORM describe the relationships for you and import them into the application-layer ERD.
 
 ```python
-class TaskResponse(DefineSubset):
-    __subset__ = (TaskEntity, ('id', 'name'))  # owner_id excluded
-    owner: Annotated[Optional[UserEntity], AutoLoad()] = None
+from pydantic_resolve import ErDiagram
+from pydantic_resolve.integration.mapping import Mapping
+from pydantic_resolve.integration.sqlalchemy import build_relationship
+
+
+entities = build_relationship(
+    mappings=[
+        Mapping(entity=SprintEntity, orm=SprintORM),
+        Mapping(entity=TaskEntity, orm=TaskORM),
+        Mapping(entity=UserEntity, orm=UserORM),
+    ],
+    session_factory=session_factory,
+)
+
+diagram = ErDiagram(entities=[]).add_relationship(entities)
+AutoLoad = diagram.create_auto_load()
+config_global_resolver(diagram)
 ```
+
+`build_relationship` supports **SQLAlchemy**, **Django**, and **Tortoise ORM**. This is a good later optimization when your ORM metadata is already stable and you want to avoid duplicating relationship declarations.
+
+### A Practical Adoption Path
+
+1. Start with hand-written `resolve_*` and `post_*` on one endpoint.
+2. Move repeated relations into ERD when multiple models need the same wiring.
+3. Let `build_relationship()` read ORM metadata when the ORM is already the source of truth.
 
 ### When to Use Declarative Mode
 
-**Declarative Mode is a good fit when:**
-- The project has 3+ interrelated entities
-- You need to generate GraphQL schema or MCP services
-- The team needs centralized relationship management
-- You want to hide FK fields from API contracts
+**ERD mode is a good fit when:**
 
-**Core API is sufficient when:**
-- Only a few data loading requirements
-- Simple data source
-- No GraphQL or MCP needed
+- The project has 3+ related entities reused across multiple response models.
+- The team wants one shared place to inspect and discuss relationships.
+- You want GraphQL or MCP generated from the same model graph.
+- You want to hide FK fields while keeping relationship definitions centralized.
+
+**Core API is usually enough when:**
+
+- You only have a few loading requirements.
+- You want each endpoint to stay maximally explicit.
+- The response shape is still changing quickly.
 
 [→ Full ERD-Driven Guide](https://allmonday.github.io/pydantic-resolve/erd_driven/)
 

@@ -1,5 +1,5 @@
 site_name: Pydantic-resolve
-site_description: "a business model friendly data orchestration tool, simple way to implement the core concept of clean architecture."
+site_description: "Declarative data assembly for Pydantic — eliminate N+1 queries with minimal code."
 site_url: https://allmonday.github.io/pydantic-resolve
 site_author: tangkikodo
 theme:
@@ -7,8 +7,6 @@ theme:
   icon:
     repo: fontawesome/brands/github
   features:
-    # - navigation.instant
-    # - navigation.sections
     - navigation.tabs
     - navigation.tabs.sticky
     - content.links.target_blank
@@ -17,38 +15,33 @@ repo_name: allmonday/pydantic-resolve
 repo_url: https://github.com/allmonday/pydantic-resolve
 edit_uri: ""
 
-# nav:
-#   - Quick Start:
-#       - Install: ./v1/index.md
-#       - Let's start: ./v1/about.md
-#       - Dataloader: ./v1/dataloader.md
-#       - Inheritance: ./v1/inherit.md
-#       - Tree: ./v1/tree.md
-#       - Philosophy: ./v1/philosophy.md
-#   - Reference:
-#       - API: ./v1/reference_api.md
-#   - Change log:
-#       - pydantic-resolve: ./v1/changelog.md
-
 nav:
-  - Quick Start:
-      - Introduction: ./introduction.md
-      - Install: ./install.md
-      # - Use cases: ./use_case.md
-      # - Schema first: ./schema_first.md
-  - Features:
-      - Dataloader: ./dataloader.md
-      - ERD Driven Pattern: ./erd_driven.md
-      - Inherit and reuse: ./inherit_reuse.md
-      - Expose and collect: ./expose_and_collect.md
-      - Connect to UI: ./connect_to_ui.md
-      - GraphQL Support: ./graphql.md
-  - API:
-      - Reference: ./api.md
-      - Migration Guide: ./migration.md
-      - Change log: ./changelog.md
-  - Others:
-      - Why create it: ./why.md
+  - Guide:
+    - Overview: ./index.md
+    - Quick Start: ./quick_start.md
+    - Core API: ./core_api.md
+    - Post Processing: ./post_processing.md
+    - Cross-Layer Data Flow: ./cross_layer_data_flow.md
+    - ERD and AutoLoad: ./erd_and_autoload.md
+  - Advanced:
+    - DataLoader Deep Dive: ./dataloader_deep_dive.md
+    - ERD with DefineSubset: ./erd_define_subset.md
+    - ORM Integration: ./orm_integration.md
+    - FastAPI Integration: ./fastapi_integration.md
+    - GraphQL Guide: ./graphql_guide.md
+    - MCP Service: ./mcp_service.md
+    - Voyager Visualization: ./voyager_guide.md
+  - API Reference:
+    - Resolver: ./api_resolver.md
+    - DataLoader Utilities: ./api_dataloader.md
+    - Cross-Layer Annotations: ./api_cross_layer.md
+    - ER Diagram: ./api_erd.md
+    - DefineSubset: ./api_subset.md
+    - GraphQL API: ./api_graphql.md
+    - MCP API: ./api_mcp.md
+  - Reference:
+    - Migration Guide: ./migration.md
+    - Changelog: ./changelog.md
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -74,27 +67,32 @@ plugins:
           build: true
           link: "/pydantic-resolve/zh/"
           nav_translations:
+            Guide: "指南"
+            Advanced: "进阶"
+            API Reference: "API 参考"
+            Reference: "参考"
+            Overview: "总览"
             Quick Start: "快速开始"
-            Introduction: "简介"
-            Use cases: "应用场景"
-            Why create it: "为何写个新的库?"
-            Schema first: "定义数据结构"
-            Features: "功能介绍"
-            Dataloader: "数据加载器"
-            Inherit and reuse: "继承和复用"
-            Expose and collect: "提供和收集"
-            Reference: "文档"
-            Connect to UI: "连接UI"
-            GraphQL Support: "GraphQL 支持"
-            ERD Driven Pattern: "ERD 驱动开发"
+            Core API: "核心 API"
+            Post Processing: "后处理"
+            Cross-Layer Data Flow: "跨层数据流"
+            ERD and AutoLoad: "ERD 与 AutoLoad"
+            DataLoader Deep Dive: "DataLoader 深入"
+            ERD with DefineSubset: "ERD 与 DefineSubset"
+            ORM Integration: "ORM 集成"
+            FastAPI Integration: "FastAPI 集成"
+            GraphQL Guide: "GraphQL 指南"
+            MCP Service: "MCP 服务"
+            Voyager Visualization: "Voyager 可视化"
+            Resolver: "Resolver"
+            DataLoader Utilities: "DataLoader 工具"
+            Cross-Layer Annotations: "跨层注解"
+            ER Diagram: "ER 图"
+            DefineSubset: "DefineSubset"
+            GraphQL API: "GraphQL API"
+            MCP API: "MCP API"
             Change log: "变更记录"
             Migration Guide: "迁移指南"
-            Install: "安装"
-            Let's start: "开始"
-            Inheritance: "继承"
-            Philosophy: "迷思"
-            Others: "其他"
-            Install: "安装"
 
 extra:
   analytics:

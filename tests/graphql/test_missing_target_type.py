@@ -71,7 +71,7 @@ class TestErDiagramMissingTargetType:
         - UserEntity's Relationship references ProfileInfo as target_kls
         - Check if introspection's types list includes ProfileInfo
         """
-        diagram = ErDiagram(configs=[
+        diagram = ErDiagram(entities=[
             Entity(
                 kls=UserEntityForManualConfig,
                 relationships=[
@@ -102,7 +102,7 @@ class TestErDiagramMissingTargetType:
         """
         Verify that SDLBuilder correctly generates type definitions for target_kls.
         """
-        diagram = ErDiagram(configs=[
+        diagram = ErDiagram(entities=[
             Entity(
                 kls=UserEntityForManualConfig,
                 relationships=[
@@ -136,7 +136,7 @@ class TestErDiagramMissingTargetType:
         - UserEntity's Relationship references ContactInfo
         - Both ContactInfo and AddressInfo should be in types list
         """
-        diagram = ErDiagram(configs=[
+        diagram = ErDiagram(entities=[
             Entity(
                 kls=UserEntityForManualConfig,
                 relationships=[
@@ -167,7 +167,7 @@ class TestErDiagramMissingTargetType:
         If a field's type references "ProfileInfo", then "ProfileInfo" must
         be defined in the types list.
         """
-        diagram = ErDiagram(configs=[
+        diagram = ErDiagram(entities=[
             Entity(
                 kls=UserEntityForManualConfig,
                 relationships=[
@@ -253,7 +253,7 @@ class TestBaseEntityRelationships:
             profile_id: int
 
         diagram = BaseEntity.get_diagram()
-        config_class_names = {cfg.kls.__name__ for cfg in diagram.configs}
+        config_class_names = {cfg.kls.__name__ for cfg in diagram.entities}
 
         # Both entities should be collected
         assert 'UserEntityTest' in config_class_names, \
@@ -313,7 +313,7 @@ class TestIntrospectionSDLConsistency:
 
         When target_kls is not in configs, both should handle it consistently.
         """
-        diagram = ErDiagram(configs=[
+        diagram = ErDiagram(entities=[
             Entity(
                 kls=UserEntityForManualConfig,
                 relationships=[
@@ -352,7 +352,7 @@ class TestIntrospectionSDLConsistency:
         """
         Verify nested types are collected consistently.
         """
-        diagram = ErDiagram(configs=[
+        diagram = ErDiagram(entities=[
             Entity(
                 kls=UserEntityForManualConfig,
                 relationships=[
@@ -403,7 +403,7 @@ class TestEdgeCases:
         """
         Test that list[TargetType] where TargetType is not registered works.
         """
-        diagram = ErDiagram(configs=[
+        diagram = ErDiagram(entities=[
             Entity(
                 kls=UserEntityForManualConfig,
                 relationships=[
@@ -430,7 +430,7 @@ class TestEdgeCases:
         """
         Test multiple relationships referencing the same unregistered type.
         """
-        diagram = ErDiagram(configs=[
+        diagram = ErDiagram(entities=[
             Entity(
                 kls=UserEntityForManualConfig,
                 relationships=[

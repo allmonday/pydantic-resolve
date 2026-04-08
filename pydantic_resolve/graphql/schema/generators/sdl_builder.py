@@ -48,7 +48,7 @@ class SDLBuilder(SchemaGenerator):
         processed_enums = set()
 
         # Build all entity types
-        for entity_cfg in self.er_diagram.configs:
+        for entity_cfg in self.er_diagram.entities:
             type_def = self._build_type_definition(entity_cfg)
             type_defs.append(type_def)
             processed_types.add(entity_cfg.kls)
@@ -287,7 +287,7 @@ class SDLBuilder(SchemaGenerator):
 
     def _get_entity_by_name(self, name: str):
         """Find entity class by name from ERD."""
-        for cfg in self.er_diagram.configs:
+        for cfg in self.er_diagram.entities:
             if cfg.kls.__name__ == name:
                 return cfg.kls
         return None
@@ -463,7 +463,7 @@ class SDLBuilder(SchemaGenerator):
 
     def _validate_all_entities(self) -> None:
         """Validate field name conflicts for all entities."""
-        for entity_cfg in self.er_diagram.configs:
+        for entity_cfg in self.er_diagram.entities:
             self._validate_entity_fields(entity_cfg)
 
     def _validate_entity_fields(self, entity_cfg) -> None:
@@ -495,7 +495,7 @@ class SDLBuilder(SchemaGenerator):
         types_to_check = list(processed_types)
 
         # Add target from relationships to types_to_check
-        for entity_cfg in self.er_diagram.configs:
+        for entity_cfg in self.er_diagram.entities:
             for rel in entity_cfg.relationships:
                 if isinstance(rel, Relationship):
                     # get_core_types handles list[T] and Optional[T] unwrapping
@@ -545,7 +545,7 @@ class SDLBuilder(SchemaGenerator):
                         except Exception:
                             pass
 
-        for entity_cfg in self.er_diagram.configs:
+        for entity_cfg in self.er_diagram.entities:
             query_methods = self._extract_query_methods(entity_cfg.kls)
             for method_info in query_methods:
                 method = method_info.get('method')
@@ -697,7 +697,7 @@ class SDLBuilder(SchemaGenerator):
         Returns:
             Method info dictionary or None if not found
         """
-        for entity_cfg in self.er_diagram.configs:
+        for entity_cfg in self.er_diagram.entities:
             if operation_type == "Query":
                 methods = self._extract_query_methods(entity_cfg.kls)
             else:
@@ -746,7 +746,7 @@ class SDLBuilder(SchemaGenerator):
                     type_name = core_type.__name__
                     if type_name not in visited:
                         # Check if it's an entity in our ER diagram
-                        for entity_cfg in self.er_diagram.configs:
+                        for entity_cfg in self.er_diagram.entities:
                             if entity_cfg.kls == core_type:
                                 visited.add(type_name)
                                 related_entities.add(core_type)
@@ -803,7 +803,7 @@ class SDLBuilder(SchemaGenerator):
 
         # Get entity config for relationship filtering
         entity_cfg = None
-        for cfg in self.er_diagram.configs:
+        for cfg in self.er_diagram.entities:
             if cfg.kls == entity:
                 entity_cfg = cfg
                 break

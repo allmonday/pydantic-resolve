@@ -285,7 +285,7 @@ Container for all entity relationship definitions.
 from pydantic_resolve import ErDiagram
 
 ErDiagram(
-    configs=[
+    entities=[
         Entity(kls=Comment, relationships=[...]),
         Entity(kls=User, relationships=[...])
     ],
@@ -295,7 +295,7 @@ ErDiagram(
 
 **Parameters:**
 
-- `configs` (list[Entity]): List of entity definitions
+- `entities` (list[Entity]): List of entity definitions
 - `description` (str | None): Optional description of the diagram
 
 #### Usage
@@ -443,7 +443,7 @@ Creates a new Resolver class with specific ERD configuration.
 ```python
 from pydantic_resolve import config_resolver, ErDiagram, Entity
 
-diagram = ErDiagram(configs=[...])
+diagram = ErDiagram(entities=[...])
 CustomResolver = config_resolver('CustomResolver', er_diagram=diagram)
 
 result = await CustomResolver().resolve(data)
@@ -541,6 +541,225 @@ config_global_resolver(BaseEntity.get_diagram())
 
 # Now default Resolver will use the ERD
 result = await Resolver().resolve(data)
+```
+
+#### ErDiagram.add_relationship()
+
+Merge externally-generated entities (e.g. from ORM inspection) into an existing `ErDiagram`. Returns a new `ErDiagram` instance.
+
+Merge rules for entities with the same `kls`:
+- **relationships**: merged by `name` (raises `ValueError` on duplicate)
+- **queries**: merged by method name (raises `ValueError` on duplicate)
+- **mutations**: merged by method name (raises `ValueError` on duplicate)
+
+Entities with a new `kls` are appended.
+
+```python
+from pydantic_resolve.integration.sqlalchemy import build_relationship
+from pydantic_resolve.integration.mapping import Mapping
+
+# Inline-defined diagram
+BaseEntity = base_entity()
+class UserEntity(BaseModel, BaseEntity):
+    id: int
+    name: str
+
+diagram = BaseEntity.get_diagram()
+
+# ORM-generated entities
+sa_entities = build_relationship(
+    mappings=[
+        Mapping(entity=TaskDTO, orm=TaskORM),
+    ],
+    session_factory=async_session_factory,
+)
+
+# Merge
+merged_diagram = diagram.add_relationship(sa_entities)
+```
+
+
+## ORM Integration
+
+The `pydantic_resolve.integration` module auto-generates `Relationship` + `DataLoader` from ORM model definitions, eliminating hand-written loaders.
+
+### Installation
+
+```bash
+pip install pydantic-resolve[sqlalchemy]   # SQLAlchemy
+pip install pydantic-resolve[django]       # Django
+pip install pydantic-resolve[tortoise]     # Tortoise ORM
+```
+
+### Mapping
+
+`Mapping` is a dataclass that maps a Pydantic DTO to an ORM model.
+
+```python
+from pydantic_resolve.integration.mapping import Mapping
+
+Mapping(
+    entity=TaskDTO,           # Pydantic model
+    orm=TaskORM,              # ORM model
+    filters=[TaskORM.active == True],  # Optional per-target filters
+)
+```
+
+**Parameters:**
+
+- `entity` (type): Pydantic DTO class
+- `orm` (type): ORM model class
+- `filters` (list | None): Per-target ORM filter expressions
+
+### build_relationship()
+
+Inspects ORM relationships and generates `list[Entity]` with matching `Relationship` and `DataLoader` definitions.
+
+**SQLAlchemy:**
+
+```python
+from pydantic_resolve.integration.sqlalchemy import build_relationship
+
+entities = build_relationship(
+    mappings=[
+        Mapping(entity=UserDTO, orm=UserORM),
+        Mapping(entity=PostDTO, orm=PostORM),
+        Mapping(entity=CommentDTO, orm=CommentORM),
+    ],
+    session_factory=async_session_factory,
+)
+```
+
+**Django:**
+
+```python
+from pydantic_resolve.integration.django import build_relationship
+
+entities = build_relationship(
+    mappings=[
+        Mapping(entity=UserDTO, orm=UserORM),
+        Mapping(entity=PostDTO, orm=PostORM),
+    ],
+    using='default',  # Optional database alias
+)
+```
+
+**Tortoise:**
+
+```python
+from pydantic_resolve.integration.tortoise import build_relationship
+
+entities = build_relationship(
+    mappings=[
+        Mapping(entity=UserDTO, orm=UserORM),
+    ],
+)
+```
+
+**Common Parameters:**
+
+| Parameter | SQLAlchemy | Django | Tortoise |
+|-----------|-----------|--------|----------|
+| `mappings` | `list[Mapping]` | `list[Mapping]` | `list[Mapping]` |
+| `session_factory` | `Callable` | — | — |
+| `using` | — | `Any` | — |
+| `default_filter` | `Callable` | `Callable` | — |
+
+**`session_factory`** (SQLAlchemy): A callable returning an async `AsyncSession` instance.
+
+**`using`** (Django): Database alias or callable returning one. Passed to `QuerySet.using()`.
+
+**`default_filter`** (SQLAlchemy, Django): `Callable[[type], list]` — receives the target ORM class and returns filter expressions. Applied to all targets unless overridden per-mapping.
+
+### Supported Relationship Types
+
+| Relationship | SQLAlchemy | Django | Tortoise |
+|-------------|-----------|--------|----------|
+| Many-to-One | yes | yes | yes |
+| One-to-Many | yes | yes | yes |
+| One-to-One (forward) | yes | yes | yes |
+| Reverse One-to-One | yes | yes | yes |
+| Many-to-Many | yes | yes | yes |
+
+**Limitations:**
+- SQLAlchemy: composite foreign keys are not supported (raises `NotImplementedError`)
+- SQLAlchemy: `MANYTOMANY` without explicit `secondary` table is not supported
+- Unmapped ORM targets are skipped with a warning
+
+### Complete Example (SQLAlchemy)
+
+```python
+from pydantic import BaseModel
+from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from pydantic_resolve import (
+    Entity, ErDiagram, QueryConfig, config_global_resolver, base_entity,
+)
+from pydantic_resolve.integration.mapping import Mapping
+from pydantic_resolve.integration.sqlalchemy import build_relationship
+
+# --- ORM Models ---
+class Base(DeclarativeBase):
+    pass
+
+class UserORM(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String)
+    posts: Mapped[list["PostORM"]] = relationship(back_populates="author")
+
+class PostORM(Base):
+    __tablename__ = "posts"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String)
+    author_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    author: Mapped["UserORM"] = relationship(back_populates="posts")
+
+# --- DTOs ---
+class UserDTO(BaseModel):
+    id: int
+    name: str
+
+class PostDTO(BaseModel):
+    id: int
+    title: str
+    author_id: int
+
+# --- Build ---
+engine = create_async_engine("sqlite+aiosqlite://")
+session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+entities = build_relationship(
+    mappings=[
+        Mapping(entity=UserDTO, orm=UserORM),
+        Mapping(entity=PostDTO, orm=PostORM),
+    ],
+    session_factory=session_factory,
+)
+
+diagram = ErDiagram(entities=entities)
+config_global_resolver(diagram)
+```
+
+The generated loaders:
+- Use `load_only` / `only` to select only the columns needed by the DTO
+- Apply per-mapping or default filters
+- Convert ORM rows to DTO via `model_validate`
+
+### DTO Validation
+
+`build_relationship` validates that all required DTO fields exist as scalar columns on the ORM model. If a required DTO field has no corresponding ORM column, a `ValueError` is raised at setup time:
+
+```python
+class TaskDTO(BaseModel):
+    id: int
+    name: str
+    priority: str  # Not in ORM → ValueError
+
+# ValueError: Required DTO fields not found in ORM scalar fields
+# for mapping TaskDTO -> TaskORM: priority
 ```
 
 

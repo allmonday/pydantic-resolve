@@ -27,7 +27,7 @@ async def test_resolver_factory():
 
 def test_config_resolver_good_case():
     er_configs = ErDiagram(
-        configs=[
+        entities=[
             Entity(
                 kls=User,
                 relationships=[
@@ -37,7 +37,7 @@ def test_config_resolver_good_case():
 
 
 def test_config_resolver_allow_duplicate_field_different_target():
-    er_configs = ErDiagram(configs=[
+    er_configs = ErDiagram(entities=[
         Entity(
             kls=User,
             relationships=[

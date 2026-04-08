@@ -60,7 +60,7 @@ class ErrorOnNonNumericLoader(DataLoader):
 async def test_field_fn_raises_value_error():
     """Test that field_fn raising ValueError is propagated."""
     diagram = ErDiagram(
-        configs=[
+        entities=[
             Entity(
                 kls=Order,
                 relationships=[
@@ -95,7 +95,7 @@ async def test_field_fn_raises_value_error():
 async def test_field_fn_with_none_value():
     """Test field_fn behavior when field value is None."""
     diagram = ErDiagram(
-        configs=[
+        entities=[
             Entity(
                 kls=Order,
                 relationships=[
@@ -132,7 +132,7 @@ async def test_field_fn_returns_none():
         return None
 
     diagram = ErDiagram(
-        configs=[
+        entities=[
             Entity(
                 kls=Order,
                 relationships=[
@@ -167,7 +167,7 @@ async def test_field_fn_returns_incompatible_type():
     """Test field_fn that returns incompatible type."""
     # field_fn returns string when loader expects int
     diagram = ErDiagram(
-        configs=[
+        entities=[
             Entity(
                 kls=Order,
                 relationships=[
@@ -199,7 +199,7 @@ async def test_field_fn_returns_incompatible_type():
 async def test_load_many_fn_with_none_field_value():
     """Test load_many_fn behavior when field value is None (returns None by default)."""
     diagram = ErDiagram(
-        configs=[
+        entities=[
             Entity(
                 kls=Order,
                 relationships=[
@@ -234,7 +234,7 @@ async def test_load_many_fn_with_none_field_value():
 async def test_load_many_fn_returns_none():
     """Test load_many_fn that returns None causes TypeError from DataLoader."""
     diagram = ErDiagram(
-        configs=[
+        entities=[
             Entity(
                 kls=Order,
                 relationships=[
@@ -269,7 +269,7 @@ async def test_load_many_fn_returns_none():
 async def test_load_many_fn_returns_non_iterable():
     """Test load_many_fn that returns non-iterable value."""
     diagram = ErDiagram(
-        configs=[
+        entities=[
             Entity(
                 kls=Order,
                 relationships=[
@@ -303,7 +303,7 @@ async def test_load_many_fn_returns_non_iterable():
 async def test_field_fn_with_valid_transformation():
     """Test field_fn with valid transformation (baseline test)."""
     diagram = ErDiagram(
-        configs=[
+        entities=[
             Entity(
                 kls=Order,
                 relationships=[
@@ -336,7 +336,7 @@ async def test_field_fn_with_valid_transformation():
 async def test_load_many_fn_with_valid_transformation():
     """Test load_many_fn with valid transformation (baseline test)."""
     diagram = ErDiagram(
-        configs=[
+        entities=[
             Entity(
                 kls=Order,
                 relationships=[

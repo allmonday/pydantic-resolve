@@ -115,7 +115,7 @@ class TestErDiagramBinding:
 
     def test_bind_query_to_entity(self):
         """测试将 Query 方法绑定到 Entity"""
-        _diagram = ErDiagram(configs=[
+        _diagram = ErDiagram(entities=[
             Entity(
                 kls=UserEntityForConfig,
                 relationships=[],
@@ -136,7 +136,7 @@ class TestErDiagramBinding:
 
     def test_bind_mutation_to_entity(self):
         """测试将 Mutation 方法绑定到 Entity"""
-        _diagram = ErDiagram(configs=[
+        _diagram = ErDiagram(entities=[
             Entity(
                 kls=PostEntityForConfig,
                 relationships=[],
@@ -157,7 +157,7 @@ class TestErDiagramBinding:
 
     def test_wrapper_ignores_cls_parameter(self):
         """测试包装器自动忽略 cls 参数"""
-        _diagram = ErDiagram(configs=[
+        _diagram = ErDiagram(entities=[
             Entity(
                 kls=UserEntityForConfig,
                 relationships=[],
@@ -176,7 +176,7 @@ class TestErDiagramBinding:
 
     def test_method_callable_without_cls(self):
         """测试绑定后的方法可以正常调用（无需传递 cls）"""
-        _diagram = ErDiagram(configs=[
+        _diagram = ErDiagram(entities=[
             Entity(
                 kls=UserEntityForConfig,
                 relationships=[],
@@ -217,7 +217,7 @@ class TestSchemaBuilderCompatibility:
 
     def test_schema_generation_with_config(self):
         """测试 SchemaBuilder 能正确识别配置化的方法"""
-        diagram = ErDiagram(configs=[
+        diagram = ErDiagram(entities=[
             Entity(
                 kls=UserEntityForConfig,
                 relationships=[],
@@ -243,7 +243,7 @@ class TestSchemaBuilderCompatibility:
 
     def test_mixed_decorator_and_config(self):
         """测试装饰器和配置混合使用"""
-        diagram = ErDiagram(configs=[
+        diagram = ErDiagram(entities=[
             Entity(kls=UserWithDecorator, relationships=[]),
             Entity(
                 kls=PostWithConfig,
@@ -290,7 +290,7 @@ class TestCircularReferenceScenario:
         但方法定义在外部，避免了循环导入。
         """
         # 配置 ErDiagram
-        diagram = ErDiagram(configs=[
+        diagram = ErDiagram(entities=[
             Entity(
                 kls=AuthorEntity,
                 relationships=[Relationship(fk='id', target=list[BookEntity], name='books')],
@@ -370,7 +370,7 @@ class TestMethodConflictDetection:
             return []
 
         with pytest.raises(ValueError, match="Method 'get_all' already exists in UserWithDecoratorForConflict"):
-            ErDiagram(configs=[
+            ErDiagram(entities=[
                 Entity(
                     kls=UserWithDecoratorForConflict,
                     relationships=[],
@@ -386,7 +386,7 @@ class TestMethodConflictDetection:
             return False
 
         with pytest.raises(ValueError, match="Method 'delete_entity' already exists in EntityWithMutationForConflict"):
-            ErDiagram(configs=[
+            ErDiagram(entities=[
                 Entity(
                     kls=EntityWithMutationForConflict,
                     relationships=[],

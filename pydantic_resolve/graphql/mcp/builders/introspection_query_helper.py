@@ -44,6 +44,11 @@ class IntrospectionQueryHelper:
         self._type_cache: dict[str, GraphQLType] = {}
         self._build_type_cache()
 
+    @property
+    def introspection(self) -> IntrospectionData:
+        """Get the full introspection data."""
+        return self._introspection
+
     def _build_type_cache(self) -> None:
         """Build a cache of type name to type info for quick lookup."""
         for type_info in self._introspection.get("types", []):

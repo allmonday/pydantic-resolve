@@ -113,11 +113,11 @@ class Entity(BaseModel):
                     )
 
 class ErDiagram(BaseModel):
-    configs: list[Entity]
+    entities: list[Entity]
 
     @model_validator(mode="after")
     def _validate_configs(self) -> "ErDiagram":
-        cfgs = self.configs or []
+        cfgs = self.entities or []
         seen = set()
         seen_names = {}
         for cfg in cfgs:
@@ -154,7 +154,7 @@ class ErDiagram(BaseModel):
             ValueError: If a pydantic-resolve method with the same name already exists
                 on the target class (defined via decorator)
         """
-        for entity_cfg in self.configs:
+        for entity_cfg in self.entities:
             kls = entity_cfg.kls
 
             for query_cfg in entity_cfg.queries:
@@ -235,12 +235,114 @@ class ErDiagram(BaseModel):
             class MyResponse(Biz):
                 user: Annotated[Optional[User], AutoLoad()] = None
         """
-        er_configs_map = {config.kls: config for config in self.configs}
+        er_configs_map = {config.kls: config for config in self.entities}
 
         def _auto_load(origin: str | None = None) -> LoaderInfo:
             return LoaderInfo(origin=origin, _er_configs_map=er_configs_map)
 
         return _auto_load
+
+    def add_relationship(self, entities: list[Entity]) -> "ErDiagram":
+        """Return a new ErDiagram with entities merged by class.
+
+        Merge rules for entities with same `kls`:
+        - relationships: merged by `name` (error on duplicate)
+        - queries: merged by method name (error on duplicate)
+        - mutations: merged by method name (error on duplicate)
+        """
+        if not entities:
+            return ErDiagram(entities=list(self.entities), description=self.description)
+
+        seen_incoming = set()
+        for entity in entities:
+            if entity.kls in seen_incoming:
+                raise ValueError(f"Duplicate incoming entity.kls detected: {entity.kls}")
+            seen_incoming.add(entity.kls)
+
+        incoming_map = {entity.kls: entity for entity in entities}
+
+        def _merge_method_configs(
+            existing_items: list[QueryConfig] | list[MutationConfig],
+            incoming_items: list[QueryConfig] | list[MutationConfig],
+            *,
+            kind: str,
+            kls: type,
+        ) -> list[QueryConfig] | list[MutationConfig]:
+            from pydantic_resolve.graphql.utils.naming import to_graphql_field_name
+
+            def _to_operation_name(cfg: QueryConfig | MutationConfig) -> str:
+                base_name = cfg.name or cfg.method.__name__
+                return to_graphql_field_name(kls.__name__, base_name)
+
+            merged = list(existing_items)
+            seen_method_names = {cfg.method.__name__ for cfg in existing_items}
+            seen_operation_names = {_to_operation_name(cfg) for cfg in existing_items}
+
+            for cfg in incoming_items:
+                method_name = cfg.method.__name__
+                if method_name in seen_method_names:
+                    raise ValueError(
+                        f"Duplicate {kind} method detected in {kls.__name__}: '{method_name}'"
+                    )
+
+                operation_name = _to_operation_name(cfg)
+                if operation_name in seen_operation_names:
+                    raise ValueError(
+                        f"Duplicate {kind} operation name detected in {kls.__name__}: '{operation_name}'"
+                    )
+
+                merged.append(cfg)
+                seen_method_names.add(method_name)
+                seen_operation_names.add(operation_name)
+
+            return merged
+
+        merged_configs: list[Entity] = []
+        existing_kls = {cfg.kls for cfg in self.entities}
+
+        for cfg in self.entities:
+            incoming = incoming_map.get(cfg.kls)
+            if incoming is None:
+                merged_configs.append(cfg)
+                continue
+
+            merged_relationships = list(cfg.relationships)
+            seen_relationship_names = {rel.name for rel in merged_relationships}
+            for rel in incoming.relationships:
+                if rel.name in seen_relationship_names:
+                    raise ValueError(
+                        f"Duplicate relationship name detected in {cfg.kls.__name__}: '{rel.name}'"
+                    )
+                merged_relationships.append(rel)
+                seen_relationship_names.add(rel.name)
+
+            merged_queries = _merge_method_configs(
+                cfg.queries,
+                incoming.queries,
+                kind='query',
+                kls=cfg.kls,
+            )
+            merged_mutations = _merge_method_configs(
+                cfg.mutations,
+                incoming.mutations,
+                kind='mutation',
+                kls=cfg.kls,
+            )
+
+            merged_configs.append(
+                Entity(
+                    kls=cfg.kls,
+                    relationships=merged_relationships,
+                    queries=merged_queries,
+                    mutations=merged_mutations,
+                )
+            )
+
+        for incoming in entities:
+            if incoming.kls not in existing_kls:
+                merged_configs.append(incoming)
+
+        return ErDiagram(entities=merged_configs, description=self.description)
 
 
 class BaseEntity:  # just type (TODO: optimize)
@@ -333,7 +435,7 @@ def base_entity() -> type[BaseEntity]:
                 )
 
             resolved_configs.append(Entity(kls=kls, relationships=resolved_rels))
-        return ErDiagram(configs=resolved_configs)
+        return ErDiagram(entities=resolved_configs)
 
     class Base:
         def __init_subclass__(cls, **kwargs):
@@ -358,7 +460,7 @@ def base_entity() -> type[BaseEntity]:
 
 class ErLoaderPreGenerator:
     def __init__(self, er_diagram: ErDiagram | None) -> None:
-        self.er_configs_map = {config.kls: config for config in er_diagram.configs} if er_diagram else None
+        self.er_configs_map = {config.kls: config for config in er_diagram.entities} if er_diagram else None
 
     def _identify_entity(self, target: type) -> Entity:
         """Locate the matching ErConfig for a target class via compatibility check."""

@@ -1,8 +1,45 @@
-# Migration Guide (v3 to v4)
+# Migration Guide
+
+## v4 to v5
+
+v5.0 introduces one breaking rename. New features (ORM integration, GraphiQL, MCP schema) are additive and documented separately.
+
+### 1. `ErDiagram.configs` → `ErDiagram.entities`
+
+The `ErDiagram` constructor parameter is renamed from `configs` to `entities`.
+
+```python
+# v4
+diagram = ErDiagram(configs=[
+    Entity(kls=User, relationships=[...]),
+])
+
+# v5
+diagram = ErDiagram(entities=[
+    Entity(kls=User, relationships=[...]),
+])
+```
+
+If you use `base_entity()` with `__relationships__`, no change is needed — `get_diagram()` is updated internally.
+
+### 2. Forward references can use module-path syntax
+
+If you previously relied on same-module ordering or local `setattr(...)` workarounds for ER Diagram targets, you can now write forward refs as `'package.module:ClassName'`.
+
+```python
+Relationship(fk='owner_id', target='app.dto.user:UserDTO', name='owner')
+Relationship(fk='id', target=list['app.dto.post:PostDTO'], name='posts')
+```
+
+This is optional and backward compatible.
+
+---
+
+## v3 to v4
 
 v4.0 introduces breaking changes to the ER Diagram API, simplifying how relationships are defined.
 
-## 1. Relationship parameter renames
+### 1. Relationship parameter renames
 
 | v3 | v4 | Description |
 |----|----|-------------|
@@ -22,7 +59,7 @@ Relationship(fk='user_id', target=User, loader=user_loader, name='owner')
 Relationship(fk='id', target=list[Post], fk_none_default_factory=list, loader=post_loader, name='posts')
 ```
 
-## 2. Relationship `name` is now required (replaces `default_field_name`)
+### 2. Relationship `name` is now required (replaces `default_field_name`)
 
 `name` is the unique identifier for each relationship. It serves as the GraphQL field name and the lookup key for `AutoLoad`.
 
@@ -34,7 +71,7 @@ Relationship(field='owner_id', target_kls=User, loader=user_loader, default_fiel
 Relationship(fk='owner_id', target=User, loader=user_loader, name='owner')
 ```
 
-## 3. `LoadBy` replaced by `AutoLoad`
+### 3. `LoadBy` replaced by `AutoLoad`
 
 `AutoLoad` no longer requires a FK field name. It resolves the relationship by matching the field name against relationship `name` values. If the field name differs from the relationship name, use the `origin` parameter.
 
@@ -63,7 +100,7 @@ config_global_resolver(diagram)
 
 `LoadBy` parameters `biz` and `origin_kls` are removed. Use `Relationship.name` and `AutoLoad(origin=...)` instead.
 
-## 4. `MultipleRelationship` and `Link` removed
+### 4. `MultipleRelationship` and `Link` removed
 
 Multiple relationships to the same target entity are now expressed as separate `Relationship` entries, each with its own `name`, `loader`, and behavior.
 
@@ -82,7 +119,7 @@ Relationship(fk='user_id', target=list[Task], loader=created_loader, name='creat
 Relationship(fk='user_id', target=list[Task], loader=assigned_loader, name='assigned_tasks'),
 ```
 
-## 5. Deprecated `Resolver` parameters removed
+### 5. Deprecated `Resolver` parameters removed
 
 `loader_filters` and `global_loader_filter` (deprecated since v1.9.3) have been removed.
 
@@ -94,7 +131,7 @@ Resolver(loader_filters={...}, global_loader_filter={...})
 Resolver(loader_params={...}, global_loader_param={...})
 ```
 
-## 6. `field_fn` renamed to `fk_fn`
+### 6. `field_fn` renamed to `fk_fn`
 
 ```python
 # v3
@@ -104,7 +141,7 @@ Relationship(field='tags', target_kls=list[Tag], field_fn=lambda v: v.split(',')
 Relationship(fk='tags', target=list[Tag], fk_fn=lambda v: v.split(','), name='tags')
 ```
 
-## 7. `__pydantic_resolve_relationships__` removed
+### 7. `__pydantic_resolve_relationships__` removed
 
 Use `__relationships__` only.
 
@@ -118,11 +155,11 @@ class TaskEntity(BaseModel, BaseEntity):
     __relationships__ = [...]
 ```
 
-## 8. `LoaderDepend` removed
+### 8. `LoaderDepend` removed
 
 Use `Loader` only.
 
-## 9. `model_config` decorator removed
+### 9. `model_config` decorator removed
 
 Use `serialization` only.
 
