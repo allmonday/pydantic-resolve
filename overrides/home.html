@@ -1,0 +1,871 @@
+{% extends "main.html" %}
+
+{% block tabs %}
+{{ super() }}
+
+{#- Language detection -#}
+{% set is_zh = (i18n_file_locale | default('en')) == 'zh' %}
+
+{#- Translation macro -#}
+{% macro t(en, zh) %}{% if is_zh %}{{ zh }}{% else %}{{ en }}{% endif %}{% endmacro %}
+
+<style>
+  /* ========== CSS Variables ========== */
+  :root {
+    --pr-primary: #1a56db;
+    --pr-primary-dark: #1e3a8a;
+    --pr-accent: #06b6d4;
+    --pr-accent-light: #67e8f9;
+    --pr-success: #10b981;
+    --pr-danger: #ef4444;
+    --pr-bg: #f8fafc;
+    --pr-surface: #ffffff;
+    --pr-text: #1e293b;
+    --pr-text-secondary: #64748b;
+    --pr-gradient-start: #1a56db;
+    --pr-gradient-end: #06b6d4;
+    --pr-code-bg: #f1f5f9;
+    --pr-border: #e2e8f0;
+    --pr-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+    --pr-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
+  }
+
+  [data-md-color-scheme="slate"] {
+    --pr-primary: #6d9eeb;
+    --pr-primary-dark: #93bbf5;
+    --pr-accent: #22d3ee;
+    --pr-accent-light: #a5f3fc;
+    --pr-success: #34d399;
+    --pr-danger: #f87171;
+    --pr-bg: #0f172a;
+    --pr-surface: #1e293b;
+    --pr-text: #e2e8f0;
+    --pr-text-secondary: #94a3b8;
+    --pr-gradient-start: #1e3a8a;
+    --pr-gradient-end: #0e7490;
+    --pr-code-bg: #0f172a;
+    --pr-border: #334155;
+    --pr-shadow: 0 4px 6px -1px rgba(0,0,0,0.3), 0 2px 4px -2px rgba(0,0,0,0.3);
+    --pr-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.3), 0 4px 6px -4px rgba(0,0,0,0.3);
+  }
+
+  /* ========== Base Layout ========== */
+  .pr-page {
+    background: var(--pr-bg);
+    color: var(--pr-text);
+    overflow-x: hidden;
+  }
+
+  .pr-container {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* ========== Hero Section ========== */
+  .pr-hero {
+    position: relative;
+    padding: 100px 24px 80px;
+    text-align: center;
+    background: linear-gradient(135deg, var(--pr-gradient-start), var(--pr-gradient-end));
+    overflow: hidden;
+  }
+
+  .pr-hero::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at 30% 50%, rgba(255,255,255,0.08) 0%, transparent 50%),
+                radial-gradient(circle at 70% 80%, rgba(255,255,255,0.05) 0%, transparent 40%);
+    animation: pr-hero-glow 8s ease-in-out infinite alternate;
+  }
+
+  @keyframes pr-hero-glow {
+    0% { transform: translate(0, 0); }
+    100% { transform: translate(-2%, 2%); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pr-hero::before { animation: none; }
+    .pr-feature-card { transition: none !important; }
+    .pr-step { transition: none !important; }
+  }
+
+  .pr-hero__inner {
+    position: relative;
+    z-index: 1;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .pr-hero__badge {
+    display: inline-block;
+    padding: 6px 16px;
+    border-radius: 100px;
+    background: rgba(255,255,255,0.15);
+    backdrop-filter: blur(8px);
+    color: rgba(255,255,255,0.9);
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 24px;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+
+  .pr-hero__title {
+    font-size: 3.2rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 20px;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+  }
+
+  .pr-hero__subtitle {
+    font-size: 1.25rem;
+    color: rgba(255,255,255,0.85);
+    margin: 0 0 40px;
+    line-height: 1.6;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .pr-hero__actions {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 40px;
+  }
+
+  .pr-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 28px;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: transform 0.2s, box-shadow 0.2s;
+    cursor: pointer;
+    border: none;
+  }
+
+  .pr-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+  }
+
+  .pr-btn--primary {
+    background: #ffffff;
+    color: var(--pr-primary-dark);
+  }
+
+  .pr-btn--secondary {
+    background: rgba(255,255,255,0.15);
+    color: #ffffff;
+    border: 1px solid rgba(255,255,255,0.3);
+    backdrop-filter: blur(8px);
+  }
+
+  .pr-btn--secondary:hover {
+    background: rgba(255,255,255,0.25);
+  }
+
+  .pr-hero__install {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0,0,0,0.2);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 10px;
+    padding: 10px 20px;
+    font-family: 'Roboto Mono', monospace;
+    font-size: 0.95rem;
+    color: rgba(255,255,255,0.9);
+  }
+
+  .pr-hero__install code {
+    background: none;
+    color: inherit;
+    font-size: inherit;
+    padding: 0;
+  }
+
+  .pr-copy-btn {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.8);
+    border-radius: 6px;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: background 0.2s;
+  }
+
+  .pr-copy-btn:hover {
+    background: rgba(255,255,255,0.2);
+  }
+
+  .pr-copy-btn svg {
+    width: 16px;
+    height: 16px;
+    vertical-align: middle;
+  }
+
+  /* ========== Features Section ========== */
+  .pr-features {
+    padding: 80px 24px;
+  }
+
+  .pr-section-header {
+    text-align: center;
+    margin-bottom: 56px;
+  }
+
+  .pr-section-header h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--pr-text);
+    margin: 0 0 12px;
+  }
+
+  .pr-section-header p {
+    font-size: 1.1rem;
+    color: var(--pr-text-secondary);
+    margin: 0;
+    max-width: 560px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .pr-features__grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+
+  .pr-feature-card {
+    background: var(--pr-surface);
+    border: 1px solid var(--pr-border);
+    border-radius: 14px;
+    padding: 32px 28px;
+    transition: transform 0.25s, box-shadow 0.25s, border-color 0.25s;
+  }
+
+  .pr-feature-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--pr-shadow-lg);
+    border-color: var(--pr-accent);
+  }
+
+  .pr-feature-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 18px;
+    font-size: 24px;
+  }
+
+  .pr-feature-icon--blue { background: rgba(26,86,219,0.1); color: var(--pr-primary); }
+  .pr-feature-icon--cyan { background: rgba(6,182,212,0.1); color: var(--pr-accent); }
+  .pr-feature-icon--green { background: rgba(16,185,129,0.1); color: var(--pr-success); }
+  .pr-feature-icon--indigo { background: rgba(99,102,241,0.1); color: #6366f1; }
+  .pr-feature-icon--purple { background: rgba(139,92,246,0.1); color: #8b5cf6; }
+  .pr-feature-icon--rose { background: rgba(244,63,94,0.1); color: #f43f5e; }
+
+  .pr-feature-card h3 {
+    font-size: 1.1rem;
+    font-weight: 650;
+    margin: 0 0 8px;
+    color: var(--pr-text);
+  }
+
+  .pr-feature-card p {
+    font-size: 0.92rem;
+    color: var(--pr-text-secondary);
+    margin: 0;
+    line-height: 1.55;
+  }
+
+  /* ========== Clean Architecture Section ========== */
+  .pr-clean-arch {
+    padding: 80px 24px;
+  }
+
+  .pr-clean-arch__grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+
+  @media (max-width: 768px) {
+    .pr-clean-arch__grid {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+  }
+
+  @media (min-width: 769px) and (max-width: 1024px) {
+    .pr-clean-arch__grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  /* ========== Architecture / Steps Section ========== */
+  .pr-architecture {
+    padding: 80px 24px;
+    background: var(--pr-surface);
+  }
+
+  .pr-steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .pr-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--pr-bg);
+    border: 1px solid var(--pr-border);
+    border-radius: 10px;
+    padding: 12px 18px;
+    transition: border-color 0.25s, box-shadow 0.25s;
+  }
+
+  .pr-step:hover {
+    border-color: var(--pr-accent);
+    box-shadow: var(--pr-shadow);
+  }
+
+  .pr-step__number {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--pr-gradient-start), var(--pr-gradient-end));
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .pr-step__label {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--pr-text);
+    white-space: nowrap;
+  }
+
+  .pr-arrow {
+    color: var(--pr-text-secondary);
+    font-size: 1.2rem;
+    flex-shrink: 0;
+  }
+
+  /* ========== Code Comparison Section ========== */
+  .pr-comparison {
+    padding: 80px 24px;
+    background: var(--pr-surface);
+  }
+
+  .pr-comparison__panels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    max-width: 1500px;
+    margin: 0 auto;
+  }
+
+  .pr-code-panel {
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid var(--pr-border);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .pr-code-panel--bad { border-top: 3px solid var(--pr-danger); }
+  .pr-code-panel--good { border-top: 3px solid var(--pr-success); }
+
+  .pr-code-panel__header {
+    padding: 14px 20px;
+    background: var(--pr-surface);
+    border-bottom: 1px solid var(--pr-border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .pr-code-panel__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .pr-code-panel--bad .pr-code-panel__dot { background: var(--pr-danger); }
+  .pr-code-panel--good .pr-code-panel__dot { background: var(--pr-success); }
+
+  .pr-code-panel__title {
+    font-size: 0.9rem;
+    font-weight: 650;
+    color: var(--pr-text);
+  }
+
+  .pr-code-panel__body {
+    padding: 20px;
+    background: var(--pr-code-bg);
+    flex: 1;
+  }
+
+  .pr-code-panel__body pre {
+    margin: 0;
+    padding: 0;
+    background: none !important;
+    font-size: 0.85rem;
+    line-height: 1.7;
+    overflow-x: auto;
+  }
+
+  .pr-code-panel__body code {
+    background: none !important;
+    font-size: inherit;
+    padding: 0;
+  }
+
+  /* Syntax highlighting */
+  .pr-kw { color: #c678dd; font-weight: 600; }
+  .pr-fn { color: #61afef; }
+  .pr-st { color: #98c379; }
+  .pr-cm { color: #5c6370; font-style: italic; }
+  .pr-cm strong { color: var(--pr-danger); font-style: normal; }
+  .pr-cm em { color: var(--pr-success); font-style: normal; }
+  .pr-op { color: #56b6c2; }
+  .pr-nr { color: #d19a66; }
+  .pr-var { color: #e06c75; }
+  .pr-cls { color: #e5c07b; }
+  .pr-pr { color: #c678dd; }
+
+  [data-md-color-scheme="slate"] .pr-cm { color: #6b7280; }
+  [data-md-color-scheme="slate"] .pr-cm strong { color: #f87171; }
+  [data-md-color-scheme="slate"] .pr-cm em { color: #34d399; }
+
+  /* ========== Integrations Section ========== */
+  .pr-integrations {
+    padding: 80px 24px;
+    background: var(--pr-surface);
+  }
+
+  .pr-integrations__grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: center;
+    max-width: 700px;
+    margin: 0 auto;
+  }
+
+  .pr-integration-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: var(--pr-bg);
+    border: 1px solid var(--pr-border);
+    border-radius: 10px;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--pr-text);
+    text-decoration: none;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+
+  .pr-integration-badge:hover {
+    border-color: var(--pr-accent);
+    transform: translateY(-2px);
+  }
+
+  .pr-integration-icon {
+    font-size: 1.2rem;
+  }
+
+  /* ========== CTA Section ========== */
+  .pr-cta {
+    padding: 80px 24px;
+    text-align: center;
+    background: linear-gradient(135deg, var(--pr-gradient-start), var(--pr-gradient-end));
+  }
+
+  .pr-cta h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0 0 16px;
+  }
+
+  .pr-cta p {
+    font-size: 1.1rem;
+    color: rgba(255,255,255,0.85);
+    margin: 0 0 32px;
+    max-width: 500px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .pr-cta .pr-cta__actions {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  /* ========== Footer ========== */
+  .pr-footer {
+    padding: 32px 24px;
+    text-align: center;
+    border-top: 1px solid var(--pr-border);
+    background: var(--pr-surface);
+  }
+
+  .pr-footer p {
+    font-size: 0.85rem;
+    color: var(--pr-text-secondary);
+    margin: 0;
+  }
+
+  .pr-footer a {
+    color: var(--pr-primary);
+    text-decoration: none;
+  }
+
+  .pr-footer a:hover {
+    text-decoration: underline;
+  }
+
+  /* ========== Responsive ========== */
+  @media (max-width: 768px) {
+    .pr-hero {
+      padding: 72px 20px 60px;
+    }
+
+    .pr-hero__title {
+      font-size: 2.2rem;
+    }
+
+    .pr-hero__subtitle {
+      font-size: 1.05rem;
+    }
+
+    .pr-features__grid {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    .pr-steps {
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .pr-arrow {
+      transform: rotate(90deg);
+    }
+
+    .pr-comparison__panels {
+      grid-template-columns: 1fr;
+    }
+
+    .pr-section-header h2 {
+      font-size: 1.6rem;
+    }
+  }
+
+  @media (min-width: 769px) and (max-width: 1024px) {
+    .pr-features__grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+</style>
+
+<div class="pr-page">
+
+  <!-- ==================== Hero ==================== -->
+  <section class="pr-hero">
+    <div class="pr-hero__inner">
+      <div class="pr-hero__badge">
+        {{ t("Open Source", "开源项目") }} &middot; Pydantic v2 &middot; Python 3.10+
+      </div>
+      <h1 class="pr-hero__title">
+        {{ t("Declarative Data Assembly", "声明式数据组装") }}
+      </h1>
+      <p class="pr-hero__subtitle">
+        {{ t(
+          "A BFF toolkit for Python. Compose complex nested APIs declaratively — zero N+1, zero boilerplate.",
+          "Python 的 BFF 工具。声明式组装复杂嵌套 API，零 N+1 查询，零样板代码。"
+        )}}
+      </p>
+      <div class="pr-hero__actions">
+        <a href="{{ 'quick_start' | url }}" class="pr-btn pr-btn--primary">
+          {{ t("Get Started", "快速开始") }} &rarr;
+        </a>
+        <a href="https://github.com/allmonday/pydantic-resolve" class="pr-btn pr-btn--secondary" target="_blank" rel="noopener">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          GitHub
+        </a>
+      </div>
+      <div class="pr-hero__install">
+        <code>pip install pydantic-resolve</code>
+        <button class="pr-copy-btn" onclick="navigator.clipboard.writeText('pip install pydantic-resolve').then(function(btn){btn.innerHTML='✓';setTimeout(function(){btn.innerHTML='<svg width=\\'16\\' height=\\'16\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\'><rect x=\\'9\\' y=\\'9\\' width=\\'13\\' height=\\'13\\' rx=\\'2\\' ry=\\'2\\'/><path d=\\'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1\\'/></svg>'},1500)}.bind(this,this))">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== Code Comparison ==================== -->
+  <section class="pr-comparison">
+    <div class="pr-section-header">
+      <h2>{{ t("Solve N+1 in a few lines of code", "几行代码解决 N+1 问题") }}</h2>
+      <p>{{ t("Replace manual loops with declarative data loading.", "用声明式数据加载替代手动循环查询。") }}</p>
+    </div>
+    <div class="pr-comparison__panels">
+      <!-- Before panel -->
+      <div class="pr-code-panel pr-code-panel--bad">
+        <div class="pr-code-panel__header">
+          <div class="pr-code-panel__dot"></div>
+          <span class="pr-code-panel__title">{{ t("Before — N+1 problem", "Before — N+1 问题") }}</span>
+        </div>
+        <div class="pr-code-panel__body">
+<pre><code><span class="pr-cm"># Sprint has 10 tasks, each needs owner</span>
+<span class="pr-kw">for</span> <span class="pr-var">task</span> <span class="pr-kw">in</span> <span class="pr-var">sprint</span>.<span class="pr-var">tasks</span>:
+    <span class="pr-var">task</span>.<span class="pr-var">owner</span> = <span class="pr-kw">await</span> <span class="pr-fn">get_user</span>(<span class="pr-var">task</span>.<span class="pr-var">owner_id</span>)
+<span class="pr-cm"> <strong># 10 queries!</strong></span></code></pre>
+        </div>
+      </div>
+      <!-- After panel -->
+      <div class="pr-code-panel pr-code-panel--good">
+        <div class="pr-code-panel__header">
+          <div class="pr-code-panel__dot"></div>
+          <span class="pr-code-panel__title">{{ t("After — pydantic-resolve", "After — pydantic-resolve") }}</span>
+        </div>
+        <div class="pr-code-panel__body">
+<pre><code><span class="pr-kw">class</span> <span class="pr-cls">TaskView</span>(<span class="pr-cls">BaseModel</span>):
+    <span class="pr-var">owner_id</span>: <span class="pr-cls">int</span>
+    <span class="pr-var">owner</span>: <span class="pr-cls">Optional</span>[<span class="pr-cls">UserView</span>] = <span class="pr-kw">None</span>
+
+    <span class="pr-kw">def</span> <span class="pr-fn">resolve_owner</span>(<span class="pr-var">self</span>, <span class="pr-var">loader</span>=<span class="pr-fn">Loader</span>(<span class="pr-var">user_loader</span>)):
+        <span class="pr-kw">return</span> <span class="pr-var">loader</span>.<span class="pr-fn">load</span>(<span class="pr-var">self</span>.<span class="pr-var">owner_id</span>)
+<span class="pr-cm"> <em># 1 query!</em></span></code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== Features ==================== -->
+  <section class="pr-features">
+    <div class="pr-section-header">
+      <h2>{{ t("Everything you need for data assembly", "数据组装的全套工具") }}</h2>
+      <p>{{ t("From loading related data to generating GraphQL APIs — all in one library.", "从加载关联数据到生成 GraphQL API — 一个库全覆盖。") }}</p>
+    </div>
+    <div class="pr-features__grid">
+      <!-- Feature 1 -->
+      <div class="pr-feature-card">
+        <div class="pr-feature-icon pr-feature-icon--blue">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        </div>
+        <h3>{{ t("Batch Loading", "批量加载") }}</h3>
+        <p>{{ t("Auto-batch queries via DataLoader pattern. 100 lookups become 1 query.", "通过 DataLoader 模式自动批量查询，100 次查询变 1 次。") }}</p>
+      </div>
+      <!-- Feature 2 -->
+      <div class="pr-feature-card">
+        <div class="pr-feature-icon pr-feature-icon--cyan">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <h3>{{ t("Post Processing", "后处理") }}</h3>
+        <p>{{ t("Compute derived fields after all nested data is resolved. Counts, aggregates, formatting.", "在嵌套数据就绪后计算派生字段：计数、聚合、格式化。") }}</p>
+      </div>
+      <!-- Feature 3 -->
+      <div class="pr-feature-card">
+        <div class="pr-feature-icon pr-feature-icon--green">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <h3>{{ t("Cross-Layer Data Flow", "跨层数据流") }}</h3>
+        <p>{{ t("ExposeAs, SendTo, Collector — pass context down or aggregate data up without traversal code.", "ExposeAs / SendTo / Collector，无需手写遍历逻辑即可跨层传递数据。") }}</p>
+      </div>
+      <!-- Feature 4 -->
+      <div class="pr-feature-card">
+        <div class="pr-feature-icon pr-feature-icon--indigo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+        </div>
+        <h3>{{ t("ER Diagram + AutoLoad", "ER 图 + AutoLoad") }}</h3>
+        <p>{{ t("Centralize relationship declarations. Reuse across models, GraphQL, and MCP services.", "集中管理关系声明，跨模型复用，同时驱动 GraphQL 和 MCP。") }}</p>
+      </div>
+      <!-- Feature 5 -->
+      <div class="pr-feature-card">
+        <div class="pr-feature-icon pr-feature-icon--purple">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        </div>
+        <h3>{{ t("GraphQL Generation", "GraphQL 生成") }}</h3>
+        <p>{{ t("Auto-generate GraphQL schema and resolvers from your ER Diagram.", "从 ER 图自动生成 GraphQL schema 和 resolver。") }}</p>
+      </div>
+      <!-- Feature 6 -->
+      <div class="pr-feature-card">
+        <div class="pr-feature-icon pr-feature-icon--rose">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+        </div>
+        <h3>{{ t("MCP Service", "MCP 服务") }}</h3>
+        <p>{{ t("Expose GraphQL APIs to AI agents via Model Context Protocol.", "通过 MCP 协议将 GraphQL API 暴露给 AI 代理。") }}</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== Architecture / Steps ==================== -->
+  <section class="pr-architecture">
+    <div class="pr-section-header">
+      <h2>{{ t("Progressive learning path", "循序渐进的学习路径") }}</h2>
+      <p>{{ t("Start simple, scale as needed. Each concept builds on the last.", "从简单开始，按需扩展。每个概念都建立在前一个之上。") }}</p>
+    </div>
+    <div class="pr-steps">
+      <div class="pr-step">
+        <span class="pr-step__number">1</span>
+        <span class="pr-step__label">{{ t("resolve_*", "resolve_*") }}</span>
+      </div>
+      <span class="pr-arrow">&rarr;</span>
+      <div class="pr-step">
+        <span class="pr-step__number">2</span>
+        <span class="pr-step__label">{{ t("Nested Tree", "嵌套树") }}</span>
+      </div>
+      <span class="pr-arrow">&rarr;</span>
+      <div class="pr-step">
+        <span class="pr-step__number">3</span>
+        <span class="pr-step__label">{{ t("post_*", "post_*") }}</span>
+      </div>
+      <span class="pr-arrow">&rarr;</span>
+      <div class="pr-step">
+        <span class="pr-step__number">4</span>
+        <span class="pr-step__label">{{ t("Cross-Layer", "跨层数据流") }}</span>
+      </div>
+      <span class="pr-arrow">&rarr;</span>
+      <div class="pr-step">
+        <span class="pr-step__number">5</span>
+        <span class="pr-step__label">{{ t("ERD + AutoLoad", "ERD + AutoLoad") }}</span>
+      </div>
+      <span class="pr-arrow">&rarr;</span>
+      <div class="pr-step">
+        <span class="pr-step__number">6</span>
+        <span class="pr-step__label">{{ t("GraphQL / MCP", "GraphQL / MCP") }}</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== Clean Architecture ==================== -->
+  <section class="pr-clean-arch">
+    <div class="pr-section-header">
+      <h2>{{ t("Aligns with Clean Architecture", "贴合整洁架构") }}</h2>
+      <p>{{ t("ER Diagram doubles as entity and use-case layer, cleanly isolating your database.", "ER 图同时充当实体层和用例层，干净地隔离数据库实现。") }}</p>
+    </div>
+    <div class="pr-clean-arch__grid">
+      <div class="pr-feature-card">
+        <div class="pr-feature-icon pr-feature-icon--indigo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+        </div>
+        <h3>{{ t("Entity + Use Case", "实体层 + 用例层") }}</h3>
+        <p>{{ t("ER Diagram defines entities and their relationships — it naturally serves as both the domain model and the use-case boundary.", "ER Diagram 定义实体及其关系，天然充当领域模型和用例边界。") }}</p>
+      </div>
+      <div class="pr-feature-card">
+        <div class="pr-feature-icon pr-feature-icon--green">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h3>{{ t("DB Agnostic", "数据库无关") }}</h3>
+        <p>{{ t("Loaders abstract away the data source. Swap SQLAlchemy for Django or Tortoise ORM — your models stay untouched.", "Loader 抽象了数据源。从 SQLAlchemy 切换到 Django 或 Tortoise ORM，模型层无需改动。") }}</p>
+      </div>
+      <div class="pr-feature-card">
+        <div class="pr-feature-icon pr-feature-icon--cyan">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        </div>
+        <h3>{{ t("Multi-Presentation", "多呈现层") }}</h3>
+        <p>{{ t("One ERD drives REST API responses, GraphQL queries, and MCP services — without duplication.", "一份 ERD 同时驱动 REST API 响应、GraphQL 查询和 MCP 服务，零重复。") }}</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== Integrations ==================== -->
+  <section class="pr-integrations">
+    <div class="pr-section-header">
+      <h2>{{ t("Built for your stack", "为你的技术栈而建") }}</h2>
+      <p>{{ t("Works with your existing frameworks and ORMs.", "与你现有的框架和 ORM 无缝集成。") }}</p>
+    </div>
+    <div class="pr-integrations__grid">
+      <a href="{{ 'fastapi_integration' | url }}" class="pr-integration-badge">
+        <span class="pr-integration-icon">&#9889;</span> FastAPI
+      </a>
+      <a href="{{ 'orm_integration' | url }}" class="pr-integration-badge">
+        <span class="pr-integration-icon">&#128451;</span> SQLAlchemy
+      </a>
+      <a href="{{ 'orm_integration' | url }}" class="pr-integration-badge">
+        <span class="pr-integration-icon">&#128736;</span> Django
+      </a>
+      <a href="{{ 'orm_integration' | url }}" class="pr-integration-badge">
+        <span class="pr-integration-icon">&#128032;</span> Tortoise ORM
+      </a>
+      <a href="{{ 'graphql_guide' | url }}" class="pr-integration-badge">
+        <span class="pr-integration-icon">&#127760;</span> GraphQL
+      </a>
+      <a href="{{ 'mcp_service' | url }}" class="pr-integration-badge">
+        <span class="pr-integration-icon">&#129302;</span> MCP
+      </a>
+    </div>
+  </section>
+
+  <!-- ==================== CTA ==================== -->
+  <section class="pr-cta">
+    <div class="pr-container">
+      <h2>{{ t("Ready to eliminate N+1 queries?", "准备好消灭 N+1 查询了吗？") }}</h2>
+      <p>{{ t("Start with a single resolve method. Scale to ER Diagram when you're ready.", "从一个 resolve 方法开始，准备好了再扩展到 ER 图。") }}</p>
+      <div class="pr-cta__actions">
+        <a href="{{ 'quick_start' | url }}" class="pr-btn pr-btn--primary">
+          {{ t("Read the Guide", "阅读指南") }} &rarr;
+        </a>
+        <a href="https://github.com/allmonday/pydantic-resolve" class="pr-btn pr-btn--secondary" target="_blank" rel="noopener">
+          {{ t("View on GitHub", "查看 GitHub") }}
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== Footer ==================== -->
+  <footer class="pr-footer">
+    <div class="pr-container">
+      <p>
+        pydantic-resolve &middot; MIT License &middot; {{ t("Made by", "作者") }} <a href="https://github.com/allmonday" target="_blank" rel="noopener">tangkikodo</a>
+        &middot; <a href="https://github.com/allmonday/pydantic-resolve" target="_blank" rel="noopener">GitHub</a>
+      </p>
+    </div>
+  </footer>
+
+</div>
+
+{% endblock %}
+
+{% block content %}{% endblock %}
+{% block footer %}{% endblock %}

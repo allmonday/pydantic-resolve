@@ -4,6 +4,7 @@ site_url: https://allmonday.github.io/pydantic-resolve
 site_author: tangkikodo
 theme:
   name: material
+  custom_dir: overrides
   palette:
     - media: "(prefers-color-scheme)"
       toggle:

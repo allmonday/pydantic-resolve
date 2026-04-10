@@ -1,3 +1,7 @@
+---
+template: home.html
+---
+
 # pydantic-resolve
 
 [English](./index.md)

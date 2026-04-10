@@ -1,3 +1,7 @@
+---
+template: home.html
+---
+
 # pydantic-resolve
 
 [中文版](./index.zh.md)
