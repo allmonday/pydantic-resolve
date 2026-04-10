@@ -90,7 +90,7 @@ async def test_loader_instance_3():
     root = Root()
     loader = FriendLoader()
     await loader.load_many(['tangkikodo'])
-    with pytest.raises(AttributeError):
+    with pytest.raises(AttributeError, match='FriendLoader is not instance of FriendLoaderCopy'):
         await Resolver(loader_instances={FriendLoaderCopy: loader}).resolve(root)
 
 @pytest.mark.asyncio

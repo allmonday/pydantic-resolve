@@ -9,7 +9,7 @@ from pydantic_resolve import config_global_resolver
 from pydantic_resolve.graphql import GraphQLHandler
 
 
-async def test_queries():
+async def run_queries():
     """测试各种 GraphQL 查询"""
 
     # 配置全局 resolver
@@ -88,4 +88,4 @@ async def test_queries():
 
 
 if __name__ == "__main__":
-    asyncio.run(test_queries())
+    asyncio.run(run_queries())
