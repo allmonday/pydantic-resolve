@@ -62,10 +62,7 @@ class TestSchemaBuilder:
         # 验证返回类型是 [CommentEntity] 而不是 [String] 或 [PostEntity]
         # 查找 postEntityGetComments 行并检查返回类型
         lines = schema.split('\n')
-        for line in lines:
-            if 'postEntityGetComments' in line:
-                # 提取返回类型部分
-                if ': [CommentEntity]' in line or ': [CommentEntity!]' in line:
-                    return
-        # 如果没有找到正确的返回类型，测试失败
-        raise AssertionError(f"postEntityGetComments should return [CommentEntity], but schema shows: {line}")
+        matched_line = next((line for line in lines if 'postEntityGetComments' in line), None)
+        assert matched_line is not None, "postEntityGetComments not found in schema"
+        assert ': [CommentEntity]' in matched_line or ': [CommentEntity!]' in matched_line, \
+            f"postEntityGetComments should return [CommentEntity], but schema shows: {matched_line}"

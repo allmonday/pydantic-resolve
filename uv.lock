@@ -1525,6 +1525,7 @@ source = { editable = "." }
 dependencies = [
     { name = "aiodataloader" },
     { name = "graphql-core" },
+    { name = "pydantic" },
 ]
 
 [package.optional-dependencies]
@@ -1575,6 +1576,7 @@ requires-dist = [
     { name = "mkdocs-material", marker = "extra == 'dev'", specifier = ">=9,<10" },
     { name = "mkdocs-static-i18n", extras = ["material"], marker = "extra == 'dev'", specifier = "==1.2.0" },
     { name = "psutil", marker = "extra == 'dev'", specifier = ">=7.1.0,<8.0.0" },
+    { name = "pydantic", specifier = ">=2.0.0,<3.0.0" },
     { name = "pydantic", marker = "extra == 'dev'", specifier = ">=2.12.0,<3.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.2.2,<8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0,<0.22.0" },

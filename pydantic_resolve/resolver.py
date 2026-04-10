@@ -17,7 +17,7 @@ import pydantic_resolve.utils.profile as profile_util
 # Two-level cache: id(resolver_class) -> {root_class -> metadata}
 # This isolates caches for different resolver classes (created via config_resolver)
 # since different resolver classes may have different er_pre_generator configurations
-METADATA_CACHE: dict[int, dict[type, any]] = {}
+METADATA_CACHE: dict[int, dict[type, Any]] = {}
 T = TypeVar("T")
 
 
@@ -133,7 +133,7 @@ class Resolver:
             if not issubclass(cls, DataLoader):
                 raise AttributeError(f'{cls.__name__} must be subclass of DataLoader')
             if not isinstance(loader, cls):
-                raise AttributeError(f'{loader.__name__} is not instance of {cls.__name__}')
+                raise AttributeError(f'{loader.__class__.__name__} is not instance of {cls.__name__}')
         return True
 
     def _get_loader_instance(self, cache_key: str):
@@ -378,7 +378,7 @@ class Resolver:
         new_ancestors = None
 
         if self.debug:
-            ancestors = self.ancestor_list.get()
+            ancestors = self.ancestor_list.get() or []
             new_ancestors = ancestors + [node.__class__.__name__]
             token = self.ancestor_list.set(new_ancestors)
             tid = self.performance.get_timer(new_ancestors).start()
@@ -467,7 +467,7 @@ class Resolver:
         if has_context and self.context is None:
             raise AttributeError('context is missing')
 
-        self.ancestor_list = contextvars.ContextVar('ancestor_list', default=[])
+        self.ancestor_list = contextvars.ContextVar('ancestor_list', default=None)
             
         await self._traverse(node, None)
 
