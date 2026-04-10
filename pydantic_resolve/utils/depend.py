@@ -1,4 +1,7 @@
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
+
+if TYPE_CHECKING:
+    from aiodataloader import DataLoader
 
 class Depends:
     def __init__(
@@ -10,5 +13,5 @@ class Depends:
 
 def Loader(  # noqa: N802
     dependency: Optional[Callable[..., Any]] = None,
-) -> "Depends":
+) -> "DataLoader":
     return Depends(dependency=dependency)
