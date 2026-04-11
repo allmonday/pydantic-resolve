@@ -6,6 +6,11 @@
 
 ## 5.0
 
+### 5.0.1 (2026-4-11)
+
+- fix:
+  - fix minor type issues
+
 ### 5.0.0 (2026-4-3)
 
 **BREAKING CHANGES** — `ErDiagram.configs` renamed to `ErDiagram.entities`. See [Migration Guide](./migration.md) for details.
