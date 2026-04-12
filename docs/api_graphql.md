@@ -23,10 +23,16 @@ handler = GraphQLHandler(
 ```python
 result = await handler.execute(
     query: str,
+    context: dict[str, Any] | None = None,
 ) -> dict
 ```
 
 Execute a GraphQL query string and return a GraphQL-style response dict.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `query` | `str` | GraphQL query string |
+| `context` | `dict \| None` | Request-scoped context injected into `@query`/`@mutation` methods and downstream Resolver |
 
 ```python
 result = await handler.execute("""
@@ -41,6 +47,30 @@ result = await handler.execute("""
     }
 }
 """)
+```
+
+When `context` is provided, it is used in two ways:
+
+1. **`@query`/`@mutation` methods** — declare a `context` parameter in the method signature to receive it directly.
+2. **DataLoaders** — the context is forwarded to the internal `Resolver(context=...)`, which injects it into class-based DataLoaders that declare a `_context` attribute.
+
+```python
+# DataLoader that uses context
+class TaskLoader(DataLoader):
+    _context: dict  # receives Resolver context automatically
+
+    async def batch_load_fn(self, keys):
+        user_id = self._context['user_id']
+        tasks = await db.fetch_tasks_by_owner_and_ids(user_id, keys)
+        ...
+```
+
+```python
+# Pass context from a FastAPI endpoint
+result = await handler.execute(
+    query=req.query,
+    context={"user_id": current_user.id},
+)
 ```
 
 The return value follows GraphQL response shape:
@@ -80,6 +110,18 @@ Decorator that registers a method as a GraphQL query root field. Must be used in
 
 The operation name is generated automatically from entity name + method name.
 Use `QueryConfig(name=...)` when you need to override the method-name part of the generated GraphQL field.
+
+### Receiving request context
+
+Add a `context` parameter to receive framework-level data (e.g. `user_id` from JWT). This parameter is **hidden from the GraphQL schema** — clients cannot see or set it.
+
+```python
+class MyEntity(BaseModel, BaseEntity):
+    @query
+    async def get_my_items(cls, limit: int = 20, context: dict = None) -> list['MyEntity']:
+        user_id = context['user_id']
+        return await fetch_items_by_owner(user_id, limit)
+```
 
 ## @mutation
 
@@ -124,14 +166,21 @@ async def get_all_sprints(cls, limit: int = 20) -> list[SprintEntity]:
 async def get_sprint_by_id(cls, id: int) -> SprintEntity | None:
     return SprintEntity(**SPRINTS.get(id, {}))
 
+async def get_my_sprints(cls, limit: int = 20, context: dict = None) -> list[SprintEntity]:
+    user_id = context['user_id']
+    return await fetch_sprints_by_owner(user_id, limit)
+
 Entity(
     kls=SprintEntity,
     queries=[
         QueryConfig(method=get_all_sprints, name='sprints'),
         QueryConfig(method=get_sprint_by_id, name='sprint'),
+        QueryConfig(method=get_my_sprints, name='my_sprints'),
     ],
 )
 ```
+
+Like `@query`, `QueryConfig` methods can declare a `context` parameter. It is **hidden from the GraphQL schema** and injected by `handler.execute(context=...)`.
 
 ## MutationConfig
 
