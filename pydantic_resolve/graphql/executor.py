@@ -63,7 +63,8 @@ class QueryExecutor:
     async def execute_query(
         self,
         query: str,
-        query_map: Dict[str, Tuple[type, Callable]]
+        query_map: Dict[str, Tuple[type, Callable]],
+        context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Execute custom query with optimized two-phase execution:
@@ -130,7 +131,7 @@ class QueryExecutor:
 
         if execution_tasks:
             # Execute all (query_method + transform + resolve) concurrently
-            execution_map = await self._execute_concurrent_queries(execution_tasks)
+            execution_map = await self._execute_concurrent_queries(execution_tasks, context=context)
 
             # Collect results and errors
             for query_name, (result_data, error_dict) in execution_map.items():
@@ -153,7 +154,8 @@ class QueryExecutor:
     async def execute_mutation(
         self,
         query: str,
-        mutation_map: Dict[str, Tuple[type, Callable]]
+        mutation_map: Dict[str, Tuple[type, Callable]],
+        context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Execute custom mutation with two-phase execution:
@@ -188,7 +190,7 @@ class QueryExecutor:
 
                 # === Phase 1: Execute mutation method ===
                 args = root_field_selection.arguments or {}
-                root_data = await self._execute_method(mutation_method, args, "mutation", entity)
+                root_data = await self._execute_method(mutation_method, args, "mutation", entity, context=context)
                 logger.debug(f"Mutation method executed: {root_mutation_name}")
 
                 # === Phase 1: Build response model ===
@@ -217,7 +219,10 @@ class QueryExecutor:
 
                 # === Phase 2: Resolve related data ===
                 if typed_data is not None:
-                    resolver = self.resolver_class(enable_from_attribute_in_type_adapter=self.enable_from_attribute_in_type_adapter)
+                    resolver = self.resolver_class(
+                        enable_from_attribute_in_type_adapter=self.enable_from_attribute_in_type_adapter,
+                        context=context,
+                    )
 
                     if isinstance(typed_data, list):
                         resolved = await resolver.resolve(typed_data)
@@ -255,6 +260,7 @@ class QueryExecutor:
         arguments: Dict[str, Any],
         operation_type: str = "query",
         entity: Optional[type] = None,
+        context: Optional[Dict[str, Any]] = None,
     ) -> Any:
         """
         Execute @query or @mutation method
@@ -271,6 +277,12 @@ class QueryExecutor:
         try:
             # Convert arguments (handle BaseModel types)
             converted_args = self._convert_arguments(method, arguments)
+
+            # Inject context parameter if method declares it
+            if context is not None:
+                sig = inspect.signature(method)
+                if 'context' in sig.parameters:
+                    converted_args['context'] = context
 
             # staticmethod object: call underlying function directly without cls
             if isinstance(method, staticmethod):
@@ -316,6 +328,10 @@ class QueryExecutor:
             sig = inspect.signature(method)
             for param_name, param in sig.parameters.items():
                 if param_name in ('self', 'cls'):
+                    continue
+
+                # context is framework-injected, not from GraphQL query
+                if param_name == 'context':
                     continue
 
                 if param_name not in arguments:
@@ -434,7 +450,8 @@ class QueryExecutor:
 
     async def _execute_concurrent_queries(
         self,
-        execution_tasks: List[Tuple[str, type, Callable, Any, type]]
+        execution_tasks: List[Tuple[str, type, Callable, Any, type]],
+        context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Tuple[Optional[Any], Optional[Dict]]]:
         """
         Execute multiple queries concurrently (query_method + transform + resolve).
@@ -468,11 +485,11 @@ class QueryExecutor:
             if semaphore:
                 async with semaphore:
                     return await self._execute_single_query(
-                        query_name, entity, query_method, field_selection, response_model
+                        query_name, entity, query_method, field_selection, response_model, context=context
                     )
             else:
                 return await self._execute_single_query(
-                    query_name, entity, query_method, field_selection, response_model
+                    query_name, entity, query_method, field_selection, response_model, context=context
                 )
 
         # Execute all (query_method + transform + resolve) tasks concurrently
@@ -505,7 +522,8 @@ class QueryExecutor:
         entity: type,
         query_method: Callable,
         field_selection: Any,
-        response_model: type
+        response_model: type,
+        context: Optional[Dict[str, Any]] = None,
     ) -> Tuple[Optional[Any], Optional[Dict]]:
         """
         Execute a single query: query_method -> transform -> resolve.
@@ -529,7 +547,7 @@ class QueryExecutor:
         try:
             # 1. Execute query method (I/O operation)
             args = field_selection.arguments or {}
-            root_data = await self._execute_method(query_method, args, "query", entity)
+            root_data = await self._execute_method(query_method, args, "query", entity, context=context)
             logger.debug(f"[Phase 2] Query method executed: {query_name}")
 
             # 2. Transform to response model
@@ -556,7 +574,8 @@ class QueryExecutor:
             result_data = None
             if typed_data is not None:
                 resolver = self.resolver_class(
-                    enable_from_attribute_in_type_adapter=self.enable_from_attribute_in_type_adapter
+                    enable_from_attribute_in_type_adapter=self.enable_from_attribute_in_type_adapter,
+                    context=context,
                 )
 
                 if is_list:

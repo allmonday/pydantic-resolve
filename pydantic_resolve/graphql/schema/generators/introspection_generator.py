@@ -552,6 +552,10 @@ class IntrospectionGenerator(SchemaGenerator):
                 if param_name in ('self', 'cls'):
                     continue
 
+                # context is framework-injected, hidden from GraphQL schema
+                if param_name == 'context':
+                    continue
+
                 param_type_def = None
                 if param.annotation != inspect.Parameter.empty:
                     param_type_def = self._build_input_graphql_type(param.annotation)

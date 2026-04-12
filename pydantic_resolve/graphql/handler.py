@@ -186,12 +186,16 @@ class GraphQLHandler:
     async def execute(
         self,
         query: str,
+        context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Execute a GraphQL query or mutation.
 
         Args:
             query: GraphQL query string
+            context: Request-scoped context dict injected into @query/@mutation
+                method's ``context`` parameter and downstream Resolver.
+                Framework-level data (e.g. user_id from JWT) goes here.
 
         Returns:
             GraphQL response format: {"data": {...}, "errors": [...]}
@@ -208,10 +212,10 @@ class GraphQLHandler:
 
             if operation_type == 'mutation':
                 logger.debug("Processing mutation")
-                return await self.executor.execute_mutation(query, self.mutation_map)
+                return await self.executor.execute_mutation(query, self.mutation_map, context=context)
             else:
                 logger.debug("Processing query")
-                return await self.executor.execute_query(query, self.query_map)
+                return await self.executor.execute_query(query, self.query_map, context=context)
 
         except GraphQLError as e:
             logger.warning(f"GraphQL error: {e.message}")
