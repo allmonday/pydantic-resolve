@@ -4,6 +4,19 @@
 - **Minor (x.Y.0)**: New features, backward compatible
 - **Patch (x.y.Z)**: Bug fixes and minor improvements
 
+## 5.1
+
+### 5.1.0 (2026-4-13)
+
+- feat:
+  - **Request context support for GraphQL**: `handler.execute()` accepts an optional `context` dict, passed into `@query`/`@mutation` methods via `_context` parameter and forwarded to the internal `Resolver(context=...)` for DataLoader context injection
+  - **`_context` parameter in `@query`/`@mutation` methods**: declare `_context: dict` in method signature to receive request-scoped data (e.g. `user_id` from JWT); the parameter is hidden from GraphQL schema — clients cannot see or set it
+  - **`_context` excluded from SDL and introspection**: `SDLBuilder` and `IntrospectionGenerator` skip `_context` when generating query/mutation field arguments
+  - **`AppConfig.context_extractor` for MCP**: optional callback `(Context) -> dict | Awaitable[dict]` that extracts request-scoped context from FastMCP HTTP request (e.g. user identity from Authorization header), passed as `context=` to `handler.execute()`
+  - **RBAC/ABAC demo**: new `demo/rbac/` showcasing multi-level permission queries with DataLoader batching, FK-based ancestor tracing, ABAC condition evaluation, and mail group permission inheritance
+- refactor:
+  - Entity classes updated for context handling in GraphQL API
+
 ## 5.0
 
 ### 5.0.1 (2026-4-11)

@@ -317,6 +317,10 @@ class SDLBuilder(SchemaGenerator):
                 if param_name in ('self', 'cls'):
                     continue
 
+                # _context is framework-injected, hidden from GraphQL schema
+                if param_name == '_context':
+                    continue
+
                 try:
                     gql_type = self._map_python_type_to_gql(param.annotation)
                 except Exception:
@@ -383,6 +387,10 @@ class SDLBuilder(SchemaGenerator):
             params = []
             for param_name, param in sig.parameters.items():
                 if param_name in ('self', 'cls'):
+                    continue
+
+                # _context is framework-injected, hidden from GraphQL schema
+                if param_name == '_context':
                     continue
 
                 try:
@@ -558,6 +566,8 @@ class SDLBuilder(SchemaGenerator):
                         for param_name, param in sig.parameters.items():
                             if param_name in ('self', 'cls'):
                                 continue
+                            if param_name == '_context':
+                                continue
                             if param.annotation != inspect.Parameter.empty:
                                 collect_from_type(param.annotation)
                     except Exception:
@@ -571,6 +581,8 @@ class SDLBuilder(SchemaGenerator):
                         sig = inspect.signature(method)
                         for param_name, param in sig.parameters.items():
                             if param_name in ('self', 'cls'):
+                                continue
+                            if param_name == '_context':
                                 continue
                             if param.annotation != inspect.Parameter.empty:
                                 collect_from_type(param.annotation)
@@ -785,6 +797,8 @@ class SDLBuilder(SchemaGenerator):
                 sig = inspect.signature(method)
                 for param_name, param in sig.parameters.items():
                     if param_name in ('self', 'cls'):
+                        continue
+                    if param_name == '_context':
                         continue
                     if param.annotation != inspect.Parameter.empty:
                         collect_from_type(param.annotation)

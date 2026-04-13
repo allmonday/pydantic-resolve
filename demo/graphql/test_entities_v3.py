@@ -13,12 +13,12 @@ Validates:
 import pytest
 from demo.graphql.entities_v3 import (
     diagram_v3,
-    UserEntityV3,
-    PostEntityV3,
-    CommentEntityV3,
+    UserEntity,
+    PostEntity,
     init_db_v3,
 )
 from pydantic_resolve.graphql import GraphQLHandler
+from pydantic_resolve.graphql.schema_builder import SchemaBuilder
 from pydantic_resolve import config_global_resolver
 
 
@@ -307,7 +307,7 @@ class TestErDiagramConfiguration:
 
     def test_user_entity_has_relationships(self):
         user_cfg = next(
-            (cfg for cfg in diagram_v3.entities if cfg.kls == UserEntityV3), None
+            (cfg for cfg in diagram_v3.entities if cfg.kls == UserEntity), None
         )
         assert user_cfg is not None
         assert len(user_cfg.relationships) >= 1
@@ -316,10 +316,74 @@ class TestErDiagramConfiguration:
 
     def test_post_entity_has_relationships(self):
         post_cfg = next(
-            (cfg for cfg in diagram_v3.entities if cfg.kls == PostEntityV3), None
+            (cfg for cfg in diagram_v3.entities if cfg.kls == PostEntity), None
         )
         assert post_cfg is not None
         assert len(post_cfg.relationships) == 2  # author and comments
+
+
+class TestContextInjection:
+    """Test request-context injection into @query methods."""
+
+    @pytest.mark.asyncio
+    async def test_context_reaches_query_method(self, handler):
+        """Context dict is passed to @query method's context parameter."""
+        result = await handler.execute(
+            "{ postEntityV3MyPostsV3 { id title author_id } }",
+            context={"user_id": 1},
+        )
+        assert result["errors"] is None
+        assert result["data"] is not None
+        posts = result["data"]["postEntityV3MyPostsV3"]
+        # All posts should belong to user_id=1 (Alice)
+        for post in posts:
+            assert post["author_id"] == 1
+
+    @pytest.mark.asyncio
+    async def test_context_with_different_user(self, handler):
+        """Different context values produce different results."""
+        result = await handler.execute(
+            "{ postEntityV3MyPostsV3 { id title author_id } }",
+            context={"user_id": 2},
+        )
+        assert result["errors"] is None
+        assert result["data"] is not None
+        posts = result["data"]["postEntityV3MyPostsV3"]
+        for post in posts:
+            assert post["author_id"] == 2
+
+    @pytest.mark.asyncio
+    async def test_context_none_raises_for_required_query(self, handler):
+        """Method that requires context raises when context is not provided."""
+        result = await handler.execute(
+            "{ postEntityV3MyPostsV3 { id title } }",
+        )
+        # Should have errors because the method raises ValueError
+        assert result["errors"] is not None
+
+    @pytest.mark.asyncio
+    async def test_query_without_context_unaffected(self, handler):
+        """Queries that don't use context still work normally."""
+        result = await handler.execute(
+            "{ postEntityV3PostsV3 { id title } }",
+            context={"user_id": 999},
+        )
+        assert result["errors"] is None
+        assert result["data"] is not None
+        # Should return ALL posts, not filtered by user_id
+        assert len(result["data"]["postEntityV3PostsV3"]) > 0
+
+    @pytest.mark.asyncio
+    async def test_context_hidden_from_schema(self):
+        """context parameter should not appear in SDL schema."""
+        from demo.graphql.entities_v3 import diagram_v3 as d
+        builder = SchemaBuilder(d)
+        schema_sdl = builder.build_schema()
+
+        # The MyPostsV3 query should exist but without _context param
+        assert "MyPostsV3" in schema_sdl
+        # _context should NOT appear as a parameter in the schema
+        assert "_context" not in schema_sdl
 
 
 if __name__ == "__main__":

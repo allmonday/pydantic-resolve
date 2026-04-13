@@ -288,6 +288,73 @@ The default endpoint is `/graphql`. To use a different path, pass it to `get_gra
 handler.get_graphiql_html(endpoint="/api/graphql", title="My API")
 ```
 
+## Request Context
+
+When the GraphQL handler runs inside a web framework (FastAPI, Django, etc.), you often need to pass request-scoped data — such as the current user's ID from a JWT — into query methods. `handler.execute()` accepts a `context` dict for this purpose.
+
+### Passing context from FastAPI
+
+```python
+@app.post("/graphql")
+async def graphql_endpoint(request: Request):
+    body = await request.json()
+    query = body.get("query", "")
+
+    # Extract user info from JWT (simplified example)
+    user_id = decode_jwt(request.headers.get("Authorization", ""))
+    context = {"user_id": user_id}
+
+    result = await handler.execute(query, context=context)
+    return result
+```
+
+### Receiving context in query methods
+
+Add a `context` parameter to any `@query` or `@mutation` method (or `QueryConfig`/`MutationConfig` function). The parameter is **hidden from the GraphQL schema** — clients never see it.
+
+```python
+async def get_my_tasks(limit: int = 10, context: dict = None) -> list[TaskEntity]:
+    """Get tasks assigned to the current user."""
+    user_id = context['user_id']
+    return await fetch_tasks_by_owner(user_id, limit)
+
+Entity(
+    kls=TaskEntity,
+    queries=[
+        QueryConfig(method=get_my_tasks, name='my_tasks'),
+    ],
+)
+```
+
+Clients query this as a normal field — no `context` argument in the query:
+
+```graphql
+{
+    taskEntityMyTasks(limit: 5) { id title }
+}
+```
+
+### Context in DataLoaders
+
+The same `context` dict is also forwarded to the internal `Resolver(context=...)`, which injects it into class-based DataLoaders that declare a `_context` attribute. This allows loaders to filter or scope their queries by request-level data such as `user_id`:
+
+```python
+from aiodataloader import DataLoader
+
+class TaskByOwnerLoader(DataLoader):
+    _context: dict  # injected by Resolver
+
+    async def batch_load_fn(self, sprint_ids):
+        user_id = self._context['user_id']
+        tasks = await db.query(Task).filter(
+            Task.sprint_id.in_(sprint_ids),
+            Task.owner_id == user_id,
+        ).all()
+        return build_list(tasks, sprint_ids, lambda t: t.sprint_id)
+```
+
+> Function-based loaders (plain async functions) cannot receive context. Use a class-based DataLoader when you need access to request-scoped data.
+
 ## How It Works
 
 1. `GraphQLHandler` generates a GraphQL schema from the ERD entities and relationships.

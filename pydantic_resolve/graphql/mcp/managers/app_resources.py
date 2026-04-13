@@ -1,7 +1,7 @@
 """App resources container for MCP server."""
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Set
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Set
 
 if TYPE_CHECKING:
     from pydantic_resolve.graphql.handler import GraphQLHandler
@@ -24,12 +24,14 @@ class AppResources:
         handler: GraphQLHandler instance for executing operations
         introspection_helper: IntrospectionQueryHelper instance for progressive disclosure
         sdl_builder: SDLBuilder instance for schema generation
+        context_extractor: Optional callback to extract request-scoped context from FastMCP Context
     """
     name: str
     description: str
     handler: "GraphQLHandler"
     introspection_helper: "IntrospectionQueryHelper"
     sdl_builder: "SDLBuilder"
+    context_extractor: Callable[[Any], dict | Awaitable[dict]] | None = field(default=None)
 
     @property
     def entity_names(self) -> Set[str]:

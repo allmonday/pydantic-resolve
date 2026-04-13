@@ -3,7 +3,7 @@ GraphQL Demo FastAPI 应用
 提供可查询的 GraphQL endpoint
 """
 
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, Request
 from fastapi.responses import PlainTextResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -65,11 +65,24 @@ async def graphiql_playground():
 
 
 @graphql_router.post("/graphql")
-async def graphql_endpoint(req: GraphQLRequest):
-    """GraphQL 查询端点"""
-    print(req)
+async def graphql_endpoint(req: GraphQLRequest, request: Request):
+    """GraphQL query endpoint with request context."""
+    # Extract user context from JWT or session.
+    # This is a simplified example — in production, use proper JWT decoding.
+    auth_header = request.headers.get("Authorization", "")
+    user_id = None
+    if auth_header.startswith("Bearer "):
+        # Placeholder: decode JWT and extract user_id
+        # token = auth_header[7:]
+        # payload = jwt.decode(token, ...)
+        # user_id = payload.get("user_id")
+        user_id = 1  # placeholder
+
+    context = {"user_id": user_id} if user_id else None
+
     result = await handler.execute(
         query=req.query,
+        context=context,
     )
     return result
 

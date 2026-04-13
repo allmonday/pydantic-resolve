@@ -288,6 +288,73 @@ async def graphql_endpoint(request: Request):
 handler.get_graphiql_html(endpoint="/api/graphql", title="My API")
 ```
 
+## 请求上下文
+
+当 GraphQL handler 运行在 Web 框架（FastAPI、Django 等）中时，通常需要将请求级数据（如从 JWT 解析的当前用户 ID）传入查询方法。`handler.execute()` 接受一个 `context` dict 用于此目的。
+
+### 从 FastAPI 传入上下文
+
+```python
+@app.post("/graphql")
+async def graphql_endpoint(request: Request):
+    body = await request.json()
+    query = body.get("query", "")
+
+    # 从 JWT 中提取用户信息（简化示例）
+    user_id = decode_jwt(request.headers.get("Authorization", ""))
+    context = {"user_id": user_id}
+
+    result = await handler.execute(query, context=context)
+    return result
+```
+
+### 在查询方法中接收上下文
+
+在任意 `@query` 或 `@mutation` 方法（或 `QueryConfig`/`MutationConfig` 函数）中添加 `context` 参数即可接收。该参数**对 GraphQL schema 不可见** — 客户端无法看到它。
+
+```python
+async def get_my_tasks(limit: int = 10, context: dict = None) -> list[TaskEntity]:
+    """获取当前用户的任务。"""
+    user_id = context['user_id']
+    return await fetch_tasks_by_owner(user_id, limit)
+
+Entity(
+    kls=TaskEntity,
+    queries=[
+        QueryConfig(method=get_my_tasks, name='my_tasks'),
+    ],
+)
+```
+
+客户端像普通字段一样查询，查询中不包含 `context` 参数：
+
+```graphql
+{
+    taskEntityMyTasks(limit: 5) { id title }
+}
+```
+
+### DataLoader 中的上下文
+
+同一个 `context` dict 也会传入内部的 `Resolver(context=...)`，由 Resolver 自动注入到声明了 `_context` 属性的类式 DataLoader 中。这样 loader 可以按请求级数据（如 `user_id`）过滤或限定查询范围：
+
+```python
+from aiodataloader import DataLoader
+
+class TaskByOwnerLoader(DataLoader):
+    _context: dict  # 由 Resolver 注入
+
+    async def batch_load_fn(self, sprint_ids):
+        user_id = self._context['user_id']
+        tasks = await db.query(Task).filter(
+            Task.sprint_id.in_(sprint_ids),
+            Task.owner_id == user_id,
+        ).all()
+        return build_list(tasks, sprint_ids, lambda t: t.sprint_id)
+```
+
+> 函数式 loader（普通异步函数）无法接收 context。需要访问请求级数据时，请使用类式 DataLoader。
+
 ## 工作原理
 
 1. `GraphQLHandler` 从 ERD 实体和关系生成 GraphQL schema。
