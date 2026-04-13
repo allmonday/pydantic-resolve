@@ -13,8 +13,8 @@ Validates:
 import pytest
 from demo.graphql.entities_v3 import (
     diagram_v3,
-    UserEntityV3,
-    PostEntityV3,
+    UserEntity,
+    PostEntity,
     init_db_v3,
 )
 from pydantic_resolve.graphql import GraphQLHandler
@@ -307,7 +307,7 @@ class TestErDiagramConfiguration:
 
     def test_user_entity_has_relationships(self):
         user_cfg = next(
-            (cfg for cfg in diagram_v3.entities if cfg.kls == UserEntityV3), None
+            (cfg for cfg in diagram_v3.entities if cfg.kls == UserEntity), None
         )
         assert user_cfg is not None
         assert len(user_cfg.relationships) >= 1
@@ -316,7 +316,7 @@ class TestErDiagramConfiguration:
 
     def test_post_entity_has_relationships(self):
         post_cfg = next(
-            (cfg for cfg in diagram_v3.entities if cfg.kls == PostEntityV3), None
+            (cfg for cfg in diagram_v3.entities if cfg.kls == PostEntity), None
         )
         assert post_cfg is not None
         assert len(post_cfg.relationships) == 2  # author and comments

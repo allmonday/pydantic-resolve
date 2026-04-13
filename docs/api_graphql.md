@@ -51,7 +51,7 @@ result = await handler.execute("""
 
 When `context` is provided, it is used in two ways:
 
-1. **`@query`/`@mutation` methods** — declare a `context` parameter in the method signature to receive it directly.
+1. **`@query`/`@mutation` methods** — declare an `_context` parameter in the method signature to receive it directly.
 2. **DataLoaders** — the context is forwarded to the internal `Resolver(context=...)`, which injects it into class-based DataLoaders that declare a `_context` attribute.
 
 ```python
@@ -113,13 +113,13 @@ Use `QueryConfig(name=...)` when you need to override the method-name part of th
 
 ### Receiving request context
 
-Add a `context` parameter to receive framework-level data (e.g. `user_id` from JWT). This parameter is **hidden from the GraphQL schema** — clients cannot see or set it.
+Add an `_context` parameter to receive framework-level data (e.g. `user_id` from JWT). This parameter is **hidden from the GraphQL schema** — clients cannot see or set it.
 
 ```python
 class MyEntity(BaseModel, BaseEntity):
     @query
-    async def get_my_items(cls, limit: int = 20, context: dict = None) -> list['MyEntity']:
-        user_id = context['user_id']
+    async def get_my_items(cls, limit: int = 20, _context: dict = None) -> list['MyEntity']:
+        user_id = _context['user_id']
         return await fetch_items_by_owner(user_id, limit)
 ```
 
@@ -166,8 +166,8 @@ async def get_all_sprints(cls, limit: int = 20) -> list[SprintEntity]:
 async def get_sprint_by_id(cls, id: int) -> SprintEntity | None:
     return SprintEntity(**SPRINTS.get(id, {}))
 
-async def get_my_sprints(cls, limit: int = 20, context: dict = None) -> list[SprintEntity]:
-    user_id = context['user_id']
+async def get_my_sprints(cls, limit: int = 20, _context: dict = None) -> list[SprintEntity]:
+    user_id = _context['user_id']
     return await fetch_sprints_by_owner(user_id, limit)
 
 Entity(
@@ -180,7 +180,7 @@ Entity(
 )
 ```
 
-Like `@query`, `QueryConfig` methods can declare a `context` parameter. It is **hidden from the GraphQL schema** and injected by `handler.execute(context=...)`.
+Like `@query`, `QueryConfig` methods can declare an `_context` parameter. It is **hidden from the GraphQL schema** and injected by `handler.execute(context=...)`.
 
 ## MutationConfig
 

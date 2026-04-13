@@ -137,7 +137,7 @@ class CommentOrm(Base):
 # =====================================
 
 
-class UserEntityV3(BaseModel):
+class UserEntity(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int = Field(description="User ID")
@@ -147,7 +147,7 @@ class UserEntityV3(BaseModel):
     created_at: datetime = Field(description="Created at")
 
 
-class PostEntityV3(BaseModel):
+class PostEntity(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int = Field(description="Post ID")
@@ -158,7 +158,7 @@ class PostEntityV3(BaseModel):
     created_at: datetime = Field(description="Created at")
 
 
-class CommentEntityV3(BaseModel):
+class CommentEntity(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int = Field(description="Comment ID")
@@ -173,28 +173,28 @@ class CommentEntityV3(BaseModel):
 # =====================================
 
 
-async def get_all_users(limit: int = 10, offset: int = 0) -> List[UserEntityV3]:
+async def get_all_users(limit: int = 10, offset: int = 0) -> List[UserEntity]:
     """Get all users (paginated)."""
     async with async_session_factory() as session:
         stmt = select(UserOrm).offset(offset).limit(limit)
         result = await session.execute(stmt)
         rows = result.scalars().all()
-    return [UserEntityV3.model_validate(r) for r in rows]
+    return [UserEntity.model_validate(r) for r in rows]
 
 
-async def get_user_by_id(id: int) -> Optional[UserEntityV3]:
+async def get_user_by_id(id: int) -> Optional[UserEntity]:
     """Get user by ID."""
     async with async_session_factory() as session:
         result = await session.execute(
             select(UserOrm).where(UserOrm.id == id)
         )
         row = result.scalar_one_or_none()
-    return UserEntityV3.model_validate(row) if row else None
+    return UserEntity.model_validate(row) if row else None
 
 
 async def get_all_posts(
     limit: int = 10, status: Optional[str] = None
-) -> List[PostEntityV3]:
+) -> List[PostEntity]:
     """Get all posts (filterable by status)."""
     async with async_session_factory() as session:
         stmt = select(PostOrm)
@@ -203,28 +203,28 @@ async def get_all_posts(
         stmt = stmt.limit(limit)
         result = await session.execute(stmt)
         rows = result.scalars().all()
-    return [PostEntityV3.model_validate(r) for r in rows]
+    return [PostEntity.model_validate(r) for r in rows]
 
 
-async def get_post_by_id(id: int) -> Optional[PostEntityV3]:
+async def get_post_by_id(id: int) -> Optional[PostEntity]:
     """Get post by ID."""
     async with async_session_factory() as session:
         result = await session.execute(
             select(PostOrm).where(PostOrm.id == id)
         )
         row = result.scalar_one_or_none()
-    return PostEntityV3.model_validate(row) if row else None
+    return PostEntity.model_validate(row) if row else None
 
 
-async def get_all_comments() -> List[CommentEntityV3]:
+async def get_all_comments() -> List[CommentEntity]:
     """Get all comments."""
     async with async_session_factory() as session:
         result = await session.execute(select(CommentOrm))
         rows = result.scalars().all()
-    return [CommentEntityV3.model_validate(r) for r in rows]
+    return [CommentEntity.model_validate(r) for r in rows]
 
 
-async def get_my_posts(limit: int = 10, _context: dict = None) -> List[PostEntityV3]:
+async def get_my_posts(limit: int = 10, _context: dict = None) -> List[PostEntity]:
     """Get posts by the current user (requires context)."""
     if _context is None:
         raise ValueError("Authentication required")
@@ -239,7 +239,7 @@ async def get_my_posts(limit: int = 10, _context: dict = None) -> List[PostEntit
         )
         result = await session.execute(stmt)
         rows = result.scalars().all()
-    return [PostEntityV3.model_validate(r) for r in rows]
+    return [PostEntity.model_validate(r) for r in rows]
 
 
 # =====================================
@@ -249,7 +249,7 @@ async def get_my_posts(limit: int = 10, _context: dict = None) -> List[PostEntit
 
 async def create_user(
     name: str, email: str, role: str = "user"
-) -> UserEntityV3:
+) -> UserEntity:
     """Create a new user."""
     async with async_session_factory() as session:
         async with session.begin():
@@ -260,10 +260,10 @@ async def create_user(
             session.add(orm)
             await session.flush()
             await session.refresh(orm)
-        return UserEntityV3.model_validate(orm)
+        return UserEntity.model_validate(orm)
 
 
-async def create_user_with_input(input: CreateUserInput) -> UserEntityV3:
+async def create_user_with_input(input: CreateUserInput) -> UserEntity:
     """Create user with input type."""
     return await create_user(name=input.name, email=input.email, role=input.role)
 
@@ -273,7 +273,7 @@ async def create_post(
     content: str,
     author_id: int,
     status: str = "draft",
-) -> PostEntityV3:
+) -> PostEntity:
     """Create a new post."""
     async with async_session_factory() as session:
         async with session.begin():
@@ -284,10 +284,10 @@ async def create_post(
             session.add(orm)
             await session.flush()
             await session.refresh(orm)
-        return PostEntityV3.model_validate(orm)
+        return PostEntity.model_validate(orm)
 
 
-async def create_post_with_input(input: CreatePostInput) -> PostEntityV3:
+async def create_post_with_input(input: CreatePostInput) -> PostEntity:
     """Create post with input type."""
     return await create_post(
         title=input.title, content=input.content,
@@ -297,7 +297,7 @@ async def create_post_with_input(input: CreatePostInput) -> PostEntityV3:
 
 async def create_comment(
     text: str, author_id: int, post_id: int
-) -> CommentEntityV3:
+) -> CommentEntity:
     """Create a new comment."""
     async with async_session_factory() as session:
         async with session.begin():
@@ -308,7 +308,7 @@ async def create_comment(
             session.add(orm)
             await session.flush()
             await session.refresh(orm)
-        return CommentEntityV3.model_validate(orm)
+        return CommentEntity.model_validate(orm)
 
 
 # =====================================
@@ -318,9 +318,9 @@ async def create_comment(
 # Step 1: Auto-generate relationship entities from ORM
 relationship_entities = build_relationship(
     mappings=[
-        Mapping(entity=UserEntityV3, orm=UserOrm),
-        Mapping(entity=PostEntityV3, orm=PostOrm),
-        Mapping(entity=CommentEntityV3, orm=CommentOrm),
+        Mapping(entity=UserEntity, orm=UserOrm),
+        Mapping(entity=PostEntity, orm=PostOrm),
+        Mapping(entity=CommentEntity, orm=CommentOrm),
     ],
     session_factory=session_factory,
 )
@@ -328,7 +328,7 @@ relationship_entities = build_relationship(
 # Step 2: Define query/mutation configs
 qm_entities = [
     Entity(
-        kls=UserEntityV3,
+        kls=UserEntity,
         queries=[
             QueryConfig(
                 method=get_all_users, name="users_v3",
@@ -351,7 +351,7 @@ qm_entities = [
         ],
     ),
     Entity(
-        kls=PostEntityV3,
+        kls=PostEntity,
         queries=[
             QueryConfig(
                 method=get_all_posts, name="posts_v3",
@@ -363,7 +363,7 @@ qm_entities = [
             ),
             QueryConfig(
                 method=get_my_posts, name="my_posts_v3",
-                description="Get posts by the current authenticated user",
+                description="Get posts by the me (current use)",
             ),
         ],
         mutations=[
@@ -378,7 +378,7 @@ qm_entities = [
         ],
     ),
     Entity(
-        kls=CommentEntityV3,
+        kls=CommentEntity,
         queries=[
             QueryConfig(
                 method=get_all_comments, name="comments_v3",

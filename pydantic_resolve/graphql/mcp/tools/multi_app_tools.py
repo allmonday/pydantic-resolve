@@ -10,7 +10,10 @@ The tools are organized in 4 layers:
 
 from __future__ import annotations
 
+import inspect
 from typing import TYPE_CHECKING, Any, Dict
+
+from fastmcp.server.context import Context
 
 from pydantic_resolve.graphql.mcp.types.errors import (
     MCPErrors,
@@ -20,6 +23,7 @@ from pydantic_resolve.graphql.mcp.types.errors import (
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
+    from pydantic_resolve.graphql.mcp.managers.app_resources import AppResources
     from pydantic_resolve.graphql.mcp.managers.multi_app_manager import MultiAppManager
 
 
@@ -40,6 +44,15 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
         mcp: The FastMCP server instance
         manager: The MultiAppManager instance containing app resources
     """
+
+    async def _extract_context(app: "AppResources", ctx: "Context") -> dict | None:
+        """Call the app's context_extractor if configured, returning a context dict."""
+        if app.context_extractor is None:
+            return None
+        result = app.context_extractor(ctx)
+        if inspect.isawaitable(result):
+            return await result
+        return result
 
     # Layer 0: Application discovery
     @mcp.tool()
@@ -329,7 +342,7 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
 
     # Layer 3: Execute operations
     @mcp.tool()
-    async def graphql_query(query: str, app_name: str) -> Dict[str, Any]:
+    async def graphql_query(query: str, app_name: str, ctx: "Context") -> Dict[str, Any]:
         """Execute a GraphQL query on a specific application.
 
         Use this tool after discovering operations with list_queries and
@@ -356,7 +369,8 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
 
         try:
             app = manager.get_app(app_name)
-            result = await app.handler.execute(query)
+            context = await _extract_context(app, ctx)
+            result = await app.handler.execute(query, context=context)
 
             if "errors" in result and result["errors"]:
                 error_messages = [
@@ -385,7 +399,7 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
             return create_error_response(str(e), MCPErrors.INTERNAL_ERROR)
 
     @mcp.tool()
-    async def graphql_mutation(mutation: str, app_name: str) -> Dict[str, Any]:
+    async def graphql_mutation(mutation: str, app_name: str, ctx: "Context") -> Dict[str, Any]:
         """Execute a GraphQL mutation on a specific application.
 
         Use this tool after discovering operations with list_mutations and
@@ -413,7 +427,8 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
 
         try:
             app = manager.get_app(app_name)
-            result = await app.handler.execute(mutation)
+            context = await _extract_context(app, ctx)
+            result = await app.handler.execute(mutation, context=context)
 
             if "errors" in result and result["errors"]:
                 error_messages = [

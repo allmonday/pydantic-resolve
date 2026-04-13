@@ -51,7 +51,7 @@ result = await handler.execute("""
 
 当提供 `context` 时，它在两处生效：
 
-1. **`@query`/`@mutation` 方法** — 在方法签名中声明 `context` 参数即可直接接收。
+1. **`@query`/`@mutation` 方法** — 在方法签名中声明 `_context` 参数即可直接接收。
 2. **DataLoader** — context 会传入内部的 `Resolver(context=...)`，由 Resolver 自动注入到声明了 `_context` 属性的类式 DataLoader 中。
 
 ```python
@@ -113,13 +113,13 @@ class MyEntity(BaseModel, BaseEntity):
 
 ### 接收请求上下文
 
-添加 `context` 参数可接收框架级数据（如来自 JWT 的 `user_id`）。该参数**对 GraphQL schema 不可见** — 客户端无法看到或设置它。
+添加 `_context` 参数可接收框架级数据（如来自 JWT 的 `user_id`）。该参数**对 GraphQL schema 不可见** — 客户端无法看到或设置它。
 
 ```python
 class MyEntity(BaseModel, BaseEntity):
     @query
-    async def get_my_items(cls, limit: int = 20, context: dict = None) -> list['MyEntity']:
-        user_id = context['user_id']
+    async def get_my_items(cls, limit: int = 20, _context: dict = None) -> list['MyEntity']:
+        user_id = _context['user_id']
         return await fetch_items_by_owner(user_id, limit)
 ```
 
@@ -166,8 +166,8 @@ async def get_all_sprints(cls, limit: int = 20) -> list[SprintEntity]:
 async def get_sprint_by_id(cls, id: int) -> SprintEntity | None:
     return SprintEntity(**SPRINTS.get(id, {}))
 
-async def get_my_sprints(cls, limit: int = 20, context: dict = None) -> list[SprintEntity]:
-    user_id = context['user_id']
+async def get_my_sprints(cls, limit: int = 20, _context: dict = None) -> list[SprintEntity]:
+    user_id = _context['user_id']
     return await fetch_sprints_by_owner(user_id, limit)
 
 Entity(
@@ -180,7 +180,7 @@ Entity(
 )
 ```
 
-与 `@query` 相同，`QueryConfig` 方法也可以声明 `context` 参数。它**对 GraphQL schema 不可见**，由 `handler.execute(context=...)` 注入。
+与 `@query` 相同，`QueryConfig` 方法也可以声明 `_context` 参数。它**对 GraphQL schema 不可见**，由 `handler.execute(context=...)` 注入。
 
 ## MutationConfig
 

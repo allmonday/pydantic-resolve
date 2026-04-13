@@ -41,6 +41,7 @@ AppConfig(
     query_description: str | None = None,
     mutation_description: str | None = None,
     enable_from_attribute_in_type_adapter: bool = False,
+    context_extractor: Callable | None = None,
 )
 ```
 
@@ -52,6 +53,53 @@ AppConfig(
 | `query_description` | `str \| None` | Description for the Query type |
 | `mutation_description` | `str \| None` | Description for the Mutation type |
 | `enable_from_attribute_in_type_adapter` | `bool` | Enable Pydantic from_attributes mode |
+| `context_extractor` | `Callable \| None` | Callback to extract request-scoped context from HTTP request |
+
+### context_extractor
+
+Optional callback that extracts request-scoped context (e.g. user identity from Authorization header) from the MCP HTTP request and passes it to `handler.execute(context=...)`, which injects it into `@query`/`@mutation` methods' `_context` parameter.
+
+Signature: `(Context) -> dict | Awaitable[dict]`, supports both sync and async.
+
+```python
+from fastmcp.server.context import Context
+from fastmcp.server.dependencies import get_http_headers
+
+def extract_user_context(ctx: Context) -> dict:
+    # NOTE: get_http_headers() strips 'authorization' by default.
+    # You must pass include={"authorization"} to receive it.
+    headers = get_http_headers(include={"authorization"})
+    auth = headers.get("authorization", "")
+    if auth.startswith("Bearer "):
+        token = auth[7:]
+        # In production, decode JWT here
+        return {"user_id": int(token)}
+    return {}
+
+apps = [
+    AppConfig(
+        name="blog",
+        er_diagram=diagram,
+        context_extractor=extract_user_context,
+    ),
+]
+```
+
+Data flow:
+
+```
+HTTP Request (Authorization: Bearer <token>)
+  → FastMCP Context
+    → context_extractor(ctx) → {"user_id": 1}
+      → handler.execute(query, context={"user_id": 1})
+        → @query method's _context parameter
+```
+
+**Important notes:**
+
+- `get_http_headers()` excludes `authorization`, `content-type`, and other sensitive headers by default. You must pass `include={"authorization"}` to receive the Authorization header.
+- When MCP runs via stdio transport (no HTTP request), `get_http_headers()` returns an empty dict.
+- Without `context_extractor`, behavior is unchanged (no context is passed).
 
 ## MultiAppManager
 

@@ -41,6 +41,7 @@ AppConfig(
     query_description: str | None = None,
     mutation_description: str | None = None,
     enable_from_attribute_in_type_adapter: bool = False,
+    context_extractor: Callable | None = None,
 )
 ```
 
@@ -52,6 +53,53 @@ AppConfig(
 | `query_description` | `str \| None` | Query 类型的描述 |
 | `mutation_description` | `str \| None` | Mutation 类型的描述 |
 | `enable_from_attribute_in_type_adapter` | `bool` | 启用 Pydantic 的 from_attributes 模式 |
+| `context_extractor` | `Callable \| None` | 从 HTTP 请求提取上下文的回调函数 |
+
+### context_extractor
+
+可选的回调函数，用于从 MCP 的 HTTP 请求中提取请求级上下文（如用户身份），并传递给 `handler.execute(context=...)`，最终注入到 `@query`/`@mutation` 方法的 `_context` 参数。
+
+函数签名：`(Context) -> dict | Awaitable[dict]`，支持同步和异步。
+
+```python
+from fastmcp.server.context import Context
+from fastmcp.server.dependencies import get_http_headers
+
+def extract_user_context(ctx: Context) -> dict:
+    # 注意：get_http_headers() 默认会过滤 authorization 等敏感头，
+    # 必须通过 include 参数显式声明才能获取。
+    headers = get_http_headers(include={"authorization"})
+    auth = headers.get("authorization", "")
+    if auth.startswith("Bearer "):
+        token = auth[7:]
+        # 生产环境中应解码 JWT，此处仅为演示
+        return {"user_id": int(token)}
+    return {}
+
+apps = [
+    AppConfig(
+        name="blog",
+        er_diagram=diagram,
+        context_extractor=extract_user_context,
+    ),
+]
+```
+
+数据流向：
+
+```
+HTTP 请求 (Authorization: Bearer <token>)
+  → FastMCP Context
+    → context_extractor(ctx) → {"user_id": 1}
+      → handler.execute(query, context={"user_id": 1})
+        → @query 方法的 _context 参数
+```
+
+**注意事项：**
+
+- `get_http_headers()` 默认排除 `authorization`、`content-type` 等头。必须传入 `include={"authorization"}` 才能获取。
+- 如果 MCP 通过 stdio 传输（无 HTTP 请求），`get_http_headers()` 返回空字典。
+- 不配置 `context_extractor` 时，行为与之前完全一致（不传 context）。
 
 ## MultiAppManager
 

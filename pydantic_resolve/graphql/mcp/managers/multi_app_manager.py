@@ -95,6 +95,7 @@ class MultiAppManager:
             handler=handler,
             introspection_helper=introspection_helper,
             sdl_builder=sdl_builder,
+            context_extractor=config.context_extractor,
         )
 
     def _register_app(self, resources: AppResources) -> None:
