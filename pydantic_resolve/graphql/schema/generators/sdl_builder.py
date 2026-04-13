@@ -317,8 +317,8 @@ class SDLBuilder(SchemaGenerator):
                 if param_name in ('self', 'cls'):
                     continue
 
-                # context is framework-injected, hidden from GraphQL schema
-                if param_name == 'context':
+                # _context is framework-injected, hidden from GraphQL schema
+                if param_name == '_context':
                     continue
 
                 try:
@@ -389,8 +389,8 @@ class SDLBuilder(SchemaGenerator):
                 if param_name in ('self', 'cls'):
                     continue
 
-                # context is framework-injected, hidden from GraphQL schema
-                if param_name == 'context':
+                # _context is framework-injected, hidden from GraphQL schema
+                if param_name == '_context':
                     continue
 
                 try:
@@ -566,7 +566,7 @@ class SDLBuilder(SchemaGenerator):
                         for param_name, param in sig.parameters.items():
                             if param_name in ('self', 'cls'):
                                 continue
-                            if param_name == 'context':
+                            if param_name == '_context':
                                 continue
                             if param.annotation != inspect.Parameter.empty:
                                 collect_from_type(param.annotation)
@@ -582,7 +582,7 @@ class SDLBuilder(SchemaGenerator):
                         for param_name, param in sig.parameters.items():
                             if param_name in ('self', 'cls'):
                                 continue
-                            if param_name == 'context':
+                            if param_name == '_context':
                                 continue
                             if param.annotation != inspect.Parameter.empty:
                                 collect_from_type(param.annotation)
@@ -798,7 +798,7 @@ class SDLBuilder(SchemaGenerator):
                 for param_name, param in sig.parameters.items():
                     if param_name in ('self', 'cls'):
                         continue
-                    if param_name == 'context':
+                    if param_name == '_context':
                         continue
                     if param.annotation != inspect.Parameter.empty:
                         collect_from_type(param.annotation)

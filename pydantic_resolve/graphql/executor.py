@@ -278,11 +278,11 @@ class QueryExecutor:
             # Convert arguments (handle BaseModel types)
             converted_args = self._convert_arguments(method, arguments)
 
-            # Inject context parameter if method declares it
+            # Inject _context parameter if method declares it
             if context is not None:
                 sig = inspect.signature(method)
-                if 'context' in sig.parameters:
-                    converted_args['context'] = context
+                if '_context' in sig.parameters:
+                    converted_args['_context'] = context
 
             # staticmethod object: call underlying function directly without cls
             if isinstance(method, staticmethod):
@@ -330,8 +330,8 @@ class QueryExecutor:
                 if param_name in ('self', 'cls'):
                     continue
 
-                # context is framework-injected, not from GraphQL query
-                if param_name == 'context':
+                # _context is framework-injected, not from GraphQL query
+                if param_name == '_context':
                     continue
 
                 if param_name not in arguments:

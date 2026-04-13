@@ -224,6 +224,24 @@ async def get_all_comments() -> List[CommentEntityV3]:
     return [CommentEntityV3.model_validate(r) for r in rows]
 
 
+async def get_my_posts(limit: int = 10, _context: dict = None) -> List[PostEntityV3]:
+    """Get posts by the current user (requires context)."""
+    if _context is None:
+        raise ValueError("Authentication required")
+    user_id = _context.get('user_id')
+    if user_id is None:
+        raise ValueError("user_id is required in context")
+    async with async_session_factory() as session:
+        stmt = (
+            select(PostOrm)
+            .where(PostOrm.author_id == user_id)
+            .limit(limit)
+        )
+        result = await session.execute(stmt)
+        rows = result.scalars().all()
+    return [PostEntityV3.model_validate(r) for r in rows]
+
+
 # =====================================
 # Mutation Functions
 # =====================================
@@ -342,6 +360,10 @@ qm_entities = [
             QueryConfig(
                 method=get_post_by_id, name="post_v3",
                 description="Get post by ID",
+            ),
+            QueryConfig(
+                method=get_my_posts, name="my_posts_v3",
+                description="Get posts by the current authenticated user",
             ),
         ],
         mutations=[

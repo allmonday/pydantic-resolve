@@ -552,8 +552,8 @@ class IntrospectionGenerator(SchemaGenerator):
                 if param_name in ('self', 'cls'):
                     continue
 
-                # context is framework-injected, hidden from GraphQL schema
-                if param_name == 'context':
+                # _context is framework-injected, hidden from GraphQL schema
+                if param_name == '_context':
                     continue
 
                 param_type_def = None

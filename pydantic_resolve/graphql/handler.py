@@ -194,7 +194,7 @@ class GraphQLHandler:
         Args:
             query: GraphQL query string
             context: Request-scoped context dict injected into @query/@mutation
-                method's ``context`` parameter and downstream Resolver.
+                method's ``_context`` parameter and downstream Resolver.
                 Framework-level data (e.g. user_id from JWT) goes here.
 
         Returns:
