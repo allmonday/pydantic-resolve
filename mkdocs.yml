@@ -76,6 +76,8 @@ nav:
   - Reference:
     - Migration Guide: ./migration.md
     - Changelog: ./changelog.md
+  - Articles:
+    - "Reframing Data Assembly: pydantic-resolve vs SQLAlchemy ORM": ./blog_pydantic_resolve_vs_orm.md
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -103,6 +105,7 @@ plugins:
           nav_translations:
             Guide: "指南"
             Advanced: "进阶"
+            Articles: "文章"
             API Reference: "API 参考"
             Reference: "参考"
             Overview: "总览"
@@ -127,6 +130,7 @@ plugins:
             MCP API: "MCP API"
             Change log: "变更记录"
             Migration Guide: "迁移指南"
+            "Reframing Data Assembly: pydantic-resolve vs SQLAlchemy ORM": "重塑数据构建的开发体验：pydantic-resolve vs SQLAlchemy ORM 查询对比"
 
 extra:
   analytics:
