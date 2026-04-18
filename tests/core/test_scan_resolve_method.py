@@ -61,7 +61,8 @@ def test_scan_resolve_method_3():
                 'kls': SampleLoader,
                 'path': 'test_scan_resolve_method.test_scan_resolve_method_3.<locals>.SampleLoader',
                 'request_type': None,
-                'requires_context': False
+                'requires_context': False,
+                'type_key': (),
             }
         ]
     }

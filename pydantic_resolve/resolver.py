@@ -59,7 +59,8 @@ class Resolver:
             context: dict[str, Any] | None = None,
             debug=False,
             enable_from_attribute_in_type_adapter=False,
-            annotation: type[T] | None=None
+            annotation: type[T] | None=None,
+            split_loader_by_type=False,
             ):
         
         self.debug = debug or os.getenv("PYDANTIC_RESOLVE_DEBUG", "false").lower() == "true"
@@ -128,6 +129,8 @@ class Resolver:
         # if user provide annotation, it will skip the deduction from input value
         self.annotation = annotation
 
+        self.split_loader_by_type = split_loader_by_type
+
     def _validate_loader_instance(self, loader_instances: dict[Any, Any]):
         for cls, loader in loader_instances.items():
             if not issubclass(cls, DataLoader):
@@ -136,14 +139,23 @@ class Resolver:
                 raise AttributeError(f'{loader.__class__.__name__} is not instance of {cls.__name__}')
         return True
 
-    def _get_loader_instance(self, cache_key: str):
-        try:
-            return self.loader_instance_cache[cache_key]
-        except KeyError as exc:
+    def _get_loader_instance(self, path: str, type_key):
+        entry = self.loader_instance_cache.get(path)
+        if entry is None:
             raise AttributeError(
-                f'Loader instance not found for "{cache_key}". '
+                f'Loader instance not found for "{path}". '
                 'Check Resolver loader_params/global_loader_param or loader_instances.'
-            ) from exc
+            )
+        if not self.split_loader_by_type:
+            return entry
+        # Nested structure: {path: {type_tuple: DataLoader}}
+        instance = entry.get(type_key)
+        if instance is None:
+            raise AttributeError(
+                f'Loader instance not found for "{path}" with type_key {type_key}. '
+                'Check Resolver loader_params/global_loader_param or loader_instances.'
+            )
+        return instance
     
     def _prepare_collectors(self, node: object, kls: type):
         alias_map = analysis.generate_alias_map_with_cloned_collector(kls, self.metadata)
@@ -213,12 +225,11 @@ class Resolver:
             params['parent'] = self._parent_contextvar.get()
         
         for loader in resolve_param['dataloaders']:
-            cache_key = loader['path']
-            loader_instance = self._get_loader_instance(cache_key)
+            loader_instance = self._get_loader_instance(loader['path'], loader['type_key'])
             params[loader['param']] = loader_instance
 
         return method(**params)
-    
+
     def _execute_post_method(
             self,
             node: object,
@@ -238,8 +249,7 @@ class Resolver:
             params['parent'] = self._parent_contextvar.get()
         
         for loader in post_param['dataloaders']:
-            cache_key = loader['path']
-            loader_instance = self._get_loader_instance(cache_key)
+            loader_instance = self._get_loader_instance(loader['path'], loader['type_key'])
             params[loader['param']] = loader_instance
 
         alias_map = self.object_level_collect_alias_map_store.get(id(node), {})
@@ -461,7 +471,8 @@ class Resolver:
             self.global_loader_param,
             self.loader_instances,
             self.metadata,
-            self.context)
+            self.context,
+            split_loader_by_type=self.split_loader_by_type)
         
         has_context = analysis.has_context(self.metadata)
         if has_context and self.context is None:

@@ -132,8 +132,9 @@ def validate_and_create_loader_instance(
     global_loader_param: dict,
     loader_instances: dict,
     metadata: MappedMetaType,
-    context: dict | None = None
-) -> dict[str, DataLoader]:
+    context: dict | None = None,
+    split_loader_by_type: bool = False
+) -> dict[str, DataLoader] | dict[str, dict[tuple[type, ...], DataLoader]]:
     """
     Validate and create loader instances.
 
@@ -143,44 +144,107 @@ def validate_and_create_loader_instance(
         - loader class
             - no param
             - has param
+
+    Returns:
+        Default mode (split_loader_by_type=False):
+            dict[str, DataLoader] — flat mapping from loader path to instance.
+        Split mode (split_loader_by_type=True):
+            dict[str, dict[tuple[type, ...], DataLoader]] — nested mapping.
+            Outer key is loader path, inner key is sorted tuple of request_types.
     """
     # Validate context requirements first
     _validate_loader_context_requirements(metadata, context is not None)
 
-    cache: dict[str, DataLoader] = {}
-    request_info: dict[str, list[type]] = {}
+    # split_loader_by_type is incompatible with pre-created loader_instances
+    # because split requires creating separate DataLoader instances per request_type,
+    # but loader_instances provides a single shared instance per loader class.
+    if split_loader_by_type and loader_instances:
+        raise ValueError(
+            'split_loader_by_type=True is incompatible with loader_instances. '
+            'When splitting loaders by type, each split requires an independent '
+            'DataLoader instance, which conflicts with pre-created shared instances.'
+        )
 
-    # create instance
-    for loader in _get_all_loaders_from_meta(metadata):
-        loader_kls = loader['kls']
-        path = loader['path']
+    if not split_loader_by_type:
+        # Default: flat structure {path: DataLoader}
+        cache: dict[str, DataLoader] = {}
+        request_info: dict[str, list[list[type]]] = {}
+        seen_type_keys: dict[str, set] = {}
 
-        if path in cache:
-            continue
+        # create instance
+        for loader in _get_all_loaders_from_meta(metadata):
+            path = loader['path']
+            if path in cache:
+                continue
+            loader_kls = loader['kls']
+            if loader_instances.get(loader_kls):
+                cache[path] = loader_instances[loader_kls]
+            else:
+                cache[path] = _create_loader_instance(loader, loader_params, global_loader_param, context)
 
-        if loader_instances.get(loader_kls):  # if instance already exists
-            cache[path] = loader_instances.get(loader_kls)
-            continue
+        # prepare query meta
+        for loader in _get_all_loaders_from_meta(metadata):
+            kls = loader['request_type']
+            if kls is None:
+                continue
+            path = loader['path']
+            type_key = loader['type_key']
+            if path not in request_info:
+                request_info[path] = []
+                seen_type_keys[path] = set()
+            # Dedup by type_key (sorted tuple) so Union order doesn't matter
+            if type_key not in seen_type_keys[path]:
+                request_info[path].append(kls)
+                seen_type_keys[path].add(type_key)
 
-        cache[path] = _create_loader_instance(loader, loader_params, global_loader_param, context)
+        # combine
+        for path, instance in cache.items():
+            if request_info.get(path) is None:
+                continue
+            instance._query_meta = _generate_query_meta(request_info[path])
 
-    # prepare query meta
-    for loader in _get_all_loaders_from_meta(metadata):
-        kls = loader['request_type']
-        path = loader['path']
+        return cache
 
-        if kls is None:
-            continue
+    else:
+        # Split: nested structure {path: {type_tuple: DataLoader}}
+        cache: dict[str, dict[tuple[type, ...], DataLoader]] = {}  # type: ignore[no-redef]
+        request_info: dict[str, dict[tuple[type, ...], list[list[type]]]] = {}  # type: ignore[no-redef]
 
-        if path in request_info and kls not in request_info[path]:
-            request_info[path].append(kls)
-        else:
-            request_info[path] = [kls]
+        # create instance
+        for loader in _get_all_loaders_from_meta(metadata):
+            path = loader['path']
+            type_key = loader['type_key']
 
-    # combine together
-    for path, instance in cache.items():
-        if request_info.get(path) is None:
-            continue
-        instance._query_meta = _generate_query_meta(request_info[path])
+            if path not in cache:
+                cache[path] = {}
+            if type_key in cache[path]:
+                continue
 
-    return cache
+            loader_kls = loader['kls']
+            if loader_instances.get(loader_kls):
+                cache[path][type_key] = loader_instances[loader_kls]
+            else:
+                cache[path][type_key] = _create_loader_instance(loader, loader_params, global_loader_param, context)
+
+        # prepare query meta
+        for loader in _get_all_loaders_from_meta(metadata):
+            request_types = loader['request_type']
+            if request_types is None:
+                continue
+            path = loader['path']
+            type_key = loader['type_key']
+
+            if path not in request_info:
+                request_info[path] = {}
+            # Same type_key means same type set (regardless of Union order);
+            # keep only one representative request_types per type_key.
+            if type_key not in request_info[path]:
+                request_info[path][type_key] = [request_types]
+
+        # combine
+        for path, inner in cache.items():
+            for type_key, instance in inner.items():
+                if path in request_info and type_key in request_info[path]:
+                    instance._query_meta = _generate_query_meta(request_info[path][type_key])
+
+        return cache

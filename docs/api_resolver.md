@@ -20,6 +20,7 @@ class Resolver:
         debug: bool = False,
         enable_from_attribute_in_type_adapter: bool = False,
         annotation: type[T] | None = None,
+        split_loader_by_type: bool = False,
     )
 ```
 
@@ -35,6 +36,34 @@ class Resolver:
 | `debug` | `bool` | `False` | Print per-node timing information |
 | `enable_from_attribute_in_type_adapter` | `bool` | `False` | Enable Pydantic v2 `from_attributes` mode |
 | `annotation` | `type \| None` | `None` | Explicit root type when input is a list of Union types |
+| `split_loader_by_type` | `bool` | `False` | Create separate DataLoader instances per `request_type`. **Incompatible with `loader_instances`**. |
+
+#### split_loader_by_type
+
+When multiple fields in the same resolve tree share a `DataLoader` but declare different response types (e.g., `TaskCard` with 2 columns vs `TaskDetail` with 20 columns), the default behavior creates a single shared loader instance whose `_query_meta.fields` is the **union** of all requested columns. This means even the lightweight view queries all 20 columns.
+
+Setting `split_loader_by_type=True` creates an independent `DataLoader` instance per `request_type`, so each instance's `_query_meta` contains only the columns its target type actually needs.
+
+```python
+class Dashboard(BaseModel):
+    id: int
+    cards: List[TaskCard] = []       # only needs id, title
+    details: List[TaskDetail] = []   # needs id, title, desc, status, ...
+
+    def resolve_cards(self, loader=Loader(TaskLoader)):
+        return loader.load(self.id)
+
+    def resolve_details(self, loader=Loader(TaskLoader)):
+        return loader.load(self.id)
+
+# Default: one TaskLoader instance, _query_meta.fields = union of all columns
+# Split:   two TaskLoader instances, each with its own _query_meta
+result = await Resolver(split_loader_by_type=True).resolve(Dashboard(id=1))
+```
+
+**Limitation:** Split loaders maintain independent caches. If both `cards` and `details` request the same key `1`, the database will be queried twice — once by each loader instance.
+
+**Incompatible with `loader_instances`:** Pre-created instances are shared by nature and cannot be split per type. Raises `ValueError` if both are provided.
 
 ### resolve()
 
@@ -51,7 +80,18 @@ After resolution, contains all DataLoader instances that were created:
 ```python
 resolver = Resolver()
 result = await resolver.resolve(data)
-print(resolver.loader_instance_cache)
+
+# Default mode: dict[str, DataLoader]
+#   {'module.TaskLoader': <DataLoader>}
+print(resolver.loader_instance_cache['module.TaskLoader'])
+```
+
+When `split_loader_by_type=True`, the structure is nested:
+
+```python
+# Split mode: dict[str, dict[tuple[type, ...], DataLoader]]
+#   {'module.TaskLoader': {(TaskCard,): inst1, (TaskDetail,): inst2}}
+print(resolver.loader_instance_cache['module.TaskLoader'][(TaskCard,)])
 ```
 
 ## config_global_resolver
