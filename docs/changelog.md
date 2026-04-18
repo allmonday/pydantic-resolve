@@ -4,6 +4,16 @@
 - **Minor (x.Y.0)**: New features, backward compatible
 - **Patch (x.y.Z)**: Bug fixes and minor improvements
 
+## 5.2
+
+### 5.2.0 (2026-4-18)
+
+- feat:
+  - **`Resolver(split_loader_by_type=True)`**: create separate DataLoader instances per request_type so lightweight views (e.g. `TaskCard` with 2 columns) don't query all columns needed by heavyweight views (e.g. `TaskDetail` with 20 columns). Incompatible with `loader_instances`. See [Resolver API](./api_resolver.md) for details.
+- refactor:
+  - Improved `validate_and_create_loader_instance` readability with unified split/non-split logic
+  - Deterministic `_query_meta` output order
+
 ## 5.1
 
 ### 5.1.0 (2026-4-13)
