@@ -1,5 +1,5 @@
 import pytest
-from typing import List, Optional
+from typing import List, Optional, Union
 from pydantic import BaseModel
 from aiodataloader import DataLoader
 from pydantic_resolve import Loader, Resolver
@@ -189,3 +189,76 @@ async def test_split_with_loader_instances_raises_error():
 
     with pytest.raises(ValueError, match='split_loader_by_type=True is incompatible with loader_instances'):
         await resolver.resolve(Dashboard(id=1))
+
+
+# --- Regression: loader without request_type (type_key=()) ---
+
+
+class PlainLoader(DataLoader):
+    async def batch_load_fn(self, keys):
+        return [[f'value-{k}'] for k in keys]
+
+
+class NoTypeView(BaseModel):
+    id: int
+    names: list[str] = []
+
+    def resolve_names(self, loader=Loader(PlainLoader)):
+        return loader.load(self.id)
+
+
+@pytest.mark.asyncio
+async def test_loader_without_request_type_no_query_meta():
+    """Loader without request_type (type_key=()) should have no _query_meta."""
+    resolver = Resolver()
+    await resolver.resolve(NoTypeView(id=1))
+    loader = resolver.loader_instance_cache[
+        'tests.resolver.test_54_split_loader_by_type.PlainLoader']
+    assert not hasattr(loader, '_query_meta')
+
+
+@pytest.mark.asyncio
+async def test_split_loader_without_request_type_works():
+    """Split mode works for loaders without request_type (type_key=())."""
+    resolver = Resolver(split_loader_by_type=True)
+    result = await resolver.resolve(NoTypeView(id=1))
+    assert result.names == ['value-1']
+
+
+# --- Regression: reversed Union order dedup ---
+
+
+class TypeA(BaseModel):
+    x: int
+
+
+class TypeB(BaseModel):
+    y: str
+
+
+class UnionOrderLoader(DataLoader):
+    async def batch_load_fn(self, keys):
+        return [[dict(x=1, y='a')] for k in keys]
+
+
+class UnionOrderView(BaseModel):
+    id: int
+    items_ab: List[Union[TypeA, TypeB]] = []
+    items_ba: List[Union[TypeB, TypeA]] = []
+
+    def resolve_items_ab(self, loader=Loader(UnionOrderLoader)):
+        return loader.load(self.id)
+
+    def resolve_items_ba(self, loader=Loader(UnionOrderLoader)):
+        return loader.load(self.id)
+
+
+@pytest.mark.asyncio
+async def test_union_order_dedup_in_query_meta():
+    """Union A|B and B|A should produce the same type_key, no duplicate request_types."""
+    resolver = Resolver()
+    await resolver.resolve(UnionOrderView(id=1))
+    loader = resolver.loader_instance_cache[
+        'tests.resolver.test_54_split_loader_by_type.UnionOrderLoader']
+    # 2 types (TypeA, TypeB), not 4 from two unresolved Union orders
+    assert len(loader._query_meta['request_types']) == 2
