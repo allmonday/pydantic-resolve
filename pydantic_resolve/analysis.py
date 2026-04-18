@@ -85,6 +85,7 @@ class DataLoaderType(TypedDict):
     path: str
     request_type: list[type]
     requires_context: bool
+    type_key: tuple[type, ...]  # sorted tuple for cache lookup, computed once; empty tuple if no request_types
 
 class CollectorType(TypedDict):
     field: str 
@@ -383,12 +384,18 @@ def _scan_resolve_method(method, field: str, request_types: list[type]) -> Resol
     for name, param in signature.parameters.items():
         if isinstance(param.default, Depends):
             loader_kls = param.default.dependency
+            path = class_util.get_kls_full_name(loader_kls)
+
+            # Sort to ensure Union order (TaskA | TaskB vs TaskB | TaskA) produces the same key
+            type_key = tuple(sorted(request_types, key=lambda t: class_util.get_kls_full_name(t))) if request_types else ()
+
             info: DataLoaderType = {
                 'param': name,
-                'kls': loader_kls,  # for later initialization
-                'path': class_util.get_kls_full_name(loader_kls),
+                'kls': loader_kls,
+                'path': path,
                 'request_type': request_types,
-                'requires_context': _loader_requires_context(loader_kls)
+                'requires_context': _loader_requires_context(loader_kls),
+                'type_key': type_key,
             }
             result['dataloaders'].append(info)
 
@@ -423,12 +430,17 @@ def _scan_post_method(method, field: str, request_types: list[type]) -> PostMeth
     for name, param in signature.parameters.items():
         if isinstance(param.default, Depends):
             loader_kls = param.default.dependency
+            path = class_util.get_kls_full_name(loader_kls)
+
+            type_key = tuple(sorted(request_types, key=lambda t: class_util.get_kls_full_name(t))) if request_types else ()
+
             loader_info: DataLoaderType = {
                 'param': name,
-                'kls': loader_kls,  # for later initialization
-                'path': class_util.get_kls_full_name(loader_kls),
+                'kls': loader_kls,
+                'path': path,
                 'request_type': request_types,
-                'requires_context': _loader_requires_context(loader_kls)
+                'requires_context': _loader_requires_context(loader_kls),
+                'type_key': type_key,
             }
             result['dataloaders'].append(loader_info)
 

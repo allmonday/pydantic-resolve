@@ -132,8 +132,9 @@ def validate_and_create_loader_instance(
     global_loader_param: dict,
     loader_instances: dict,
     metadata: MappedMetaType,
-    context: dict | None = None
-) -> dict[str, DataLoader]:
+    context: dict | None = None,
+    split_loader_by_type: bool = False
+) -> dict[str, DataLoader] | dict[str, dict[tuple[type, ...], DataLoader]]:
     """
     Validate and create loader instances.
 
@@ -143,44 +144,132 @@ def validate_and_create_loader_instance(
         - loader class
             - no param
             - has param
+
+    Returns:
+        Default mode (split_loader_by_type=False):
+            dict[str, DataLoader] — flat mapping from loader path to instance.
+        Split mode (split_loader_by_type=True):
+            dict[str, dict[tuple[type, ...], DataLoader]] — nested mapping.
+            Outer key is loader path, inner key is sorted tuple of request_types.
+
+    Data transformation example (split mode):
+
+        Given: Dashboard.resolve_cards  (request_type=[TaskCard])
+               Dashboard.resolve_details (request_type=[TaskDetail])
+
+        Phase 1 → cache:
+          {'mod.TaskLoader': {
+            (TaskCard,): <TaskLoader inst1>,
+            (TaskDetail,): <TaskLoader inst2>,
+          }}
+
+        Phase 2 → type_keys:
+          {'mod.TaskLoader': {(TaskCard,), (TaskDetail,)}}
+          Each type_key is a sorted tuple. If a field annotation were `TaskA | TaskB`,
+          the type_key would be (TaskA, TaskB) (sorted by full class name to normalize Union order).
+
+        Phase 3 → _query_meta:
+          _generate_query_meta expands each type_key into its Pydantic fields:
+            inst1._query_meta = {
+              'fields': ['id', 'title'],
+              'request_types': [{'name': TaskCard, 'fields': ['id', 'title']}]
+            }
+
+    Data transformation example (default / non-split mode):
+
+        Same scenario: Dashboard.resolve_cards + Dashboard.resolve_details
+
+        Phase 1 → cache (key is always ()):
+          {'mod.TaskLoader': {(): <TaskLoader shared_inst>}}
+
+        Phase 2 → type_keys (same as split, just collecting unique type_keys):
+          {'mod.TaskLoader': {(TaskCard,), (TaskDetail,)}}
+
+        Phase 3 → _query_meta (all type_keys feed into one shared instance):
+          shared_inst._query_meta = {
+            'fields': ['id', 'title', 'desc', 'status', ...],  # union across all types
+            'request_types': [
+              {'name': TaskCard, 'fields': ['id', 'title']},
+              {'name': TaskDetail, 'fields': ['id', 'title', 'desc', 'status', ...]},
+            ]
+          }
+
+        Return → flattened to {'mod.TaskLoader': <shared_inst>}
     """
     # Validate context requirements first
     _validate_loader_context_requirements(metadata, context is not None)
 
-    cache: dict[str, DataLoader] = {}
-    request_info: dict[str, list[type]] = {}
+    # split_loader_by_type is incompatible with pre-created loader_instances
+    # because split requires creating separate DataLoader instances per request_type,
+    # but loader_instances provides a single shared instance per loader class.
+    if split_loader_by_type and loader_instances:
+        raise ValueError(
+            'split_loader_by_type=True is incompatible with loader_instances. '
+            'When splitting loaders by type, each split requires an independent '
+            'DataLoader instance, which conflicts with pre-created shared instances.'
+        )
 
-    # create instance
+    # Internally always use nested structure {path: {key: DataLoader}}:
+    #   split mode:  key = type_key  (one instance per request_type set)
+    #   default mode: key = ()       (all entries share the same key → one instance per path)
+    cache: dict[str, dict[tuple[type, ...], DataLoader]] = {}
+    # type_keys collects unique type_key sets per loader path.
+    # type_key is a sorted tuple of request types (e.g. (TaskCard,) or (TaskA, TaskB)),
+    # used both as cache key in split mode and as type source for _query_meta generation.
+    type_keys: dict[str, set[tuple[type, ...]]] = {}
+
+    # Phase 1: create instances
+    # Iterate all DataLoaderType entries from scanned metadata (resolve_* and post_* methods).
+    # - Non-split mode: key = (), so every path maps to exactly one instance.
+    # - Split mode:     key = type_key (sorted tuple of request types), creating one instance per type set.
+    #
+    # Result (non-split):  cache = {'mod.TaskLoader': {(): <TaskLoader inst>}}
+    # Result (split):      cache = {'mod.TaskLoader': {(TaskCard,): <inst1>, (TaskDetail,): <inst2>}}
     for loader in _get_all_loaders_from_meta(metadata):
+        path = loader['path']
+        key = () if not split_loader_by_type else loader['type_key']
+
+        if path not in cache:
+            cache[path] = {}
+        if key in cache[path]:
+            continue
+
         loader_kls = loader['kls']
-        path = loader['path']
-
-        if path in cache:
-            continue
-
-        if loader_instances.get(loader_kls):  # if instance already exists
-            cache[path] = loader_instances.get(loader_kls)
-            continue
-
-        cache[path] = _create_loader_instance(loader, loader_params, global_loader_param, context)
-
-    # prepare query meta
-    for loader in _get_all_loaders_from_meta(metadata):
-        kls = loader['request_type']
-        path = loader['path']
-
-        if kls is None:
-            continue
-
-        if path in request_info and kls not in request_info[path]:
-            request_info[path].append(kls)
+        if loader_instances.get(loader_kls):
+            cache[path][key] = loader_instances[loader_kls]
         else:
-            request_info[path] = [kls]
+            cache[path][key] = _create_loader_instance(loader, loader_params, global_loader_param, context)
 
-    # combine together
-    for path, instance in cache.items():
-        if request_info.get(path) is None:
+    # Phase 2: collect type_keys for _query_meta generation.
+    # A set naturally deduplicates — Union alternatives with different order
+    # (e.g. TaskA|TaskB vs TaskB|TaskA) produce the same sorted type_key.
+    #
+    # Result: type_keys = {'mod.TaskLoader': {(TaskCard,), (TaskDetail,)}}
+    for loader in _get_all_loaders_from_meta(metadata):
+        if loader['request_type'] is None:
             continue
-        instance._query_meta = _generate_query_meta(request_info[path])
+        type_keys.setdefault(loader['path'], set()).add(loader['type_key'])
 
+    # Phase 3: assign _query_meta
+    # For each instance, determine which type_keys are relevant:
+    #   - Non-split: all type_keys (shared instance serves all types)
+    #   - Split:     only the type_key matching this instance's key
+    # _generate_query_meta expands each type into its Pydantic fields:
+    #   - fields:         union of all columns (for SQL column pruning)
+    #   - request_types:  per-type field lists (for type-specific queries)
+    for path, inner in cache.items():
+        keys = type_keys.get(path)
+        if not keys:  # do nothing, leave it to `not split_loader_by_type`
+            continue
+        for key, instance in inner.items():
+            relevant = keys if not split_loader_by_type else keys & {key}
+            if relevant:
+                # Sort to ensure deterministic _query_meta output order
+                sorted_keys = sorted(relevant, key=lambda tk: tuple(class_util.get_kls_full_name(t) for t in tk))
+                instance._query_meta = _generate_query_meta([list(tk) for tk in sorted_keys])
+
+    # Flatten for non-split mode: extract the sole () entry from each path's inner dict
+    # to produce the flat {path: DataLoader} return type.
+    if not split_loader_by_type:
+        return {path: inner[()] for path, inner in cache.items()}
     return cache

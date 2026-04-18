@@ -146,7 +146,8 @@ def test_resolve_params():
                             'kls': loader_fn,
                             'path': 'test_field_pydantic.loader_fn',
                             'request_type': None,
-                            'requires_context': False
+                            'requires_context': False,
+                            'type_key': (),
                         }
                     ],
                 },

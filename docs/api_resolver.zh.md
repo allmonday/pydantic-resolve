@@ -20,6 +20,7 @@ class Resolver:
         debug: bool = False,
         enable_from_attribute_in_type_adapter: bool = False,
         annotation: type[T] | None = None,
+        split_loader_by_type: bool = False,
     )
 ```
 
@@ -35,6 +36,34 @@ class Resolver:
 | `debug` | `bool` | `False` | 打印每个节点的计时信息 |
 | `enable_from_attribute_in_type_adapter` | `bool` | `False` | 启用 Pydantic v2 的 `from_attributes` 模式 |
 | `annotation` | `type \| None` | `None` | 当输入是 Union 类型列表时的显式根类型 |
+| `split_loader_by_type` | `bool` | `False` | 按 `request_type` 创建独立的 DataLoader 实例。**与 `loader_instances` 不兼容**。 |
+
+#### split_loader_by_type
+
+当同一棵 resolve 树中有多个字段共享同一个 `DataLoader`，但声明了不同的响应类型（例如 `TaskCard` 只需 2 个字段，`TaskDetail` 需要 20 个字段）时，默认行为是创建一个共享的 loader 实例，其 `_query_meta.fields` 取所有字段**并集**。这意味着轻量视图也会查询全部 20 列。
+
+开启 `split_loader_by_type=True` 后，会为每个 `request_type` 创建独立的 `DataLoader` 实例，各自 `_query_meta` 只包含对应类型实际需要的列。
+
+```python
+class Dashboard(BaseModel):
+    id: int
+    cards: List[TaskCard] = []       # 只需要 id, title
+    details: List[TaskDetail] = []   # 需要 id, title, desc, status, ...
+
+    def resolve_cards(self, loader=Loader(TaskLoader)):
+        return loader.load(self.id)
+
+    def resolve_details(self, loader=Loader(TaskLoader)):
+        return loader.load(self.id)
+
+# 默认：一个 TaskLoader 实例，_query_meta.fields = 所有字段的并集
+# 分裂：两个 TaskLoader 实例，各自拥有独立的 _query_meta
+result = await Resolver(split_loader_by_type=True).resolve(Dashboard(id=1))
+```
+
+**代价：** 分裂后的 loader 实例各自维护独立缓存。如果 `cards` 和 `details` 请求了同一个 key `1`，数据库会被查询两次——分别由各自的 loader 实例触发。
+
+**与 `loader_instances` 不兼容：** 预创建的实例本质上是共享的，无法按类型分裂。同时传入会抛出 `ValueError`。
 
 ### resolve()
 
@@ -51,7 +80,18 @@ async def resolve(self, data: T) -> T
 ```python
 resolver = Resolver()
 result = await resolver.resolve(data)
-print(resolver.loader_instance_cache)
+
+# 默认模式: dict[str, DataLoader]
+#   {'module.TaskLoader': <DataLoader>}
+print(resolver.loader_instance_cache['module.TaskLoader'])
+```
+
+当 `split_loader_by_type=True` 时，结构为嵌套映射：
+
+```python
+# Split 模式: dict[str, dict[tuple[type, ...], DataLoader]]
+#   {'module.TaskLoader': {(TaskCard,): inst1, (TaskDetail,): inst2}}
+print(resolver.loader_instance_cache['module.TaskLoader'][(TaskCard,)])
 ```
 
 ## config_global_resolver
