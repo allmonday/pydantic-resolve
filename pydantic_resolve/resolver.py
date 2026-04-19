@@ -335,13 +335,11 @@ class Resolver:
         setattr(node, trim_field, val)
 
     def _inject_nested_pagination(self, parent: object, result: object, field_name: str) -> None:
-        """Inject nested PageArgs from parent's prpag_tree into result items.
+        """Inject nested PageArgs from parent's prpag_tree into resolved children.
 
-        When a _result field is resolved, the result is a dict like
-        {"items": [...], "pagination": ...} which gets converted to a
-        Pydantic Result model. Before traversing into the items, we need
-        to inject their PageArgs from the pagination tree stored on the
-        parent instance.
+        Handles two cases:
+        1. _result fields (paginated lists): result is a Result model with 'items'
+        2. Many-to-one fields: result is a single Pydantic model instance
         """
         tree = getattr(parent, 'prpag_tree', None)
         if not tree or field_name not in tree:
@@ -351,19 +349,27 @@ class Resolver:
         if not nested_tree:
             return
 
-        # Result model has 'items' attribute
+        # Case 1: Result model has 'items' attribute (paginated list)
         items = getattr(result, 'items', None)
-        if not items:
+        if items:
+            for item in items:
+                for nested_name, (nested_pa, deeper_tree) in nested_tree.items():
+                    key = f'prpag_{nested_name}'
+                    if hasattr(item, key):
+                        object.__setattr__(item, key, nested_pa)
+                # Propagate the nested tree for deeper levels
+                if hasattr(item, 'prpag_tree'):
+                    object.__setattr__(item, 'prpag_tree', nested_tree)
             return
 
-        for item in items:
+        # Case 2: Many-to-one field (single model instance)
+        if hasattr(result, '__dict__'):
             for nested_name, (nested_pa, deeper_tree) in nested_tree.items():
                 key = f'prpag_{nested_name}'
-                if hasattr(item, key):
-                    object.__setattr__(item, key, nested_pa)
-            # Propagate the nested tree for deeper levels
-            if hasattr(item, 'prpag_tree'):
-                object.__setattr__(item, 'prpag_tree', nested_tree)
+                if hasattr(result, key):
+                    object.__setattr__(result, key, nested_pa)
+            if hasattr(result, 'prpag_tree'):
+                object.__setattr__(result, 'prpag_tree', nested_tree)
 
     async def _execute_post_method_field(
          self,

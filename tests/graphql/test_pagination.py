@@ -1054,3 +1054,147 @@ class TestNestedPagination:
         alice_art = authors[0]["articles"]["items"][0]
         assert len(alice_art["comments"]["items"]) == 2
         assert alice_art["comments"]["pagination"]["total_count"] == 2
+
+
+# =====================================
+# Test: Alias rejection
+# =====================================
+
+
+class TestAliasSupport:
+    """Test that field aliases are rejected."""
+
+    @pytest.mark.asyncio
+    async def test_root_alias_rejected(self, diagram):
+        handler = GraphQLHandler(
+            diagram,
+            enable_from_attribute_in_type_adapter=True,
+            enable_pagination=True,
+        )
+        result = await handler.execute("{ renamed: authorEntityAuthors { id } }")
+        assert result["errors"] is not None
+        assert "alias" in result["errors"][0]["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_nested_alias_rejected(self, nested_diagram):
+        handler = GraphQLHandler(
+            nested_diagram,
+            enable_from_attribute_in_type_adapter=True,
+            enable_pagination=True,
+        )
+        result = await handler.execute(
+            "{ blogAuthorEntityBlogAuthors { n: name articles(limit: 1) { items { t: title } } } }"
+        )
+        assert result["errors"] is not None
+        assert "alias" in result["errors"][0]["message"].lower()
+
+
+# =====================================
+# Test: Pagination through many-to-one (Bug 2 fix)
+# =====================================
+
+
+class TestPaginationThroughManyToOne:
+    """Test that pagination params pass through many-to-one relationships."""
+
+    @pytest.mark.asyncio
+    async def test_nested_pagination_through_many_to_one(self, nested_diagram):
+        """Pagination inside a many-to-one field should work.
+
+        Path: authors -> articles(limit:1) -> items -> author -> articles(limit:1)
+        The inner articles(limit:1) should respect the limit.
+        """
+        handler = GraphQLHandler(
+            nested_diagram,
+            enable_from_attribute_in_type_adapter=True,
+            enable_pagination=True,
+        )
+
+        result = await handler.execute(
+            '{ blogAuthorEntityBlogAuthors { id name articles(limit: 1) { items { id title author { id name articles(limit: 1) { items { id title } pagination { total_count has_more } } } } pagination { total_count has_more } } } }'
+        )
+
+        assert result["errors"] is None, f"Errors: {result['errors']}"
+        authors = result["data"]["blogAuthorEntityBlogAuthors"]
+
+        # Alice: 3 articles, limit=1
+        alice = authors[0]
+        assert alice["name"] == "Alice"
+        assert len(alice["articles"]["items"]) == 1
+
+        # The article's author (Alice again) should have articles(limit:1)
+        article = alice["articles"]["items"][0]
+        inner_author = article["author"]
+        assert inner_author["name"] == "Alice"
+
+        # Inner pagination should also respect limit=1
+        inner_articles = inner_author["articles"]["items"]
+        assert len(inner_articles) == 1
+        assert inner_author["articles"]["pagination"]["total_count"] == 3
+        assert inner_author["articles"]["pagination"]["has_more"] is True
+
+
+# =====================================
+# Test: Stable pagination order (Bug 3 fix)
+# =====================================
+
+
+class TestStablePaginationOrder:
+    """Test that pagination order is deterministic with non-unique sort fields."""
+
+    @pytest.mark.asyncio
+    async def test_pagination_order_is_stable(self, non_unique_diagram):
+        """Running the same paginated query twice should return identical results."""
+        handler = GraphQLHandler(
+            non_unique_diagram,
+            enable_from_attribute_in_type_adapter=True,
+            enable_pagination=True,
+        )
+
+        query = "{ categoryEntityCategories { id name items(limit: 3) { items { id name priority } pagination { total_count } } } }"
+
+        result1 = await handler.execute(query)
+        result2 = await handler.execute(query)
+
+        assert result1["errors"] is None
+        assert result2["errors"] is None
+
+        categories1 = result1["data"]["categoryEntityCategories"]
+        categories2 = result2["data"]["categoryEntityCategories"]
+
+        for cat1, cat2 in zip(categories1, categories2):
+            items1 = cat1["items"]["items"]
+            items2 = cat2["items"]["items"]
+            ids1 = [i["id"] for i in items1]
+            ids2 = [i["id"] for i in items2]
+            assert ids1 == ids2, f"Order mismatch: {ids1} vs {ids2}"
+
+    @pytest.mark.asyncio
+    async def test_pagination_across_pages_no_overlap(self, non_unique_diagram):
+        """Items from page 1 and page 2 should not overlap with stable ordering."""
+        handler = GraphQLHandler(
+            non_unique_diagram,
+            enable_from_attribute_in_type_adapter=True,
+            enable_pagination=True,
+        )
+
+        # Page 1: limit=3
+        result1 = await handler.execute(
+            "{ categoryEntityCategories { id items(limit: 3) { items { id name priority } } } }"
+        )
+        # Page 2: offset=3, limit=3
+        result2 = await handler.execute(
+            "{ categoryEntityCategories { id items(limit: 3, offset: 3) { items { id name priority } } } }"
+        )
+
+        assert result1["errors"] is None
+        assert result2["errors"] is None
+
+        cats1 = result1["data"]["categoryEntityCategories"]
+        cats2 = result2["data"]["categoryEntityCategories"]
+
+        for cat1, cat2 in zip(cats1, cats2):
+            ids1 = {i["id"] for i in cat1["items"]["items"]}
+            ids2 = {i["id"] for i in cat2["items"]["items"]}
+            # No overlap between pages
+            assert ids1.isdisjoint(ids2), f"Overlapping items between pages: {ids1 & ids2}"

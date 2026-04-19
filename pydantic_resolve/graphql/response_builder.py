@@ -45,7 +45,6 @@ class ResponseBuilder:
     │   ├── _build_field_definition()       # Build single field definition
     │   ├── _try_build_nested_field()       # Try to build nested Pydantic model
     │   ├── _build_nested_type()            # Build type tuple for nested model
-    │   ├── _apply_alias()                  # Apply serialization alias
     │   └── _build_scalar_field()           # Build scalar field definition
     │
     ├── [FK & Relationships]
@@ -238,10 +237,10 @@ class ResponseBuilder:
         if selection.sub_fields:
             nested_def = self._try_build_nested_field(field_type, selection, parent_path)
             if nested_def is not None:
-                return self._apply_alias(nested_def, selection.alias)
+                return nested_def
 
         # Handle scalar fields (no sub-fields)
-        return self._build_scalar_field(field_type, selection.alias)
+        return self._build_scalar_field(field_type)
 
     def _try_build_nested_field(
         self,
@@ -313,46 +312,19 @@ class ResponseBuilder:
         # Case 3: Plain required type
         return (nested_model, ...)
 
-    def _apply_alias(
-        self,
-        type_default: Tuple[type, Any],
-        alias: Optional[str]
-    ) -> Tuple[type, Any]:
-        """
-        Apply serialization alias to field definition if present.
-
-        Example:
-        ─────────────────────────────────────────────────────────────────
-        Input:  type_default = (str, ...), alias = None
-        Output: (str, ...)
-
-        Input:  type_default = (str, ...), alias = "userName"
-        Output: (str, Field(serialization_alias="userName", default=...))
-        ─────────────────────────────────────────────────────────────────
-        """
-        if alias is None:
-            return type_default
-
-        field_type, default = type_default
-        return (field_type, Field(serialization_alias=alias, default=default))
-
     def _build_scalar_field(
         self,
         field_type: type,
-        alias: Optional[str]
     ) -> Tuple[type, Any]:
         """
         Build field definition for scalar types.
 
         Example:
         ─────────────────────────────────────────────────────────────────
-        Input:  field_type = int, alias = None
+        Input:  field_type = int
         Output: (int, ...)  # ... means required field
 
-        Input:  field_type = str, alias = "id"
-        Output: (str, Field(serialization_alias="id"))
-
-        Input:  field_type = UserRole (Enum), alias = None
+        Input:  field_type = UserRole (Enum)
         Output: (Annotated[UserRole, PlainSerializer(_enum_name_serializer)], ...)
         ─────────────────────────────────────────────────────────────────
         """
@@ -362,13 +334,9 @@ class ResponseBuilder:
             if safe_issubclass(core_type, Enum):
                 # Wrap enum type with PlainSerializer to output enum.name
                 serialized_type = Annotated[field_type, PlainSerializer(_enum_name_serializer)]
-                if alias:
-                    return (serialized_type, Field(serialization_alias=alias))
                 return (serialized_type, ...)
 
         # Non-enum scalar field
-        if alias:
-            return (field_type, Field(serialization_alias=alias))
         return (field_type, ...)
 
     # ========== Helper Methods for FK and Relationships ==========
@@ -446,12 +414,12 @@ class ResponseBuilder:
                 Field(default=None, exclude=True, repr=False),
             )
 
-        # Add prpag_tree for nested pagination injection
+        # Add prpag_tree for nested pagination injection.
+        # Include any model that has relationship sub-fields, not just direct
+        # paginated lists, so the tree can propagate through many-to-one hops.
         if any(
-            relationship.page_loader is not None
+            self._find_relationship(entity, field_name) is not None
             for field_name in (field_selection.sub_fields or {})
-            for relationship in [self._find_relationship(entity, field_name)]
-            if relationship and relationship.is_list_relationship
         ):
             field_definitions['prpag_tree'] = (
                 dict,
@@ -499,6 +467,9 @@ class ResponseBuilder:
 
         Returns a dict mapping field_name -> (PageArgs, nested_tree).
         The nested_tree contains the same structure for deeper levels.
+
+        Also traverses through many-to-one relationships so that nested
+        paginated lists behind many-to-one hops receive their PageArgs.
         """
         from pydantic_resolve.graphql.relay.types import PageArgs
 
@@ -508,28 +479,38 @@ class ResponseBuilder:
         result = {}
         for field_name, selection in field_selection.sub_fields.items():
             relationship = self._find_relationship(entity, field_name)
-            if not relationship or not relationship.is_list_relationship:
-                continue
-            if relationship.page_loader is None:
+            if not relationship:
                 continue
 
-            args = selection.arguments or {}
-            page_args = PageArgs(
-                limit=args.get('limit'),
-                offset=args.get('offset', 0),
-                default_page_size=relationship.default_page_size,
-                max_page_size=relationship.max_page_size,
-            )
+            if relationship.is_list_relationship and relationship.page_loader is not None:
+                # List relationship: collect PageArgs and recurse into items
+                args = selection.arguments or {}
+                page_args = PageArgs(
+                    limit=args.get('limit'),
+                    offset=args.get('offset', 0),
+                    default_page_size=relationship.default_page_size,
+                    max_page_size=relationship.max_page_size,
+                )
 
-            # Recurse into items sub-selection for nested _result fields
-            nested_tree = {}
-            items_sel = (selection.sub_fields or {}).get('items')
-            if items_sel and items_sel.sub_fields:
-                actual_entity = self._extract_entity_type(relationship.target)
-                if actual_entity:
-                    nested_tree = self._collect_pagination_tree(actual_entity, items_sel)
+                nested_tree = {}
+                items_sel = (selection.sub_fields or {}).get('items')
+                if items_sel and items_sel.sub_fields:
+                    actual_entity = self._extract_entity_type(relationship.target)
+                    if actual_entity:
+                        nested_tree = self._collect_pagination_tree(actual_entity, items_sel)
 
-            result[field_name] = (page_args, nested_tree)
+                result[field_name] = (page_args, nested_tree)
+
+            elif not relationship.is_list_relationship:
+                # Many-to-one: recurse directly (no items wrapper)
+                sub_sel = selection.sub_fields
+                if sub_sel:
+                    actual_entity = self._extract_entity_type(relationship.target)
+                    if actual_entity:
+                        wrapped_sel = FieldSelection(sub_fields=sub_sel)
+                        nested_tree = self._collect_pagination_tree(actual_entity, wrapped_sel)
+                        if nested_tree:
+                            result[field_name] = (None, nested_tree)
 
         return result
 
@@ -616,10 +597,6 @@ class ResponseBuilder:
                 Field(
                     default=None,
                     validation_alias=validation_alias,
-                    serialization_alias=selection.alias,
-                ) if selection.alias else Field(
-                    default=None,
-                    validation_alias=validation_alias,
                 ),
             )
 
@@ -664,10 +641,6 @@ class ResponseBuilder:
                 Field(
                     default=None,
                     validation_alias=validation_alias,
-                    serialization_alias=selection.alias,
-                ) if selection.alias else Field(
-                    default=None,
-                    validation_alias=validation_alias,
                 ),
             )
 
@@ -682,10 +655,6 @@ class ResponseBuilder:
                 Field(
                     default=[],
                     validation_alias=validation_alias,
-                    serialization_alias=selection.alias,
-                ) if selection.alias else Field(
-                    default=[],
-                    validation_alias=validation_alias,
                 ),
             )
 
@@ -698,10 +667,6 @@ class ResponseBuilder:
             return (
                 base_type,
                 Field(
-                    default=None,
-                    validation_alias=validation_alias,
-                    serialization_alias=selection.alias,
-                ) if selection.alias else Field(
                     default=None,
                     validation_alias=validation_alias,
                 ),

@@ -265,13 +265,13 @@ class QueryExecutor:
                     if isinstance(typed_data, list):
                         resolved = await resolver.resolve(typed_data)
                         data[root_mutation_name] = [
-                            _filter_response_data(r.model_dump(mode='json', by_alias=True), root_field_selection)
+                            _filter_response_data(r.model_dump(mode='json', by_alias=False), root_field_selection)
                             for r in resolved
                         ] if resolved else []
                     else:
                         resolved = await resolver.resolve(typed_data)
                         data[root_mutation_name] = _filter_response_data(
-                            resolved.model_dump(mode='json', by_alias=True), root_field_selection
+                            resolved.model_dump(mode='json', by_alias=False), root_field_selection
                         ) if resolved else None
                 else:
                     data[root_mutation_name] = None
@@ -637,7 +637,7 @@ class QueryExecutor:
                     result = await resolver.resolve(typed_data)
                     if result is not None:
                         result_data = [
-                            _filter_response_data(r.model_dump(mode='json', by_alias=True), field_selection)
+                            _filter_response_data(r.model_dump(mode='json', by_alias=False), field_selection)
                             for r in result
                         ]
                     else:
@@ -646,7 +646,7 @@ class QueryExecutor:
                     result = await resolver.resolve(typed_data)
                     if result is not None:
                         result_data = _filter_response_data(
-                            result.model_dump(mode='json', by_alias=True), field_selection
+                            result.model_dump(mode='json', by_alias=False), field_selection
                         )
                     else:
                         result_data = None

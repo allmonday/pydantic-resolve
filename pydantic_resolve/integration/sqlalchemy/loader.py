@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from collections import defaultdict
 import re
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from aiodataloader import DataLoader
+
+
+if TYPE_CHECKING:
+    from pydantic_resolve.graphql.relay.types import PageArgs
 
 
 def _normalize_identifier(value: str) -> str:
@@ -363,9 +367,11 @@ def create_page_one_to_many_loader(
                 rn_label = "_pr_rn"
                 tc_label = "_pr_tc"
 
+                pk_col = getattr(self.target_orm_kls, self.pk_col_name)
+
                 row_num_col = func.row_number().over(
                     partition_by=fk_col,
-                    order_by=sort_col,
+                    order_by=[sort_col, pk_col],
                 ).label(rn_label)
 
                 total_count_col = func.count().over(
@@ -385,7 +391,13 @@ def create_page_one_to_many_loader(
                 rn_col = subq.c[rn_label]
                 tc_col = subq.c[tc_label]
 
-                outer = select(subq).where(rn_col.between(start, end))
+                fk_col_sub = subq.c[self.target_fk_col_name]
+                sort_col_sub = subq.c[self.sort_field]
+                pk_col_sub = subq.c[self.pk_col_name]
+
+                outer = select(subq).where(rn_col.between(start, end)).order_by(
+                    fk_col_sub, sort_col_sub, pk_col_sub,
+                )
 
                 rows = (await session.execute(outer)).all()
 
@@ -427,7 +439,7 @@ def create_page_one_to_many_loader(
 
 def _build_page_result(
     rows: list,
-    page_args: "PageArgs",
+    page_args: PageArgs,
     total_count: int | None,
     has_next_page: bool,
 ) -> dict:

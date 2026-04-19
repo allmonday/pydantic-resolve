@@ -135,8 +135,12 @@ class QueryParser:
         """Recursively build field selection tree"""
         fragments = fragments or {}
 
-        # Extract alias
-        alias = field_node.alias.value if field_node.alias else None
+        # Reject aliases — not supported in this version
+        if field_node.alias:
+            raise QueryParseError(
+                f"Field aliases are not supported: '{field_node.alias.value}' on '{field_node.name.value}'. "
+                "Use the original field name."
+            )
 
         # Extract arguments
         arguments = self._extract_arguments(field_node)
@@ -185,7 +189,6 @@ class QueryParser:
                             sub_fields[sub_field_name] = parsed_field
 
         return FieldSelection(
-            alias=alias,
             sub_fields=sub_fields,
             arguments=arguments
         )
@@ -247,8 +250,6 @@ class QueryParser:
         right: FieldSelection,
     ) -> FieldSelection:
         """Merge two selections for the same field name."""
-        merged_alias = left.alias or right.alias
-
         merged_arguments = None
         if left.arguments or right.arguments:
             merged_arguments = {
@@ -269,7 +270,6 @@ class QueryParser:
                     merged_sub_fields[field_name] = sub_selection
 
         return FieldSelection(
-            alias=merged_alias,
             sub_fields=merged_sub_fields,
             arguments=merged_arguments,
         )

@@ -24,7 +24,7 @@ The `pydantic_resolve/graphql/` module implements a GraphQL server that auto-gen
 | Feature | Standard GraphQL | pydantic-resolve GraphQL | Status |
 |---------|-----------------|-------------------------|--------|
 | **Field Selection** | Select specific fields | ✅ Supported | Full |
-| **Aliases** | Field renaming | ✅ Supported | Full |
+| **Aliases** | Field renaming | ❌ Not supported | Missing |
 | **Arguments** | Field-level parameters | ✅ Supported | Full |
 | **Nested Queries** | Multi-level relationships | ✅ Supported | Full |
 | **Variables** | Reusable query values | ⚠️ Basic | Partial |
