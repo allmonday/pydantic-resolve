@@ -1198,3 +1198,36 @@ class TestStablePaginationOrder:
             ids2 = {i["id"] for i in cat2["items"]["items"]}
             # No overlap between pages
             assert ids1.isdisjoint(ids2), f"Overlapping items between pages: {ids1 & ids2}"
+
+
+class TestEmptyPageTotalCount:
+    """Regression test: offset exceeding total_count should still report correct total_count."""
+
+    @pytest.mark.asyncio
+    async def test_offset_exceeds_total_count(self, diagram):
+        """When offset > total_count, items should be empty but total_count must be correct."""
+        handler = GraphQLHandler(
+            diagram,
+            enable_from_attribute_in_type_adapter=True,
+            enable_pagination=True,
+        )
+
+        result = await handler.execute(
+            "{ authorEntityAuthors { id name articles(limit: 1, offset: 10) { items { title } pagination { has_more total_count } } } }"
+        )
+
+        assert result["errors"] is None
+        authors = result["data"]["authorEntityAuthors"]
+
+        # Alice has 3 articles, offset=10 is past all of them
+        alice = authors[0]
+        assert alice["name"] == "Alice"
+        assert alice["articles"]["items"] == []
+        assert alice["articles"]["pagination"]["total_count"] == 3
+        assert alice["articles"]["pagination"]["has_more"] is False
+
+        # Bob has 2 articles
+        bob = authors[1]
+        assert bob["articles"]["items"] == []
+        assert bob["articles"]["pagination"]["total_count"] == 2
+        assert bob["articles"]["pagination"]["has_more"] is False

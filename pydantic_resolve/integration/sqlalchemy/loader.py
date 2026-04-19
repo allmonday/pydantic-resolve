@@ -413,6 +413,20 @@ def create_page_one_to_many_loader(
                     grouped[fk_val].append((row_dict, rn))
                     total_counts[fk_val] = tc
 
+                # Fallback: when offset exceeds total_count for a parent,
+                # no rows are returned and total_counts is missing that key.
+                # Query counts separately for those parents.
+                missing_fks = [cmd.fk_value for cmd in keys if cmd.fk_value not in total_counts]
+                if missing_fks:
+                    count_q = (
+                        select(fk_col, func.count().label(tc_label))
+                        .where(fk_col.in_(missing_fks))
+                    )
+                    count_q = _apply_filters(count_q, self.filters)
+                    count_q = count_q.group_by(fk_col)
+                    for row in (await session.execute(count_q)).all():
+                        total_counts[row[0]] = row[1]
+
                 return [
                     _build_page_result(
                         rows=[r for r, _ in grouped.get(cmd.fk_value, [])],
