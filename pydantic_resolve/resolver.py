@@ -328,8 +328,42 @@ class Resolver:
                 val,
                 self.enable_from_attribute_in_type_adapter)
 
+        # Inject nested pagination args into child items before traversing
+        self._inject_nested_pagination(node, val, trim_field)
+
         val = await self._traverse(val, node)
         setattr(node, trim_field, val)
+
+    def _inject_nested_pagination(self, parent: object, result: object, field_name: str) -> None:
+        """Inject nested PageArgs from parent's prpag_tree into result items.
+
+        When a _result field is resolved, the result is a dict like
+        {"items": [...], "pagination": ...} which gets converted to a
+        Pydantic Result model. Before traversing into the items, we need
+        to inject their PageArgs from the pagination tree stored on the
+        parent instance.
+        """
+        tree = getattr(parent, 'prpag_tree', None)
+        if not tree or field_name not in tree:
+            return
+
+        _, nested_tree = tree[field_name]
+        if not nested_tree:
+            return
+
+        # Result model has 'items' attribute
+        items = getattr(result, 'items', None)
+        if not items:
+            return
+
+        for item in items:
+            for nested_name, (nested_pa, deeper_tree) in nested_tree.items():
+                key = f'prpag_{nested_name}'
+                if hasattr(item, key):
+                    object.__setattr__(item, key, nested_pa)
+            # Propagate the nested tree for deeper levels
+            if hasattr(item, 'prpag_tree'):
+                object.__setattr__(item, 'prpag_tree', nested_tree)
 
     async def _execute_post_method_field(
          self,

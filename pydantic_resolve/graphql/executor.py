@@ -29,6 +29,35 @@ from pydantic_resolve.graphql.response_builder import ResponseBuilder
 logger = logging.getLogger(__name__)
 
 
+def _filter_response_data(data: Any, selection: Any) -> Any:
+    """Filter serialized response dict to only include fields selected in the GraphQL query.
+
+    Walks the dict and FieldSelection tree in parallel, removing
+    any keys not present in the selection (e.g. ``pagination``
+    when not requested, or ``total_count`` when only ``has_more`` is selected).
+    """
+    if data is None:
+        return None
+    if isinstance(data, list):
+        return [_filter_response_data(item, selection) for item in data]
+    if isinstance(data, dict):
+        if not selection or not selection.sub_fields:
+            return data
+        result = {}
+        for key, value in data.items():
+            if key not in selection.sub_fields:
+                continue
+            child_sel = selection.sub_fields[key]
+            if isinstance(value, list):
+                result[key] = [_filter_response_data(item, child_sel) for item in value]
+            elif isinstance(value, dict):
+                result[key] = _filter_response_data(value, child_sel)
+            else:
+                result[key] = value
+        return result
+    return data
+
+
 class QueryExecutor:
     """
     Handles GraphQL query and mutation execution.
@@ -217,6 +246,15 @@ class QueryExecutor:
 
                 logger.debug(f"Data transformed: {root_mutation_name}")
 
+                # Inject pagination args into model instances
+                if typed_data is not None:
+                    instances = typed_data if isinstance(typed_data, list) else [typed_data]
+                    self.builder.inject_pagination_args(
+                        instances=instances,
+                        entity=entity,
+                        field_selection=root_field_selection,
+                    )
+
                 # === Phase 2: Resolve related data ===
                 if typed_data is not None:
                     resolver = self.resolver_class(
@@ -226,10 +264,15 @@ class QueryExecutor:
 
                     if isinstance(typed_data, list):
                         resolved = await resolver.resolve(typed_data)
-                        data[root_mutation_name] = [r.model_dump(mode='json', by_alias=True) for r in resolved] if resolved else []
+                        data[root_mutation_name] = [
+                            _filter_response_data(r.model_dump(mode='json', by_alias=True), root_field_selection)
+                            for r in resolved
+                        ] if resolved else []
                     else:
                         resolved = await resolver.resolve(typed_data)
-                        data[root_mutation_name] = resolved.model_dump(mode='json', by_alias=True) if resolved else None
+                        data[root_mutation_name] = _filter_response_data(
+                            resolved.model_dump(mode='json', by_alias=True), root_field_selection
+                        ) if resolved else None
                 else:
                     data[root_mutation_name] = None
 
@@ -570,6 +613,18 @@ class QueryExecutor:
 
             logger.debug(f"[Phase 2] Data transformed: {query_name}")
 
+            # 2.5. Inject pagination args into model instances
+            #      (must happen after model_validate, before resolver.resolve,
+            #       because the response model is cached and cannot hold
+            #       query-specific PageArgs in its field defaults)
+            if typed_data is not None:
+                instances = typed_data if isinstance(typed_data, list) else [typed_data]
+                self.builder.inject_pagination_args(
+                    instances=instances,
+                    entity=entity,
+                    field_selection=field_selection,
+                )
+
             # 3. Resolve related data
             result_data = None
             if typed_data is not None:
@@ -581,13 +636,18 @@ class QueryExecutor:
                 if is_list:
                     result = await resolver.resolve(typed_data)
                     if result is not None:
-                        result_data = [r.model_dump(mode='json', by_alias=True) for r in result]
+                        result_data = [
+                            _filter_response_data(r.model_dump(mode='json', by_alias=True), field_selection)
+                            for r in result
+                        ]
                     else:
                         result_data = []
                 else:
                     result = await resolver.resolve(typed_data)
                     if result is not None:
-                        result_data = result.model_dump(mode='json', by_alias=True)
+                        result_data = _filter_response_data(
+                            result.model_dump(mode='json', by_alias=True), field_selection
+                        )
                     else:
                         result_data = None
             else:

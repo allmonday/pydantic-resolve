@@ -10,7 +10,7 @@ from typing import Any, Callable, Dict, ForwardRef, Optional, Tuple, Union, get_
 from graphql import parse as parse_graphql
 from graphql.language.ast import OperationDefinitionNode, OperationType
 
-from pydantic_resolve.utils.er_diagram import ErDiagram
+from pydantic_resolve.utils.er_diagram import ErDiagram, Relationship
 from pydantic_resolve.utils.resolver_configurator import config_resolver
 from pydantic_resolve.graphql.exceptions import GraphQLError
 from pydantic_resolve.graphql.executor import QueryExecutor
@@ -34,16 +34,24 @@ class GraphQLHandler:
     def __init__(
         self,
         er_diagram: ErDiagram,
-        enable_from_attribute_in_type_adapter: bool = False
+        enable_from_attribute_in_type_adapter: bool = False,
+        enable_pagination: bool = False,
     ):
         """
         Args:
             er_diagram: Entity relationship diagram
             enable_from_attribute_in_type_adapter: Enable Pydantic from_attributes mode for type adapter validation.
                 Allows loaders to return Pydantic instances instead of dictionaries.
+            enable_pagination: When True, validate that all one-to-many relationships
+                have sort_field configured (requires order_by on ORM relationship).
+                Raises ValueError if any relationship lacks it.
         """
         self.er_diagram = er_diagram
         self.enable_from_attribute_in_type_adapter = enable_from_attribute_in_type_adapter
+        self.enable_pagination = enable_pagination
+
+        if enable_pagination:
+            self._validate_pagination_sort_fields()
 
         # Create diagram-specific resolver class
         self.resolver_class = config_resolver(
@@ -56,22 +64,47 @@ class GraphQLHandler:
         self.builder = ResponseBuilder(
             er_diagram,
             resolver_class=self.resolver_class,
-            enable_from_attribute_in_type_adapter=enable_from_attribute_in_type_adapter
+            enable_from_attribute_in_type_adapter=enable_from_attribute_in_type_adapter,
+            enable_pagination=enable_pagination,
         )
-        self.schema_builder = SchemaBuilder(er_diagram)
+        self.schema_builder = SchemaBuilder(er_diagram, enable_pagination=enable_pagination)
 
         # Build query and mutation maps
         self.query_map = self._build_query_map()
         self.mutation_map = self._build_mutation_map()
 
         # Initialize helpers
-        self.introspection = IntrospectionHelper(er_diagram, self.query_map, self.mutation_map)
+        self.introspection = IntrospectionHelper(er_diagram, self.query_map, self.mutation_map, enable_pagination=enable_pagination)
         self.executor = QueryExecutor(
             parser=self.parser,
             builder=self.builder,
             resolver_class=self.resolver_class,
             enable_from_attribute_in_type_adapter=enable_from_attribute_in_type_adapter
         )
+
+    def _validate_pagination_sort_fields(self):
+        """Validate all one-to-many relationships have page_loader configured."""
+        errors = []
+        for entity_cfg in self.er_diagram.entities:
+            for rel in entity_cfg.relationships:
+                if not isinstance(rel, Relationship):
+                    continue
+                if rel.loader is None:
+                    continue
+                if not rel.is_list_relationship:
+                    continue
+                if rel.page_loader is None:
+                    errors.append(
+                        f"  {entity_cfg.kls.__name__}.{rel.name} "
+                        f"(target: {rel.target}) - no order_by configured"
+                    )
+        if errors:
+            raise ValueError(
+                "enable_pagination is True but the following one-to-many "
+                "relationships lack order_by configuration:\n"
+                + "\n".join(errors)
+                + "\n\nSet order_by on the ORM relationship to enable pagination."
+            )
 
     def _build_query_map(self) -> Dict[str, Tuple[type, Callable]]:
         """

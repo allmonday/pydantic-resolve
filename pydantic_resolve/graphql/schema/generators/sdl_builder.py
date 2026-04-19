@@ -6,7 +6,7 @@ using the unified type collection and mapping logic.
 """
 
 import inspect
-from typing import ForwardRef, get_args, get_origin, get_type_hints
+from typing import ForwardRef, Optional, get_args, get_origin, get_type_hints
 
 from pydantic import BaseModel
 
@@ -26,6 +26,10 @@ class SDLBuilder(SchemaGenerator):
     This is the refactored implementation that uses the unified
     type collection and mapping logic.
     """
+
+    def __init__(self, er_diagram, validate_conflicts=True, enable_pagination=False):
+        super().__init__(er_diagram, validate_conflicts)
+        self.enable_pagination = enable_pagination
 
     def generate(self) -> str:
         """
@@ -97,6 +101,11 @@ class SDLBuilder(SchemaGenerator):
 
         if input_defs:
             schema_parts.append("\n".join(input_defs))
+
+        # Add Pagination and Result types for one-to-many relationships
+        page_result_defs = self._collect_page_result_sdl_defs(processed_types)
+        if page_result_defs:
+            schema_parts.append("\n".join(page_result_defs))
 
         if type_defs:
             schema_parts.append("\n".join(type_defs))
@@ -175,11 +184,32 @@ class SDLBuilder(SchemaGenerator):
                     if rel.loader is None:
                         continue
                     field_name = rel.name
-                    gql_type = self._map_python_type_to_gql(rel.target)
-                    if rel.description:
-                        fields.append(f'  """{rel.description}"""\n  {field_name}: {gql_type}')
+
+                    # One-to-many relationship
+                    rel_origin = get_origin(rel.target)
+                    if rel_origin is list:
+                        if self.enable_pagination and rel.page_loader is not None:
+                            # Paginated: articles(limit: Int, offset: Int): ArticleEntityResult!
+                            target_name = self._get_target_entity_name(rel)
+                            result_type_name = f"{target_name}Result" if target_name else "Result"
+                            args_str = "(limit: Int, offset: Int)"
+                            if rel.description:
+                                fields.append(f'  """{rel.description}"""\n  {field_name}{args_str}: {result_type_name}!')
+                            else:
+                                fields.append(f"  {field_name}{args_str}: {result_type_name}!")
+                        else:
+                            # Raw list: posts: [PostEntity!]!
+                            gql_type = self._map_python_type_to_gql(rel.target)
+                            if rel.description:
+                                fields.append(f'  """{rel.description}"""\n  {field_name}: {gql_type}')
+                            else:
+                                fields.append(f"  {field_name}: {gql_type}")
                     else:
-                        fields.append(f"  {field_name}: {gql_type}")
+                        gql_type = self._map_python_type_to_gql(rel.target)
+                        if rel.description:
+                            fields.append(f'  """{rel.description}"""\n  {field_name}: {gql_type}')
+                        else:
+                            fields.append(f"  {field_name}: {gql_type}")
 
         return f"type {entity_cfg.kls.__name__} {{\n" + "\n".join(fields) + "\n}"
 
@@ -851,8 +881,15 @@ class SDLBuilder(SchemaGenerator):
                         if rel.loader is None:
                             continue
                         field_name = rel.name
-                        gql_type = self._map_python_type_to_gql(rel.target)
-                        fields.append(f"  {field_name}: {gql_type}")
+
+                        if rel.is_list_relationship and self.enable_pagination and rel.page_loader is not None:
+                            target_name = self._get_target_entity_name(rel)
+                            result_type_name = f"{target_name}Result" if target_name else "Result"
+                            args_str = "(limit: Int, offset: Int)"
+                            fields.append(f"  {field_name}{args_str}: {result_type_name}!")
+                        else:
+                            gql_type = self._map_python_type_to_gql(rel.target)
+                            fields.append(f"  {field_name}: {gql_type}")
 
         # Build type definition
         type_def = f"type {entity.__name__} {{\n" + "\n".join(fields) + "\n}"
@@ -873,3 +910,65 @@ class SDLBuilder(SchemaGenerator):
                 if rel.name == field_name:
                     return True
         return False
+
+    # ========== Pagination / Result Type Generation ==========
+
+    def _get_target_entity_name(self, rel: Relationship) -> Optional[str]:
+        """Extract entity class name from a list relationship target."""
+        args = get_args(rel.target)
+        if args and safe_issubclass(args[0], BaseModel):
+            return args[0].__name__
+        return None
+
+    def _collect_page_result_sdl_defs(self, processed_types: set) -> list[str]:
+        """Generate Pagination and Result SDL for all one-to-many relationships.
+
+        Returns:
+            List of SDL strings for Pagination (once) and {Entity}Result types.
+        """
+        if not self.enable_pagination:
+            return []
+
+        defs: list[str] = []
+        seen_result_types: set[str] = set()
+        has_one_to_many = False
+
+        for entity_cfg in self.er_diagram.entities:
+            for rel in entity_cfg.relationships:
+                if not isinstance(rel, Relationship):
+                    continue
+                if rel.loader is None:
+                    continue
+                if get_origin(rel.target) is not list:
+                    continue
+                if rel.page_loader is None:
+                    continue
+
+                target_name = self._get_target_entity_name(rel)
+                if not target_name:
+                    continue
+
+                has_one_to_many = True
+                result_name = f"{target_name}Result"
+                if result_name in seen_result_types:
+                    continue
+                seen_result_types.add(result_name)
+
+                # Result type
+                defs.append(
+                    f"type {result_name} {{\n"
+                    f"  items: [{target_name}!]!\n"
+                    f"  pagination: Pagination!\n"
+                    f"}}"
+                )
+
+        # Add Pagination type exactly once if there are any one-to-many relationships
+        if has_one_to_many:
+            defs.insert(0, (
+                "type Pagination {\n"
+                "  has_more: Boolean!\n"
+                "  total_count: Int\n"
+                "}"
+            ))
+
+        return defs

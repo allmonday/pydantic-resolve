@@ -78,6 +78,7 @@ nav:
     - Changelog: ./changelog.md
   - Articles:
     - "Reframing Data Assembly: pydantic-resolve vs SQLAlchemy ORM": ./blog_pydantic_resolve_vs_orm.md
+    - "REST vs GraphQL and the Missing Layer: ER Diagram": ./blog_rest_graphql_and_er_diagram.md
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -131,6 +132,7 @@ plugins:
             Change log: "变更记录"
             Migration Guide: "迁移指南"
             "Reframing Data Assembly: pydantic-resolve vs SQLAlchemy ORM": "重塑数据构建的开发体验：pydantic-resolve vs SQLAlchemy ORM 查询对比"
+            "REST vs GraphQL and the Missing Layer: ER Diagram": "REST 与 GraphQL 之争，漏掉了关键的一层"
 
 extra:
   analytics:

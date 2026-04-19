@@ -41,8 +41,8 @@ async def startup():
     await init_db_v3()
 
 # 创建 GraphQL handler 和 schema builder
-handler = GraphQLHandler(diagram, enable_from_attribute_in_type_adapter=True)
-schema_builder = SchemaBuilder(diagram)
+handler = GraphQLHandler(diagram, enable_from_attribute_in_type_adapter=True, enable_pagination=True)
+schema_builder = SchemaBuilder(diagram, enable_pagination=True)
 
 # 定义 GraphQL 请求模型
 class GraphQLRequest(BaseModel):

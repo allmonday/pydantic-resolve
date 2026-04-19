@@ -13,6 +13,7 @@ from pydantic_resolve.constant import ENSURE_SUBSET_REFERENCE, ER_DIAGRAM_PRE_GE
 from pydantic_resolve.utils.er_diagram import ErDiagram, Relationship
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.types import get_core_types
+from pydantic_resolve.utils.depend import Loader
 from pydantic_resolve.graphql.types import FieldSelection
 from pydantic_resolve import analysis
 
@@ -64,7 +65,7 @@ class ResponseBuilder:
     ─────────────────────────────────────────────────────────────────
     """
 
-    def __init__(self, er_diagram: ErDiagram, resolver_class: type = None, enable_from_attribute_in_type_adapter: bool = False):
+    def __init__(self, er_diagram: ErDiagram, resolver_class: type = None, enable_from_attribute_in_type_adapter: bool = False, enable_pagination: bool = False):
         """
         Args:
             er_diagram: Entity relationship diagram
@@ -72,11 +73,13 @@ class ResponseBuilder:
                            If provided, response models will be pre-analyzed and cached.
             enable_from_attribute_in_type_adapter: Enable Pydantic from_attributes mode.
                            Allows loaders to return Pydantic instances instead of dictionaries.
+            enable_pagination: When True, one-to-many fields build Result types.
         """
         self.er_diagram = er_diagram
         self.entity_map = {cfg.kls: cfg for cfg in er_diagram.entities}
         self.resolver_class = resolver_class
         self.enable_from_attribute_in_type_adapter = enable_from_attribute_in_type_adapter
+        self.enable_pagination = enable_pagination
         self._create_auto_load = er_diagram.create_auto_load()
         # Bind lru_cache to instance method
         # This provides LRU eviction + thread safety + instance isolation
@@ -160,15 +163,11 @@ class ResponseBuilder:
     ) -> type[BaseModel]:
         """
         Core model building logic (cached by lru_cache).
-
-        Args:
-            entity: Base entity class
-            field_selection: Field selection (must be hashable)
-            parent_path: Parent path
-
-        Returns:
-            Dynamically created Pydantic model class
         """
+        # Save and reset pending _result fields for this model level
+        saved_pending = getattr(self, '_pending_result_fields', [])
+        self._pending_result_fields = []
+
         field_definitions: Dict[str, Tuple[type, Any]] = {}
         type_hints = self._get_type_hints(entity)
         entity_cfg = self.entity_map.get(entity)
@@ -194,13 +193,21 @@ class ResponseBuilder:
         if is_registered:
             self._add_fk_fields(entity, field_selection, type_hints, field_definitions)
 
+        # Step 2.5: Add pagination arg fields for _result relationships
+        if is_registered and field_selection.sub_fields:
+            self._add_pagination_fields(entity, field_selection, field_definitions)
+
         # Step 3: Process relationship fields (ERD-based)
         if is_registered and field_selection.sub_fields:
             self._add_relationship_fields(
                 entity, field_selection, field_definitions, parent_path
             )
 
-        return self._create_model(entity, field_selection, field_definitions)
+        # Collect pending _result fields for this model, then restore parent's list
+        pending_result_fields = self._pending_result_fields
+        self._pending_result_fields = saved_pending
+
+        return self._create_model(entity, field_selection, field_definitions, pending_result_fields)
 
     # ========== Helper Methods for Field Building ==========
 
@@ -397,6 +404,135 @@ class ResponseBuilder:
             if fk_field not in field_definitions and fk_field in type_hints:
                 field_definitions[fk_field] = (type_hints[fk_field], Field(exclude=True))
 
+    def _add_pagination_fields(
+        self,
+        entity: type,
+        field_selection: FieldSelection,
+        field_definitions: Dict[str, Tuple[type, Any]]
+    ) -> None:
+        """Add hidden pagination argument fields for paginated list fields.
+
+        For each paginated list field selected in the query, injects:
+        - prpag_{field_name}: PageArgs | None (resolved at execution time)
+
+        These hidden fields are read by the resolve method attached
+        directly by _build_relationship_field.
+
+        NOTE: We store None as the default (not a specific PageArgs) because
+        the response model is cached by (entity, field_selection) where
+        field_selection intentionally excludes arguments from its hash.
+        The actual PageArgs values are injected at execution time via
+        inject_pagination_args().
+        """
+        if not self.enable_pagination:
+            return
+
+        from pydantic_resolve.graphql.relay.types import PageArgs
+
+        for field_name, selection in (field_selection.sub_fields or {}).items():
+            relationship = self._find_relationship(entity, field_name)
+            if not relationship or not relationship.is_list_relationship:
+                continue
+
+            # Only handle paginated fields (with page_loader)
+            if relationship.page_loader is None:
+                continue
+
+            # Use field_name for hidden field keys so they match
+            # the resolve method's getattr lookups
+            hidden_field = f'prpag_{field_name}'
+            field_definitions[hidden_field] = (
+                PageArgs,
+                Field(default=None, exclude=True, repr=False),
+            )
+
+        # Add prpag_tree for nested pagination injection
+        if any(
+            relationship.page_loader is not None
+            for field_name in (field_selection.sub_fields or {})
+            for relationship in [self._find_relationship(entity, field_name)]
+            if relationship and relationship.is_list_relationship
+        ):
+            field_definitions['prpag_tree'] = (
+                dict,
+                Field(default=None, exclude=True, repr=False),
+            )
+
+    def inject_pagination_args(
+        self,
+        instances: list,
+        entity: type,
+        field_selection: 'FieldSelection',
+    ) -> None:
+        """Inject PageArgs into model instances at execution time.
+
+        This must be called after model_validate() and before resolver.resolve()
+        because the response model is cached and cannot hold query-specific
+        PageArgs in its field defaults.
+
+        Recursively collects ALL levels of PageArgs (including nested
+        _result fields) and stores them as a tree on each root instance.
+        The Resolver reads this tree to inject nested PageArgs into child
+        instances after each level is resolved.
+        """
+        from pydantic_resolve.graphql.relay.types import PageArgs
+
+        tree = self._collect_pagination_tree(entity, field_selection)
+        if not tree:
+            return
+
+        for inst in instances:
+            if hasattr(inst, 'prpag_tree'):
+                object.__setattr__(inst, 'prpag_tree', tree)
+            # Also inject root-level prpag_ fields
+            for field_name, (page_args, _) in tree.items():
+                hidden_field = f'prpag_{field_name}'
+                if hasattr(inst, hidden_field):
+                    object.__setattr__(inst, hidden_field, page_args)
+
+    def _collect_pagination_tree(
+        self,
+        entity: type,
+        field_selection: 'FieldSelection',
+    ) -> dict:
+        """Recursively collect PageArgs for all levels of _result fields.
+
+        Returns a dict mapping field_name -> (PageArgs, nested_tree).
+        The nested_tree contains the same structure for deeper levels.
+        """
+        from pydantic_resolve.graphql.relay.types import PageArgs
+
+        if not field_selection.sub_fields:
+            return {}
+
+        result = {}
+        for field_name, selection in field_selection.sub_fields.items():
+            relationship = self._find_relationship(entity, field_name)
+            if not relationship or not relationship.is_list_relationship:
+                continue
+            if relationship.page_loader is None:
+                continue
+
+            args = selection.arguments or {}
+            page_args = PageArgs(
+                limit=args.get('limit'),
+                offset=args.get('offset', 0),
+                default_page_size=relationship.default_page_size,
+                max_page_size=relationship.max_page_size,
+            )
+
+            # Recurse into items sub-selection for nested _result fields
+            nested_tree = {}
+            items_sel = (selection.sub_fields or {}).get('items')
+            if items_sel and items_sel.sub_fields:
+                actual_entity = self._extract_entity_type(relationship.target)
+                if actual_entity:
+                    nested_tree = self._collect_pagination_tree(actual_entity, items_sel)
+
+            result[field_name] = (page_args, nested_tree)
+
+        return result
+
     def _add_relationship_fields(
         self,
         entity: type,
@@ -452,39 +588,23 @@ class ResponseBuilder:
         self,
         relationship: Relationship,
         selection: FieldSelection,
-        parent_path: str
+        parent_path: str,
     ) -> Optional[Tuple[type, Any]]:
         """
         Build field definition for a relationship.
 
-        Example:
-        ─────────────────────────────────────────────────────────────────
-        Input:
-            relationship = Relationship(fk='id', target=list[PostEntity], name='posts')
-            selection = {title, content}
-
-        Process:
-            1. Extract PostEntity from list[PostEntity]
-            2. Recursively build PostResponse model
-            3. Wrap with Annotated[..., AutoLoad()]
-            4. Assign a synthetic validation_alias so model_validate(from_attributes=True)
-                does not read the relationship attribute from ORM objects before AutoLoad runs.
-
-            Why validation_alias is needed:
-                - ORM-first loaders now return ORM instances directly.
-                - Relationship attributes may be lazy-loaded and require an active Session.
-                - Dynamic response model validation happens before relationship AutoLoad resolution.
-                - If Pydantic reads relationship attrs at this stage, detached instances can raise
-                    DetachedInstanceError.
-                - Using a synthetic validation_alias makes Pydantic fall back to field defaults
-                    (None / []), and Resolver fills the real relationship values in AutoLoad phase.
-
-        Output:
-            (Annotated[List[PostResponse], AutoLoad()], [])
-        ─────────────────────────────────────────────────────────────────
+        Handles two cases:
+        1. Paginated list field (when enable_pagination and page_loader): Result type with
+           directly attached resolve method (bypasses AutoLoad entirely)
+        2. Regular list/many-to-one field: Annotated with AutoLoad()
         """
         target_kls = relationship.target
         origin = get_origin(target_kls)
+        is_paginated = (
+            self.enable_pagination
+            and origin is list
+            and relationship.page_loader is not None
+        )
         validation_alias = f"__pydantic_resolve_skip_{relationship.name}"
 
         # Handle scalar targets (str, int, etc.) — skip recursive model building
@@ -508,35 +628,84 @@ class ResponseBuilder:
         if actual_entity is None:
             return None
 
-        # Recursively build nested model
-        nested_model = self.build_response_model(
-            actual_entity, selection, parent_path
-        )
-
         # Build annotated type with AutoLoad
         _AutoLoad = self._create_auto_load
-        if origin is list:
-            base_type = Annotated[List[nested_model], _AutoLoad()]
-            field = Field(
-                default_factory=list,
-                validation_alias=validation_alias,
-                serialization_alias=selection.alias,
-            ) if selection.alias else Field(
-                default_factory=list,
-                validation_alias=validation_alias,
-            )
-        else:
-            base_type = Annotated[Optional[nested_model], _AutoLoad()]
-            field = Field(
-                default=None,
-                validation_alias=validation_alias,
-                serialization_alias=selection.alias,
-            ) if selection.alias else Field(
-                default=None,
-                validation_alias=validation_alias,
+
+        if origin is list and is_paginated:
+            # Paginated field: build {Entity}Result type
+            # Extract 'items' sub-selection for the node model
+            items_selection = None
+            if selection.sub_fields:
+                items_sel = selection.sub_fields.get('items')
+                if items_sel:
+                    items_selection = items_sel
+
+            # Build node model from items sub-selection
+            node_model = self.build_response_model(
+                actual_entity,
+                items_selection or FieldSelection(),
+                parent_path,
             )
 
-        return (base_type, field)
+            # Create {Entity}Result type
+            from pydantic_resolve.graphql.relay.types import create_result_type
+            result_type = create_result_type(node_model)
+
+            # Store resolve method info for later attachment
+            # (resolved in _attach_result_resolve_methods)
+            model_field_name = relationship.name
+            if not hasattr(self, '_pending_result_fields'):
+                self._pending_result_fields = []
+            self._pending_result_fields.append((model_field_name, relationship))
+
+            base_type = result_type
+            return (
+                base_type,
+                Field(
+                    default=None,
+                    validation_alias=validation_alias,
+                    serialization_alias=selection.alias,
+                ) if selection.alias else Field(
+                    default=None,
+                    validation_alias=validation_alias,
+                ),
+            )
+
+        elif origin is list:
+            # Regular list field: standard AutoLoad
+            nested_model = self.build_response_model(
+                actual_entity, selection, parent_path
+            )
+            base_type = Annotated[List[nested_model], _AutoLoad()]
+            return (
+                base_type,
+                Field(
+                    default=[],
+                    validation_alias=validation_alias,
+                    serialization_alias=selection.alias,
+                ) if selection.alias else Field(
+                    default=[],
+                    validation_alias=validation_alias,
+                ),
+            )
+
+        else:
+            # Many-to-one: Optional with AutoLoad
+            nested_model = self.build_response_model(
+                actual_entity, selection, parent_path
+            )
+            base_type = Annotated[Optional[nested_model], _AutoLoad()]
+            return (
+                base_type,
+                Field(
+                    default=None,
+                    validation_alias=validation_alias,
+                    serialization_alias=selection.alias,
+                ) if selection.alias else Field(
+                    default=None,
+                    validation_alias=validation_alias,
+                ),
+            )
 
     def _is_scalar_relationship(self, relationship: Relationship) -> bool:
         """Check if a relationship targets a scalar type (not a BaseModel)."""
@@ -597,35 +766,11 @@ class ResponseBuilder:
         self,
         entity: type,
         field_selection: FieldSelection,
-        field_definitions: Dict[str, Tuple[type, Any]]
+        field_definitions: Dict[str, Tuple[type, Any]],
+        pending_result_fields: list = None,
     ) -> type[BaseModel]:
         """
         Create dynamic Pydantic model with proper configuration.
-
-        Example:
-        ─────────────────────────────────────────────────────────────────
-        Input:
-            entity = UserEntity
-            field_selection = FieldSelection with id(field_selection) = 123456789
-            field_definitions = {
-                'id': (int, ...),
-                'name': (str, ...),
-                'posts': (Annotated[List[PostResponse], AutoLoad()], [])
-            }
-
-        Process:
-            1. Generate unique name: "UserEntityResponse_123456789"
-            2. Call pydantic.create_model() with field definitions
-            3. Set __pydantic_resolve_subset__ = UserEntity
-            4. Pre-analyze model if resolver_class is provided
-
-        Output:
-            class UserEntityResponse_123456789(BaseModel):
-                id: int
-                name: str
-                posts: Annotated[List[PostResponse], AutoLoad()] = []
-                __pydantic_resolve_subset__ = UserEntity
-        ─────────────────────────────────────────────────────────────────
         """
         model_name = f"{entity.__name__}Response_{id(field_selection)}"
 
@@ -650,6 +795,10 @@ class ResponseBuilder:
         # Set ENSURE_SUBSET_REFERENCE to point to original entity
         # This allows ErLoaderPreGenerator.prepare() to find original entity config
         setattr(dynamic_model, ENSURE_SUBSET_REFERENCE, entity)
+
+        # Attach resolve methods for _result fields BEFORE pre-analyze,
+        # so the analysis scan discovers them and caches correct metadata.
+        self._attach_result_resolve_methods(dynamic_model, pending_result_fields or [])
 
         # Pre-analyze the model if resolver_class is provided
         # This caches metadata early, avoiding repeated analysis in Resolver.resolve()
@@ -687,6 +836,47 @@ class ResponseBuilder:
 
         # Cache the result
         _set_metadata_to_cache(resolver_class_id, model, metadata)
+
+    def _attach_result_resolve_methods(self, model: type[BaseModel], pending_fields: list) -> None:
+        """Attach resolve methods for _result fields (pagination).
+
+        These resolve methods bypass AutoLoad entirely. They read PageArgs
+        from hidden fields injected by _add_pagination_fields and create
+        PageLoadCommand keys for the paginated DataLoader.
+        """
+        if not pending_fields:
+            return
+
+        for field_name, relationship in pending_fields:
+            # field_name is the relationship name (e.g. 'articles_result')
+            method_name = f'resolve_{field_name}'
+            if hasattr(model, method_name):
+                continue
+
+            def _make_resolve_method(rel: Relationship, fld_name: str):
+                from pydantic_resolve.graphql.relay.types import PageArgs, PageLoadCommand
+
+                def resolve_method(self, loader=Loader(rel.page_loader)):
+                    fk = getattr(self, rel.fk)
+                    if fk is None:
+                        return None
+
+                    # Hidden fields use the field name
+                    page_args = getattr(self, f'prpag_{fld_name}', None)
+                    if page_args is None:
+                        page_args = PageArgs(default_page_size=rel.default_page_size)
+
+                    return loader.load(PageLoadCommand(
+                        fk_value=fk,
+                        page_args=page_args,
+                    ))
+
+                return resolve_method
+
+            method = _make_resolve_method(relationship, field_name)
+            method.__name__ = method_name
+            method.__qualname__ = f'{model.__name__}.{method_name}'
+            setattr(model, method_name, method)
 
     # ========== FK Field Detection (with caching) ==========
 
@@ -762,7 +952,7 @@ class ResponseBuilder:
 
     def _find_relationship(self, entity: type, field_name: str) -> Optional[Relationship]:
         """
-        Find relationship for a given field.
+        Find relationship for a given field name.
 
         Args:
             entity: Entity class
@@ -770,19 +960,6 @@ class ResponseBuilder:
 
         Returns:
             Relationship object, or None if not found
-
-        Example:
-        ─────────────────────────────────────────────────────────────────
-        Input:
-            entity = UserEntity
-            field_name = 'posts'
-            UserEntity.__relationships__ = [
-                Relationship(fk='id', target=list[PostEntity], name='posts')
-            ]
-
-        Output:
-            Relationship(fk='id', target=list[PostEntity], name='posts')
-        ─────────────────────────────────────────────────────────────────
         """
         entity_cfg = self.entity_map.get(entity)
         if not entity_cfg:

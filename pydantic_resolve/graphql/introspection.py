@@ -22,13 +22,15 @@ class IntrospectionHelper:
         self,
         er_diagram,
         query_map: Dict[str, Tuple[type, Callable]],
-        mutation_map: Dict[str, Tuple[type, Callable]]
+        mutation_map: Dict[str, Tuple[type, Callable]],
+        enable_pagination: bool = False
     ):
         """
         Args:
             er_diagram: Entity relationship diagram
             query_map: Mapping of query names to (entity, method) tuples
             mutation_map: Mapping of mutation names to (entity, method) tuples
+            enable_pagination: When True, one-to-many fields use Result types
         """
         self.er_diagram = er_diagram
         self.query_map = query_map
@@ -36,7 +38,8 @@ class IntrospectionHelper:
 
         # Create internal generator
         self._generator = IntrospectionGenerator(
-            er_diagram, query_map, mutation_map
+            er_diagram, query_map, mutation_map,
+            enable_pagination=enable_pagination,
         )
 
     def is_introspection_query(self, query: str) -> bool:

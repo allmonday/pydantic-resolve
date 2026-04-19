@@ -101,8 +101,8 @@ class UserOrm(Base):
     role: Mapped[str] = mapped_column(String, default="user")
     created_at: Mapped[datetime] = mapped_column(DateTime)
 
-    posts: Mapped[List["PostOrm"]] = relationship(back_populates="author")
-    comments: Mapped[List["CommentOrm"]] = relationship(back_populates="author")
+    posts: Mapped[List["PostOrm"]] = relationship(back_populates="author", order_by="PostOrm.id")
+    comments: Mapped[List["CommentOrm"]] = relationship(back_populates="author", order_by="CommentOrm.id")
 
 
 class PostOrm(Base):
@@ -116,7 +116,7 @@ class PostOrm(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime)
 
     author: Mapped["UserOrm"] = relationship(back_populates="posts")
-    comments: Mapped[List["CommentOrm"]] = relationship(back_populates="post")
+    comments: Mapped[List["CommentOrm"]] = relationship(back_populates="post", order_by="CommentOrm.id")
 
 
 class CommentOrm(Base):
@@ -414,6 +414,7 @@ async def init_db_v3() -> None:
 
     async with async_session_factory() as session:
         async with session.begin():
+            # --- Users (8) ---
             session.add_all([
                 UserOrm(
                     id=1, name="Alice", email="alice@example.com",
@@ -431,44 +432,277 @@ async def init_db_v3() -> None:
                     id=4, name="Diana", email="diana@example.com",
                     role="admin", created_at=datetime(2024, 1, 4, 13, 0, 0),
                 ),
+                UserOrm(
+                    id=5, name="Eve", email="eve@example.com",
+                    role="user", created_at=datetime(2024, 2, 1, 9, 0, 0),
+                ),
+                UserOrm(
+                    id=6, name="Frank", email="frank@example.com",
+                    role="user", created_at=datetime(2024, 2, 5, 14, 0, 0),
+                ),
+                UserOrm(
+                    id=7, name="Grace", email="grace@example.com",
+                    role="user", created_at=datetime(2024, 2, 10, 16, 0, 0),
+                ),
+                UserOrm(
+                    id=8, name="Henry", email="henry@example.com",
+                    role="user", created_at=datetime(2024, 2, 15, 8, 30, 0),
+                ),
             ])
+
+            # --- Posts (15) ---
             session.add_all([
                 PostOrm(
-                    id=1, title="First Post", content="Hello World!",
+                    id=1, title="Getting Started with Python",
+                    content="Python is a versatile programming language...",
                     author_id=1, status="published",
                     created_at=datetime(2024, 1, 10, 9, 0, 0),
                 ),
                 PostOrm(
-                    id=2, title="Second Post", content="GraphQL is awesome",
-                    author_id=2, status="published",
-                    created_at=datetime(2024, 1, 12, 14, 30, 0),
+                    id=2, title="GraphQL Best Practices",
+                    content="Tips for designing efficient GraphQL schemas...",
+                    author_id=1, status="published",
+                    created_at=datetime(2024, 1, 15, 14, 0, 0),
                 ),
                 PostOrm(
-                    id=3, title="Third Post", content="Python tips",
+                    id=3, title="Async Programming Guide",
+                    content="Understanding async/await in Python...",
                     author_id=1, status="draft",
-                    created_at=datetime(2024, 1, 15, 8, 0, 0),
+                    created_at=datetime(2024, 1, 20, 8, 0, 0),
                 ),
                 PostOrm(
-                    id=4, title="Fourth Post", content="FastAPI tutorial",
+                    id=4, title="Database Design Tips",
+                    content="Normalization, indexing, and query optimization...",
+                    author_id=1, status="published",
+                    created_at=datetime(2024, 1, 25, 11, 0, 0),
+                ),
+                PostOrm(
+                    id=5, title="FastAPI Deep Dive",
+                    content="Exploring FastAPI's advanced features...",
+                    author_id=2, status="published",
+                    created_at=datetime(2024, 2, 3, 10, 30, 0),
+                ),
+                PostOrm(
+                    id=6, title="Testing Strategies",
+                    content="Unit tests, integration tests, and E2E testing...",
+                    author_id=2, status="draft",
+                    created_at=datetime(2024, 2, 8, 15, 0, 0),
+                ),
+                PostOrm(
+                    id=7, title="Docker for Beginners",
+                    content="Containerization basics and Docker Compose...",
                     author_id=3, status="published",
-                    created_at=datetime(2024, 1, 20, 16, 0, 0),
+                    created_at=datetime(2024, 2, 12, 9, 0, 0),
+                ),
+                PostOrm(
+                    id=8, title="Kubernetes in Production",
+                    content="Lessons learned from running K8s at scale...",
+                    author_id=3, status="published",
+                    created_at=datetime(2024, 2, 18, 13, 0, 0),
+                ),
+                PostOrm(
+                    id=9, title="Machine Learning Basics",
+                    content="Introduction to supervised and unsupervised learning...",
+                    author_id=3, status="archived",
+                    created_at=datetime(2024, 2, 22, 16, 0, 0),
+                ),
+                PostOrm(
+                    id=10, title="React Patterns",
+                    content="Compound components, render props, and hooks...",
+                    author_id=4, status="published",
+                    created_at=datetime(2024, 3, 1, 10, 0, 0),
+                ),
+                PostOrm(
+                    id=11, title="Vue.js vs React",
+                    content="A practical comparison for new projects...",
+                    author_id=4, status="published",
+                    created_at=datetime(2024, 3, 5, 14, 0, 0),
+                ),
+                PostOrm(
+                    id=12, title="CSS Architecture",
+                    content="BEM, CSS Modules, and utility-first approaches...",
+                    author_id=5, status="published",
+                    created_at=datetime(2024, 3, 10, 9, 30, 0),
+                ),
+                PostOrm(
+                    id=13, title="TypeScript Advanced Types",
+                    content="Conditional types, mapped types, and template literals...",
+                    author_id=5, status="published",
+                    created_at=datetime(2024, 3, 15, 11, 0, 0),
+                ),
+                PostOrm(
+                    id=14, title="Rust for Python Devs",
+                    content="Memory ownership, borrowing, and lifetimes explained...",
+                    author_id=6, status="draft",
+                    created_at=datetime(2024, 3, 20, 8, 0, 0),
+                ),
+                PostOrm(
+                    id=15, title="Go Concurrency Patterns",
+                    content="Goroutines, channels, and select statements...",
+                    author_id=7, status="published",
+                    created_at=datetime(2024, 3, 25, 16, 0, 0),
                 ),
             ])
+
+            # --- Comments (32) ---
             session.add_all([
+                # Post 1: 5 comments (hot post, good for pagination testing)
                 CommentOrm(
-                    id=1, text="Great post!", author_id=2, post_id=1,
+                    id=1, text="Great introduction, very clear!", author_id=2, post_id=1,
                     created_at=datetime(2024, 1, 11, 10, 0, 0),
                 ),
                 CommentOrm(
-                    id=2, text="Thanks!", author_id=1, post_id=1,
+                    id=2, text="Thanks for sharing!", author_id=1, post_id=1,
                     created_at=datetime(2024, 1, 11, 11, 0, 0),
                 ),
                 CommentOrm(
-                    id=3, text="Very helpful", author_id=3, post_id=2,
-                    created_at=datetime(2024, 1, 13, 15, 0, 0),
+                    id=3, text="Could you cover type hints next?", author_id=3, post_id=1,
+                    created_at=datetime(2024, 1, 12, 9, 0, 0),
                 ),
                 CommentOrm(
-                    id=4, text="Nice tutorial", author_id=4, post_id=4,
-                    created_at=datetime(2024, 1, 21, 9, 0, 0),
+                    id=4, text="This helped me get started quickly.", author_id=5, post_id=1,
+                    created_at=datetime(2024, 1, 13, 14, 0, 0),
+                ),
+                CommentOrm(
+                    id=5, text="Bookmarked for reference!", author_id=4, post_id=1,
+                    created_at=datetime(2024, 1, 14, 8, 0, 0),
+                ),
+                # Post 2: 3 comments
+                CommentOrm(
+                    id=6, text="Very helpful for schema design.", author_id=3, post_id=2,
+                    created_at=datetime(2024, 1, 16, 10, 0, 0),
+                ),
+                CommentOrm(
+                    id=7, text="The batching tips are golden.", author_id=4, post_id=2,
+                    created_at=datetime(2024, 1, 17, 9, 0, 0),
+                ),
+                CommentOrm(
+                    id=8, text="I used this in my project, works great.", author_id=6, post_id=2,
+                    created_at=datetime(2024, 1, 18, 15, 0, 0),
+                ),
+                # Post 3: 1 comment (draft)
+                CommentOrm(
+                    id=9, text="Looking forward to the full version!", author_id=2, post_id=3,
+                    created_at=datetime(2024, 1, 21, 10, 0, 0),
+                ),
+                # Post 4: 4 comments
+                CommentOrm(
+                    id=10, text="The indexing section was eye-opening.", author_id=5, post_id=4,
+                    created_at=datetime(2024, 1, 26, 9, 0, 0),
+                ),
+                CommentOrm(
+                    id=11, text="More on query optimization please!", author_id=2, post_id=4,
+                    created_at=datetime(2024, 1, 27, 11, 0, 0),
+                ),
+                CommentOrm(
+                    id=12, text="Applied this to my production DB.", author_id=7, post_id=4,
+                    created_at=datetime(2024, 1, 28, 14, 0, 0),
+                ),
+                CommentOrm(
+                    id=13, text="Great comparison of normalization levels.", author_id=3, post_id=4,
+                    created_at=datetime(2024, 1, 29, 8, 0, 0),
+                ),
+                # Post 5: 3 comments
+                CommentOrm(
+                    id=14, text="FastAPI is amazing, thanks for the deep dive!", author_id=1, post_id=5,
+                    created_at=datetime(2024, 2, 4, 10, 0, 0),
+                ),
+                CommentOrm(
+                    id=15, text="The dependency injection section is excellent.", author_id=6, post_id=5,
+                    created_at=datetime(2024, 2, 5, 9, 0, 0),
+                ),
+                CommentOrm(
+                    id=16, text="Would love to see WebSocket examples.", author_id=3, post_id=5,
+                    created_at=datetime(2024, 2, 6, 14, 0, 0),
+                ),
+                # Post 6: 1 comment (draft)
+                CommentOrm(
+                    id=17, text="When will this be published?", author_id=8, post_id=6,
+                    created_at=datetime(2024, 2, 9, 10, 0, 0),
+                ),
+                # Post 7: 2 comments
+                CommentOrm(
+                    id=18, text="Docker Compose section saved me hours.", author_id=4, post_id=7,
+                    created_at=datetime(2024, 2, 13, 10, 0, 0),
+                ),
+                CommentOrm(
+                    id=19, text="Clear explanation of volumes vs bind mounts.", author_id=8, post_id=7,
+                    created_at=datetime(2024, 2, 14, 11, 0, 0),
+                ),
+                # Post 8: 3 comments
+                CommentOrm(
+                    id=20, text="We use similar patterns at my company.", author_id=1, post_id=8,
+                    created_at=datetime(2024, 2, 19, 10, 0, 0),
+                ),
+                CommentOrm(
+                    id=21, text="Helm charts tips would be a great follow-up.", author_id=5, post_id=8,
+                    created_at=datetime(2024, 2, 20, 9, 0, 0),
+                ),
+                CommentOrm(
+                    id=22, text="The monitoring section is crucial.", author_id=7, post_id=8,
+                    created_at=datetime(2024, 2, 21, 15, 0, 0),
+                ),
+                # Post 9: 1 comment (archived)
+                CommentOrm(
+                    id=23, text="Still relevant even though it's archived.", author_id=6, post_id=9,
+                    created_at=datetime(2024, 2, 23, 10, 0, 0),
+                ),
+                # Post 10: 3 comments
+                CommentOrm(
+                    id=24, text="Compound components are so elegant!", author_id=2, post_id=10,
+                    created_at=datetime(2024, 3, 2, 10, 0, 0),
+                ),
+                CommentOrm(
+                    id=25, text="Custom hooks section is fantastic.", author_id=5, post_id=10,
+                    created_at=datetime(2024, 3, 3, 14, 0, 0),
+                ),
+                CommentOrm(
+                    id=26, text="I refactored my codebase after reading this.", author_id=8, post_id=10,
+                    created_at=datetime(2024, 3, 4, 9, 0, 0),
+                ),
+                # Post 11: 2 comments
+                CommentOrm(
+                    id=27, text="Fair comparison, both have their strengths.", author_id=1, post_id=11,
+                    created_at=datetime(2024, 3, 6, 10, 0, 0),
+                ),
+                CommentOrm(
+                    id=28, text="I chose Vue for my last project.", author_id=7, post_id=11,
+                    created_at=datetime(2024, 3, 7, 11, 0, 0),
+                ),
+                # Post 12: 2 comments
+                CommentOrm(
+                    id=29, text="Utility-first CSS changed my workflow.", author_id=2, post_id=12,
+                    created_at=datetime(2024, 3, 11, 10, 0, 0),
+                ),
+                CommentOrm(
+                    id=30, text="BEM still works well for large teams.", author_id=4, post_id=12,
+                    created_at=datetime(2024, 3, 12, 9, 0, 0),
+                ),
+                # Post 13: 3 comments
+                CommentOrm(
+                    id=31, text="Mapped types blew my mind.", author_id=1, post_id=13,
+                    created_at=datetime(2024, 3, 16, 10, 0, 0),
+                ),
+                CommentOrm(
+                    id=32, text="Finally understand conditional types.", author_id=6, post_id=13,
+                    created_at=datetime(2024, 3, 17, 14, 0, 0),
+                ),
+                CommentOrm(
+                    id=33, text="Template literal types are underrated.", author_id=3, post_id=13,
+                    created_at=datetime(2024, 3, 18, 9, 0, 0),
+                ),
+                # Post 14: 1 comment (draft)
+                CommentOrm(
+                    id=34, text="As a Python dev, this is very helpful!", author_id=8, post_id=14,
+                    created_at=datetime(2024, 3, 21, 10, 0, 0),
+                ),
+                # Post 15: 2 comments
+                CommentOrm(
+                    id=35, text="Channels are powerful but tricky.", author_id=1, post_id=15,
+                    created_at=datetime(2024, 3, 26, 10, 0, 0),
+                ),
+                CommentOrm(
+                    id=36, text="Select statement examples are clear.", author_id=4, post_id=15,
+                    created_at=datetime(2024, 3, 27, 11, 0, 0),
                 ),
             ])

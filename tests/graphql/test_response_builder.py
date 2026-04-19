@@ -141,4 +141,5 @@ def test_relationship_field_uses_validation_alias_to_avoid_attribute_access():
 
     result = response_model.model_validate(UserSource())
     assert result.id == 1
+    # posts is a raw list field (default=[]), not resolved from source
     assert result.posts == []

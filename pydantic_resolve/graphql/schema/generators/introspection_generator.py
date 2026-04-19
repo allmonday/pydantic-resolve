@@ -8,7 +8,7 @@ using the unified type collection and mapping logic.
 import inspect
 import re
 from enum import Enum
-from typing import Any, Callable, Optional, get_type_hints
+from typing import Any, Callable, Optional, get_origin, get_type_hints
 
 from pydantic import BaseModel
 
@@ -40,7 +40,8 @@ class IntrospectionGenerator(SchemaGenerator):
         self,
         er_diagram,
         query_map: Optional[dict[str, tuple[type, Callable]]] = None,
-        mutation_map: Optional[dict[str, tuple[type, Callable]]] = None
+        mutation_map: Optional[dict[str, tuple[type, Callable]]] = None,
+        enable_pagination: bool = False
     ):
         """
         Initialize the introspection generator.
@@ -49,10 +50,12 @@ class IntrospectionGenerator(SchemaGenerator):
             er_diagram: Entity relationship diagram
             query_map: Mapping of query names to (entity, method) tuples
             mutation_map: Mapping of mutation names to (entity, method) tuples
+            enable_pagination: When True, one-to-many fields use Result types
         """
         super().__init__(er_diagram)
         self.query_map = query_map or {}
         self.mutation_map = mutation_map or {}
+        self.enable_pagination = enable_pagination
         self._collected_types: dict[str, type] = {}
         self._input_types: set[type] = set()
 
@@ -184,6 +187,10 @@ class IntrospectionGenerator(SchemaGenerator):
         for input_type in self._input_types:
             types.append(self._build_input_type(input_type))
 
+        # Add Pagination and Result types for one-to-many relationships
+        page_types = self._build_page_types()
+        types.extend(page_types)
+
         # Add Query type
         types.append({
             "kind": "OBJECT",
@@ -244,6 +251,11 @@ class IntrospectionGenerator(SchemaGenerator):
         for input_type in self._input_types:
             if input_type.__name__ == type_name:
                 return self._build_input_type(input_type)
+
+        # Check Pagination and Result types
+        for page_type in self._build_page_types():
+            if page_type["name"] == type_name:
+                return page_type
 
         # Check Query type
         if type_name == "Query":
@@ -453,16 +465,53 @@ class IntrospectionGenerator(SchemaGenerator):
                         continue
 
                     field_name = rel.name
-                    type_def = self._build_graphql_type(rel.target)
 
-                    fields.append({
-                        "name": field_name,
-                        "description": rel.description,
-                        "args": [],
-                        "type": type_def,
-                        "isDeprecated": False,
-                        "deprecationReason": None
-                    })
+                    # One-to-many: check if pagination is enabled
+                    if rel.is_list_relationship:
+                        target_classes = get_core_types(rel.target)
+                        target_name = target_classes[0].__name__ if target_classes else "Unknown"
+
+                        # If pagination enabled and page_loader exists, generate paginated field
+                        if self.enable_pagination and rel.page_loader is not None:
+                            result_name = f"{target_name}Result"
+                            fields.append({
+                                "name": field_name,
+                                "description": rel.description,
+                                "args": self._build_pagination_args(),
+                                "type": {
+                                    "kind": "NON_NULL",
+                                    "name": None,
+                                    "ofType": {
+                                        "kind": "OBJECT",
+                                        "name": result_name,
+                                        "ofType": None
+                                    }
+                                },
+                                "isDeprecated": False,
+                                "deprecationReason": None
+                            })
+                        else:
+                            # Regular list field without pagination
+                            type_def = self._build_graphql_type(rel.target)
+                            fields.append({
+                                "name": field_name,
+                                "description": rel.description,
+                                "args": [],
+                                "type": type_def,
+                                "isDeprecated": False,
+                                "deprecationReason": None
+                            })
+                    else:
+                        type_def = self._build_graphql_type(rel.target)
+
+                        fields.append({
+                            "name": field_name,
+                            "description": rel.description,
+                            "args": [],
+                            "type": type_def,
+                            "isDeprecated": False,
+                            "deprecationReason": None
+                        })
 
         return fields
 
@@ -473,6 +522,128 @@ class IntrospectionGenerator(SchemaGenerator):
                 if rel.name == field_name:
                     return True
         return False
+
+    def _build_pagination_args(self) -> list[dict]:
+        """Build pagination arguments for one-to-many relationship fields."""
+        return [
+            {"name": "limit", "description": None, "type": {"kind": "SCALAR", "name": "Int", "ofType": None}, "defaultValue": None},
+            {"name": "offset", "description": None, "type": {"kind": "SCALAR", "name": "Int", "ofType": None}, "defaultValue": None},
+        ]
+
+    def _build_page_types(self) -> list[dict]:
+        """Generate Pagination and Result introspection types for one-to-many relationships."""
+        if not self.enable_pagination:
+            return []
+
+        types: list[dict] = []
+        seen: set[str] = set()
+        has_one_to_many = False
+
+        for entity_cfg in self.er_diagram.entities:
+            for rel in entity_cfg.relationships:
+                if not isinstance(rel, Relationship):
+                    continue
+                if rel.loader is None:
+                    continue
+                if get_origin(rel.target) is not list:
+                    continue
+                if rel.page_loader is None:
+                    continue
+
+                target_classes = get_core_types(rel.target)
+                if not target_classes:
+                    continue
+                target_name = target_classes[0].__name__
+
+                if target_name in seen:
+                    continue
+                seen.add(target_name)
+                has_one_to_many = True
+
+                # Result type
+                types.append(self._build_result_introspection_type(target_name))
+
+        if has_one_to_many:
+            types.insert(0, self._build_pagination_introspection_type())
+
+        return types
+
+    def _build_pagination_introspection_type(self) -> dict:
+        """Build Pagination introspection type."""
+        return {
+            "kind": "OBJECT",
+            "name": "Pagination",
+            "description": "Pagination information for list results.",
+            "fields": [
+                {
+                    "name": "has_more",
+                    "description": None,
+                    "args": [],
+                    "type": {"kind": "NON_NULL", "name": None, "ofType": {"kind": "SCALAR", "name": "Boolean", "ofType": None}},
+                    "isDeprecated": False,
+                    "deprecationReason": None,
+                },
+                {
+                    "name": "total_count",
+                    "description": None,
+                    "args": [],
+                    "type": {"kind": "SCALAR", "name": "Int", "ofType": None},
+                    "isDeprecated": False,
+                    "deprecationReason": None,
+                },
+            ],
+            "inputFields": None,
+            "interfaces": [],
+            "enumValues": None,
+            "possibleTypes": None,
+        }
+
+    def _build_result_introspection_type(self, entity_name: str) -> dict:
+        """Build Result introspection type for a given entity."""
+        result_name = f"{entity_name}Result"
+        return {
+            "kind": "OBJECT",
+            "name": result_name,
+            "description": f"Paginated result for {entity_name}.",
+            "fields": [
+                {
+                    "name": "items",
+                    "description": None,
+                    "args": [],
+                    "type": {
+                        "kind": "NON_NULL",
+                        "name": None,
+                        "ofType": {
+                            "kind": "LIST",
+                            "name": None,
+                            "ofType": {
+                                "kind": "NON_NULL",
+                                "name": None,
+                                "ofType": {"kind": "OBJECT", "name": entity_name, "ofType": None},
+                            },
+                        },
+                    },
+                    "isDeprecated": False,
+                    "deprecationReason": None,
+                },
+                {
+                    "name": "pagination",
+                    "description": None,
+                    "args": [],
+                    "type": {
+                        "kind": "NON_NULL",
+                        "name": None,
+                        "ofType": {"kind": "OBJECT", "name": "Pagination", "ofType": None},
+                    },
+                    "isDeprecated": False,
+                    "deprecationReason": None,
+                },
+            ],
+            "inputFields": None,
+            "interfaces": [],
+            "enumValues": None,
+            "possibleTypes": None,
+        }
 
     def _get_input_fields(self, kls: type) -> list[dict]:
         """Get introspection inputFields for an input type."""
