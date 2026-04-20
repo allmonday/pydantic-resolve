@@ -5,7 +5,7 @@ Provides centralized type conversion between Python and GraphQL types.
 """
 
 from enum import Enum
-from typing import get_origin, get_args, Union, List
+from typing import get_origin, get_args, Union
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.types import get_core_types, _is_optional, _is_list
 from pydantic import BaseModel
@@ -45,7 +45,7 @@ def is_enum_type(python_type: type) -> bool:
         return False
 
 
-def get_enum_names(enum_class: type) -> List[str]:
+def get_enum_names(enum_class: type) -> list[str]:
     """
     Get all enum member names from an Enum class.
 

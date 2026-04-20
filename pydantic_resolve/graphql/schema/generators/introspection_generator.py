@@ -8,7 +8,7 @@ using the unified type collection and mapping logic.
 import inspect
 import re
 from enum import Enum
-from typing import Any, Callable, Optional, get_origin, get_type_hints
+from typing import Any, Callable, Optional, get_type_hints
 
 from pydantic import BaseModel
 

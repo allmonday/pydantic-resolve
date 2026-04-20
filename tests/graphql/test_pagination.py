@@ -12,7 +12,6 @@ import pytest
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import ForeignKey, Integer, String, select
 from sqlalchemy.ext.asyncio import (
-    AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )

@@ -4,7 +4,7 @@ GraphQL handler - coordinates all components and provides FastAPI integration.
 
 import inspect
 import logging
-from typing import Any, Callable, Dict, ForwardRef, Optional, Tuple, get_args
+from typing import Any, Callable, ForwardRef, Optional, get_args
 
 from graphql import parse as parse_graphql
 from graphql.language.ast import OperationDefinitionNode, OperationType
@@ -106,7 +106,7 @@ class GraphQLHandler:
                 + "\n\nSet order_by on the ORM relationship to enable pagination."
             )
 
-    def _build_query_map(self) -> Dict[str, Tuple[type, Callable]]:
+    def _build_query_map(self) -> dict[str, tuple[type, Callable]]:
         """
         Scan all entities and build query name to method mapping.
 
@@ -122,7 +122,7 @@ class GraphQLHandler:
                 query_map[query_name] = (return_entity, method_info['method'])
         return query_map
 
-    def _build_mutation_map(self) -> Dict[str, Tuple[type, Callable]]:
+    def _build_mutation_map(self) -> dict[str, tuple[type, Callable]]:
         """
         Scan all entities and build mutation name to method mapping.
 
@@ -217,8 +217,8 @@ class GraphQLHandler:
     async def execute(
         self,
         query: str,
-        context: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        context: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
         """
         Execute a GraphQL query or mutation.
 

@@ -1,7 +1,7 @@
 """App resources container for MCP server."""
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Set
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 if TYPE_CHECKING:
     from pydantic_resolve.graphql.handler import GraphQLHandler
@@ -34,7 +34,7 @@ class AppResources:
     context_extractor: Callable[[Any], dict | Awaitable[dict]] | None = field(default=None)
 
     @property
-    def entity_names(self) -> Set[str]:
+    def entity_names(self) -> set[str]:
         """Get set of entity class names from the ER diagram.
 
         Returns:
@@ -43,7 +43,7 @@ class AppResources:
         return {cfg.kls.__name__ for cfg in self.handler.er_diagram.entities}
 
     @property
-    def query_names(self) -> Set[str]:
+    def query_names(self) -> set[str]:
         """Get set of query names.
 
         Returns:
@@ -52,7 +52,7 @@ class AppResources:
         return set(self.handler.query_map.keys())
 
     @property
-    def mutation_names(self) -> Set[str]:
+    def mutation_names(self) -> set[str]:
         """Get set of mutation names.
 
         Returns:

@@ -14,7 +14,7 @@ import inspect
 import logging
 import os
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Optional
 
 from pydantic import BaseModel
 
@@ -27,35 +27,6 @@ from pydantic_resolve.graphql.query_parser import QueryParser
 from pydantic_resolve.graphql.response_builder import ResponseBuilder
 
 logger = logging.getLogger(__name__)
-
-
-def _filter_response_data(data: Any, selection: Any) -> Any:
-    """Filter serialized response dict to only include fields selected in the GraphQL query.
-
-    Walks the dict and FieldSelection tree in parallel, removing
-    any keys not present in the selection (e.g. ``pagination``
-    when not requested, or ``total_count`` when only ``has_more`` is selected).
-    """
-    if data is None:
-        return None
-    if isinstance(data, list):
-        return [_filter_response_data(item, selection) for item in data]
-    if isinstance(data, dict):
-        if not selection or not selection.sub_fields:
-            return data
-        result = {}
-        for key, value in data.items():
-            if key not in selection.sub_fields:
-                continue
-            child_sel = selection.sub_fields[key]
-            if isinstance(value, list):
-                result[key] = [_filter_response_data(item, child_sel) for item in value]
-            elif isinstance(value, dict):
-                result[key] = _filter_response_data(value, child_sel)
-            else:
-                result[key] = value
-        return result
-    return data
 
 
 class QueryExecutor:
@@ -92,9 +63,9 @@ class QueryExecutor:
     async def execute_query(
         self,
         query: str,
-        query_map: Dict[str, Tuple[type, Callable]],
-        context: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        query_map: dict[str, tuple[type, Callable]],
+        context: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
         """
         Execute custom query with optimized two-phase execution:
         - Phase 1 (Serial): Parse query, build response models (no I/O)
@@ -183,9 +154,9 @@ class QueryExecutor:
     async def execute_mutation(
         self,
         query: str,
-        mutation_map: Dict[str, Tuple[type, Callable]],
-        context: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        mutation_map: dict[str, tuple[type, Callable]],
+        context: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
         """
         Execute custom mutation with two-phase execution:
         - Phase 1 (Serial): Mutation method execution, model building, data transformation
@@ -265,13 +236,13 @@ class QueryExecutor:
                     if isinstance(typed_data, list):
                         resolved = await resolver.resolve(typed_data)
                         data[root_mutation_name] = [
-                            _filter_response_data(r.model_dump(mode='json', by_alias=False), root_field_selection)
+                            r.model_dump(mode='json', by_alias=False)
                             for r in resolved
                         ] if resolved else []
                     else:
                         resolved = await resolver.resolve(typed_data)
-                        data[root_mutation_name] = _filter_response_data(
-                            resolved.model_dump(mode='json', by_alias=False), root_field_selection
+                        data[root_mutation_name] = (
+                            resolved.model_dump(mode='json', by_alias=False)
                         ) if resolved else None
                 else:
                     data[root_mutation_name] = None
@@ -300,10 +271,10 @@ class QueryExecutor:
     async def _execute_method(
         self,
         method: Callable,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
         operation_type: str = "query",
         entity: Optional[type] = None,
-        context: Optional[Dict[str, Any]] = None,
+        context: Optional[dict[str, Any]] = None,
     ) -> Any:
         """
         Execute @query or @mutation method
@@ -353,8 +324,8 @@ class QueryExecutor:
     def _convert_arguments(
         self,
         method: Callable,
-        arguments: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        arguments: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Convert method parameters, transforming dict to corresponding Pydantic BaseModel instances
         and enum names to enum values.
@@ -493,9 +464,9 @@ class QueryExecutor:
 
     async def _execute_concurrent_queries(
         self,
-        execution_tasks: List[Tuple[str, type, Callable, Any, type]],
-        context: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Tuple[Optional[Any], Optional[Dict]]]:
+        execution_tasks: list[tuple[str, type, Callable, Any, type]],
+        context: Optional[dict[str, Any]] = None,
+    ) -> dict[str, tuple[Optional[Any], Optional[dict]]]:
         """
         Execute multiple queries concurrently (query_method + transform + resolve).
 
@@ -566,8 +537,8 @@ class QueryExecutor:
         query_method: Callable,
         field_selection: Any,
         response_model: type,
-        context: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[Optional[Any], Optional[Dict]]:
+        context: Optional[dict[str, Any]] = None,
+    ) -> tuple[Optional[Any], Optional[dict]]:
         """
         Execute a single query: query_method -> transform -> resolve.
 
@@ -637,7 +608,7 @@ class QueryExecutor:
                     result = await resolver.resolve(typed_data)
                     if result is not None:
                         result_data = [
-                            _filter_response_data(r.model_dump(mode='json', by_alias=False), field_selection)
+                            r.model_dump(mode='json', by_alias=False)
                             for r in result
                         ]
                     else:
@@ -645,9 +616,7 @@ class QueryExecutor:
                 else:
                     result = await resolver.resolve(typed_data)
                     if result is not None:
-                        result_data = _filter_response_data(
-                            result.model_dump(mode='json', by_alias=False), field_selection
-                        )
+                        result_data = result.model_dump(mode='json', by_alias=False)
                     else:
                         result_data = None
             else:

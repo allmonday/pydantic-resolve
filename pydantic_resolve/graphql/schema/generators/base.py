@@ -5,8 +5,10 @@ This module defines the interface that all schema generators must implement,
 ensuring consistency between SDL and Introspection output formats.
 """
 
+import inspect
+
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Callable, Optional, TYPE_CHECKING
 
 from pydantic import BaseModel
 
@@ -49,8 +51,8 @@ class SchemaGenerator(ABC):
         self.mapper = TypeMapper()
 
         # Query and mutation maps (set by subclasses if needed)
-        self.query_map: Dict[str, Tuple[type, Callable]] = {}
-        self.mutation_map: Dict[str, Tuple[type, Callable]] = {}
+        self.query_map: dict[str, tuple[type, Callable]] = {}
+        self.mutation_map: dict[str, tuple[type, Callable]] = {}
 
     @abstractmethod
     def generate(self) -> Any:
@@ -117,7 +119,7 @@ class SchemaGenerator(ABC):
         """
         from typing import get_type_hints
 
-        fields: Dict[str, FieldInfo] = {}
+        fields: dict[str, FieldInfo] = {}
         description = self._get_class_description(kls)
 
         try:
@@ -165,7 +167,7 @@ class SchemaGenerator(ABC):
         field = kls.model_fields[field_name]
         return getattr(field, 'description', None)
 
-    def get_all_type_names(self) -> List[str]:
+    def get_all_type_names(self) -> list[str]:
         """Get all registered type names."""
         return [t.name for t in self.registry.get_all_types()]
 
@@ -185,14 +187,14 @@ class SchemaGenerator(ABC):
             return args[0].__name__
         return None
 
-    def _collect_paginated_relationships(self) -> List[Tuple[Relationship, str]]:
+    def _collect_paginated_relationships(self) -> list[tuple[Relationship, str]]:
         """Collect all one-to-many relationships with page_loader, deduped by target name.
 
         Returns:
             List of (Relationship, target_entity_name) tuples.
         """
         seen: set[str] = set()
-        result: List[Tuple[Relationship, str]] = []
+        result: list[tuple[Relationship, str]] = []
 
         for entity_cfg in self.er_diagram.entities:
             for rel in entity_cfg.relationships:
@@ -213,7 +215,7 @@ class SchemaGenerator(ABC):
 
         return result
 
-    def _extract_operation_methods(self, entity: type, operation_type: str) -> List[Dict[str, Any]]:
+    def _extract_operation_methods(self, entity: type, operation_type: str) -> list[dict[str, Any]]:
         """Extract all @query or @mutation decorated methods from an entity.
 
         Args:
@@ -223,7 +225,6 @@ class SchemaGenerator(ABC):
         Returns:
             List of dicts with keys: name, description, params, return_type, entity, method
         """
-        import inspect
         import pydantic_resolve.constant as const
         from pydantic_resolve.graphql.utils.naming import to_graphql_field_name
 
@@ -270,14 +271,12 @@ class SchemaGenerator(ABC):
 
         return methods
 
-    def _extract_method_params(self, sig: 'inspect.Signature') -> List[Dict[str, Any]]:
+    def _extract_method_params(self, sig: 'inspect.Signature') -> list[dict[str, Any]]:
         """Extract parameter info from a method signature.
 
         Returns:
             List of dicts with keys: name, type, required, default, definition
         """
-        import inspect as _inspect
-
         params = []
         for param_name, param in sig.parameters.items():
             if param_name in ('self', 'cls'):
@@ -286,11 +285,11 @@ class SchemaGenerator(ABC):
                 continue
 
             param_type = param.annotation
-            if param_type == _inspect.Parameter.empty:
+            if param_type == inspect.Parameter.empty:
                 continue
 
             default = param.default
-            is_required = default == _inspect.Parameter.empty
+            is_required = default == inspect.Parameter.empty
 
             params.append({
                 'name': param_name,

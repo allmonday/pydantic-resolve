@@ -1,7 +1,6 @@
 import logging
 import time
 import math
-from typing import List
 from uuid import uuid1
 
 profile_logger = logging.getLogger(__name__)
@@ -9,8 +8,8 @@ profile_logger = logging.getLogger(__name__)
 class Profile():
     def __init__(self):
         self.full_path_timer = {}
-    
-    def get_timer(self, path: List[str]):
+
+    def get_timer(self, path: list[str]):
         key = '.'.join(path)
         if key not in self.full_path_timer:
             self.full_path_timer[key] = Timer(key)

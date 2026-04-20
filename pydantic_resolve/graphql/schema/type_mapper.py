@@ -7,7 +7,7 @@ internal representation.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, ForwardRef, Optional, get_args
+from typing import Any, ForwardRef, Optional, get_args
 
 from pydantic import BaseModel
 
@@ -44,7 +44,7 @@ class GraphQLTypeInfo:
         else:
             return self.name or "String"
 
-    def to_introspection(self) -> Dict[str, Any]:
+    def to_introspection(self) -> dict[str, Any]:
         """Convert to introspection format."""
         result = {
             "kind": self.kind,
@@ -157,7 +157,7 @@ class TypeMapper:
 
         return sdl
 
-    def map_to_introspection(self, python_type: type, is_input: bool = False) -> Dict[str, Any]:
+    def map_to_introspection(self, python_type: type, is_input: bool = False) -> dict[str, Any]:
         """
         Map Python type to introspection format.
 

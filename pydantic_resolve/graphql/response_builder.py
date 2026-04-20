@@ -4,7 +4,7 @@ Dynamic Pydantic model builder based on GraphQL field selection.
 
 from pydantic import ConfigDict
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple, get_type_hints, get_args, Annotated
+from typing import Any, Optional, get_type_hints, get_args, Annotated
 from pydantic import BaseModel, create_model, Field
 from pydantic.functional_serializers import PlainSerializer
 from functools import lru_cache
@@ -136,7 +136,7 @@ class ResponseBuilder:
             class UserResponse(BaseModel):
                 id: int
                 name: str
-                posts: Annotated[List[PostResponse], AutoLoad()] = []
+                posts: Annotated[list[PostResponse], AutoLoad()] = []
 
         Key Implementation Details:
         ─────────────────────────────────────────────────────────────────
@@ -167,7 +167,7 @@ class ResponseBuilder:
         saved_pending = getattr(self, '_pending_result_fields', [])
         self._pending_result_fields = []
 
-        field_definitions: Dict[str, Tuple[type, Any]] = {}
+        field_definitions: dict[str, tuple[type, Any]] = {}
         type_hints = self._get_type_hints(entity)
         entity_cfg = self.entity_map.get(entity)
         is_registered = entity_cfg is not None
@@ -215,7 +215,7 @@ class ResponseBuilder:
         field_type: type,
         selection: FieldSelection,
         parent_path: str
-    ) -> Optional[Tuple[type, Any]]:
+    ) -> Optional[tuple[type, Any]]:
         """
         Build a single field definition.
 
@@ -230,7 +230,7 @@ class ResponseBuilder:
         Output: (Optional[str], Field(serialization_alias="userName"))
 
         Input:  field_type = list[PostEntity], selection.sub_fields = {title, content}
-        Output: (List[PostResponse_123], [])  # recursive call to build nested model
+        Output: (list[PostResponse_123], [])  # recursive call to build nested model
         ─────────────────────────────────────────────────────────────────
         """
         # Handle nested Pydantic models with sub-field selections
@@ -247,7 +247,7 @@ class ResponseBuilder:
         field_type: type,
         selection: FieldSelection,
         parent_path: str
-    ) -> Optional[Tuple[type, Any]]:
+    ) -> Optional[tuple[type, Any]]:
         """
         Try to build nested field definition for Pydantic models.
 
@@ -259,8 +259,8 @@ class ResponseBuilder:
         Process:
             1. get_core_types() extracts [PostEntity]
             2. PostEntity is BaseModel subclass → recursive build
-            3. _build_nested_type() wraps with List[]
-        Output: (List[PostResponse_123], [])
+            3. _build_nested_type() wraps with list[]
+        Output: (list[PostResponse_123], [])
 
         Input:  field_type = str, selection.sub_fields = None
         Output: None  # not a Pydantic model, fallback to scalar
@@ -282,14 +282,14 @@ class ResponseBuilder:
         self,
         field_type: type,
         nested_model: type[BaseModel]
-    ) -> Tuple[type, Any]:
+    ) -> tuple[type, Any]:
         """
         Build type tuple for nested model based on container type.
 
         Example:
         ─────────────────────────────────────────────────────────────────
         Input:  field_type = list[PostEntity], nested_model = PostResponse
-        Output: (List[PostResponse], [])
+        Output: (list[PostResponse], [])
 
         Input:  field_type = Optional[UserEntity], nested_model = UserResponse
         Output: (Optional[UserResponse], None)
@@ -300,7 +300,7 @@ class ResponseBuilder:
         """
         # Case 1: List container
         if _is_list(field_type):
-            return (List[nested_model], [])
+            return (list[nested_model], [])
 
         # Case 2: Optional (Union[X, None])
         if _is_optional(field_type):
@@ -312,7 +312,7 @@ class ResponseBuilder:
     def _build_scalar_field(
         self,
         field_type: type,
-    ) -> Tuple[type, Any]:
+    ) -> tuple[type, Any]:
         """
         Build field definition for scalar types.
 
@@ -342,8 +342,8 @@ class ResponseBuilder:
         self,
         entity: type,
         field_selection: FieldSelection,
-        type_hints: Dict[str, type],
-        field_definitions: Dict[str, Tuple[type, Any]]
+        type_hints: dict[str, type],
+        field_definitions: dict[str, tuple[type, Any]]
     ) -> None:
         """
         Add required foreign key fields to field definitions.
@@ -373,7 +373,7 @@ class ResponseBuilder:
         self,
         entity: type,
         field_selection: FieldSelection,
-        field_definitions: Dict[str, Tuple[type, Any]]
+        field_definitions: dict[str, tuple[type, Any]]
     ) -> None:
         """Add hidden pagination argument fields for paginated list fields.
 
@@ -440,7 +440,6 @@ class ResponseBuilder:
         The Resolver reads this tree to inject nested PageArgs into child
         instances after each level is resolved.
         """
-        from pydantic_resolve.graphql.pagination.types import PageArgs
 
         tree = self._collect_pagination_tree(entity, field_selection)
         if not tree:
@@ -515,7 +514,7 @@ class ResponseBuilder:
         self,
         entity: type,
         field_selection: FieldSelection,
-        field_definitions: Dict[str, Tuple[type, Any]],
+        field_definitions: dict[str, tuple[type, Any]],
         parent_path: str
     ) -> None:
         """
@@ -535,7 +534,7 @@ class ResponseBuilder:
 
         Result:
             field_definitions['posts'] = (
-                Annotated[List[PostResponse], AutoLoad()],
+                Annotated[list[PostResponse], AutoLoad()],
                 []
             )
         ─────────────────────────────────────────────────────────────────
@@ -567,7 +566,7 @@ class ResponseBuilder:
         relationship: Relationship,
         selection: FieldSelection,
         parent_path: str,
-    ) -> Optional[Tuple[type, Any]]:
+    ) -> Optional[tuple[type, Any]]:
         """
         Build field definition for a relationship.
 
@@ -622,7 +621,15 @@ class ResponseBuilder:
 
             # Create {Entity}Result type
             from pydantic_resolve.graphql.pagination.types import create_result_type
-            result_type = create_result_type(node_model)
+            pagination_selection = None
+            if selection.sub_fields:
+                pag_sel = selection.sub_fields.get('pagination')
+                if pag_sel is not None and pag_sel.sub_fields:
+                    pagination_selection = set(pag_sel.sub_fields.keys())
+            result_type = create_result_type(
+                node_model,
+                pagination_selection=pagination_selection,
+            )
 
             # Store resolve method info for later attachment
             # (resolved in _attach_result_resolve_methods)
@@ -645,7 +652,7 @@ class ResponseBuilder:
             nested_model = self.build_response_model(
                 actual_entity, selection, parent_path
             )
-            base_type = Annotated[List[nested_model], _AutoLoad()]
+            base_type = Annotated[list[nested_model], _AutoLoad()]
             return (
                 base_type,
                 Field(
@@ -698,7 +705,7 @@ class ResponseBuilder:
 
     # ========== Utility Methods ==========
 
-    def _get_type_hints(self, entity: type) -> Dict[str, type]:
+    def _get_type_hints(self, entity: type) -> dict[str, type]:
         """
         Safely get type hints for an entity.
 
@@ -725,7 +732,7 @@ class ResponseBuilder:
         self,
         entity: type,
         field_selection: FieldSelection,
-        field_definitions: Dict[str, Tuple[type, Any]],
+        field_definitions: dict[str, tuple[type, Any]],
         pending_result_fields: list = None,
     ) -> type[BaseModel]:
         """
@@ -839,7 +846,7 @@ class ResponseBuilder:
 
     # ========== FK Field Detection (with caching) ==========
 
-    def _get_required_fk_fields(self, entity: type, selected_fields: Set[str]) -> Set[str]:
+    def _get_required_fk_fields(self, entity: type, selected_fields: set[str]) -> set[str]:
         """
         Determine foreign key fields required by AutoLoad (with caching)
 
@@ -869,7 +876,7 @@ class ResponseBuilder:
         return self._get_required_fk_fields_cached(entity, frozenset(selected_fields))
 
     @lru_cache(maxsize=128)
-    def _get_required_fk_fields_cached(self, entity: type, selected_fields: frozenset) -> Set[str]:
+    def _get_required_fk_fields_cached(self, entity: type, selected_fields: frozenset) -> set[str]:
         """
         Determine foreign key fields required by AutoLoad (cached version)
 

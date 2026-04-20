@@ -1,10 +1,10 @@
-from typing import Any, Dict, Set, get_args
+from typing import Any, get_args
 from pydantic import BaseModel
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.types import _is_optional, _is_list
 
 
-def _collect_nested_types(model: type, collected: Set[type] = None) -> Set[type]:
+def _collect_nested_types(model: type, collected: set[type] = None) -> set[type]:
     """Recursively collect all nested Pydantic BaseModel types from model_fields.
 
     Args:
@@ -74,7 +74,7 @@ def serialization(cls):
 
     # Step 2: Create the json_schema_extra function
     def build():
-        def _schema_extra(schema: Dict[str, Any], model) -> None:
+        def _schema_extra(schema: dict[str, Any], model) -> None:
             # Process exclude fields at current level
             excluded_fields = [k for k, v in model.model_fields.items() if v.exclude]
             props = {}

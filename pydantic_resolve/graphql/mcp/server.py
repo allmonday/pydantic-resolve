@@ -6,7 +6,7 @@ pydantic-resolve GraphQL applications with progressive disclosure support.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 
 from pydantic_resolve.graphql.mcp.managers.multi_app_manager import MultiAppManager
 from pydantic_resolve.graphql.mcp.tools.multi_app_tools import register_multi_app_tools
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 
 def create_mcp_server(
-    apps: List[AppConfig],
+    apps: list[AppConfig],
     name: str = "Pydantic-Resolve GraphQL API",
 ) -> "FastMCP":
     """Create an MCP server that exposes multiple ErDiagram as independent GraphQL apps.

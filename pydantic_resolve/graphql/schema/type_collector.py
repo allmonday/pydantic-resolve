@@ -9,7 +9,7 @@ from an ErDiagram, including:
 """
 
 import inspect
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, get_type_hints
+from typing import Any, Callable, Optional, get_type_hints
 
 from pydantic import BaseModel
 
@@ -52,7 +52,7 @@ class TypeCollector:
 
         return self.registry
 
-    def collect_all_types(self) -> Dict[str, type]:
+    def collect_all_types(self) -> dict[str, type]:
         """Collect all types from ERD: entities, relationship targets, and nested types.
 
         Returns:
@@ -60,7 +60,7 @@ class TypeCollector:
         """
         from pydantic_resolve.utils.er_diagram import Relationship
 
-        collected: Dict[str, type] = {}
+        collected: dict[str, type] = {}
 
         # 1. Collect entity types from ERD
         for entity_cfg in self.er_diagram.entities:
@@ -85,9 +85,9 @@ class TypeCollector:
 
     def collect_input_types(
         self,
-        query_map: Optional[Dict[str, Tuple[type, Callable]]] = None,
-        mutation_map: Optional[Dict[str, Tuple[type, Callable]]] = None
-    ) -> Set[type]:
+        query_map: Optional[dict[str, tuple[type, Callable]]] = None,
+        mutation_map: Optional[dict[str, tuple[type, Callable]]] = None
+    ) -> set[type]:
         """
         Collect all BaseModel types from method parameters as Input Types.
 
@@ -98,8 +98,8 @@ class TypeCollector:
         Returns:
             Set of all BaseModel types that need input definitions
         """
-        input_types: Set[type] = set()
-        visited: Set[str] = set()
+        input_types: set[type] = set()
+        visited: set[str] = set()
 
         def collect_from_type(param_type: Any) -> None:
             """Recursively collect BaseModel types."""
@@ -157,7 +157,7 @@ class TypeCollector:
         except Exception:
             pass
 
-    def _collect_entity_types(self) -> List[type]:
+    def _collect_entity_types(self) -> list[type]:
         """Collect all entity types from ERD configs."""
         entity_types = []
         for entity_cfg in self.er_diagram.entities:
@@ -166,9 +166,9 @@ class TypeCollector:
 
     def collect_nested_pydantic_types(
         self,
-        entities: List[type],
-        visited: Optional[Set[str]] = None
-    ) -> Dict[str, type]:
+        entities: list[type],
+        visited: Optional[set[str]] = None
+    ) -> dict[str, type]:
         """
         Recursively collect all Pydantic BaseModel types referenced in entity fields.
 
@@ -182,7 +182,7 @@ class TypeCollector:
         if visited is None:
             visited = set()
 
-        collected: Dict[str, type] = {}
+        collected: dict[str, type] = {}
 
         for entity in entities:
             type_name = entity.__name__
@@ -218,7 +218,7 @@ class TypeCollector:
     # Alias for backward compatibility
     _collect_nested_pydantic_types = collect_nested_pydantic_types
 
-    def collect_enum_types(self, types_to_scan: List[type]) -> List[type]:
+    def collect_enum_types(self, types_to_scan: list[type]) -> list[type]:
         """Collect all enum types from a list of classes.
 
         Scans type hints of each class for enum types.
@@ -231,8 +231,8 @@ class TypeCollector:
         """
         from pydantic_resolve.graphql.type_mapping import is_enum_type
 
-        enums: List[type] = []
-        visited: Set[str] = set()
+        enums: list[type] = []
+        visited: set[str] = set()
 
         for kls in types_to_scan:
             try:
@@ -251,7 +251,7 @@ class TypeCollector:
 
         return enums
 
-    def _extract_query_mutation_methods(self, entity: type) -> List[Callable]:
+    def _extract_query_mutation_methods(self, entity: type) -> list[Callable]:
         """
         Extract all @query and @mutation decorated methods from an Entity.
 

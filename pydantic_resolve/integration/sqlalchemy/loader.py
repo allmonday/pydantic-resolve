@@ -332,9 +332,6 @@ def create_page_one_to_many_loader(
 
     Returns Page dict structures keyed by fk_value.
     """
-    from pydantic_resolve.graphql.pagination.types import (
-        PageLoadCommand, PageArgs, Pagination,
-    )
 
     class _Loader(DataLoader):
         async def batch_load_fn(self, keys):
@@ -389,7 +386,6 @@ def create_page_one_to_many_loader(
                 subq = inner.subquery()
 
                 rn_col = subq.c[rn_label]
-                tc_col = subq.c[tc_label]
 
                 fk_col_sub = subq.c[self.target_fk_col_name]
                 sort_col_sub = subq.c[self.sort_field]

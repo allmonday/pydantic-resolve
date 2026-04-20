@@ -5,7 +5,7 @@ Handles __schema, __type, and other introspection queries for GraphiQL compatibi
 This module provides the IntrospectionHelper class that delegates to IntrospectionGenerator.
 """
 
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable
 
 from pydantic_resolve.graphql.schema.generators.introspection_generator import IntrospectionGenerator
 
@@ -21,8 +21,8 @@ class IntrospectionHelper:
     def __init__(
         self,
         er_diagram,
-        query_map: Dict[str, Tuple[type, Callable]],
-        mutation_map: Dict[str, Tuple[type, Callable]],
+        query_map: dict[str, tuple[type, Callable]],
+        mutation_map: dict[str, tuple[type, Callable]],
         enable_pagination: bool = False
     ):
         """
@@ -46,6 +46,6 @@ class IntrospectionHelper:
         """Check if this is an introspection query."""
         return self._generator.is_introspection_query(query)
 
-    async def execute(self, query: str) -> Dict[str, Any]:
+    async def execute(self, query: str) -> dict[str, Any]:
         """Execute introspection query - returns full introspection data to support GraphiQL."""
         return await self._generator.execute(query)
