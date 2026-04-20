@@ -8,7 +8,7 @@ from aiodataloader import DataLoader
 
 
 if TYPE_CHECKING:
-    from pydantic_resolve.graphql.relay.types import PageArgs
+    from pydantic_resolve.graphql.pagination.types import PageArgs
 
 
 def _normalize_identifier(value: str) -> str:
@@ -332,7 +332,7 @@ def create_page_one_to_many_loader(
 
     Returns Page dict structures keyed by fk_value.
     """
-    from pydantic_resolve.graphql.relay.types import (
+    from pydantic_resolve.graphql.pagination.types import (
         PageLoadCommand, PageArgs, Pagination,
     )
 
@@ -458,7 +458,7 @@ def _build_page_result(
     has_next_page: bool,
 ) -> dict:
     """Build a Page result dict from queried rows."""
-    from pydantic_resolve.graphql.relay.types import Pagination
+    from pydantic_resolve.graphql.pagination.types import Pagination
 
     effective_limit = page_args.effective_limit
 

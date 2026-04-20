@@ -395,7 +395,7 @@ class ResponseBuilder:
         if not self.enable_pagination:
             return
 
-        from pydantic_resolve.graphql.relay.types import PageArgs
+        from pydantic_resolve.graphql.pagination.types import PageArgs
 
         for field_name, selection in (field_selection.sub_fields or {}).items():
             relationship = self._find_relationship(entity, field_name)
@@ -443,7 +443,7 @@ class ResponseBuilder:
         The Resolver reads this tree to inject nested PageArgs into child
         instances after each level is resolved.
         """
-        from pydantic_resolve.graphql.relay.types import PageArgs
+        from pydantic_resolve.graphql.pagination.types import PageArgs
 
         tree = self._collect_pagination_tree(entity, field_selection)
         if not tree:
@@ -471,7 +471,7 @@ class ResponseBuilder:
         Also traverses through many-to-one relationships so that nested
         paginated lists behind many-to-one hops receive their PageArgs.
         """
-        from pydantic_resolve.graphql.relay.types import PageArgs
+        from pydantic_resolve.graphql.pagination.types import PageArgs
 
         if not field_selection.sub_fields:
             return {}
@@ -625,7 +625,7 @@ class ResponseBuilder:
             )
 
             # Create {Entity}Result type
-            from pydantic_resolve.graphql.relay.types import create_result_type
+            from pydantic_resolve.graphql.pagination.types import create_result_type
             result_type = create_result_type(node_model)
 
             # Store resolve method info for later attachment
@@ -819,7 +819,7 @@ class ResponseBuilder:
                 continue
 
             def _make_resolve_method(rel: Relationship, fld_name: str):
-                from pydantic_resolve.graphql.relay.types import PageArgs, PageLoadCommand
+                from pydantic_resolve.graphql.pagination.types import PageArgs, PageLoadCommand
 
                 def resolve_method(self, loader=Loader(rel.page_loader)):
                     fk = getattr(self, rel.fk)
