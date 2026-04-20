@@ -4,14 +4,14 @@ GraphQL handler - coordinates all components and provides FastAPI integration.
 
 import inspect
 import logging
-import types
-from typing import Any, Callable, Dict, ForwardRef, Optional, Tuple, Union, get_args, get_origin
+from typing import Any, Callable, Dict, ForwardRef, Optional, Tuple, get_args
 
 from graphql import parse as parse_graphql
 from graphql.language.ast import OperationDefinitionNode, OperationType
 
 from pydantic_resolve.utils.er_diagram import ErDiagram, Relationship
 from pydantic_resolve.utils.resolver_configurator import config_resolver
+from pydantic_resolve.utils.types import _is_optional, _is_list
 from pydantic_resolve.graphql.exceptions import GraphQLError
 from pydantic_resolve.graphql.executor import QueryExecutor
 from pydantic_resolve.graphql.introspection import IntrospectionHelper
@@ -161,22 +161,20 @@ class GraphQLHandler:
         if return_annotation == inspect.Parameter.empty:
             return None
 
-        origin = get_origin(return_annotation)
-
-        # Unwrap Optional[List[T]] -> List[T] -> T
-        if origin is list:
+        # Unwrap List[T]
+        if _is_list(return_annotation):
             args = get_args(return_annotation)
             if args:
                 return_annotation = args[0]
-                origin = get_origin(return_annotation)
-        # Handle Optional[Entity] (Union[Entity, None]) - extract Entity
-        elif origin is Union or (hasattr(types, 'UnionType') and isinstance(return_annotation, types.UnionType)):
+
+        # Unwrap Optional[T] or Optional[List[T]]
+        if _is_optional(return_annotation):
             args = get_args(return_annotation)
             non_none_args = [a for a in args if a is not type(None)]
             if len(non_none_args) == 1:
                 return_annotation = non_none_args[0]
                 # Check if it's Optional[List[T]]
-                if get_origin(return_annotation) is list:
+                if _is_list(return_annotation):
                     args = get_args(return_annotation)
                     if args:
                         return_annotation = args[0]

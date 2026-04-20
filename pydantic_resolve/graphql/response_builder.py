@@ -4,7 +4,7 @@ Dynamic Pydantic model builder based on GraphQL field selection.
 
 from pydantic import ConfigDict
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple, Union, get_type_hints, get_origin, get_args, Annotated
+from typing import Any, Dict, List, Optional, Set, Tuple, get_type_hints, get_args, Annotated
 from pydantic import BaseModel, create_model, Field
 from pydantic.functional_serializers import PlainSerializer
 from functools import lru_cache
@@ -12,7 +12,7 @@ from functools import lru_cache
 from pydantic_resolve.constant import ENSURE_SUBSET_REFERENCE, ER_DIAGRAM_PRE_GENERATOR
 from pydantic_resolve.utils.er_diagram import ErDiagram, Relationship
 from pydantic_resolve.utils.class_util import safe_issubclass
-from pydantic_resolve.utils.types import get_core_types
+from pydantic_resolve.utils.types import get_core_types, _is_optional, _is_list
 from pydantic_resolve.utils.depend import Loader
 from pydantic_resolve.graphql.types import FieldSelection
 from pydantic_resolve import analysis
@@ -298,15 +298,12 @@ class ResponseBuilder:
         Output: (UserResponse, ...)  # required field
         ─────────────────────────────────────────────────────────────────
         """
-        origin = get_origin(field_type)
-        args = get_args(field_type)
-
         # Case 1: List container
-        if origin is list:
+        if _is_list(field_type):
             return (List[nested_model], [])
 
         # Case 2: Optional (Union[X, None])
-        if origin is Union and type(None) in args:
+        if _is_optional(field_type):
             return (Optional[nested_model], None)
 
         # Case 3: Plain required type
@@ -580,10 +577,9 @@ class ResponseBuilder:
         2. Regular list/many-to-one field: Annotated with AutoLoad()
         """
         target_kls = relationship.target
-        origin = get_origin(target_kls)
         is_paginated = (
             self.enable_pagination
-            and origin is list
+            and _is_list(target_kls)
             and relationship.page_loader is not None
         )
         validation_alias = f"__pydantic_resolve_skip_{relationship.name}"
@@ -608,7 +604,7 @@ class ResponseBuilder:
         # Build annotated type with AutoLoad
         _AutoLoad = self._create_auto_load
 
-        if origin is list and is_paginated:
+        if _is_list(target_kls) and is_paginated:
             # Paginated field: build {Entity}Result type
             # Extract 'items' sub-selection for the node model
             items_selection = None
@@ -644,7 +640,7 @@ class ResponseBuilder:
                 ),
             )
 
-        elif origin is list:
+        elif _is_list(target_kls):
             # Regular list field: standard AutoLoad
             nested_model = self.build_response_model(
                 actual_entity, selection, parent_path
@@ -694,9 +690,7 @@ class ResponseBuilder:
         Output: CommentEntity
         ─────────────────────────────────────────────────────────────────
         """
-        origin = get_origin(target_kls)
-
-        if origin is list:
+        if _is_list(target_kls):
             args = get_args(target_kls)
             return args[0] if args else None
 

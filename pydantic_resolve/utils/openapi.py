@@ -1,8 +1,7 @@
-from typing import Any, Dict, Set, get_origin, get_args
-from types import UnionType
-from typing import Union as TypingUnion
+from typing import Any, Dict, Set, get_args
 from pydantic import BaseModel
 from pydantic_resolve.utils.class_util import safe_issubclass
+from pydantic_resolve.utils.types import _is_optional, _is_list
 
 
 def _collect_nested_types(model: type, collected: Set[type] = None) -> Set[type]:
@@ -23,10 +22,8 @@ def _collect_nested_types(model: type, collected: Set[type] = None) -> Set[type]
         if field_type is None:
             continue
 
-        origin = get_origin(field_type)
-
         # Handle List[SomeModel]
-        if origin is list:
+        if _is_list(field_type):
             args = get_args(field_type)
             if args:
                 nested_type = args[0]
@@ -35,7 +32,7 @@ def _collect_nested_types(model: type, collected: Set[type] = None) -> Set[type]
                     _collect_nested_types(nested_type, collected)
 
         # Handle Union[SomeModel, None] or SomeModel | None
-        elif origin is TypingUnion or origin is UnionType:
+        elif _is_optional(field_type):
             args = get_args(field_type)
             for arg in args:
                 if arg is not type(None) and safe_issubclass(arg, BaseModel) and arg not in collected:

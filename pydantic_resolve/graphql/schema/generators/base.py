@@ -8,9 +8,13 @@ ensuring consistency between SDL and Introspection output formats.
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
 
+from pydantic import BaseModel
+
 from pydantic_resolve.graphql.schema.type_registry import TypeRegistry, TypeInfo, FieldInfo
 from pydantic_resolve.graphql.schema.type_collector import TypeCollector
 from pydantic_resolve.graphql.schema.type_mapper import TypeMapper
+from pydantic_resolve.utils.er_diagram import Relationship
+from pydantic_resolve.utils.class_util import safe_issubclass
 
 if TYPE_CHECKING:
     from pydantic_resolve.utils.er_diagram import ErDiagram
@@ -164,3 +168,135 @@ class SchemaGenerator(ABC):
     def get_all_type_names(self) -> List[str]:
         """Get all registered type names."""
         return [t.name for t in self.registry.get_all_types()]
+
+    def _is_relationship_field(self, entity_cfg, field_name: str) -> bool:
+        """Check if field is a relationship field."""
+        for rel in entity_cfg.relationships:
+            if isinstance(rel, Relationship):
+                if rel.name == field_name:
+                    return True
+        return False
+
+    def _get_target_entity_name(self, rel: Relationship) -> Optional[str]:
+        """Extract entity class name from a list relationship target."""
+        from typing import get_args
+        args = get_args(rel.target)
+        if args and safe_issubclass(args[0], BaseModel):
+            return args[0].__name__
+        return None
+
+    def _collect_paginated_relationships(self) -> List[Tuple[Relationship, str]]:
+        """Collect all one-to-many relationships with page_loader, deduped by target name.
+
+        Returns:
+            List of (Relationship, target_entity_name) tuples.
+        """
+        seen: set[str] = set()
+        result: List[Tuple[Relationship, str]] = []
+
+        for entity_cfg in self.er_diagram.entities:
+            for rel in entity_cfg.relationships:
+                if not isinstance(rel, Relationship):
+                    continue
+                if rel.loader is None:
+                    continue
+                if not rel.is_list_relationship:
+                    continue
+                if rel.page_loader is None:
+                    continue
+
+                target_name = self._get_target_entity_name(rel)
+                if not target_name or target_name in seen:
+                    continue
+                seen.add(target_name)
+                result.append((rel, target_name))
+
+        return result
+
+    def _extract_operation_methods(self, entity: type, operation_type: str) -> List[Dict[str, Any]]:
+        """Extract all @query or @mutation decorated methods from an entity.
+
+        Args:
+            entity: Entity class to scan
+            operation_type: "query" or "mutation"
+
+        Returns:
+            List of dicts with keys: name, description, params, return_type, entity, method
+        """
+        import inspect
+        import pydantic_resolve.constant as const
+        from pydantic_resolve.graphql.utils.naming import to_graphql_field_name
+
+        if operation_type == "query":
+            attr = const.GRAPHQL_QUERY_ATTR
+            name_attr = const.GRAPHQL_QUERY_NAME_ATTR
+            desc_attr = const.GRAPHQL_QUERY_DESCRIPTION_ATTR
+        else:
+            attr = const.GRAPHQL_MUTATION_ATTR
+            name_attr = const.GRAPHQL_MUTATION_NAME_ATTR
+            desc_attr = const.GRAPHQL_MUTATION_DESCRIPTION_ATTR
+
+        methods = []
+
+        for name, method in entity.__dict__.items():
+            actual_method = method
+            if isinstance(method, classmethod):
+                actual_method = method.__func__
+
+            if not hasattr(actual_method, attr):
+                continue
+
+            try:
+                sig = inspect.signature(actual_method)
+            except Exception:
+                continue
+
+            params = self._extract_method_params(sig)
+            return_type = sig.return_annotation
+
+            # Build GraphQL operation name
+            base_name = getattr(actual_method, name_attr, None) or name
+            graphql_name = to_graphql_field_name(entity.__name__, base_name)
+            description = getattr(actual_method, desc_attr, "") or ""
+
+            methods.append({
+                'name': graphql_name,
+                'description': description,
+                'params': params,
+                'return_type': return_type,
+                'entity': entity,
+                'method': actual_method
+            })
+
+        return methods
+
+    def _extract_method_params(self, sig: 'inspect.Signature') -> List[Dict[str, Any]]:
+        """Extract parameter info from a method signature.
+
+        Returns:
+            List of dicts with keys: name, type, required, default, definition
+        """
+        import inspect as _inspect
+
+        params = []
+        for param_name, param in sig.parameters.items():
+            if param_name in ('self', 'cls'):
+                continue
+            if param_name == '_context':
+                continue
+
+            param_type = param.annotation
+            if param_type == _inspect.Parameter.empty:
+                continue
+
+            default = param.default
+            is_required = default == _inspect.Parameter.empty
+
+            params.append({
+                'name': param_name,
+                'type': param_type,
+                'required': is_required,
+                'default': default,
+            })
+
+        return params

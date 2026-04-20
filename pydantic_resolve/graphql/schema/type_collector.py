@@ -52,6 +52,37 @@ class TypeCollector:
 
         return self.registry
 
+    def collect_all_types(self) -> Dict[str, type]:
+        """Collect all types from ERD: entities, relationship targets, and nested types.
+
+        Returns:
+            Dictionary mapping type names to type classes.
+        """
+        from pydantic_resolve.utils.er_diagram import Relationship
+
+        collected: Dict[str, type] = {}
+
+        # 1. Collect entity types from ERD
+        for entity_cfg in self.er_diagram.entities:
+            collected[entity_cfg.kls.__name__] = entity_cfg.kls
+
+        # 2. Collect types from Relationship.target
+        for entity_cfg in self.er_diagram.entities:
+            for rel in entity_cfg.relationships:
+                if isinstance(rel, Relationship):
+                    for target_class in get_core_types(rel.target):
+                        if safe_issubclass(target_class, BaseModel):
+                            if target_class.__name__ not in collected:
+                                collected[target_class.__name__] = target_class
+
+        # 3. Collect nested Pydantic types from all collected types' fields
+        nested = self.collect_nested_pydantic_types(list(collected.values()))
+        for name, cls in nested.items():
+            if name not in collected:
+                collected[name] = cls
+
+        return collected
+
     def collect_input_types(
         self,
         query_map: Optional[Dict[str, Tuple[type, Callable]]] = None,
@@ -186,6 +217,39 @@ class TypeCollector:
 
     # Alias for backward compatibility
     _collect_nested_pydantic_types = collect_nested_pydantic_types
+
+    def collect_enum_types(self, types_to_scan: List[type]) -> List[type]:
+        """Collect all enum types from a list of classes.
+
+        Scans type hints of each class for enum types.
+
+        Args:
+            types_to_scan: List of classes to scan for enum usage
+
+        Returns:
+            Deduplicated list of enum types
+        """
+        from pydantic_resolve.graphql.type_mapping import is_enum_type
+
+        enums: List[type] = []
+        visited: Set[str] = set()
+
+        for kls in types_to_scan:
+            try:
+                type_hints = get_type_hints(kls)
+            except Exception:
+                continue
+
+            for field_type in type_hints.values():
+                core_types_list = get_core_types(field_type)
+                for ct in core_types_list:
+                    if is_enum_type(ct):
+                        type_name = ct.__name__
+                        if type_name not in visited:
+                            visited.add(type_name)
+                            enums.append(ct)
+
+        return enums
 
     def _extract_query_mutation_methods(self, entity: type) -> List[Callable]:
         """

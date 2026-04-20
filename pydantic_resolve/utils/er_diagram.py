@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Iterator, Any, Callable, Optional, get_origin
+from typing import Iterator, Any, Callable, Optional
 from pydantic import BaseModel, model_validator, Field
 import logging
 import importlib
@@ -48,7 +48,7 @@ class Relationship(BaseModel):
     @property
     def is_list_relationship(self) -> bool:
         """True if this relationship targets a list (one-to-many)."""
-        return get_origin(self.target) is list
+        return types._is_list(self.target)
 
     @model_validator(mode="after")
     def _validate_defaults(self) -> "Relationship":

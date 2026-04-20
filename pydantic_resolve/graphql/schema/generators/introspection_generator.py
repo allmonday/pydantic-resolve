@@ -290,25 +290,8 @@ class IntrospectionGenerator(SchemaGenerator):
         if self._collected_types:
             return  # Already collected
 
-        # Collect entities from ERD
-        for entity_cfg in self.er_diagram.entities:
-            self._collected_types[entity_cfg.kls.__name__] = entity_cfg.kls
-
-        # Collect types from Relationship.target (similar to SDLBuilder)
-        for entity_cfg in self.er_diagram.entities:
-            for rel in entity_cfg.relationships:
-                if isinstance(rel, Relationship):
-                    # get_core_types handles list[T] and Optional[T] unwrapping
-                    for target_class in get_core_types(rel.target):
-                        if safe_issubclass(target_class, BaseModel):
-                            if target_class.__name__ not in self._collected_types:
-                                self._collected_types[target_class.__name__] = target_class
-
-        # Collect nested types from entity fields
-        nested = self._collect_nested_pydantic_types(list(self._collected_types.values()))
-        for name, cls in nested.items():
-            if name not in self._collected_types:
-                self._collected_types[name] = cls
+        # Use shared TypeCollector for entity, relationship target, and nested types
+        self._collected_types = self.collector.collect_all_types()
 
         # Collect input types
         self._input_types = self._collect_input_types_from_maps()
@@ -353,31 +336,7 @@ class IntrospectionGenerator(SchemaGenerator):
 
     def _collect_input_types_from_maps(self) -> set[type]:
         """Collect input types from query/mutation maps."""
-        input_types: set[type] = set()
-        visited: set[str] = set()
-
-        def collect_from_type(param_type: Any) -> None:
-            core_types = get_core_types(param_type)
-            for core_type in core_types:
-                if safe_issubclass(core_type, BaseModel):
-                    type_name = core_type.__name__
-                    if type_name not in visited:
-                        visited.add(type_name)
-                        input_types.add(core_type)
-                        try:
-                            type_hints = get_type_hints(core_type)
-                            for field_type in type_hints.values():
-                                collect_from_type(field_type)
-                        except Exception:
-                            pass
-
-        for _, (_, method) in self.query_map.items():
-            self._collect_from_method(method, collect_from_type)
-
-        for _, (_, method) in self.mutation_map.items():
-            self._collect_from_method(method, collect_from_type)
-
-        return input_types
+        return self.collector.collect_input_types(self.query_map, self.mutation_map)
 
     def _collect_from_method(self, method: Callable, collector: Callable[[Any], None]) -> None:
         """Collect types from method parameters."""
@@ -515,14 +474,6 @@ class IntrospectionGenerator(SchemaGenerator):
 
         return fields
 
-    def _is_relationship_field(self, entity_cfg, field_name: str) -> bool:
-        """Check if field is a relationship field."""
-        for rel in entity_cfg.relationships:
-            if isinstance(rel, Relationship):
-                if rel.name == field_name:
-                    return True
-        return False
-
     def _build_pagination_args(self) -> list[dict]:
         """Build pagination arguments for one-to-many relationship fields."""
         return [
@@ -535,36 +486,15 @@ class IntrospectionGenerator(SchemaGenerator):
         if not self.enable_pagination:
             return []
 
+        paginated_rels = self._collect_paginated_relationships()
+        if not paginated_rels:
+            return []
+
         types: list[dict] = []
-        seen: set[str] = set()
-        has_one_to_many = False
+        for _, target_name in paginated_rels:
+            types.append(self._build_result_introspection_type(target_name))
 
-        for entity_cfg in self.er_diagram.entities:
-            for rel in entity_cfg.relationships:
-                if not isinstance(rel, Relationship):
-                    continue
-                if rel.loader is None:
-                    continue
-                if get_origin(rel.target) is not list:
-                    continue
-                if rel.page_loader is None:
-                    continue
-
-                target_classes = get_core_types(rel.target)
-                if not target_classes:
-                    continue
-                target_name = target_classes[0].__name__
-
-                if target_name in seen:
-                    continue
-                seen.add(target_name)
-                has_one_to_many = True
-
-                # Result type
-                types.append(self._build_result_introspection_type(target_name))
-
-        if has_one_to_many:
-            types.insert(0, self._build_pagination_introspection_type())
+        types.insert(0, self._build_pagination_introspection_type())
 
         return types
 
@@ -1033,54 +963,6 @@ class IntrospectionGenerator(SchemaGenerator):
 
     def _collect_all_enum_types(self) -> list[type]:
         """Collect all enum types from entities, input types, and query/mutation maps."""
-        enums: list[type] = []
-        visited: set[str] = set()
-
-        def collect_from_class(kls: type) -> None:
-            """Collect enum types from a class's type hints."""
-            try:
-                type_hints = get_type_hints(kls)
-            except Exception:
-                return
-
-            for field_type in type_hints.values():
-                core_types_list = get_core_types(field_type)
-                for ct in core_types_list:
-                    if is_enum_type(ct):
-                        type_name = ct.__name__
-                        if type_name not in visited:
-                            visited.add(type_name)
-                            enums.append(ct)
-
-        # Collect from entity types
-        for entity in self._collected_types.values():
-            collect_from_class(entity)
-
-        # Collect from input types
-        for input_type in self._input_types:
-            collect_from_class(input_type)
-
-        # Collect from query/mutation method parameters
-        for _, (_, method) in self.query_map.items():
-            try:
-                sig = inspect.signature(method)
-                for param_name, param in sig.parameters.items():
-                    if param_name in ('self', 'cls'):
-                        continue
-                    if param.annotation != inspect.Parameter.empty:
-                        collect_from_class(param.annotation)
-            except Exception:
-                pass
-
-        for _, (_, method) in self.mutation_map.items():
-            try:
-                sig = inspect.signature(method)
-                for param_name, param in sig.parameters.items():
-                    if param_name in ('self', 'cls'):
-                        continue
-                    if param.annotation != inspect.Parameter.empty:
-                        collect_from_class(param.annotation)
-            except Exception:
-                pass
-
-        return enums
+        # Collect from entity types and input types
+        types_to_scan = list(self._collected_types.values()) + list(self._input_types)
+        return self.collector.collect_enum_types(types_to_scan)
