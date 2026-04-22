@@ -355,6 +355,166 @@ class TaskByOwnerLoader(DataLoader):
 
 > Function-based loaders (plain async functions) cannot receive context. Use a class-based DataLoader when you need access to request-scoped data.
 
+## Pagination
+
+When a one-to-many relationship has an `order_by` defined on the ORM model, you can enable limit/offset pagination for all list fields.
+
+### Enabling Pagination
+
+Set `enable_pagination=True` on both the handler and the schema builder:
+
+```python
+handler = GraphQLHandler(
+    diagram,
+    enable_from_attribute_in_type_adapter=True,
+    enable_pagination=True,
+)
+schema_builder = SchemaBuilder(diagram, enable_pagination=True)
+```
+
+Prerequisite: every one-to-many ORM relationship must have `order_by` configured. Otherwise `GraphQLHandler` raises a `ValueError` at startup.
+
+```python
+class AuthorOrm(Base):
+    articles: Mapped[list["ArticleOrm"]] = relationship(
+        back_populates="author",
+        order_by="ArticleOrm.id",  # required for pagination
+    )
+```
+
+### Schema Changes
+
+When pagination is enabled, one-to-many fields gain `limit` and `offset` arguments and return a `Result` type instead of a plain list:
+
+Before (no pagination):
+
+```graphql
+type AuthorEntity {
+  articles: [ArticleEntity!]!
+}
+```
+
+After (pagination enabled):
+
+```graphql
+type AuthorEntity {
+  articles(limit: Int, offset: Int): ArticleEntityResult!
+}
+
+type ArticleEntityResult {
+  items: [ArticleEntity!]!
+  pagination: Pagination!
+}
+
+type Pagination {
+  has_more: Boolean!
+  total_count: Int
+}
+```
+
+### Basic Query
+
+```graphql
+{
+  authorEntityAuthors {
+    id
+    name
+    articles(limit: 10, offset: 0) {
+      items {
+        id
+        title
+      }
+      pagination {
+        has_more
+        total_count
+      }
+    }
+  }
+}
+```
+
+Response:
+
+```json
+{
+  "articles": {
+    "items": [
+      {"id": 1, "title": "Article 1"},
+      {"id": 2, "title": "Article 2"}
+    ],
+    "pagination": {
+      "has_more": true,
+      "total_count": 5
+    }
+  }
+}
+```
+
+### Nested Pagination
+
+Each level can paginate independently, and pagination works correctly per parent entity:
+
+```graphql
+{
+  authorEntityAuthors {
+    id
+    articles(limit: 2) {
+      items {
+        id
+        title
+        comments(limit: 1) {
+          items { text }
+          pagination { total_count has_more }
+        }
+      }
+      pagination { total_count has_more }
+    }
+  }
+}
+```
+
+### Pagination Through Many-to-One
+
+Pagination parameters also propagate through many-to-one relationships:
+
+```graphql
+{
+  authorEntityAuthors {
+    articles(limit: 1) {
+      items {
+        title
+        author {
+          articles(limit: 1) {
+            items { id title }
+            pagination { total_count }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### Page Size Configuration
+
+`Relationship` supports `default_page_size` and `max_page_size`:
+
+- `default_page_size` (default: 20) — used when `limit` is omitted
+- `max_page_size` (default: 100) — caps the effective limit
+
+These values are auto-populated when using `build_relationship()` from ORM integration.
+
+### Pagination Field Selection
+
+The `pagination` field supports partial selection:
+
+| Query | Result |
+|-------|--------|
+| `pagination { has_more }` | Only `has_more` |
+| `pagination { total_count }` | Only `total_count` |
+| `pagination { has_more total_count }` | Both fields |
+| Omit `pagination` entirely | Only `items` is returned |
+
 ## How It Works
 
 1. `GraphQLHandler` generates a GraphQL schema from the ERD entities and relationships.

@@ -355,6 +355,166 @@ class TaskByOwnerLoader(DataLoader):
 
 > 函数式 loader（普通异步函数）无法接收 context。需要访问请求级数据时，请使用类式 DataLoader。
 
+## 分页
+
+当一对多关系在 ORM 模型上定义了 `order_by` 时，可以为所有列表字段启用 limit/offset 分页。
+
+### 启用分页
+
+在 handler 和 schema builder 上同时设置 `enable_pagination=True`：
+
+```python
+handler = GraphQLHandler(
+    diagram,
+    enable_from_attribute_in_type_adapter=True,
+    enable_pagination=True,
+)
+schema_builder = SchemaBuilder(diagram, enable_pagination=True)
+```
+
+前提条件：每个一对多 ORM 关系都必须配置 `order_by`，否则 `GraphQLHandler` 启动时会抛出 `ValueError`。
+
+```python
+class AuthorOrm(Base):
+    articles: Mapped[list["ArticleOrm"]] = relationship(
+        back_populates="author",
+        order_by="ArticleOrm.id",  # 分页所必需
+    )
+```
+
+### Schema 变化
+
+启用分页后，一对多字段会增加 `limit` 和 `offset` 参数，返回类型从普通列表变为 `Result` 类型：
+
+启用前（无分页）：
+
+```graphql
+type AuthorEntity {
+  articles: [ArticleEntity!]!
+}
+```
+
+启用后：
+
+```graphql
+type AuthorEntity {
+  articles(limit: Int, offset: Int): ArticleEntityResult!
+}
+
+type ArticleEntityResult {
+  items: [ArticleEntity!]!
+  pagination: Pagination!
+}
+
+type Pagination {
+  has_more: Boolean!
+  total_count: Int
+}
+```
+
+### 基本查询
+
+```graphql
+{
+  authorEntityAuthors {
+    id
+    name
+    articles(limit: 10, offset: 0) {
+      items {
+        id
+        title
+      }
+      pagination {
+        has_more
+        total_count
+      }
+    }
+  }
+}
+```
+
+响应：
+
+```json
+{
+  "articles": {
+    "items": [
+      {"id": 1, "title": "Article 1"},
+      {"id": 2, "title": "Article 2"}
+    ],
+    "pagination": {
+      "has_more": true,
+      "total_count": 5
+    }
+  }
+}
+```
+
+### 嵌套分页
+
+每一层可以独立分页，分页参数按父实体分别生效：
+
+```graphql
+{
+  authorEntityAuthors {
+    id
+    articles(limit: 2) {
+      items {
+        id
+        title
+        comments(limit: 1) {
+          items { text }
+          pagination { total_count has_more }
+        }
+      }
+      pagination { total_count has_more }
+    }
+  }
+}
+```
+
+### 穿过多对一关系的分页
+
+分页参数也能穿透多对一关系传播：
+
+```graphql
+{
+  authorEntityAuthors {
+    articles(limit: 1) {
+      items {
+        title
+        author {
+          articles(limit: 1) {
+            items { id title }
+            pagination { total_count }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### 分页大小配置
+
+`Relationship` 支持 `default_page_size` 和 `max_page_size`：
+
+- `default_page_size`（默认：20）— 省略 `limit` 时使用
+- `max_page_size`（默认：100）— 限制实际生效的 limit 上限
+
+使用 `build_relationship()` 从 ORM 集成时，这些值会自动填充。
+
+### 分页字段选择
+
+`pagination` 字段支持部分选择：
+
+| 查询 | 结果 |
+|------|------|
+| `pagination { has_more }` | 仅返回 `has_more` |
+| `pagination { total_count }` | 仅返回 `total_count` |
+| `pagination { has_more total_count }` | 两个字段都返回 |
+| 完全省略 `pagination` | 仅返回 `items` |
+
 ## 工作原理
 
 1. `GraphQLHandler` 从 ERD 实体和关系生成 GraphQL schema。

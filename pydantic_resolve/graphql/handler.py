@@ -17,6 +17,7 @@ from pydantic_resolve.graphql.executor import QueryExecutor
 from pydantic_resolve.graphql.introspection import IntrospectionHelper
 from pydantic_resolve.graphql.query_parser import QueryParser
 from pydantic_resolve.graphql.response_builder import ResponseBuilder
+from pydantic_resolve.graphql.pagination.injector import inject_nested_pagination
 from pydantic_resolve.graphql.schema_builder import SchemaBuilder
 from pydantic_resolve.graphql.graphiql import get_graphiql_html
 
@@ -75,11 +76,14 @@ class GraphQLHandler:
 
         # Initialize helpers
         self.introspection = IntrospectionHelper(er_diagram, self.query_map, self.mutation_map, enable_pagination=enable_pagination)
+        resolved_hooks = [inject_nested_pagination] if enable_pagination else []
+
         self.executor = QueryExecutor(
             parser=self.parser,
             builder=self.builder,
             resolver_class=self.resolver_class,
-            enable_from_attribute_in_type_adapter=enable_from_attribute_in_type_adapter
+            enable_from_attribute_in_type_adapter=enable_from_attribute_in_type_adapter,
+            resolved_hooks=resolved_hooks,
         )
 
     def _validate_pagination_sort_fields(self):

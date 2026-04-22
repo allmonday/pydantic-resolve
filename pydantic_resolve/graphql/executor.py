@@ -46,7 +46,8 @@ class QueryExecutor:
         parser: QueryParser,
         builder: ResponseBuilder,
         resolver_class: type[Resolver],
-        enable_from_attribute_in_type_adapter: bool = False
+        enable_from_attribute_in_type_adapter: bool = False,
+        resolved_hooks: list[Callable] | None = None,
     ):
         """
         Args:
@@ -54,11 +55,13 @@ class QueryExecutor:
             builder: Response builder instance
             resolver_class: Resolver class to use
             enable_from_attribute_in_type_adapter: Enable Pydantic from_attributes mode
+            resolved_hooks: List of hooks to execute after each resolve field
         """
         self.parser = parser
         self.builder = builder
         self.resolver_class = resolver_class
         self.enable_from_attribute_in_type_adapter = enable_from_attribute_in_type_adapter
+        self.resolved_hooks = resolved_hooks or []
 
     async def execute_query(
         self,
@@ -231,6 +234,7 @@ class QueryExecutor:
                     resolver = self.resolver_class(
                         enable_from_attribute_in_type_adapter=self.enable_from_attribute_in_type_adapter,
                         context=context,
+                        resolved_hooks=self.resolved_hooks,
                     )
 
                     if isinstance(typed_data, list):
@@ -602,6 +606,7 @@ class QueryExecutor:
                 resolver = self.resolver_class(
                     enable_from_attribute_in_type_adapter=self.enable_from_attribute_in_type_adapter,
                     context=context,
+                    resolved_hooks=self.resolved_hooks,
                 )
 
                 if is_list:

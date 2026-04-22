@@ -9,7 +9,12 @@ from pydantic import BaseModel, create_model, Field
 from pydantic.functional_serializers import PlainSerializer
 from functools import lru_cache
 
-from pydantic_resolve.constant import ENSURE_SUBSET_REFERENCE, ER_DIAGRAM_PRE_GENERATOR
+from pydantic_resolve.constant import (
+    ENSURE_SUBSET_REFERENCE,
+    ER_DIAGRAM_PRE_GENERATOR,
+    GRAPHQL_PAGINATION_FIELD_PREFIX,
+    GRAPHQL_PAGINATION_TREE_FIELD,
+)
 from pydantic_resolve.utils.er_diagram import ErDiagram, Relationship
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.types import get_core_types, _is_optional, _is_list
@@ -163,7 +168,7 @@ class ResponseBuilder:
         """
         Core model building logic (cached by lru_cache).
         """
-        # Save and reset pending _result fields for this model level
+        # Save and reset pending paginated fields for this model level
         saved_pending = getattr(self, '_pending_result_fields', [])
         self._pending_result_fields = []
 
@@ -192,7 +197,7 @@ class ResponseBuilder:
         if is_registered:
             self._add_fk_fields(entity, field_selection, type_hints, field_definitions)
 
-        # Step 2.5: Add pagination arg fields for _result relationships
+        # Step 2.5: Add pagination arg fields for paginated relationships
         if is_registered and field_selection.sub_fields:
             self._add_pagination_fields(entity, field_selection, field_definitions)
 
@@ -202,7 +207,7 @@ class ResponseBuilder:
                 entity, field_selection, field_definitions, parent_path
             )
 
-        # Collect pending _result fields for this model, then restore parent's list
+        # Collect pending paginated fields for this model, then restore parent's list
         pending_result_fields = self._pending_result_fields
         self._pending_result_fields = saved_pending
 
@@ -378,7 +383,7 @@ class ResponseBuilder:
         """Add hidden pagination argument fields for paginated list fields.
 
         For each paginated list field selected in the query, injects:
-        - prpag_{field_name}: PageArgs | None (resolved at execution time)
+        - pydantic_resolve_pag_{field_name}: PageArgs | None (resolved at execution time)
 
         These hidden fields are read by the resolve method attached
         directly by _build_relationship_field.
@@ -405,20 +410,20 @@ class ResponseBuilder:
 
             # Use field_name for hidden field keys so they match
             # the resolve method's getattr lookups
-            hidden_field = f'prpag_{field_name}'
+            hidden_field = f'{GRAPHQL_PAGINATION_FIELD_PREFIX}{field_name}'
             field_definitions[hidden_field] = (
                 PageArgs,
                 Field(default=None, exclude=True, repr=False),
             )
 
-        # Add prpag_tree for nested pagination injection.
+        # Add pagination tree for nested pagination injection.
         # Include any model that has relationship sub-fields, not just direct
         # paginated lists, so the tree can propagate through many-to-one hops.
         if any(
             self._find_relationship(entity, field_name) is not None
             for field_name in (field_selection.sub_fields or {})
         ):
-            field_definitions['prpag_tree'] = (
+            field_definitions[GRAPHQL_PAGINATION_TREE_FIELD] = (
                 dict,
                 Field(default=None, exclude=True, repr=False),
             )
@@ -436,7 +441,7 @@ class ResponseBuilder:
         PageArgs in its field defaults.
 
         Recursively collects ALL levels of PageArgs (including nested
-        _result fields) and stores them as a tree on each root instance.
+        paginated fields) and stores them as a tree on each root instance.
         The Resolver reads this tree to inject nested PageArgs into child
         instances after each level is resolved.
         """
@@ -446,11 +451,11 @@ class ResponseBuilder:
             return
 
         for inst in instances:
-            if hasattr(inst, 'prpag_tree'):
-                object.__setattr__(inst, 'prpag_tree', tree)
-            # Also inject root-level prpag_ fields
+            if hasattr(inst, GRAPHQL_PAGINATION_TREE_FIELD):
+                object.__setattr__(inst, GRAPHQL_PAGINATION_TREE_FIELD, tree)
+            # Also inject root-level pagination fields
             for field_name, (page_args, _) in tree.items():
-                hidden_field = f'prpag_{field_name}'
+                hidden_field = f'{GRAPHQL_PAGINATION_FIELD_PREFIX}{field_name}'
                 if hasattr(inst, hidden_field):
                     object.__setattr__(inst, hidden_field, page_args)
 
@@ -459,7 +464,7 @@ class ResponseBuilder:
         entity: type,
         field_selection: 'FieldSelection',
     ) -> dict:
-        """Recursively collect PageArgs for all levels of _result fields.
+        """Recursively collect PageArgs for all levels of paginated fields.
 
         Returns a dict mapping field_name -> (PageArgs, nested_tree).
         The nested_tree contains the same structure for deeper levels.
@@ -762,7 +767,7 @@ class ResponseBuilder:
         # This allows ErLoaderPreGenerator.prepare() to find original entity config
         setattr(dynamic_model, ENSURE_SUBSET_REFERENCE, entity)
 
-        # Attach resolve methods for _result fields BEFORE pre-analyze,
+        # Attach resolve methods for paginated fields BEFORE pre-analyze,
         # so the analysis scan discovers them and caches correct metadata.
         self._attach_result_resolve_methods(dynamic_model, pending_result_fields or [])
 
@@ -804,7 +809,7 @@ class ResponseBuilder:
         _set_metadata_to_cache(resolver_class_id, model, metadata)
 
     def _attach_result_resolve_methods(self, model: type[BaseModel], pending_fields: list) -> None:
-        """Attach resolve methods for _result fields (pagination).
+        """Attach resolve methods for paginated fields.
 
         These resolve methods bypass AutoLoad entirely. They read PageArgs
         from hidden fields injected by _add_pagination_fields and create
@@ -814,7 +819,7 @@ class ResponseBuilder:
             return
 
         for field_name, relationship in pending_fields:
-            # field_name is the relationship name (e.g. 'articles_result')
+            # field_name is the relationship name (e.g. 'articles')
             method_name = f'resolve_{field_name}'
             if hasattr(model, method_name):
                 continue
@@ -828,7 +833,7 @@ class ResponseBuilder:
                         return None
 
                     # Hidden fields use the field name
-                    page_args = getattr(self, f'prpag_{fld_name}', None)
+                    page_args = getattr(self, f'{GRAPHQL_PAGINATION_FIELD_PREFIX}{fld_name}', None)
                     if page_args is None:
                         page_args = PageArgs(default_page_size=rel.default_page_size)
 

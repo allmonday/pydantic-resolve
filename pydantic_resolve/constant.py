@@ -33,3 +33,7 @@ GRAPHQL_MUTATION_DESCRIPTION_ATTR = '_pydantic_resolve_mutation_description'
 # Marks methods dynamically bound from config to avoid
 # conflict with decorator-defined methods of the same name.
 GRAPHQL_CONFIG_BOUND_ATTR = '_pydantic_resolve_config_bound'
+
+# GraphQL pagination hidden field prefixes
+GRAPHQL_PAGINATION_FIELD_PREFIX = 'pydantic_resolve_pag_'
+GRAPHQL_PAGINATION_TREE_FIELD = 'pydantic_resolve_pag_tree'

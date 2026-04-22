@@ -10,6 +10,7 @@ from pydantic_resolve.graphql import GraphQLHandler
 handler = GraphQLHandler(
     er_diagram: ErDiagram,
     enable_from_attribute_in_type_adapter: bool = False,
+    enable_pagination: bool = False,
 )
 ```
 
@@ -17,6 +18,7 @@ handler = GraphQLHandler(
 |-----------|------|-------------|
 | `er_diagram` | `ErDiagram` | 用于生成 schema 的 ERD |
 | `enable_from_attribute_in_type_adapter` | `bool` | 启用 Pydantic 的 `from_attributes` 模式 |
+| `enable_pagination` | `bool` | 为一对多字段启用 limit/offset 分页。要求所有一对多 ORM 关系配置了 `order_by`。 |
 
 ### execute()
 
@@ -89,11 +91,16 @@ result = await handler.execute(
 ```python
 from pydantic_resolve.graphql import SchemaBuilder
 
-builder = SchemaBuilder(er_diagram)
+builder = SchemaBuilder(er_diagram, enable_pagination=True)
 sdl = builder.build_schema()  # 返回 GraphQL SDL 字符串
 ```
 
 对生成的 GraphQL schema 的底层访问。大多数用户应该使用 `GraphQLHandler`。
+
+| 参数 | 类型 | 描述 |
+|-----------|------|-------------|
+| `er_diagram` | `ErDiagram` | 用于生成 schema 的 ERD |
+| `enable_pagination` | `bool` | 在生成的 schema 中启用分页 |
 
 ## @query
 
