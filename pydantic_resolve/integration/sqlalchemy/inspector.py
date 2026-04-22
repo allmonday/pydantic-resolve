@@ -8,6 +8,7 @@ from pydantic_resolve.integration.sqlalchemy.loader import (
     create_many_to_many_loader,
     create_many_to_one_loader,
     create_one_to_many_loader,
+    create_page_many_to_many_loader,
     create_page_one_to_many_loader,
     create_reverse_one_to_one_loader,
 )
@@ -243,6 +244,33 @@ def _inspect_orm_relationships(
             )
             fk_field = source_col.key
             target_type = list[target_dto]
+
+            # Check if order_by is set for pagination support (same as ONETOMANY)
+            order_by = rel.order_by
+            sort_field = None
+            page_loader = None
+
+            if order_by and order_by is not False:
+                sort_field = _extract_sort_field(order_by)
+
+                target_mapper = inspect(target_orm)
+                pk_col_name = target_mapper.primary_key[0].name
+
+                page_loader = create_page_many_to_many_loader(
+                    source_orm_kls=orm_kls,
+                    rel_name=rel.key,
+                    target_orm_kls=target_orm,
+                    target_dto_kls=target_dto,
+                    secondary_table=secondary,
+                    secondary_local_col_name=secondary_local_col.key,
+                    secondary_remote_col_name=secondary_remote_col.key,
+                    target_match_col_name=target_col.key,
+                    sort_field=sort_field,
+                    pk_col_name=pk_col_name,
+                    session_factory=session_factory,
+                    filters=filters,
+                )
+
             loader = create_many_to_many_loader(
                 source_orm_kls=orm_kls,
                 rel_name=rel.key,
@@ -264,6 +292,18 @@ def _inspect_orm_relationships(
         # Append relationship
         if direction is ONETOMANY and rel.uselist is True:
             # Single relationship with both loaders
+            relationships.append(
+                Relationship(
+                    fk=fk_field,
+                    target=target_type,
+                    name=rel.key,
+                    loader=loader,
+                    page_loader=page_loader,
+                    sort_field=sort_field,
+                    description=rel.doc or None,
+                )
+            )
+        elif direction is MANYTOMANY:
             relationships.append(
                 Relationship(
                     fk=fk_field,

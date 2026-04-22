@@ -1230,3 +1230,363 @@ class TestEmptyPageTotalCount:
         assert bob["articles"]["items"] == []
         assert bob["articles"]["pagination"]["total_count"] == 2
         assert bob["articles"]["pagination"]["has_more"] is False
+
+
+# =====================================
+# Test: Many-to-Many Pagination
+# =====================================
+
+
+# Association table for Student <-> Course M2M
+from sqlalchemy import Table, Column, ForeignKey as SAFK, Integer as SAInteger
+
+# Use a separate declarative base to avoid table name conflicts with earlier tests
+
+
+class M2MBase(DeclarativeBase):
+    pass
+
+
+student_course = Table(
+    "student_course",
+    M2MBase.metadata,
+    Column("student_id", SAInteger, SAFK("m2m_student.id"), primary_key=True),
+    Column("course_id", SAInteger, SAFK("m2m_course.id"), primary_key=True),
+)
+
+
+class StudentOrm(M2MBase):
+    __tablename__ = "m2m_student"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String)
+    courses: Mapped[list["CourseOrm"]] = relationship(
+        secondary=student_course,
+        back_populates="students",
+        order_by="CourseOrm.id",
+    )
+
+
+class CourseOrm(M2MBase):
+    __tablename__ = "m2m_course"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String)
+    students: Mapped[list["StudentOrm"]] = relationship(
+        secondary=student_course,
+        back_populates="courses",
+        order_by="StudentOrm.id",
+    )
+
+
+class StudentEntity(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+
+
+class CourseEntity(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+
+
+@pytest.fixture
+async def m2m_session_maker():
+    engine = create_async_engine("sqlite+aiosqlite://", echo=False)
+    async_session = async_sessionmaker(engine, expire_on_commit=False)
+
+    async with engine.begin() as conn:
+        await conn.run_sync(M2MBase.metadata.create_all)
+
+    # Seed:
+    # Student 1 (Alice): 4 courses (C1, C2, C3, C4)
+    # Student 2 (Bob):   2 courses (C2, C4)
+    # Student 3 (Carol): 0 courses
+    async with async_session() as session:
+        async with session.begin():
+            session.add_all(
+                [
+                    StudentOrm(id=1, name="Alice"),
+                    StudentOrm(id=2, name="Bob"),
+                    StudentOrm(id=3, name="Carol"),
+                ]
+            )
+            session.add_all(
+                [
+                    CourseOrm(id=1, title="Math"),
+                    CourseOrm(id=2, title="Physics"),
+                    CourseOrm(id=3, title="Chemistry"),
+                    CourseOrm(id=4, title="Biology"),
+                ]
+            )
+            await session.execute(
+                student_course.insert(),
+                [
+                    {"student_id": 1, "course_id": 1},
+                    {"student_id": 1, "course_id": 2},
+                    {"student_id": 1, "course_id": 3},
+                    {"student_id": 1, "course_id": 4},
+                    {"student_id": 2, "course_id": 2},
+                    {"student_id": 2, "course_id": 4},
+                ],
+            )
+
+    try:
+        yield async_session
+    finally:
+        await engine.dispose()
+
+
+@pytest.fixture
+def m2m_session_factory(m2m_session_maker):
+    def _factory():
+        return m2m_session_maker()
+
+    return _factory
+
+
+@pytest.fixture
+def m2m_diagram(m2m_session_factory):
+    async def get_all_students() -> list[StudentEntity]:
+        async with m2m_session_factory() as session:
+            rows = (
+                await session.execute(select(StudentOrm).order_by(StudentOrm.id))
+            ).scalars().all()
+        return [StudentEntity.model_validate(r) for r in rows]
+
+    relationship_entities = build_relationship(
+        mappings=[
+            Mapping(entity=StudentEntity, orm=StudentOrm),
+            Mapping(entity=CourseEntity, orm=CourseOrm),
+        ],
+        session_factory=m2m_session_factory,
+    )
+
+    qm_entities = [
+        Entity(
+            kls=StudentEntity,
+            queries=[
+                QueryConfig(
+                    method=get_all_students,
+                    name="students",
+                    description="Get all students",
+                ),
+            ],
+        ),
+    ]
+
+    d = ErDiagram(entities=qm_entities).add_relationship(relationship_entities)
+    config_global_resolver(d)
+    return d
+
+
+class TestManyToManyPagination:
+    """Test pagination on many-to-many relationships via secondary tables."""
+
+    def test_m2m_pagination_types_in_sdl(self, m2m_diagram):
+        """M2M field should produce a Result type with limit/offset args in SDL."""
+        handler = GraphQLHandler(
+            m2m_diagram,
+            enable_from_attribute_in_type_adapter=True,
+            enable_pagination=True,
+        )
+        sdl = handler.schema_builder.build_schema()
+
+        # Result type for CourseEntity
+        assert "type CourseEntityResult" in sdl
+        assert "items: [CourseEntity!]!" in sdl
+        assert "pagination: Pagination!" in sdl
+
+        # M2M field with pagination args
+        assert "courses(limit: Int, offset: Int): CourseEntityResult!" in sdl
+
+    def test_m2m_raw_list_when_pagination_disabled(self, m2m_diagram):
+        """M2M field should be a raw list when pagination is disabled."""
+        handler = GraphQLHandler(
+            m2m_diagram,
+            enable_from_attribute_in_type_adapter=True,
+        )
+        sdl = handler.schema_builder.build_schema()
+
+        assert "courses: [CourseEntity!]!" in sdl
+        assert "type CourseEntityResult" not in sdl
+
+    @pytest.mark.asyncio
+    async def test_m2m_default_page_size(self, m2m_diagram):
+        """M2M without explicit limit/offset should use default page_size=20."""
+        handler = GraphQLHandler(
+            m2m_diagram,
+            enable_from_attribute_in_type_adapter=True,
+            enable_pagination=True,
+        )
+
+        result = await handler.execute(
+            "{ studentEntityStudents { id name courses { items { title } pagination { has_more } } } }"
+        )
+
+        assert result["errors"] is None
+        students = result["data"]["studentEntityStudents"]
+        assert len(students) == 3
+
+        # Alice: 4 courses, default page_size=20 → all returned
+        alice = students[0]
+        assert alice["name"] == "Alice"
+        assert len(alice["courses"]["items"]) == 4
+        assert alice["courses"]["pagination"]["has_more"] is False
+
+        # Bob: 2 courses
+        bob = students[1]
+        assert len(bob["courses"]["items"]) == 2
+        assert bob["courses"]["pagination"]["has_more"] is False
+
+        # Carol: 0 courses
+        carol = students[2]
+        assert len(carol["courses"]["items"]) == 0
+        assert carol["courses"]["pagination"]["has_more"] is False
+
+    @pytest.mark.asyncio
+    async def test_m2m_limit_results(self, m2m_diagram):
+        """M2M with limit should restrict results per parent."""
+        handler = GraphQLHandler(
+            m2m_diagram,
+            enable_from_attribute_in_type_adapter=True,
+            enable_pagination=True,
+        )
+
+        result = await handler.execute(
+            "{ studentEntityStudents { id name courses(limit: 2) { items { title } pagination { has_more } } } }"
+        )
+
+        assert result["errors"] is None
+        students = result["data"]["studentEntityStudents"]
+
+        # Alice: 4 courses, limit=2 → 2 items, has_more=True
+        alice = students[0]
+        assert len(alice["courses"]["items"]) == 2
+        assert alice["courses"]["pagination"]["has_more"] is True
+
+        # Bob: 2 courses, limit=2 → 2 items, has_more=False
+        bob = students[1]
+        assert len(bob["courses"]["items"]) == 2
+        assert bob["courses"]["pagination"]["has_more"] is False
+
+        # Carol: 0 courses, limit=2 → 0 items, has_more=False
+        carol = students[2]
+        assert len(carol["courses"]["items"]) == 0
+        assert carol["courses"]["pagination"]["has_more"] is False
+
+    @pytest.mark.asyncio
+    async def test_m2m_total_count(self, m2m_diagram):
+        """M2M total_count should reflect the full association count."""
+        handler = GraphQLHandler(
+            m2m_diagram,
+            enable_from_attribute_in_type_adapter=True,
+            enable_pagination=True,
+        )
+
+        result = await handler.execute(
+            "{ studentEntityStudents { id courses(limit: 1) { items { title } pagination { has_more total_count } } } }"
+        )
+
+        assert result["errors"] is None
+        students = result["data"]["studentEntityStudents"]
+
+        # Alice: 4 total
+        assert students[0]["courses"]["pagination"]["total_count"] == 4
+        assert len(students[0]["courses"]["items"]) == 1
+        assert students[0]["courses"]["pagination"]["has_more"] is True
+
+        # Bob: 2 total
+        assert students[1]["courses"]["pagination"]["total_count"] == 2
+        assert students[1]["courses"]["pagination"]["has_more"] is True
+
+        # Carol: 0 total
+        assert students[2]["courses"]["pagination"]["total_count"] == 0
+        assert students[2]["courses"]["pagination"]["has_more"] is False
+
+    @pytest.mark.asyncio
+    async def test_m2m_offset_pagination(self, m2m_diagram):
+        """M2M offset-based pagination should return correct page."""
+        handler = GraphQLHandler(
+            m2m_diagram,
+            enable_from_attribute_in_type_adapter=True,
+            enable_pagination=True,
+        )
+
+        # Page 1: limit=2, offset=0
+        result = await handler.execute(
+            "{ studentEntityStudents { id courses(limit: 2, offset: 0) { items { id title } pagination { has_more total_count } } } }"
+        )
+
+        assert result["errors"] is None
+        alice = result["data"]["studentEntityStudents"][0]
+        page1_ids = [c["id"] for c in alice["courses"]["items"]]
+        assert len(page1_ids) == 2
+        assert alice["courses"]["pagination"]["has_more"] is True
+
+        # Page 2: limit=2, offset=2
+        result2 = await handler.execute(
+            "{ studentEntityStudents { id courses(limit: 2, offset: 2) { items { id title } pagination { has_more total_count } } } }"
+        )
+
+        assert result2["errors"] is None
+        alice2 = result2["data"]["studentEntityStudents"][0]
+        page2_ids = [c["id"] for c in alice2["courses"]["items"]]
+        assert len(page2_ids) == 2
+        assert alice2["courses"]["pagination"]["has_more"] is False
+
+        # No overlap between pages
+        assert set(page1_ids).isdisjoint(set(page2_ids))
+
+    @pytest.mark.asyncio
+    async def test_m2m_per_parent_isolation(self, m2m_diagram):
+        """Each parent should only see its own M2M children."""
+        handler = GraphQLHandler(
+            m2m_diagram,
+            enable_from_attribute_in_type_adapter=True,
+            enable_pagination=True,
+        )
+
+        result = await handler.execute(
+            "{ studentEntityStudents { id name courses(limit: 10) { items { id title } } } }"
+        )
+
+        assert result["errors"] is None
+        students = result["data"]["studentEntityStudents"]
+
+        # Alice (id=1): courses 1,2,3,4
+        alice_courses = {c["id"] for c in students[0]["courses"]["items"]}
+        assert alice_courses == {1, 2, 3, 4}
+
+        # Bob (id=2): courses 2,4
+        bob_courses = {c["id"] for c in students[1]["courses"]["items"]}
+        assert bob_courses == {2, 4}
+
+        # Carol (id=3): no courses
+        carol_courses = {c["id"] for c in students[2]["courses"]["items"]}
+        assert carol_courses == set()
+
+    @pytest.mark.asyncio
+    async def test_m2m_offset_exceeds_total(self, m2m_diagram):
+        """When offset > total, items should be empty but total_count correct."""
+        handler = GraphQLHandler(
+            m2m_diagram,
+            enable_from_attribute_in_type_adapter=True,
+            enable_pagination=True,
+        )
+
+        result = await handler.execute(
+            "{ studentEntityStudents { id courses(limit: 1, offset: 100) { items { title } pagination { has_more total_count } } } }"
+        )
+
+        assert result["errors"] is None
+        students = result["data"]["studentEntityStudents"]
+
+        # Alice: 4 total but offset=100 → empty
+        alice = students[0]
+        assert alice["courses"]["items"] == []
+        assert alice["courses"]["pagination"]["total_count"] == 4
+        assert alice["courses"]["pagination"]["has_more"] is False

@@ -6,6 +6,11 @@
 
 ## 5.3
 
+### 5.3.1 (2026-4-22)
+
+- bug:
+  - fix pagination in many to many relationship
+
 ### 5.3.0 (2026-4-22)
 
 - feat:
@@ -14,6 +19,7 @@
 - refactor:
   - Extract `inject_nested_pagination` into standalone `graphql/pagination/injector.py` module, injected via `resolved_hooks` instead of hardcoded in core `Resolver`
   - Consolidate pagination hidden field names into `constant.py` (`GRAPHQL_PAGINATION_FIELD_PREFIX`, `GRAPHQL_PAGINATION_TREE_FIELD`)
+  
 
 ## 5.2
 

@@ -304,6 +304,156 @@ def create_many_to_many_loader(
     )
 
 
+def create_page_many_to_many_loader(
+    *,
+    source_orm_kls: type,
+    rel_name: str,
+    target_orm_kls: type,
+    target_dto_kls: type,
+    secondary_table: Any,
+    secondary_local_col_name: str,
+    secondary_remote_col_name: str,
+    target_match_col_name: str,
+    sort_field: str = "id",
+    pk_col_name: str = "id",
+    session_factory: Callable,
+    filters: list[Any] | None = None,
+) -> type[DataLoader]:
+    """Create a loader that paginates per-parent for M2M using ROW_NUMBER().
+
+    Like create_page_one_to_many_loader but works through a secondary
+    (association) table.  The PARTITION BY uses the secondary table's
+    local column (the source-side FK in the join table).
+
+    SQL strategy:
+        SELECT * FROM (
+            SELECT target.*,
+                   secondary.local_col,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY secondary.local_col
+                       ORDER BY sort_col, pk_col
+                   ) AS __rn,
+                   COUNT(*) OVER (
+                       PARTITION BY secondary.local_col
+                   ) AS __tc
+            FROM target
+            JOIN secondary ON target.match_col = secondary.remote_col
+            WHERE secondary.local_col IN (:fk_values)
+        ) sub WHERE __rn BETWEEN :start AND :end
+    """
+
+    class _Loader(DataLoader):
+        async def batch_load_fn(self, keys):
+            from sqlalchemy import select, func
+
+            if not keys:
+                return []
+
+            first_cmd = keys[0]
+            page_args: PageArgs = first_cmd.page_args
+            fk_values = [cmd.fk_value for cmd in keys]
+
+            effective_fields = _get_effective_query_fields(
+                self,
+                self.target_dto_kls,
+                extra_fields=[self.target_match_col_name, self.sort_field, self.pk_col_name],
+            )
+
+            effective_limit = page_args.effective_limit
+            start = page_args.offset + 1
+            end = start + effective_limit
+
+            async with self.session_factory() as session:
+                sec_local_col = getattr(self.secondary_table.c, self.secondary_local_col_name)
+                sec_remote_col = getattr(self.secondary_table.c, self.secondary_remote_col_name)
+                target_match_col = getattr(self.target_orm_kls, self.target_match_col_name)
+                sort_col = getattr(self.target_orm_kls, self.sort_field)
+                pk_col = getattr(self.target_orm_kls, self.pk_col_name)
+
+                rn_label = "_pr_rn"
+                tc_label = "_pr_tc"
+
+                # Inner query: join target with secondary, compute window functions
+                inner = select(
+                    self.target_orm_kls,
+                    sec_local_col.label(self.secondary_local_col_name),
+                    func.row_number().over(
+                        partition_by=sec_local_col,
+                        order_by=[sort_col, pk_col],
+                    ).label(rn_label),
+                    func.count().over(
+                        partition_by=sec_local_col,
+                    ).label(tc_label),
+                ).join(
+                    self.secondary_table,
+                    target_match_col == sec_remote_col,
+                ).where(
+                    sec_local_col.in_(fk_values),
+                )
+                inner = _apply_load_only(inner, self.target_orm_kls, effective_fields)
+                inner = _apply_filters(inner, self.filters)
+                subq = inner.subquery()
+
+                rn_col = subq.c[rn_label]
+                sec_local_sub = subq.c[self.secondary_local_col_name]
+                sort_col_sub = subq.c[self.sort_field]
+                pk_col_sub = subq.c[self.pk_col_name]
+
+                outer = select(subq).where(rn_col.between(start, end)).order_by(
+                    sec_local_sub, sort_col_sub, pk_col_sub,
+                )
+                rows = (await session.execute(outer)).all()
+
+                # Group results by source FK
+                grouped = defaultdict(list)
+                total_counts: dict[Any, int] = {}
+                for row in rows:
+                    row_dict = row._mapping
+                    fk_val = row_dict[self.secondary_local_col_name]
+                    rn = row_dict[rn_label]
+                    tc = row_dict[tc_label]
+                    grouped[fk_val].append((row_dict, rn))
+                    total_counts[fk_val] = tc
+
+                # Fallback for parents with offset > total
+                missing_fks = [cmd.fk_value for cmd in keys if cmd.fk_value not in total_counts]
+                if missing_fks:
+                    count_q = (
+                        select(sec_local_col, func.count().label(tc_label))
+                        .where(sec_local_col.in_(missing_fks))
+                    )
+                    count_q = _apply_filters(count_q, self.filters)
+                    count_q = count_q.group_by(sec_local_col)
+                    for row in (await session.execute(count_q)).all():
+                        total_counts[row[0]] = row[1]
+
+                return [
+                    _build_page_result(
+                        rows=[r for r, _ in grouped.get(cmd.fk_value, [])],
+                        page_args=page_args,
+                        total_count=total_counts.get(cmd.fk_value, 0),
+                        has_next_page=total_counts.get(cmd.fk_value, 0) >= end if cmd.fk_value in total_counts else False,
+                    )
+                    for cmd in keys
+                ]
+
+    _Loader.target_orm_kls = target_orm_kls
+    _Loader.target_dto_kls = target_dto_kls
+    _Loader.secondary_table = secondary_table
+    _Loader.secondary_local_col_name = secondary_local_col_name
+    _Loader.secondary_remote_col_name = secondary_remote_col_name
+    _Loader.target_match_col_name = target_match_col_name
+    _Loader.sort_field = sort_field
+    _Loader.pk_col_name = pk_col_name
+    _Loader.session_factory = staticmethod(session_factory)
+    _Loader.filters = filters
+
+    return _finalize_loader_class(
+        _Loader,
+        _build_loader_identity(source_orm_kls, rel_name, "PM2M"),
+    )
+
+
 def create_page_one_to_many_loader(
     *,
     source_orm_kls: type,
