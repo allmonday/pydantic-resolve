@@ -1,0 +1,23 @@
+:root {
+  --md-primary-fg-color: #1a56db;
+  --md-primary-fg-color--light: #3b82f6;
+  --md-primary-fg-color--dark: #1e3a8a;
+}
+
+.md-header {
+  background-color: rgba(26, 86, 219, 0.85) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #3b82f6;
+  --md-primary-fg-color--light: #60a5fa;
+  --md-primary-fg-color--dark: #1a56db;
+}
+
+[data-md-color-scheme="slate"] .md-header {
+  background-color: rgba(59, 130, 246, 0.85) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
