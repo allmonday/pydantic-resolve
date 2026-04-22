@@ -32,12 +32,23 @@ class Relationship(BaseModel):
 
     # Loader and behavior:
     loader: Callable | None = None
+    page_loader: Callable | None = None  # Paginated loader for GraphQL pagination mode
     fk_fn: Callable | None = None
     fk_none_default: Any | None = None
     fk_none_default_factory: Callable[[], Any] | None = None
     load_many: bool = False
     load_many_fn: Callable[[Any], Any] | None = None
     description: str | None = None
+
+    # Pagination config (effective for target=list[T] relationships in GraphQL)
+    sort_field: Optional[str] = None  # Column name for ROW_NUMBER ORDER BY; auto-populated by ORM inspector
+    default_page_size: int = 20
+    max_page_size: int = 100
+
+    @property
+    def is_list_relationship(self) -> bool:
+        """True if this relationship targets a list (one-to-many)."""
+        return types._is_list(self.target)
 
     @model_validator(mode="after")
     def _validate_defaults(self) -> "Relationship":
@@ -556,7 +567,12 @@ class ErLoaderPreGenerator:
                 return resolve_method
 
             if relationship.load_many:
+                # load_many: FK is a list of values, uses loader.load_many()
+                # This is a Core API pattern (e.g., fk='user_ids', load_many=True)
                 setattr(kls, method_name, create_resolve_method_with_load_many(relationship.fk, relationship))
+            elif relationship.is_list_relationship:
+                # One-to-many in Core API context: standard loader.load(fk)
+                setattr(kls, method_name, create_resolve_method(relationship.fk, relationship))
             else:
                 setattr(kls, method_name, create_resolve_method(relationship.fk, relationship))
 

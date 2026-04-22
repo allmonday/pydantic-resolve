@@ -1,5 +1,5 @@
 import pytest
-from typing import List, Optional, Union
+from typing import List, Union
 from pydantic import BaseModel
 from aiodataloader import DataLoader
 from pydantic_resolve import Loader, Resolver

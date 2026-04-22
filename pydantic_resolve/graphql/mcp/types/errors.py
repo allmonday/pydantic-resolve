@@ -1,7 +1,7 @@
 """Error handling utilities for MCP server."""
 
 from enum import Enum
-from typing import Any, Dict
+from typing import Any
 
 
 class MCPErrors(str, Enum):
@@ -16,7 +16,7 @@ class MCPErrors(str, Enum):
     INTERNAL_ERROR = "internal_error"
 
 
-def create_error_response(error: str, error_type: MCPErrors, hint: str | None = None) -> Dict[str, Any]:
+def create_error_response(error: str, error_type: MCPErrors, hint: str | None = None) -> dict[str, Any]:
     """Create a standardized error response.
 
     Args:
@@ -37,7 +37,7 @@ def create_error_response(error: str, error_type: MCPErrors, hint: str | None = 
     return result
 
 
-def create_success_response(data: Any, hint: str | None = None) -> Dict[str, Any]:
+def create_success_response(data: Any, hint: str | None = None) -> dict[str, Any]:
     """Create a standardized success response.
 
     Args:

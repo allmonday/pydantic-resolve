@@ -61,6 +61,7 @@ class Resolver:
             enable_from_attribute_in_type_adapter=False,
             annotation: type[T] | None=None,
             split_loader_by_type=False,
+            resolved_hooks: list[Callable] | None = None,
             ):
         
         self.debug = debug or os.getenv("PYDANTIC_RESOLVE_DEBUG", "false").lower() == "true"
@@ -130,6 +131,8 @@ class Resolver:
         self.annotation = annotation
 
         self.split_loader_by_type = split_loader_by_type
+
+        self.resolved_hooks = resolved_hooks or []
 
     def _validate_loader_instance(self, loader_instances: dict[Any, Any]):
         for cls, loader in loader_instances.items():
@@ -327,6 +330,10 @@ class Resolver:
                 trim_field,
                 val,
                 self.enable_from_attribute_in_type_adapter)
+
+        # Execute resolved hooks (e.g., nested pagination injection)
+        for hook in self.resolved_hooks:
+            hook(node, trim_field, val)
 
         val = await self._traverse(val, node)
         setattr(node, trim_field, val)

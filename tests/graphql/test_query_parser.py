@@ -107,3 +107,13 @@ class TestQueryParser:
         assert 'users' in parsed.field_tree
         assert 'id' in parsed.field_tree['users'].sub_fields
         assert 'name' in parsed.field_tree['users'].sub_fields
+
+    def test_alias_rejected(self):
+        """带 alias 的字段应该抛出错误"""
+        with pytest.raises(QueryParseError, match="alias"):
+            self.parser.parse("{ a: users { id } }")
+
+    def test_nested_alias_rejected(self):
+        """嵌套字段的 alias 也应该抛出错误"""
+        with pytest.raises(QueryParseError, match="alias"):
+            self.parser.parse("{ users { a: name } }")

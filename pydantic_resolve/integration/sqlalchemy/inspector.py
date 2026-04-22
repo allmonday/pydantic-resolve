@@ -8,6 +8,7 @@ from pydantic_resolve.integration.sqlalchemy.loader import (
     create_many_to_many_loader,
     create_many_to_one_loader,
     create_one_to_many_loader,
+    create_page_one_to_many_loader,
     create_reverse_one_to_one_loader,
 )
 from pydantic_resolve.utils.er_diagram import Entity, Relationship
@@ -62,6 +63,40 @@ def _validate_dto_scalar_fields(dto_kls: type, orm_kls: type) -> None:
             f"Required DTO fields not found in ORM scalar fields for mapping "
             f"{dto_kls.__name__} -> {orm_kls.__name__}: {missing_str}"
         )
+
+
+def _extract_sort_field(order_by: Any) -> str:
+    """Extract the column name from a SQLAlchemy order_by clause.
+
+    Args:
+        order_by: A SQLAlchemy order_by clause (typically a Column element or list)
+
+    Returns:
+        The column name as a string
+
+    Raises:
+        ValueError: If the order_by clause is not a simple column reference
+    """
+    # Handle list/tuple (order_by can be a list or tuple of clauses)
+    if isinstance(order_by, (list, tuple)):
+        if len(order_by) == 0:
+            raise ValueError("order_by cannot be empty")
+        # For now, only support single column sorting
+        if len(order_by) > 1:
+            raise ValueError(
+                f"Only single-column sorting is supported, got {len(order_by)} columns"
+            )
+        order_by = order_by[0]
+
+    # Extract the column key (name) from the Column element
+    # SQLAlchemy Column elements have a 'key' attribute that holds the column name
+    if hasattr(order_by, "key"):
+        return order_by.key
+
+    raise ValueError(
+        f"Unable to extract sort field from order_by clause: {order_by}. "
+        f"Please use a simple column reference like ArticleOrm.id"
+    )
 
 
 def _inspect_orm_relationships(
@@ -154,6 +189,34 @@ def _inspect_orm_relationships(
                 )
             else:
                 target_type = list[target_dto]
+
+                # Check if order_by is explicitly set for pagination support
+                order_by = rel.order_by
+                sort_field = None
+                page_loader = None
+
+                if order_by and order_by is not False:
+                    # Extract column name from the order_by clause
+                    sort_field = _extract_sort_field(order_by)
+
+                    # Extract primary key column name from target ORM
+                    target_mapper = inspect(target_orm)
+                    pk_col_name = target_mapper.primary_key[0].name
+
+                    # Create paginated loader (only when order_by is available)
+                    page_loader = create_page_one_to_many_loader(
+                        source_orm_kls=orm_kls,
+                        rel_name=rel.key,
+                        target_orm_kls=target_orm,
+                        target_dto_kls=target_dto,
+                        target_fk_col_name=remote_col.key,
+                        sort_field=sort_field,
+                        pk_col_name=pk_col_name,
+                        session_factory=session_factory,
+                        filters=filters,
+                    )
+
+                # Create raw list loader (always)
                 loader = create_one_to_many_loader(
                     source_orm_kls=orm_kls,
                     rel_name=rel.key,
@@ -198,15 +261,31 @@ def _inspect_orm_relationships(
                 f"Relationship direction {direction.name} is not supported: {orm_kls.__name__}.{rel.key}"
             )
 
-        relationships.append(
-            Relationship(
-                fk=fk_field,
-                target=target_type,
-                name=rel.key,
-                loader=loader,
-                description=rel.doc or None,
+        # Append relationship
+        if direction is ONETOMANY and rel.uselist is True:
+            # Single relationship with both loaders
+            relationships.append(
+                Relationship(
+                    fk=fk_field,
+                    target=target_type,
+                    name=rel.key,
+                    loader=loader,
+                    page_loader=page_loader,
+                    sort_field=sort_field,
+                    description=rel.doc or None,
+                )
             )
-        )
+        else:
+            # For all other cases, append a single relationship
+            relationships.append(
+                Relationship(
+                    fk=fk_field,
+                    target=target_type,
+                    name=rel.key,
+                    loader=loader,
+                    description=rel.doc or None,
+                )
+            )
 
     return relationships
 

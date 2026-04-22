@@ -5,9 +5,9 @@ Provides centralized type conversion between Python and GraphQL types.
 """
 
 from enum import Enum
-from typing import get_origin, get_args, Union, List
+from typing import get_origin, get_args, Union
 from pydantic_resolve.utils.class_util import safe_issubclass
-from pydantic_resolve.utils.types import get_core_types, _is_optional
+from pydantic_resolve.utils.types import get_core_types, _is_optional, _is_list
 from pydantic import BaseModel
 
 
@@ -45,7 +45,7 @@ def is_enum_type(python_type: type) -> bool:
         return False
 
 
-def get_enum_names(enum_class: type) -> List[str]:
+def get_enum_names(enum_class: type) -> list[str]:
     """
     Get all enum member names from an Enum class.
 
@@ -102,15 +102,9 @@ def map_python_to_graphql(python_type: type, include_required: bool = True) -> s
         return "String" + required_suffix  # Default to String
 
     core_type = core_types[0]
-    origin = get_origin(python_type)
 
     # Check if it's list type
-    is_list = origin is list or (
-        hasattr(python_type, '__origin__') and
-        python_type.__origin__ is list
-    )
-
-    if is_list:
+    if _is_list(python_type):
         # list[T] -> [T!]!
         inner_gql = map_python_to_graphql(core_type, include_required=True)
         return f"[{inner_gql}]{required_suffix}"
@@ -207,8 +201,7 @@ def is_list_type(type_hint: type) -> bool:
     Returns:
         Whether it's a list type
     """
-    origin = get_origin(type_hint)
-    return origin is list
+    return _is_list(type_hint)
 
 
 def unwrap_optional(type_hint: type):

@@ -1,4 +1,4 @@
-from typing import Type, Union, List, Annotated
+from typing import Type, Union, Annotated
 try:  # Python 3.10+ provides PEP 604 unions using types.UnionType
     from types import UnionType as _UnionType
 except ImportError:  # pragma: no cover - prior to 3.10
@@ -18,13 +18,13 @@ from typing import get_origin, get_args
 def _is_optional(annotation):
     origin = get_origin(annotation)
     args = get_args(annotation)
-    if origin is Union and type(None) in args:
+    if origin in (Union, _UnionType) and type(None) in args:
         return True
     return False
 
 
 def _is_list(annotation):
-    return get_origin(annotation) in (list, List)
+    return get_origin(annotation) is list
 
 
 def shelling_type(tp):

@@ -6,6 +6,7 @@ from collections import defaultdict
 from pydantic import BaseModel
 import pydantic_resolve.constant as const
 import pydantic_resolve.utils.class_util as class_util
+from pydantic_resolve.utils.types import get_class_field_annotations
 from pydantic_resolve.utils.collector import ICollector, pre_generate_collector_config
 from pydantic_resolve.utils.depend import Depends
 from pydantic_resolve.utils.er_diagram import ErLoaderPreGenerator
@@ -358,8 +359,7 @@ def _loader_requires_context(loader_kls: type) -> bool:
     """
     if not isclass(loader_kls):
         return False
-    annotations = loader_kls.__dict__.get('__annotations__', {})
-    return '_context' in annotations
+    return '_context' in get_class_field_annotations(loader_kls)
 
 
 def _scan_resolve_method(method, field: str, request_types: list[type]) -> ResolveMethodType:

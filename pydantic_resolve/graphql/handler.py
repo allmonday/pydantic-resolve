@@ -4,19 +4,20 @@ GraphQL handler - coordinates all components and provides FastAPI integration.
 
 import inspect
 import logging
-import types
-from typing import Any, Callable, Dict, ForwardRef, Optional, Tuple, Union, get_args, get_origin
+from typing import Any, Callable, ForwardRef, Optional, get_args
 
 from graphql import parse as parse_graphql
 from graphql.language.ast import OperationDefinitionNode, OperationType
 
-from pydantic_resolve.utils.er_diagram import ErDiagram
+from pydantic_resolve.utils.er_diagram import ErDiagram, Relationship
 from pydantic_resolve.utils.resolver_configurator import config_resolver
+from pydantic_resolve.utils.types import _is_optional, _is_list
 from pydantic_resolve.graphql.exceptions import GraphQLError
 from pydantic_resolve.graphql.executor import QueryExecutor
 from pydantic_resolve.graphql.introspection import IntrospectionHelper
 from pydantic_resolve.graphql.query_parser import QueryParser
 from pydantic_resolve.graphql.response_builder import ResponseBuilder
+from pydantic_resolve.graphql.pagination.injector import inject_nested_pagination
 from pydantic_resolve.graphql.schema_builder import SchemaBuilder
 from pydantic_resolve.graphql.graphiql import get_graphiql_html
 
@@ -34,16 +35,24 @@ class GraphQLHandler:
     def __init__(
         self,
         er_diagram: ErDiagram,
-        enable_from_attribute_in_type_adapter: bool = False
+        enable_from_attribute_in_type_adapter: bool = False,
+        enable_pagination: bool = False,
     ):
         """
         Args:
             er_diagram: Entity relationship diagram
             enable_from_attribute_in_type_adapter: Enable Pydantic from_attributes mode for type adapter validation.
                 Allows loaders to return Pydantic instances instead of dictionaries.
+            enable_pagination: When True, validate that all one-to-many relationships
+                have sort_field configured (requires order_by on ORM relationship).
+                Raises ValueError if any relationship lacks it.
         """
         self.er_diagram = er_diagram
         self.enable_from_attribute_in_type_adapter = enable_from_attribute_in_type_adapter
+        self.enable_pagination = enable_pagination
+
+        if enable_pagination:
+            self._validate_pagination_sort_fields()
 
         # Create diagram-specific resolver class
         self.resolver_class = config_resolver(
@@ -56,24 +65,52 @@ class GraphQLHandler:
         self.builder = ResponseBuilder(
             er_diagram,
             resolver_class=self.resolver_class,
-            enable_from_attribute_in_type_adapter=enable_from_attribute_in_type_adapter
+            enable_from_attribute_in_type_adapter=enable_from_attribute_in_type_adapter,
+            enable_pagination=enable_pagination,
         )
-        self.schema_builder = SchemaBuilder(er_diagram)
+        self.schema_builder = SchemaBuilder(er_diagram, enable_pagination=enable_pagination)
 
         # Build query and mutation maps
         self.query_map = self._build_query_map()
         self.mutation_map = self._build_mutation_map()
 
         # Initialize helpers
-        self.introspection = IntrospectionHelper(er_diagram, self.query_map, self.mutation_map)
+        self.introspection = IntrospectionHelper(er_diagram, self.query_map, self.mutation_map, enable_pagination=enable_pagination)
+        resolved_hooks = [inject_nested_pagination] if enable_pagination else []
+
         self.executor = QueryExecutor(
             parser=self.parser,
             builder=self.builder,
             resolver_class=self.resolver_class,
-            enable_from_attribute_in_type_adapter=enable_from_attribute_in_type_adapter
+            enable_from_attribute_in_type_adapter=enable_from_attribute_in_type_adapter,
+            resolved_hooks=resolved_hooks,
         )
 
-    def _build_query_map(self) -> Dict[str, Tuple[type, Callable]]:
+    def _validate_pagination_sort_fields(self):
+        """Validate all one-to-many relationships have page_loader configured."""
+        errors = []
+        for entity_cfg in self.er_diagram.entities:
+            for rel in entity_cfg.relationships:
+                if not isinstance(rel, Relationship):
+                    continue
+                if rel.loader is None:
+                    continue
+                if not rel.is_list_relationship:
+                    continue
+                if rel.page_loader is None:
+                    errors.append(
+                        f"  {entity_cfg.kls.__name__}.{rel.name} "
+                        f"(target: {rel.target}) - no order_by configured"
+                    )
+        if errors:
+            raise ValueError(
+                "enable_pagination is True but the following one-to-many "
+                "relationships lack order_by configuration:\n"
+                + "\n".join(errors)
+                + "\n\nSet order_by on the ORM relationship to enable pagination."
+            )
+
+    def _build_query_map(self) -> dict[str, tuple[type, Callable]]:
         """
         Scan all entities and build query name to method mapping.
 
@@ -89,7 +126,7 @@ class GraphQLHandler:
                 query_map[query_name] = (return_entity, method_info['method'])
         return query_map
 
-    def _build_mutation_map(self) -> Dict[str, Tuple[type, Callable]]:
+    def _build_mutation_map(self) -> dict[str, tuple[type, Callable]]:
         """
         Scan all entities and build mutation name to method mapping.
 
@@ -128,22 +165,20 @@ class GraphQLHandler:
         if return_annotation == inspect.Parameter.empty:
             return None
 
-        origin = get_origin(return_annotation)
-
-        # Unwrap Optional[List[T]] -> List[T] -> T
-        if origin is list:
+        # Unwrap List[T]
+        if _is_list(return_annotation):
             args = get_args(return_annotation)
             if args:
                 return_annotation = args[0]
-                origin = get_origin(return_annotation)
-        # Handle Optional[Entity] (Union[Entity, None]) - extract Entity
-        elif origin is Union or (hasattr(types, 'UnionType') and isinstance(return_annotation, types.UnionType)):
+
+        # Unwrap Optional[T] or Optional[List[T]]
+        if _is_optional(return_annotation):
             args = get_args(return_annotation)
             non_none_args = [a for a in args if a is not type(None)]
             if len(non_none_args) == 1:
                 return_annotation = non_none_args[0]
                 # Check if it's Optional[List[T]]
-                if get_origin(return_annotation) is list:
+                if _is_list(return_annotation):
                     args = get_args(return_annotation)
                     if args:
                         return_annotation = args[0]
@@ -186,8 +221,8 @@ class GraphQLHandler:
     async def execute(
         self,
         query: str,
-        context: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        context: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
         """
         Execute a GraphQL query or mutation.
 

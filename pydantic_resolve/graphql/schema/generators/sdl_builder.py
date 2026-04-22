@@ -6,15 +6,14 @@ using the unified type collection and mapping logic.
 """
 
 import inspect
-from typing import ForwardRef, get_args, get_origin, get_type_hints
+from typing import ForwardRef, get_args, get_type_hints
 
 from pydantic import BaseModel
 
 from pydantic_resolve.graphql.schema.generators.base import SchemaGenerator
-import pydantic_resolve.constant as const
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.er_diagram import Relationship
-from pydantic_resolve.utils.types import get_core_types
+from pydantic_resolve.utils.types import get_core_types, _is_optional, _is_list
 from pydantic_resolve.graphql.type_mapping import map_scalar_type, is_enum_type, get_enum_names
 from pydantic_resolve.graphql.exceptions import FieldNameConflictError
 
@@ -26,6 +25,10 @@ class SDLBuilder(SchemaGenerator):
     This is the refactored implementation that uses the unified
     type collection and mapping logic.
     """
+
+    def __init__(self, er_diagram, validate_conflicts=True, enable_pagination=False):
+        super().__init__(er_diagram, validate_conflicts)
+        self.enable_pagination = enable_pagination
 
     def generate(self) -> str:
         """
@@ -66,16 +69,16 @@ class SDLBuilder(SchemaGenerator):
             for method in mutation_methods:
                 mutation_defs.append(self._build_mutation_def(method))
 
-        # Collect and generate nested Pydantic types
-        nested_types = self._collect_nested_pydantic_types(processed_types)
-        for nested_type in nested_types:
-            if nested_type not in processed_types:
-                type_def = self._build_type_definition_for_class(nested_type)
+        # Collect and generate nested Pydantic types (including relationship targets)
+        all_collected = self.collector.collect_all_types()
+        for type_name, cls in all_collected.items():
+            if cls not in processed_types:
+                type_def = self._build_type_definition_for_class(cls)
                 type_defs.append(type_def)
-                processed_types.add(nested_type)
+                processed_types.add(cls)
 
                 # Collect enum types from nested types
-                self._add_enum_definitions(nested_type, enum_defs, processed_enums)
+                self._add_enum_definitions(cls, enum_defs, processed_enums)
 
         # Collect and generate Input Types
         input_types = self._collect_input_types()
@@ -97,6 +100,11 @@ class SDLBuilder(SchemaGenerator):
 
         if input_defs:
             schema_parts.append("\n".join(input_defs))
+
+        # Add Pagination and Result types for one-to-many relationships
+        page_result_defs = self._collect_page_result_sdl_defs(processed_types)
+        if page_result_defs:
+            schema_parts.append("\n".join(page_result_defs))
 
         if type_defs:
             schema_parts.append("\n".join(type_defs))
@@ -175,11 +183,31 @@ class SDLBuilder(SchemaGenerator):
                     if rel.loader is None:
                         continue
                     field_name = rel.name
-                    gql_type = self._map_python_type_to_gql(rel.target)
-                    if rel.description:
-                        fields.append(f'  """{rel.description}"""\n  {field_name}: {gql_type}')
+
+                    # One-to-many relationship
+                    if _is_list(rel.target):
+                        if self.enable_pagination and rel.page_loader is not None:
+                            # Paginated: articles(limit: Int, offset: Int): ArticleEntityResult!
+                            target_name = self._get_target_entity_name(rel)
+                            result_type_name = f"{target_name}Result" if target_name else "Result"
+                            args_str = "(limit: Int, offset: Int)"
+                            if rel.description:
+                                fields.append(f'  """{rel.description}"""\n  {field_name}{args_str}: {result_type_name}!')
+                            else:
+                                fields.append(f"  {field_name}{args_str}: {result_type_name}!")
+                        else:
+                            # Raw list: posts: [PostEntity!]!
+                            gql_type = self._map_python_type_to_gql(rel.target)
+                            if rel.description:
+                                fields.append(f'  """{rel.description}"""\n  {field_name}: {gql_type}')
+                            else:
+                                fields.append(f"  {field_name}: {gql_type}")
                     else:
-                        fields.append(f"  {field_name}: {gql_type}")
+                        gql_type = self._map_python_type_to_gql(rel.target)
+                        if rel.description:
+                            fields.append(f'  """{rel.description}"""\n  {field_name}: {gql_type}')
+                        else:
+                            fields.append(f"  {field_name}: {gql_type}")
 
         return f"type {entity_cfg.kls.__name__} {{\n" + "\n".join(fields) + "\n}"
 
@@ -229,12 +257,10 @@ class SDLBuilder(SchemaGenerator):
         Returns:
             GraphQL type string with appropriate nullability
         """
-        from typing import ForwardRef, Union
-
-        origin = get_origin(python_type)
+        from typing import ForwardRef
 
         # Handle Optional[T] (Union[T, None])
-        if origin is Union:
+        if _is_optional(python_type):
             args = get_args(python_type)
             non_none_args = [a for a in args if a is not type(None)]
             if non_none_args:
@@ -245,12 +271,7 @@ class SDLBuilder(SchemaGenerator):
                 return inner_gql
 
         # Check if it's list[T]
-        is_list = origin is list or (
-            hasattr(python_type, '__origin__') and
-            python_type.__origin__ is list
-        )
-
-        if is_list:
+        if _is_list(python_type):
             args = get_args(python_type)
             if args:
                 inner_gql = self._map_python_type_to_gql(args[0], is_input)
@@ -297,147 +318,51 @@ class SDLBuilder(SchemaGenerator):
 
     def _extract_query_methods(self, entity: type) -> list[dict]:
         """Extract all @query decorated methods."""
-        methods = []
-
-        for name, method in entity.__dict__.items():
-            actual_method = method
-            if isinstance(method, classmethod):
-                actual_method = method.__func__
-
-            if not hasattr(actual_method, const.GRAPHQL_QUERY_ATTR):
-                continue
-
-            try:
-                sig = inspect.signature(actual_method)
-            except Exception:
-                continue
-
-            params = []
-            for param_name, param in sig.parameters.items():
-                if param_name in ('self', 'cls'):
-                    continue
-
-                # _context is framework-injected, hidden from GraphQL schema
-                if param_name == '_context':
-                    continue
-
-                try:
-                    gql_type = self._map_python_type_to_gql(param.annotation)
-                except Exception:
-                    gql_type = 'Any'
-
-                default = param.default
-                is_required = default == inspect.Parameter.empty
-
-                if is_required:
-                    param_str = f"{param_name}: {gql_type}"
-                else:
-                    param_str = f"{param_name}: {gql_type.rstrip('!')}"
-
-                params.append({
-                    'name': param_name,
-                    'type': gql_type,
-                    'required': is_required,
-                    'default': default,
-                    'definition': param_str
-                })
-
-            try:
-                return_type = sig.return_annotation
-                gql_return_type = self._map_return_type_to_gql(return_type)
-            except Exception:
-                gql_return_type = 'Any'
-
-            # Operation names must always include entity prefix to avoid cross-entity collisions.
-            # Explicit configured names are treated as the method-name part.
-            from pydantic_resolve.graphql.utils.naming import to_graphql_field_name
-            query_base_name = getattr(actual_method, const.GRAPHQL_QUERY_NAME_ATTR, None) or name
-            query_name = to_graphql_field_name(entity.__name__, query_base_name)
-
-            description = getattr(actual_method, const.GRAPHQL_QUERY_DESCRIPTION_ATTR, "") or ""
-
-            methods.append({
-                'name': query_name,
-                'description': description,
-                'params': params,
-                'return_type': gql_return_type,
-                'entity': entity,
-                'method': actual_method
-            })
-
-        return methods
+        raw_methods = self._extract_operation_methods(entity, "query")
+        return [self._enrich_method_info(m) for m in raw_methods]
 
     def _extract_mutation_methods(self, entity: type) -> list[dict]:
         """Extract all @mutation decorated methods."""
-        methods = []
+        raw_methods = self._extract_operation_methods(entity, "mutation")
+        return [self._enrich_method_info(m) for m in raw_methods]
 
-        for name, method in entity.__dict__.items():
-            actual_method = method
-            if isinstance(method, classmethod):
-                actual_method = method.__func__
-
-            if not hasattr(actual_method, const.GRAPHQL_MUTATION_ATTR):
-                continue
-
+    def _enrich_method_info(self, method_info: dict) -> dict:
+        """Add SDL-specific formatting to method info from base class."""
+        # Enrich params with SDL type strings and definitions
+        params = []
+        for p in method_info['params']:
             try:
-                sig = inspect.signature(actual_method)
+                gql_type = self._map_python_type_to_gql(p['type'])
             except Exception:
-                continue
+                gql_type = 'Any'
 
-            params = []
-            for param_name, param in sig.parameters.items():
-                if param_name in ('self', 'cls'):
-                    continue
+            if p['required']:
+                param_str = f"{p['name']}: {gql_type}"
+            else:
+                param_str = f"{p['name']}: {gql_type.rstrip('!')}"
 
-                # _context is framework-injected, hidden from GraphQL schema
-                if param_name == '_context':
-                    continue
-
-                try:
-                    gql_type = self._map_python_type_to_gql(param.annotation)
-                except Exception:
-                    gql_type = 'Any'
-
-                default = param.default
-                is_required = default == inspect.Parameter.empty
-
-                if is_required:
-                    param_str = f"{param_name}: {gql_type}"
-                else:
-                    param_str = f"{param_name}: {gql_type.rstrip('!')}"
-
-                params.append({
-                    'name': param_name,
-                    'type': gql_type,
-                    'required': is_required,
-                    'default': default,
-                    'definition': param_str
-                })
-
-            try:
-                return_type = sig.return_annotation
-                gql_return_type = self._map_return_type_to_gql(return_type)
-            except Exception:
-                gql_return_type = 'Any'
-
-            # Operation names must always include entity prefix to avoid cross-entity collisions.
-            # Explicit configured names are treated as the method-name part.
-            from pydantic_resolve.graphql.utils.naming import to_graphql_field_name
-            mutation_base_name = getattr(actual_method, const.GRAPHQL_MUTATION_NAME_ATTR, None) or name
-            mutation_name = to_graphql_field_name(entity.__name__, mutation_base_name)
-
-            description = getattr(actual_method, const.GRAPHQL_MUTATION_DESCRIPTION_ATTR, "") or ""
-
-            methods.append({
-                'name': mutation_name,
-                'description': description,
-                'params': params,
-                'return_type': gql_return_type,
-                'entity': entity,
-                'method': actual_method
+            params.append({
+                'name': p['name'],
+                'type': gql_type,
+                'required': p['required'],
+                'default': p['default'],
+                'definition': param_str
             })
 
-        return methods
+        # Enrich return type
+        try:
+            gql_return_type = self._map_return_type_to_gql(method_info['return_type'])
+        except Exception:
+            gql_return_type = 'Any'
+
+        return {
+            'name': method_info['name'],
+            'description': method_info['description'],
+            'params': params,
+            'return_type': gql_return_type,
+            'entity': method_info['entity'],
+            'method': method_info['method']
+        }
 
     def _build_query_def(self, method_info: dict) -> str:
         """Build single query definition."""
@@ -464,9 +389,8 @@ class SDLBuilder(SchemaGenerator):
             return self._map_python_type_to_gql(return_type)
 
         core_type = core_types[0]
-        origin = get_origin(return_type)
 
-        if origin is list:
+        if _is_list(return_type):
             inner_gql = self._map_python_type_to_gql(core_type)
             return f"[{inner_gql}]"
 
@@ -851,25 +775,50 @@ class SDLBuilder(SchemaGenerator):
                         if rel.loader is None:
                             continue
                         field_name = rel.name
-                        gql_type = self._map_python_type_to_gql(rel.target)
-                        fields.append(f"  {field_name}: {gql_type}")
+
+                        if rel.is_list_relationship and self.enable_pagination and rel.page_loader is not None:
+                            target_name = self._get_target_entity_name(rel)
+                            result_type_name = f"{target_name}Result" if target_name else "Result"
+                            args_str = "(limit: Int, offset: Int)"
+                            fields.append(f"  {field_name}{args_str}: {result_type_name}!")
+                        else:
+                            gql_type = self._map_python_type_to_gql(rel.target)
+                            fields.append(f"  {field_name}: {gql_type}")
 
         # Build type definition
         type_def = f"type {entity.__name__} {{\n" + "\n".join(fields) + "\n}"
         return type_def
 
-    def _is_relationship_field(self, entity_cfg, field_name: str) -> bool:
-        """Check if a field name is a relationship field.
+    # ========== Pagination / Result Type Generation ==========
 
-        Args:
-            entity_cfg: Entity configuration
-            field_name: Field name to check
+    def _collect_page_result_sdl_defs(self, processed_types: set) -> list[str]:
+        """Generate Pagination and Result SDL for all one-to-many relationships.
 
         Returns:
-            True if the field is a relationship field
+            List of SDL strings for Pagination (once) and {Entity}Result types.
         """
-        for rel in entity_cfg.relationships:
-            if isinstance(rel, Relationship):
-                if rel.name == field_name:
-                    return True
-        return False
+        if not self.enable_pagination:
+            return []
+
+        paginated_rels = self._collect_paginated_relationships()
+        if not paginated_rels:
+            return []
+
+        defs: list[str] = []
+        for _, target_name in paginated_rels:
+            result_name = f"{target_name}Result"
+            defs.append(
+                f"type {result_name} {{\n"
+                f"  items: [{target_name}!]!\n"
+                f"  pagination: Pagination!\n"
+                f"}}"
+            )
+
+        defs.insert(0, (
+            "type Pagination {\n"
+            "  has_more: Boolean!\n"
+            "  total_count: Int\n"
+            "}"
+        ))
+
+        return defs

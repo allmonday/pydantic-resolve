@@ -14,7 +14,7 @@ import inspect
 import logging
 import os
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Optional
 
 from pydantic import BaseModel
 
@@ -46,7 +46,8 @@ class QueryExecutor:
         parser: QueryParser,
         builder: ResponseBuilder,
         resolver_class: type[Resolver],
-        enable_from_attribute_in_type_adapter: bool = False
+        enable_from_attribute_in_type_adapter: bool = False,
+        resolved_hooks: list[Callable] | None = None,
     ):
         """
         Args:
@@ -54,18 +55,20 @@ class QueryExecutor:
             builder: Response builder instance
             resolver_class: Resolver class to use
             enable_from_attribute_in_type_adapter: Enable Pydantic from_attributes mode
+            resolved_hooks: List of hooks to execute after each resolve field
         """
         self.parser = parser
         self.builder = builder
         self.resolver_class = resolver_class
         self.enable_from_attribute_in_type_adapter = enable_from_attribute_in_type_adapter
+        self.resolved_hooks = resolved_hooks or []
 
     async def execute_query(
         self,
         query: str,
-        query_map: Dict[str, Tuple[type, Callable]],
-        context: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        query_map: dict[str, tuple[type, Callable]],
+        context: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
         """
         Execute custom query with optimized two-phase execution:
         - Phase 1 (Serial): Parse query, build response models (no I/O)
@@ -154,9 +157,9 @@ class QueryExecutor:
     async def execute_mutation(
         self,
         query: str,
-        mutation_map: Dict[str, Tuple[type, Callable]],
-        context: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        mutation_map: dict[str, tuple[type, Callable]],
+        context: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
         """
         Execute custom mutation with two-phase execution:
         - Phase 1 (Serial): Mutation method execution, model building, data transformation
@@ -217,19 +220,34 @@ class QueryExecutor:
 
                 logger.debug(f"Data transformed: {root_mutation_name}")
 
+                # Inject pagination args into model instances
+                if typed_data is not None:
+                    instances = typed_data if isinstance(typed_data, list) else [typed_data]
+                    self.builder.inject_pagination_args(
+                        instances=instances,
+                        entity=entity,
+                        field_selection=root_field_selection,
+                    )
+
                 # === Phase 2: Resolve related data ===
                 if typed_data is not None:
                     resolver = self.resolver_class(
                         enable_from_attribute_in_type_adapter=self.enable_from_attribute_in_type_adapter,
                         context=context,
+                        resolved_hooks=self.resolved_hooks,
                     )
 
                     if isinstance(typed_data, list):
                         resolved = await resolver.resolve(typed_data)
-                        data[root_mutation_name] = [r.model_dump(mode='json', by_alias=True) for r in resolved] if resolved else []
+                        data[root_mutation_name] = [
+                            r.model_dump(mode='json', by_alias=False)
+                            for r in resolved
+                        ] if resolved else []
                     else:
                         resolved = await resolver.resolve(typed_data)
-                        data[root_mutation_name] = resolved.model_dump(mode='json', by_alias=True) if resolved else None
+                        data[root_mutation_name] = (
+                            resolved.model_dump(mode='json', by_alias=False)
+                        ) if resolved else None
                 else:
                     data[root_mutation_name] = None
 
@@ -257,10 +275,10 @@ class QueryExecutor:
     async def _execute_method(
         self,
         method: Callable,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
         operation_type: str = "query",
         entity: Optional[type] = None,
-        context: Optional[Dict[str, Any]] = None,
+        context: Optional[dict[str, Any]] = None,
     ) -> Any:
         """
         Execute @query or @mutation method
@@ -310,8 +328,8 @@ class QueryExecutor:
     def _convert_arguments(
         self,
         method: Callable,
-        arguments: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        arguments: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Convert method parameters, transforming dict to corresponding Pydantic BaseModel instances
         and enum names to enum values.
@@ -450,9 +468,9 @@ class QueryExecutor:
 
     async def _execute_concurrent_queries(
         self,
-        execution_tasks: List[Tuple[str, type, Callable, Any, type]],
-        context: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Tuple[Optional[Any], Optional[Dict]]]:
+        execution_tasks: list[tuple[str, type, Callable, Any, type]],
+        context: Optional[dict[str, Any]] = None,
+    ) -> dict[str, tuple[Optional[Any], Optional[dict]]]:
         """
         Execute multiple queries concurrently (query_method + transform + resolve).
 
@@ -523,8 +541,8 @@ class QueryExecutor:
         query_method: Callable,
         field_selection: Any,
         response_model: type,
-        context: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[Optional[Any], Optional[Dict]]:
+        context: Optional[dict[str, Any]] = None,
+    ) -> tuple[Optional[Any], Optional[dict]]:
         """
         Execute a single query: query_method -> transform -> resolve.
 
@@ -570,24 +588,40 @@ class QueryExecutor:
 
             logger.debug(f"[Phase 2] Data transformed: {query_name}")
 
+            # 2.5. Inject pagination args into model instances
+            #      (must happen after model_validate, before resolver.resolve,
+            #       because the response model is cached and cannot hold
+            #       query-specific PageArgs in its field defaults)
+            if typed_data is not None:
+                instances = typed_data if isinstance(typed_data, list) else [typed_data]
+                self.builder.inject_pagination_args(
+                    instances=instances,
+                    entity=entity,
+                    field_selection=field_selection,
+                )
+
             # 3. Resolve related data
             result_data = None
             if typed_data is not None:
                 resolver = self.resolver_class(
                     enable_from_attribute_in_type_adapter=self.enable_from_attribute_in_type_adapter,
                     context=context,
+                    resolved_hooks=self.resolved_hooks,
                 )
 
                 if is_list:
                     result = await resolver.resolve(typed_data)
                     if result is not None:
-                        result_data = [r.model_dump(mode='json', by_alias=True) for r in result]
+                        result_data = [
+                            r.model_dump(mode='json', by_alias=False)
+                            for r in result
+                        ]
                     else:
                         result_data = []
                 else:
                     result = await resolver.resolve(typed_data)
                     if result is not None:
-                        result_data = result.model_dump(mode='json', by_alias=True)
+                        result_data = result.model_dump(mode='json', by_alias=False)
                     else:
                         result_data = None
             else:

@@ -11,7 +11,7 @@ The tools are organized in 4 layers:
 from __future__ import annotations
 
 import inspect
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any
 
 from fastmcp.server.context import Context
 
@@ -56,7 +56,7 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
 
     # Layer 0: Application discovery
     @mcp.tool()
-    def list_apps() -> Dict[str, Any]:
+    def list_apps() -> dict[str, Any]:
         """List all available GraphQL applications.
 
         Returns a list of all configured applications with their metadata:
@@ -109,7 +109,7 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
 
     # Layer 1: List operations
     @mcp.tool()
-    def list_queries(app_name: str) -> Dict[str, Any]:
+    def list_queries(app_name: str) -> dict[str, Any]:
         """List all available GraphQL queries for an application.
 
         Returns a lightweight list of query names and descriptions.
@@ -143,7 +143,7 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
             return create_error_response(str(e), MCPErrors.INTERNAL_ERROR)
 
     @mcp.tool()
-    def list_mutations(app_name: str) -> Dict[str, Any]:
+    def list_mutations(app_name: str) -> dict[str, Any]:
         """List all available GraphQL mutations for an application.
 
         Returns a lightweight list of mutation names and descriptions.
@@ -178,7 +178,7 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
 
     # Layer 1: Full schema (for global view)
     @mcp.tool()
-    def get_full_schema(app_name: str, response_type: str = "sdl") -> Dict[str, Any]:
+    def get_full_schema(app_name: str, response_type: str = "sdl") -> dict[str, Any]:
         """Get the complete GraphQL schema for an application.
 
         Returns all types (entities, inputs, enums) and all operations
@@ -216,7 +216,7 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
     @mcp.tool()
     def get_query_schema(
         name: str, app_name: str, response_type: str = "sdl"
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get detailed schema information for a specific GraphQL query.
 
         Returns schema in two formats:
@@ -282,7 +282,7 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
     @mcp.tool()
     def get_mutation_schema(
         name: str, app_name: str, response_type: str = "sdl"
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get detailed schema information for a specific GraphQL mutation.
 
         Returns schema in two formats:
@@ -342,7 +342,7 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
 
     # Layer 3: Execute operations
     @mcp.tool()
-    async def graphql_query(query: str, app_name: str, ctx: "Context") -> Dict[str, Any]:
+    async def graphql_query(query: str, app_name: str, ctx: "Context") -> dict[str, Any]:
         """Execute a GraphQL query on a specific application.
 
         Use this tool after discovering operations with list_queries and
@@ -399,7 +399,7 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
             return create_error_response(str(e), MCPErrors.INTERNAL_ERROR)
 
     @mcp.tool()
-    async def graphql_mutation(mutation: str, app_name: str, ctx: "Context") -> Dict[str, Any]:
+    async def graphql_mutation(mutation: str, app_name: str, ctx: "Context") -> dict[str, Any]:
         """Execute a GraphQL mutation on a specific application.
 
         Use this tool after discovering operations with list_mutations and

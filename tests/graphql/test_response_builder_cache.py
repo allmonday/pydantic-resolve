@@ -15,19 +15,17 @@ class TestFieldSelectionHashable:
 
     def test_simple_field_selection_hash(self):
         """Simple field selection should be hashable."""
-        fs = FieldSelection(alias=None, sub_fields=None, arguments={'id': 1})
+        fs = FieldSelection(sub_fields=None, arguments={'id': 1})
         # Should not raise
         hash(fs)
 
     def test_field_selection_equality(self):
-        """FieldSelection with same alias/sub_fields should be equal (arguments excluded from comparison)."""
+        """FieldSelection with same sub_fields should be equal (arguments excluded from comparison)."""
         fs1 = FieldSelection(
-            alias=None,
             sub_fields={'name': FieldSelection(), 'id': FieldSelection()},
             arguments={'id': 1}
         )
         fs2 = FieldSelection(
-            alias=None,
             sub_fields={'name': FieldSelection(), 'id': FieldSelection()},
             arguments={'id': 999}  # Different arguments
         )
@@ -35,9 +33,9 @@ class TestFieldSelectionHashable:
         assert hash(fs1) == hash(fs2)
 
     def test_field_selection_inequality(self):
-        """FieldSelection with different alias/sub_fields should not be equal."""
-        fs1 = FieldSelection(alias='alias1')
-        fs2 = FieldSelection(alias='alias2')
+        """FieldSelection with different sub_fields should not be equal."""
+        fs1 = FieldSelection(sub_fields={'name': FieldSelection()})
+        fs2 = FieldSelection(sub_fields={'email': FieldSelection()})
         assert fs1 != fs2
         assert hash(fs1) != hash(fs2)
 

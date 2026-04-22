@@ -10,6 +10,7 @@ from pydantic_resolve.graphql import GraphQLHandler
 handler = GraphQLHandler(
     er_diagram: ErDiagram,
     enable_from_attribute_in_type_adapter: bool = False,
+    enable_pagination: bool = False,
 )
 ```
 
@@ -17,6 +18,7 @@ handler = GraphQLHandler(
 |-----------|------|-------------|
 | `er_diagram` | `ErDiagram` | ERD to generate schema from |
 | `enable_from_attribute_in_type_adapter` | `bool` | Enable Pydantic `from_attributes` mode |
+| `enable_pagination` | `bool` | Enable limit/offset pagination for one-to-many fields. Requires `order_by` on all one-to-many ORM relationships. |
 
 ### execute()
 
@@ -89,11 +91,16 @@ The return value follows GraphQL response shape:
 ```python
 from pydantic_resolve.graphql import SchemaBuilder
 
-builder = SchemaBuilder(er_diagram)
+builder = SchemaBuilder(er_diagram, enable_pagination=True)
 sdl = builder.build_schema()  # Returns the GraphQL SDL string
 ```
 
 Low-level access to the generated GraphQL schema. Most users should use `GraphQLHandler` instead.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `er_diagram` | `ErDiagram` | ERD to generate schema from |
+| `enable_pagination` | `bool` | Enable pagination in generated schema |
 
 ## @query
 

@@ -16,15 +16,17 @@ class SchemaBuilder:
     This class delegates to SDLBuilder internally.
     """
 
-    def __init__(self, er_diagram: ErDiagram, validate_conflicts: bool = True):
+    def __init__(self, er_diagram: ErDiagram, validate_conflicts: bool = True, enable_pagination: bool = False):
         """
         Args:
             er_diagram: Entity relationship diagram
             validate_conflicts: Whether to validate field name conflicts (default True)
+            enable_pagination: When True, one-to-many fields use Result types
         """
         self.er_diagram = er_diagram
         self.validate_conflicts = validate_conflicts
-        self._builder = SDLBuilder(er_diagram, validate_conflicts)
+        self.enable_pagination = enable_pagination
+        self._builder = SDLBuilder(er_diagram, validate_conflicts, enable_pagination=enable_pagination)
 
     def build_schema(self) -> str:
         """

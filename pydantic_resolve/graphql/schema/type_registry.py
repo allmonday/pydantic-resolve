@@ -6,7 +6,7 @@ and a registry to manage them as a single source of truth.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     pass
@@ -35,7 +35,7 @@ class FieldInfo:
     description: Optional[str] = None
     is_relationship: bool = False
     relationship_target: Optional[str] = None
-    args: List[ArgumentInfo] = field(default_factory=list)
+    args: list[ArgumentInfo] = field(default_factory=list)
     is_deprecated: bool = False
     deprecation_reason: Optional[str] = None
 
@@ -46,15 +46,15 @@ class TypeInfo:
     name: str
     kind: str  # OBJECT, INPUT_OBJECT, SCALAR, LIST, NON_NULL
     python_class: Optional[type] = None
-    fields: Dict[str, FieldInfo] = field(default_factory=dict)
+    fields: dict[str, FieldInfo] = field(default_factory=dict)
     description: Optional[str] = None
-    interfaces: List[str] = field(default_factory=list)
-    enum_values: Optional[List[str]] = None
+    interfaces: list[str] = field(default_factory=list)
+    enum_values: Optional[list[str]] = None
     is_input: bool = False
 
 
 # Standard GraphQL scalar types
-SCALAR_TYPES: Dict[str, TypeInfo] = {
+SCALAR_TYPES: dict[str, TypeInfo] = {
     "Int": TypeInfo(
         name="Int",
         kind="SCALAR",
@@ -92,7 +92,7 @@ class TypeRegistry:
     """
 
     def __init__(self):
-        self._types: Dict[str, TypeInfo] = {}
+        self._types: dict[str, TypeInfo] = {}
         self._scalars: set = {'Int', 'Float', 'String', 'Boolean', 'ID'}
 
         # Register standard scalars
@@ -111,18 +111,18 @@ class TypeRegistry:
         """Check if a type exists in the registry."""
         return name in self._types
 
-    def get_all_types(self) -> List[TypeInfo]:
+    def get_all_types(self) -> list[TypeInfo]:
         """Get all registered types."""
         return list(self._types.values())
 
-    def get_output_types(self) -> List[TypeInfo]:
+    def get_output_types(self) -> list[TypeInfo]:
         """Get all OBJECT types (not INPUT_OBJECT or SCALAR)."""
         return [
             t for t in self._types.values()
             if t.kind == "OBJECT"
         ]
 
-    def get_input_types(self) -> List[TypeInfo]:
+    def get_input_types(self) -> list[TypeInfo]:
         """Get all INPUT_OBJECT types."""
         return [
             t for t in self._types.values()

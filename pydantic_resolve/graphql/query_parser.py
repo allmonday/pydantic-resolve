@@ -2,7 +2,7 @@
 GraphQL query parser using graphql-core.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 from graphql import parse as parse_graphql
 from graphql.language.ast import (
     ArgumentNode,
@@ -85,9 +85,9 @@ class QueryParser:
     def _extract_fragments(
         self,
         document: DocumentNode,
-    ) -> Dict[str, FragmentDefinitionNode]:
+    ) -> dict[str, FragmentDefinitionNode]:
         """Extract named fragment definitions from document."""
-        fragments: Dict[str, FragmentDefinitionNode] = {}
+        fragments: dict[str, FragmentDefinitionNode] = {}
         for definition in document.definitions:
             if isinstance(definition, FragmentDefinitionNode):
                 fragments[definition.name.value] = definition
@@ -96,7 +96,7 @@ class QueryParser:
     def _extract_root_fields(
         self,
         operation: OperationDefinitionNode,
-        fragments: Optional[Dict[str, FragmentDefinitionNode]] = None,
+        fragments: Optional[dict[str, FragmentDefinitionNode]] = None,
     ) -> list[FieldNode]:
         """Extract all root query fields"""
         selection_set = operation.selection_set
@@ -108,7 +108,7 @@ class QueryParser:
     def _extract_fields_from_selection_set(
         self,
         selection_set: SelectionSetNode,
-        fragments: Dict[str, FragmentDefinitionNode],
+        fragments: dict[str, FragmentDefinitionNode],
     ) -> list[FieldNode]:
         """Flatten FieldNodes from selection set, expanding fragments recursively."""
         fields: list[FieldNode] = []
@@ -130,13 +130,17 @@ class QueryParser:
     def _build_field_tree(
         self,
         field_node: FieldNode,
-        fragments: Optional[Dict[str, FragmentDefinitionNode]] = None,
+        fragments: Optional[dict[str, FragmentDefinitionNode]] = None,
     ) -> FieldSelection:
         """Recursively build field selection tree"""
         fragments = fragments or {}
 
-        # Extract alias
-        alias = field_node.alias.value if field_node.alias else None
+        # Reject aliases — not supported in this version
+        if field_node.alias:
+            raise QueryParseError(
+                f"Field aliases are not supported: '{field_node.alias.value}' on '{field_node.name.value}'. "
+                "Use the original field name."
+            )
 
         # Extract arguments
         arguments = self._extract_arguments(field_node)
@@ -185,12 +189,11 @@ class QueryParser:
                             sub_fields[sub_field_name] = parsed_field
 
         return FieldSelection(
-            alias=alias,
             sub_fields=sub_fields,
             arguments=arguments
         )
 
-    def _extract_arguments(self, field_node: FieldNode) -> Dict[str, Any]:
+    def _extract_arguments(self, field_node: FieldNode) -> dict[str, Any]:
         """Extract field arguments"""
         arguments = {}
         if field_node.arguments:
@@ -247,8 +250,6 @@ class QueryParser:
         right: FieldSelection,
     ) -> FieldSelection:
         """Merge two selections for the same field name."""
-        merged_alias = left.alias or right.alias
-
         merged_arguments = None
         if left.arguments or right.arguments:
             merged_arguments = {
@@ -269,7 +270,6 @@ class QueryParser:
                     merged_sub_fields[field_name] = sub_selection
 
         return FieldSelection(
-            alias=merged_alias,
             sub_fields=merged_sub_fields,
             arguments=merged_arguments,
         )

@@ -40,7 +40,8 @@ class IntrospectionGenerator(SchemaGenerator):
         self,
         er_diagram,
         query_map: Optional[dict[str, tuple[type, Callable]]] = None,
-        mutation_map: Optional[dict[str, tuple[type, Callable]]] = None
+        mutation_map: Optional[dict[str, tuple[type, Callable]]] = None,
+        enable_pagination: bool = False
     ):
         """
         Initialize the introspection generator.
@@ -49,10 +50,12 @@ class IntrospectionGenerator(SchemaGenerator):
             er_diagram: Entity relationship diagram
             query_map: Mapping of query names to (entity, method) tuples
             mutation_map: Mapping of mutation names to (entity, method) tuples
+            enable_pagination: When True, one-to-many fields use Result types
         """
         super().__init__(er_diagram)
         self.query_map = query_map or {}
         self.mutation_map = mutation_map or {}
+        self.enable_pagination = enable_pagination
         self._collected_types: dict[str, type] = {}
         self._input_types: set[type] = set()
 
@@ -184,6 +187,10 @@ class IntrospectionGenerator(SchemaGenerator):
         for input_type in self._input_types:
             types.append(self._build_input_type(input_type))
 
+        # Add Pagination and Result types for one-to-many relationships
+        page_types = self._build_page_types()
+        types.extend(page_types)
+
         # Add Query type
         types.append({
             "kind": "OBJECT",
@@ -245,6 +252,11 @@ class IntrospectionGenerator(SchemaGenerator):
             if input_type.__name__ == type_name:
                 return self._build_input_type(input_type)
 
+        # Check Pagination and Result types
+        for page_type in self._build_page_types():
+            if page_type["name"] == type_name:
+                return page_type
+
         # Check Query type
         if type_name == "Query":
             return {
@@ -278,25 +290,8 @@ class IntrospectionGenerator(SchemaGenerator):
         if self._collected_types:
             return  # Already collected
 
-        # Collect entities from ERD
-        for entity_cfg in self.er_diagram.entities:
-            self._collected_types[entity_cfg.kls.__name__] = entity_cfg.kls
-
-        # Collect types from Relationship.target (similar to SDLBuilder)
-        for entity_cfg in self.er_diagram.entities:
-            for rel in entity_cfg.relationships:
-                if isinstance(rel, Relationship):
-                    # get_core_types handles list[T] and Optional[T] unwrapping
-                    for target_class in get_core_types(rel.target):
-                        if safe_issubclass(target_class, BaseModel):
-                            if target_class.__name__ not in self._collected_types:
-                                self._collected_types[target_class.__name__] = target_class
-
-        # Collect nested types from entity fields
-        nested = self._collect_nested_pydantic_types(list(self._collected_types.values()))
-        for name, cls in nested.items():
-            if name not in self._collected_types:
-                self._collected_types[name] = cls
+        # Use shared TypeCollector for entity, relationship target, and nested types
+        self._collected_types = self.collector.collect_all_types()
 
         # Collect input types
         self._input_types = self._collect_input_types_from_maps()
@@ -341,31 +336,7 @@ class IntrospectionGenerator(SchemaGenerator):
 
     def _collect_input_types_from_maps(self) -> set[type]:
         """Collect input types from query/mutation maps."""
-        input_types: set[type] = set()
-        visited: set[str] = set()
-
-        def collect_from_type(param_type: Any) -> None:
-            core_types = get_core_types(param_type)
-            for core_type in core_types:
-                if safe_issubclass(core_type, BaseModel):
-                    type_name = core_type.__name__
-                    if type_name not in visited:
-                        visited.add(type_name)
-                        input_types.add(core_type)
-                        try:
-                            type_hints = get_type_hints(core_type)
-                            for field_type in type_hints.values():
-                                collect_from_type(field_type)
-                        except Exception:
-                            pass
-
-        for _, (_, method) in self.query_map.items():
-            self._collect_from_method(method, collect_from_type)
-
-        for _, (_, method) in self.mutation_map.items():
-            self._collect_from_method(method, collect_from_type)
-
-        return input_types
+        return self.collector.collect_input_types(self.query_map, self.mutation_map)
 
     def _collect_from_method(self, method: Callable, collector: Callable[[Any], None]) -> None:
         """Collect types from method parameters."""
@@ -453,26 +424,156 @@ class IntrospectionGenerator(SchemaGenerator):
                         continue
 
                     field_name = rel.name
-                    type_def = self._build_graphql_type(rel.target)
 
-                    fields.append({
-                        "name": field_name,
-                        "description": rel.description,
-                        "args": [],
-                        "type": type_def,
-                        "isDeprecated": False,
-                        "deprecationReason": None
-                    })
+                    # One-to-many: check if pagination is enabled
+                    if rel.is_list_relationship:
+                        target_classes = get_core_types(rel.target)
+                        target_name = target_classes[0].__name__ if target_classes else "Unknown"
+
+                        # If pagination enabled and page_loader exists, generate paginated field
+                        if self.enable_pagination and rel.page_loader is not None:
+                            result_name = f"{target_name}Result"
+                            fields.append({
+                                "name": field_name,
+                                "description": rel.description,
+                                "args": self._build_pagination_args(),
+                                "type": {
+                                    "kind": "NON_NULL",
+                                    "name": None,
+                                    "ofType": {
+                                        "kind": "OBJECT",
+                                        "name": result_name,
+                                        "ofType": None
+                                    }
+                                },
+                                "isDeprecated": False,
+                                "deprecationReason": None
+                            })
+                        else:
+                            # Regular list field without pagination
+                            type_def = self._build_graphql_type(rel.target)
+                            fields.append({
+                                "name": field_name,
+                                "description": rel.description,
+                                "args": [],
+                                "type": type_def,
+                                "isDeprecated": False,
+                                "deprecationReason": None
+                            })
+                    else:
+                        type_def = self._build_graphql_type(rel.target)
+
+                        fields.append({
+                            "name": field_name,
+                            "description": rel.description,
+                            "args": [],
+                            "type": type_def,
+                            "isDeprecated": False,
+                            "deprecationReason": None
+                        })
 
         return fields
 
-    def _is_relationship_field(self, entity_cfg, field_name: str) -> bool:
-        """Check if field is a relationship field."""
-        for rel in entity_cfg.relationships:
-            if isinstance(rel, Relationship):
-                if rel.name == field_name:
-                    return True
-        return False
+    def _build_pagination_args(self) -> list[dict]:
+        """Build pagination arguments for one-to-many relationship fields."""
+        return [
+            {"name": "limit", "description": None, "type": {"kind": "SCALAR", "name": "Int", "ofType": None}, "defaultValue": None},
+            {"name": "offset", "description": None, "type": {"kind": "SCALAR", "name": "Int", "ofType": None}, "defaultValue": None},
+        ]
+
+    def _build_page_types(self) -> list[dict]:
+        """Generate Pagination and Result introspection types for one-to-many relationships."""
+        if not self.enable_pagination:
+            return []
+
+        paginated_rels = self._collect_paginated_relationships()
+        if not paginated_rels:
+            return []
+
+        types: list[dict] = []
+        for _, target_name in paginated_rels:
+            types.append(self._build_result_introspection_type(target_name))
+
+        types.insert(0, self._build_pagination_introspection_type())
+
+        return types
+
+    def _build_pagination_introspection_type(self) -> dict:
+        """Build Pagination introspection type."""
+        return {
+            "kind": "OBJECT",
+            "name": "Pagination",
+            "description": "Pagination information for list results.",
+            "fields": [
+                {
+                    "name": "has_more",
+                    "description": None,
+                    "args": [],
+                    "type": {"kind": "NON_NULL", "name": None, "ofType": {"kind": "SCALAR", "name": "Boolean", "ofType": None}},
+                    "isDeprecated": False,
+                    "deprecationReason": None,
+                },
+                {
+                    "name": "total_count",
+                    "description": None,
+                    "args": [],
+                    "type": {"kind": "SCALAR", "name": "Int", "ofType": None},
+                    "isDeprecated": False,
+                    "deprecationReason": None,
+                },
+            ],
+            "inputFields": None,
+            "interfaces": [],
+            "enumValues": None,
+            "possibleTypes": None,
+        }
+
+    def _build_result_introspection_type(self, entity_name: str) -> dict:
+        """Build Result introspection type for a given entity."""
+        result_name = f"{entity_name}Result"
+        return {
+            "kind": "OBJECT",
+            "name": result_name,
+            "description": f"Paginated result for {entity_name}.",
+            "fields": [
+                {
+                    "name": "items",
+                    "description": None,
+                    "args": [],
+                    "type": {
+                        "kind": "NON_NULL",
+                        "name": None,
+                        "ofType": {
+                            "kind": "LIST",
+                            "name": None,
+                            "ofType": {
+                                "kind": "NON_NULL",
+                                "name": None,
+                                "ofType": {"kind": "OBJECT", "name": entity_name, "ofType": None},
+                            },
+                        },
+                    },
+                    "isDeprecated": False,
+                    "deprecationReason": None,
+                },
+                {
+                    "name": "pagination",
+                    "description": None,
+                    "args": [],
+                    "type": {
+                        "kind": "NON_NULL",
+                        "name": None,
+                        "ofType": {"kind": "OBJECT", "name": "Pagination", "ofType": None},
+                    },
+                    "isDeprecated": False,
+                    "deprecationReason": None,
+                },
+            ],
+            "inputFields": None,
+            "interfaces": [],
+            "enumValues": None,
+            "possibleTypes": None,
+        }
 
     def _get_input_fields(self, kls: type) -> list[dict]:
         """Get introspection inputFields for an input type."""
@@ -862,54 +963,6 @@ class IntrospectionGenerator(SchemaGenerator):
 
     def _collect_all_enum_types(self) -> list[type]:
         """Collect all enum types from entities, input types, and query/mutation maps."""
-        enums: list[type] = []
-        visited: set[str] = set()
-
-        def collect_from_class(kls: type) -> None:
-            """Collect enum types from a class's type hints."""
-            try:
-                type_hints = get_type_hints(kls)
-            except Exception:
-                return
-
-            for field_type in type_hints.values():
-                core_types_list = get_core_types(field_type)
-                for ct in core_types_list:
-                    if is_enum_type(ct):
-                        type_name = ct.__name__
-                        if type_name not in visited:
-                            visited.add(type_name)
-                            enums.append(ct)
-
-        # Collect from entity types
-        for entity in self._collected_types.values():
-            collect_from_class(entity)
-
-        # Collect from input types
-        for input_type in self._input_types:
-            collect_from_class(input_type)
-
-        # Collect from query/mutation method parameters
-        for _, (_, method) in self.query_map.items():
-            try:
-                sig = inspect.signature(method)
-                for param_name, param in sig.parameters.items():
-                    if param_name in ('self', 'cls'):
-                        continue
-                    if param.annotation != inspect.Parameter.empty:
-                        collect_from_class(param.annotation)
-            except Exception:
-                pass
-
-        for _, (_, method) in self.mutation_map.items():
-            try:
-                sig = inspect.signature(method)
-                for param_name, param in sig.parameters.items():
-                    if param_name in ('self', 'cls'):
-                        continue
-                    if param.annotation != inspect.Parameter.empty:
-                        collect_from_class(param.annotation)
-            except Exception:
-                pass
-
-        return enums
+        # Collect from entity types and input types
+        types_to_scan = list(self._collected_types.values()) + list(self._input_types)
+        return self.collector.collect_enum_types(types_to_scan)

@@ -4,7 +4,7 @@ from typing import get_origin, get_args, Union
 import pydantic_resolve.constant as const
 import pydantic_resolve.utils.class_util as class_util
 from pydantic_resolve.analysis import is_acceptable_kls
-from pydantic_resolve.utils.types import get_type, get_core_types
+from pydantic_resolve.utils.types import get_type, get_core_types, _is_optional, _is_list, get_class_field_annotations
 from pydantic import BaseModel
 
 
@@ -116,8 +116,7 @@ def get_fields_default_value_not_provided(cls: type) -> list[tuple[str, bool]]: 
     print(hasattr(MyClass, 'a'))  # False
     print(hasattr(MyClass, 'b'))  # True
     """
-    anno = cls.__dict__.get('__annotations__') or {}
-    return [(k, hasattr(cls, k)) for k in anno.keys()]
+    return [(k, hasattr(cls, k)) for k in get_class_field_annotations(cls)]
 
 
 def safe_issubclass(kls, classinfo):
@@ -136,12 +135,7 @@ def is_compatible_type(src_type, target_type) -> bool:
     """
     # Helper: unwrap Optional[X] in source type only
     def unwrap_optional(tp):
-        origin = get_origin(tp)
-        if origin is None:
-            return tp
-        # typing.Union and PEP604 (types.UnionType) both have origin of Union/UnionType
-        # check identity instead of string representation for reliability
-        if origin is Union or origin is types.UnionType:
+        if _is_optional(tp):
             args = [a for a in get_args(tp) if a is not type(None)]
             if len(args) == 1:
                 return args[0]
@@ -163,8 +157,7 @@ def is_compatible_type(src_type, target_type) -> bool:
 
     # Helper: list element compatibility
     def is_list_compatible(src, tgt) -> bool:
-        src_origin, tgt_origin = get_origin(src), get_origin(tgt)
-        if src_origin is list and tgt_origin is list:
+        if _is_list(src) and _is_list(tgt):
             src_args, tgt_args = get_args(src), get_args(tgt)
             if not src_args or not tgt_args:
                 return False

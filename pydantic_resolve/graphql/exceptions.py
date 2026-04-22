@@ -2,7 +2,7 @@
 GraphQL-specific exceptions.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 
 class GraphQLError(Exception):
@@ -12,14 +12,14 @@ class GraphQLError(Exception):
         self,
         message: str,
         path: Optional[list] = None,
-        extensions: Optional[Dict[str, Any]] = None
+        extensions: Optional[dict[str, Any]] = None
     ):
         self.message = message
         self.path = path
         self.extensions = extensions or {}
         super().__init__(message)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert error to GraphQL error format."""
         error_dict = {"message": self.message}
         if self.path:
@@ -46,7 +46,7 @@ class ValidationError(GraphQLError):
         self,
         message: str,
         path: Optional[list] = None,
-        extensions: Optional[Dict[str, Any]] = None,
+        extensions: Optional[dict[str, Any]] = None,
     ):
         merged_extensions = {"code": "GRAPHQL_VALIDATION_ERROR"}
         if extensions:
@@ -79,7 +79,7 @@ class FieldNameConflictError(ValidationError):
         entity_name: str,
         field_name: str,
         conflict_type: str,
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[dict[str, Any]] = None
     ):
         """
         Initialize field name conflict error.

@@ -7,14 +7,14 @@ internal representation.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, ForwardRef, Optional, Union, get_args, get_origin
+from typing import Any, ForwardRef, Optional, get_args
 
 from pydantic import BaseModel
 
 from .type_registry import FieldInfo, ArgumentInfo
 from pydantic_resolve.utils.class_util import safe_issubclass
-from pydantic_resolve.utils.types import get_core_types
-from pydantic_resolve.graphql.type_mapping import map_scalar_type, is_list_type
+from pydantic_resolve.utils.types import get_core_types, _is_optional, _is_list
+from pydantic_resolve.graphql.type_mapping import map_scalar_type
 
 
 @dataclass
@@ -44,7 +44,7 @@ class GraphQLTypeInfo:
         else:
             return self.name or "String"
 
-    def to_introspection(self) -> Dict[str, Any]:
+    def to_introspection(self) -> dict[str, Any]:
         """Convert to introspection format."""
         result = {
             "kind": self.kind,
@@ -91,7 +91,6 @@ class TypeMapper:
             )
 
         core_type = core_types[0]
-        origin = get_origin(python_type)
 
         # Handle ForwardRef
         if isinstance(core_type, ForwardRef):
@@ -103,7 +102,7 @@ class TypeMapper:
             )
 
         # Check if it's list[T]
-        if is_list_type(python_type):
+        if _is_list(python_type):
             inner_type = self.map_to_graphql_type(core_type, is_input)
             return GraphQLTypeInfo(
                 kind="LIST",
@@ -114,7 +113,7 @@ class TypeMapper:
             )
 
         # Handle Optional[T] - check if None is in the union
-        if origin is Union:
+        if _is_optional(python_type):
             args = get_args(python_type)
             non_none_args = [a for a in args if a is not type(None)]
             if non_none_args:
@@ -158,7 +157,7 @@ class TypeMapper:
 
         return sdl
 
-    def map_to_introspection(self, python_type: type, is_input: bool = False) -> Dict[str, Any]:
+    def map_to_introspection(self, python_type: type, is_input: bool = False) -> dict[str, Any]:
         """
         Map Python type to introspection format.
 
