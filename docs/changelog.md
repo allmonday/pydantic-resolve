@@ -4,6 +4,17 @@
 - **Minor (x.Y.0)**: New features, backward compatible
 - **Patch (x.y.Z)**: Bug fixes and minor improvements
 
+## 5.3
+
+### 5.3.0 (2026-4-22)
+
+- feat:
+  - **GraphQL limit/offset pagination**: `GraphQLHandler(enable_pagination=True)` enables server-side pagination for one-to-many relationships. Requires `page_loader` and `order_by` configured on `Relationship`. Supports multi-level nested pagination with independent limit/offset per field
+  - **`Resolver(resolved_hooks=...)` dependency injection**: core Resolver now accepts a list of post-resolve hooks via constructor, decoupling GraphQL-specific pagination logic from the core resolution engine
+- refactor:
+  - Extract `inject_nested_pagination` into standalone `graphql/pagination/injector.py` module, injected via `resolved_hooks` instead of hardcoded in core `Resolver`
+  - Consolidate pagination hidden field names into `constant.py` (`GRAPHQL_PAGINATION_FIELD_PREFIX`, `GRAPHQL_PAGINATION_TREE_FIELD`)
+
 ## 5.2
 
 ### 5.2.0 (2026-4-18)
