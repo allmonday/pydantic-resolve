@@ -769,7 +769,7 @@ class ResponseBuilder:
 
         # Attach resolve methods for paginated fields BEFORE pre-analyze,
         # so the analysis scan discovers them and caches correct metadata.
-        self._attach_result_resolve_methods(dynamic_model, pending_result_fields or [])
+        self._attach_paged_resolve_methods(dynamic_model, pending_result_fields or [])
 
         # Pre-analyze the model if resolver_class is provided
         # This caches metadata early, avoiding repeated analysis in Resolver.resolve()
@@ -808,7 +808,7 @@ class ResponseBuilder:
         # Cache the result
         _set_metadata_to_cache(resolver_class_id, model, metadata)
 
-    def _attach_result_resolve_methods(self, model: type[BaseModel], pending_fields: list) -> None:
+    def _attach_paged_resolve_methods(self, model: type[BaseModel], pending_fields: list) -> None:
         """Attach resolve methods for paginated fields.
 
         These resolve methods bypass AutoLoad entirely. They read PageArgs
