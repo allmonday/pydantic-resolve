@@ -17,6 +17,8 @@ from .loaders import (
     role_permission_rows_loader,
     role_permissions_loader,
     user_departments_by_scope_loader,
+    user_documents_by_scope_loader,
+    user_projects_by_scope_loader,
 )
 
 BaseEntity = base_entity()
@@ -80,7 +82,21 @@ class UserEntity(BaseModel, BaseEntity):
             name='departments',
             target=list[DepartmentEntity],
             loader=user_departments_by_scope_loader,
-        )
+        ),
+        # Direct project access (independent of department hierarchy)
+        Relationship(
+            fk='id',
+            name='projects',
+            target=list[ProjectEntity],
+            loader=user_projects_by_scope_loader,
+        ),
+        # Direct document access (independent of hierarchy)
+        Relationship(
+            fk='id',
+            name='documents',
+            target=list[DocumentEntity],
+            loader=user_documents_by_scope_loader,
+        ),
     ]
     id: int
     name: str

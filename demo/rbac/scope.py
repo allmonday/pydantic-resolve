@@ -6,9 +6,10 @@ Provides:
 
 Scope tree format (_access_scope_tree):
 - None: no scope constraint (default)
-- 'all': global permission, unconstrained loading
-- 'empty': no permission, return empty
-- list[ScopeNode]: scoped access with type/ids/apply/children
+- list[ScopeNode]: scoped access, each node has is_all/ids/filter_fn/children
+  - []: no permission (empty)
+  - [ScopeNode(is_all=True)]: global permission, unconstrained
+  - [ScopeNode(ids=[1,2])]: scoped access with specific IDs
 
 Relationships are declared in entities.py and traversed via AutoLoad.
 """
@@ -20,7 +21,7 @@ from typing import Annotated
 
 from pydantic import BaseModel
 
-from pydantic_resolve import Loader, Resolver
+from pydantic_resolve import ICollector, Loader, Resolver, SendTo
 from pydantic_resolve.types import ScopeNode
 
 from .entities import (
@@ -103,10 +104,7 @@ def inject_access_scope(parent, field_name, result):
     and injects children into resolved items by item ID.
     """
     scope_tree = getattr(parent, '_access_scope_tree', None)
-    if not scope_tree or scope_tree in ('all', 'empty'):
-        return
-
-    if not isinstance(scope_tree, list):
+    if not scope_tree:
         return
 
     # Find entries matching current field_name
@@ -128,16 +126,15 @@ def inject_access_scope(parent, field_name, result):
     # List results: build map from item ID → children
     id_to_children: dict[int, list] = {}
     for entry in matched:
-        entry_ids = entry.ids
         children = entry.children
-        if entry_ids is None:
+        if entry.is_all or entry.ids is None:
             # Unconstrained → all items get same children
             for item in items:
                 iid = getattr(item, 'id', None)
                 if iid is not None and children:
                     id_to_children.setdefault(iid, []).extend(children)
         else:
-            for iid in entry_ids:
+            for iid in entry.ids:
                 if children:
                     id_to_children.setdefault(iid, []).extend(children)
 
@@ -159,6 +156,31 @@ def _get_items(result):
 
 
 # =====================================
+# Custom collector for scope computation
+# =====================================
+
+
+class RolePermDedupCollector(ICollector):
+    """Collect ScopeRolePermView with deduplication by (role_id, permission_id)."""
+
+    def __init__(self, alias: str):
+        self.alias = alias
+        self._seen: set[tuple[int, int]] = set()
+        self._result: list = []
+
+    def add(self, val):
+        items = val if isinstance(val, list) else [val]
+        for item in items:
+            key = (item.role_id, item.permission_id)
+            if key not in self._seen:
+                self._seen.add(key)
+                self._result.append(item)
+
+    def values(self) -> list:
+        return self._result
+
+
+# =====================================
 # AutoLoad view model tree
 # =====================================
 
@@ -174,8 +196,8 @@ class ScopeRolePermView(RolePermissionEntity):
 
 
 class ScopeRoleView(RoleEntity):
-    """Role with role_permissions auto-loaded."""
-    role_permissions: Annotated[list[ScopeRolePermView], AutoLoad()] = []
+    """Role with role_permissions auto-loaded and sent to collector."""
+    role_permissions: Annotated[list[ScopeRolePermView], AutoLoad(), SendTo('all_perms')] = []
 
 
 class ScopeUserRoleView(UserRoleEntity):
@@ -212,7 +234,7 @@ class ScopeComputeView(BaseModel):
     group_roles: list[ScopeGroupRoleView] = []
 
     # Final result
-    scope_tree: str | list[ScopeNode] = 'empty'
+    scope_tree: list[ScopeNode] = []
 
     def resolve_department_ids(self, loader=Loader(user_departments_loader)):
         return loader.load(self.user_id)
@@ -231,30 +253,15 @@ class ScopeComputeView(BaseModel):
         batches = await group_role_entities_loader(group_ids)
         return [gr for batch in batches for gr in batch]
 
-    async def post_scope_tree(self):
-        """Aggregate all permissions and build scope tree."""
-        # 1. Collect + deduplicate RolePermissionEntity from all roles
-        seen: set[tuple[int, int]] = set()
-        all_perms: list[ScopeRolePermView] = []
+    async def post_scope_tree(self, collector=RolePermDedupCollector('all_perms')):
+        """Aggregate all permissions and build scope tree.
 
-        for ur in self.user_roles:
-            if ur.role:
-                for rp in ur.role.role_permissions:
-                    key = (rp.role_id, rp.permission_id)
-                    if key not in seen:
-                        seen.add(key)
-                        all_perms.append(rp)
-
-        for gr in self.group_roles:
-            if gr.role:
-                for rp in gr.role.role_permissions:
-                    key = (rp.role_id, rp.permission_id)
-                    if key not in seen:
-                        seen.add(key)
-                        all_perms.append(rp)
-
+        RolePermDedupCollector auto-collects from ScopeRoleView.role_permissions
+        via SendTo, covering both user_roles and group_roles chains.
+        """
+        all_perms = collector.values()
         if not all_perms:
-            return 'empty'
+            return []
 
         # 2. Filter: effect=allow, action matches
         filtered = [
@@ -265,7 +272,7 @@ class ScopeComputeView(BaseModel):
         ]
 
         if not filtered:
-            return 'empty'
+            return []
 
         # 3. Check for global permissions (resource_type is None AND resource_id is None)
         global_perms = [
@@ -276,7 +283,7 @@ class ScopeComputeView(BaseModel):
         if global_perms:
             unconditional = [rp for rp in global_perms if rp.condition is None]
             if unconditional:
-                return 'all'
+                return [ScopeNode(type=HIERARCHY[0].relationship_name, is_all=True)]
             return await self._build_global_scope(global_perms)
 
         # 4. Build scope tree from resource-scoped permissions
@@ -289,80 +296,42 @@ class ScopeComputeView(BaseModel):
         subject = {'department_ids': self.department_ids, 'user_id': self.user_id}
 
         merged_ids: set[int] = set()
-        merged_apply = None
+        merged_filter_fn = None
         for rp in global_perms:
             cond = get_condition(rp.condition)
             if not cond:
                 continue
-            ids, apply = cond.build_scope(subject)
+            ids, filter_fn = cond.build_scope(subject)
             if ids:
                 merged_ids.update(ids)
-            if apply:
-                merged_apply = apply
+            if filter_fn:
+                merged_filter_fn = filter_fn
 
-        if not merged_ids and not merged_apply:
-            return 'empty'
+        if not merged_ids and not merged_filter_fn:
+            return []
 
         return [ScopeNode(
             type=HIERARCHY[0].relationship_name,
             ids=sorted(merged_ids) if merged_ids else None,
-            apply=merged_apply,
+            filter_fn=merged_filter_fn,
             children=None,
         )]
 
     async def _build_resource_scope(self, filtered):
-        """Build scope tree from resource-scoped permissions."""
-        from .loaders import _make_mapping_loader, _resolve_orm_model
+        """Build flat scope nodes from resource-scoped permissions.
 
-        # 4a: Group resource_ids by type (driven by HIERARCHY)
-        valid_types = {lvl.resource_type for lvl in HIERARCHY}
-        direct_ids_by_type: dict[str, set[int]] = {lvl.resource_type: set() for lvl in HIERARCHY}
-
-        for rp in filtered:
-            rt = rp.resource_type
-            ri = rp.resource_id
-            if rt in valid_types and ri is not None:
-                direct_ids_by_type[rt].add(ri)
-
-        if not any(direct_ids_by_type.values()):
-            return 'empty'
-
-        # 4b: Resolve FK chains via generic mapping loaders
-        fk_chain: dict[str, dict[int, int]] = {}
-        for lvl in HIERARCHY[1:]:
-            ids = direct_ids_by_type.get(lvl.resource_type, set())
-            if not ids or not lvl.parent_fk_field:
-                continue
-            orm_model = _resolve_orm_model(lvl.resource_type)
-            loader = _make_mapping_loader(orm_model, lvl.parent_fk_field)
-            parent_ids = await loader(sorted(ids))
-            fk_chain[lvl.resource_type] = {
-                cid: pid
-                for cid, pid in zip(sorted(ids), parent_ids)
-                if pid is not None
-            }
-
-        # 4c: Trace all resource IDs to root level
-        all_root_ids: set[int] = set()
-        for i, lvl in enumerate(HIERARCHY):
-            ids = direct_ids_by_type.get(lvl.resource_type, set())
-            if not ids:
-                continue
-            if i == 0:
-                all_root_ids.update(ids)
-            else:
-                current_ids = ids
-                for j in range(i, 0, -1):
-                    child_rt = HIERARCHY[j].resource_type
-                    mapping = fk_chain.get(child_rt, {})
-                    current_ids = {mapping[cid] for cid in current_ids if cid in mapping}
-                all_root_ids.update(current_ids)
-
-        if not all_root_ids:
-            return 'empty'
-
-        # 4d: Build scope tree
-        return _build_scope_tree(HIERARCHY, all_root_ids, direct_ids_by_type, fk_chain)
+        Each authorized level produces a direct ScopeNode at the root of the tree.
+        No implicit ancestor tracing.
+        """
+        nodes = []
+        for lvl in HIERARCHY:
+            ids = sorted({
+                rp.resource_id for rp in filtered
+                if rp.resource_type == lvl.resource_type and rp.resource_id is not None
+            })
+            if ids:
+                nodes.append(ScopeNode(type=lvl.relationship_name, ids=ids))
+        return nodes
 
 
 # =====================================
@@ -370,63 +339,14 @@ class ScopeComputeView(BaseModel):
 # =====================================
 
 
-async def compute_scope_tree(user_id: int, action: str = "read") -> str | list[ScopeNode]:
+async def compute_scope_tree(user_id: int, action: str = "read") -> list[ScopeNode]:
     """Build scope tree for user+action using Resolver + AutoLoad.
 
-    Returns:
-    - 'all': global permission, no constraint
-    - 'empty': no permission
-    - list[ScopeNode]: scoped access as list-of-nodes
+    Returns list[ScopeNode]:
+    - []: no permission
+    - [ScopeNode(is_all=True)]: global permission, unconstrained
+    - [ScopeNode(ids=[...])]: scoped access
     """
     view = ScopeComputeView(user_id=user_id, action=action)
     view = await Resolver(enable_from_attribute_in_type_adapter=True).resolve(view)
     return view.scope_tree
-
-
-# =====================================
-# Scope tree builder
-# =====================================
-
-
-def _build_scope_tree(
-    hierarchy: list[HierarchyLevel],
-    all_root_ids: set[int],
-    direct_ids_by_type: dict[str, set[int]],
-    fk_chain: dict[str, dict[int, int]],
-) -> list[ScopeNode]:
-    """Build list[ScopeNode] recursively from hierarchy descriptor."""
-
-    root = hierarchy[0]
-
-    def _children(level_idx: int, parent_id: int) -> list[ScopeNode] | None:
-        """Build child ScopeNodes for a parent entity at level_idx-1."""
-        if level_idx >= len(hierarchy):
-            return None
-
-        lvl = hierarchy[level_idx]
-        mapping = fk_chain.get(lvl.resource_type, {})
-        child_ids = sorted(cid for cid, pid in mapping.items() if pid == parent_id)
-
-        if not child_ids:
-            return None
-
-        nodes = []
-        for cid in child_ids:
-            has_direct = cid in direct_ids_by_type.get(lvl.resource_type, set())
-            nodes.append(ScopeNode(
-                type=lvl.relationship_name,
-                ids=[cid],
-                children=None if has_direct else _children(level_idx + 1, cid),
-            ))
-        return nodes
-
-    # Build root-level nodes
-    nodes = []
-    for rid in sorted(all_root_ids):
-        has_direct = rid in direct_ids_by_type.get(root.resource_type, set())
-        nodes.append(ScopeNode(
-            type=root.relationship_name,
-            ids=[rid],
-            children=None if has_direct else _children(1, rid),
-        ))
-    return nodes

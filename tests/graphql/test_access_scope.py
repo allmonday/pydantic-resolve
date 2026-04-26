@@ -28,14 +28,14 @@ from pydantic_resolve.utils.dataloader import build_list
 #
 # _access_scope_tree can be:
 # - None: no scope constraint (default)
-# - 'all': global permission, unconstrained loading
-# - 'empty': no permission, return empty
-# - list[ScopeNode]: scoped access as list-of-nodes
+# - []: no permission, return empty
+# - list[ScopeNode]: scoped access, each node has is_all/ids/filter_fn/children
 #
-# Each ScopeNode: type, ids, apply, children
+# Each ScopeNode: type, is_all, ids, filter_fn, children
 # - type: relationship name (field name)
-# - ids: None=unconstrained, []=empty, [1,2,...]=concrete IDs
-# - apply: ABAC filter function (optional)
+# - is_all: True = unconstrained access
+# - ids: specific resource IDs from RBAC
+# - filter_fn: ABAC filter function (optional)
 # - children: nested scope nodes (optional)
 
 
@@ -52,10 +52,7 @@ def inject_access_scope(parent, field_name, result):
     and injects children into resolved items by item ID.
     """
     scope_tree = getattr(parent, '_access_scope_tree', None)
-    if not scope_tree or scope_tree in ('all', 'empty'):
-        return
-
-    if not isinstance(scope_tree, list):
+    if not scope_tree:
         return
 
     matched = [e for e in scope_tree if e.type == field_name]
@@ -74,15 +71,14 @@ def inject_access_scope(parent, field_name, result):
 
     id_to_children: dict[int, list] = {}
     for entry in matched:
-        entry_ids = entry.ids
         children = entry.children
-        if entry_ids is None:
+        if entry.is_all or entry.ids is None:
             for item in items:
                 iid = getattr(item, 'id', None)
                 if iid is not None and children:
                     id_to_children.setdefault(iid, []).extend(children)
         else:
-            for iid in entry_ids:
+            for iid in entry.ids:
                 if children:
                     id_to_children.setdefault(iid, []).extend(children)
 
@@ -158,18 +154,18 @@ class TestInjectAccessScope:
         inject_access_scope(parent, 'projects', children)
         assert not hasattr(children[0], '_access_scope_tree')
 
-    def test_all_literal_is_noop(self):
-        """Parent with 'all' scope → hook does nothing."""
+    def test_is_all_scope_is_noop(self):
+        """Parent with is_all=True scope → hook does nothing (no children to propagate)."""
         parent = Project(id=0)
-        parent._access_scope_tree = 'all'
+        parent._access_scope_tree = [ScopeNode(type='projects', is_all=True)]
         children = [Project(id=1)]
         inject_access_scope(parent, 'projects', children)
         assert not hasattr(children[0], '_access_scope_tree')
 
-    def test_empty_literal_is_noop(self):
-        """Parent with 'empty' scope → hook does nothing."""
+    def test_empty_list_is_noop(self):
+        """Parent with [] scope → hook does nothing."""
         parent = Project(id=0)
-        parent._access_scope_tree = 'empty'
+        parent._access_scope_tree = []
         children = [Project(id=1)]
         inject_access_scope(parent, 'projects', children)
         assert not hasattr(children[0], '_access_scope_tree')
@@ -461,23 +457,23 @@ class TestResolverEndToEndRBAC:
 
 
 # =====================================
-# Layer 3: Resolver end-to-end ('all' / ScopeFilter)
+# Layer 3: Resolver end-to-end (is_all / ScopeFilter)
 # =====================================
 
 
 class TestResolverEndToEndABAC:
-    """Test 'all' literal and ScopeFilter propagation through the full chain."""
+    """Test is_all and ScopeFilter propagation through the full chain."""
 
     @pytest.mark.asyncio
-    async def test_all_literal_loads_everything(self):
-        """'all' scope loads all data without constraint."""
+    async def test_is_all_loads_everything(self):
+        """is_all=True scope loads all data without constraint."""
         from pydantic_resolve import Resolver
 
         _captured['projects'].clear()
         _captured['documents'].clear()
 
         root = DeptView(id=1, name="Engineering")
-        object.__setattr__(root, '_access_scope_tree', 'all')
+        object.__setattr__(root, '_access_scope_tree', [ScopeNode(type='projects', is_all=True)])
 
         resolver = Resolver(
             resolved_hooks=[inject_access_scope],
@@ -485,12 +481,12 @@ class TestResolverEndToEndABAC:
         )
         result = await resolver.resolve(root)
 
-        # 'all' → ScopeFilter(ids=None) → LoadCommand with unconstrained scope
+        # is_all → ScopeFilter(is_all=True) → LoadCommand with unconstrained scope
         assert len(_captured['projects']) == 1
         key = _captured['projects'][0]
         assert isinstance(key, LoadCommand)
         assert key.scope_filter is not None
-        assert key.scope_filter.ids is None  # unconstrained
+        assert key.scope_filter.is_all is True  # unconstrained
 
         # All projects loaded
         assert len(result.projects) == 3

@@ -1624,13 +1624,13 @@ class TestScopeNodeToFilter:
         assert isinstance(result, ScopeFilter)
         assert result.ids is None
 
-    def test_node_with_apply(self):
+    def test_node_with_filter_fn(self):
         from pydantic_resolve.types import ScopeNode
 
         fn = lambda q: q
-        node = ScopeNode(type='articles', apply=fn)
+        node = ScopeNode(type='articles', filter_fn=fn)
         result = node.to_scope_filter()
-        assert result.apply is fn
+        assert result.filter_fn is fn
 
 
 # =====================================

@@ -77,8 +77,8 @@ async def user_departments_by_scope_loader(keys):
         else:
             scope_filters.append(None)
 
-    # Check for unconstrained (ids=None) requests
-    has_unconstrained = any(sf and sf.ids is None for sf in scope_filters)
+    # Check for unconstrained requests
+    has_unconstrained = any(sf and sf.is_all for sf in scope_filters)
 
     # Collect concrete IDs
     all_ids: set[int] = set()
@@ -95,10 +95,10 @@ async def user_departments_by_scope_loader(keys):
         else:
             stmt = select(Department).where(Department.id.in_(all_ids))
 
-        # Apply ABAC filter from scope_filter.apply
+        # Apply ABAC filter from scope_filter.filter_fn
         for sf in scope_filters:
-            if sf and sf.apply:
-                stmt = sf.apply(stmt)
+            if sf and sf.filter_fn:
+                stmt = sf.filter_fn(stmt)
                 break
 
         rows = (await session.scalars(stmt)).all()
@@ -109,7 +109,127 @@ async def user_departments_by_scope_loader(keys):
     for sf in scope_filters:
         if sf is None:
             results.append([])
-        elif sf.ids is None:
+        elif sf.is_all:
+            results.append(list(obj_map.values()))
+        elif not sf.ids:
+            results.append([])
+        else:
+            results.append([obj_map[did] for did in sorted(sf.ids) if did in obj_map])
+    return results
+
+
+async def user_projects_by_scope_loader(keys):
+    """Load projects by scope_filter for direct User -> Project access.
+
+    Keys are LoadCommand(fk_value=user_id, scope_filter=ScopeFilter(ids=...)).
+    Pure data loading -- no permission semantics.
+    """
+    _count("user_projects_by_scope_loader")
+    from pydantic_resolve.types import LoadCommand
+    from sqlalchemy import select
+
+    from .models import Project
+
+    scope_filters = []
+    for k in keys:
+        if isinstance(k, LoadCommand):
+            scope_filters.append(k.scope_filter)
+        else:
+            scope_filters.append(None)
+
+    # Check for unconstrained requests
+    has_unconstrained = any(sf and sf.is_all for sf in scope_filters)
+
+    # Collect concrete IDs
+    all_ids: set[int] = set()
+    for sf in scope_filters:
+        if sf and sf.ids:
+            all_ids.update(sf.ids)
+
+    if not has_unconstrained and not all_ids:
+        return [[] for _ in keys]
+
+    async with session_factory() as session:
+        if has_unconstrained:
+            stmt = select(Project)
+        else:
+            stmt = select(Project).where(Project.id.in_(all_ids))
+
+        # Apply ABAC filter from scope_filter.filter_fn
+        for sf in scope_filters:
+            if sf and sf.filter_fn:
+                stmt = sf.filter_fn(stmt)
+                break
+
+        rows = (await session.scalars(stmt)).all()
+
+    obj_map = {p.id: p for p in rows}
+
+    results = []
+    for sf in scope_filters:
+        if sf is None:
+            results.append([])
+        elif sf.is_all:
+            results.append(list(obj_map.values()))
+        elif not sf.ids:
+            results.append([])
+        else:
+            results.append([obj_map[pid] for pid in sorted(sf.ids) if pid in obj_map])
+    return results
+
+
+async def user_documents_by_scope_loader(keys):
+    """Load documents by scope_filter for direct User → Document access.
+
+    Keys are LoadCommand(fk_value=user_id, scope_filter=ScopeFilter(ids=...)).
+    Pure data loading — no permission semantics.
+    """
+    _count("user_documents_by_scope_loader")
+    from pydantic_resolve.types import LoadCommand
+    from sqlalchemy import select
+
+    from .models import Document
+
+    scope_filters = []
+    for k in keys:
+        if isinstance(k, LoadCommand):
+            scope_filters.append(k.scope_filter)
+        else:
+            scope_filters.append(None)
+
+    # Check for unconstrained requests
+    has_unconstrained = any(sf and sf.is_all for sf in scope_filters)
+
+    # Collect concrete IDs
+    all_ids: set[int] = set()
+    for sf in scope_filters:
+        if sf and sf.ids:
+            all_ids.update(sf.ids)
+
+    if not has_unconstrained and not all_ids:
+        return [[] for _ in keys]
+
+    async with session_factory() as session:
+        if has_unconstrained:
+            stmt = select(Document)
+        else:
+            stmt = select(Document).where(Document.id.in_(all_ids))
+
+        # Apply ABAC filter from scope_filter.filter_fn
+        for sf in scope_filters:
+            if sf and sf.filter_fn:
+                stmt = sf.filter_fn(stmt)
+                break
+
+        rows = (await session.scalars(stmt)).all()
+
+    obj_map = {d.id: d for d in rows}
+
+    results = []
+    for sf in scope_filters:
+        if sf is None:
+            results.append([])
+        elif sf.is_all:
             results.append(list(obj_map.values()))
         elif not sf.ids:
             results.append([])
@@ -307,10 +427,10 @@ async def department_projects_loader(dept_ids: list[int]):
         if all_ids:
             stmt = stmt.where(Project.id.in_(all_ids))
 
-        # Apply ABAC filter from scope_filter.apply
+        # Apply ABAC filter from scope_filter.filter_fn
         for sf in scope_filters:
-            if sf and sf.apply:
-                stmt = sf.apply(stmt)
+            if sf and sf.filter_fn:
+                stmt = sf.filter_fn(stmt)
                 break
 
         result = await session.scalars(stmt)
@@ -367,10 +487,10 @@ async def project_documents_loader(project_ids: list[int]):
         if all_ids:
             stmt = stmt.where(Document.id.in_(all_ids))
 
-        # Apply ABAC filter from scope_filter.apply
+        # Apply ABAC filter from scope_filter.filter_fn
         for sf in scope_filters:
-            if sf and sf.apply:
-                stmt = sf.apply(stmt)
+            if sf and sf.filter_fn:
+                stmt = sf.filter_fn(stmt)
                 break
 
         result = await session.scalars(stmt)

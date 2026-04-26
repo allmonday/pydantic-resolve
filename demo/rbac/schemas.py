@@ -329,12 +329,14 @@ class DepartmentScopeView(DepartmentEntity):
 
 
 class UserScopeView(UserEntity):
-    """Root view: user -> departments via scope-aware AutoLoad.
+    """Root view: user -> resources via scope-aware AutoLoad.
 
-    All levels (user → departments → projects → documents) use AutoLoad + scope.
-    The _access_scope_tree determines which departments the user can access:
-    - 'all': global permission, unconstrained
-    - 'empty': no permission
-    - [{'type':'departments','ids':[1],'children':[...]}]: scoped with nested constraints
+    Each level (departments, projects, documents) uses AutoLoad + scope independently.
+    The _access_scope_tree determines which resources the user can access:
+    - []: no permission
+    - [ScopeNode(is_all=True)]: global permission, unconstrained
+    - [ScopeNode(type='projects', ids=[1])]: scoped access to specific projects
     """
     departments: Annotated[list[DepartmentScopeView], AutoLoad()] = []
+    projects: Annotated[list[ProjectScopeView], AutoLoad()] = []
+    documents: Annotated[list[DocumentScopeView], AutoLoad()] = []

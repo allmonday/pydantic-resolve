@@ -12,36 +12,33 @@ logger = logging.getLogger(__name__)
 
 
 def resolve_scope_filter(
-    scope_tree: list | str | None,
+    scope_tree: list | None,
     field_name: str,
 ):
     """Extract ScopeFilter for field_name from scope tree.
 
-    Handles all scope tree formats:
+    Handles scope tree formats:
     - None: no constraint
-    - 'all': global permission, unconstrained
-    - 'empty': no permission
-    - list[ScopeNode]: find nodes matching field_name, merge ids + apply
+    - list[ScopeNode]: find nodes matching field_name, merge is_all/ids/filter_fn
     """
     from pydantic_resolve.types import ScopeFilter
 
     if scope_tree is None:
         return None
-    if scope_tree == 'all':
-        return ScopeFilter(ids=None)
-    if scope_tree == 'empty':
-        return ScopeFilter(ids=frozenset())
     if isinstance(scope_tree, list):
         matched = [e for e in scope_tree if e.type == field_name]
         if not matched:
             return None
+        # Check is_all
+        if any(e.is_all for e in matched):
+            return ScopeFilter(is_all=True, filter_fn=matched[0].filter_fn)
         ids: set[int] = set()
         for entry in matched:
             if entry.ids is not None:
                 ids.update(entry.ids)
         return ScopeFilter(
             ids=frozenset(ids) if ids else None,
-            apply=matched[0].apply,
+            filter_fn=matched[0].filter_fn,
         )
     return None
 
