@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict
 
 from pydantic_resolve import ExposeAs, Loader
 
-from .condition import evaluate_conditions
+from .condition import evaluate_condition
 from .loaders import (
     all_documents_loader,
     candidate_permissions_loader,
@@ -81,7 +81,7 @@ class CandidatePerm(BaseModel):
     action: str
     resource_type: str
     effect: str
-    conditions: dict | None = None
+    condition: str | None = None
     matched_via: str = ""
 
 
@@ -134,15 +134,14 @@ class ResourceAccessView(BaseModel):
             if perm.effect != "allow":
                 continue
 
-            if not perm.conditions:
+            if perm.condition is None:
                 self.matched_rule = perm.permission_name
                 self.access_reason = f"Allowed by {perm.permission_name} (unconditional)"
                 return True
 
-            if evaluate_conditions(perm.conditions, subject_attrs, resource_attrs):
+            if evaluate_condition(perm.condition, subject_attrs, resource_attrs):
                 self.matched_rule = perm.permission_name
-                condition_desc = _describe_conditions(perm.conditions)
-                self.access_reason = f"Allowed by {perm.permission_name} (conditions: {condition_desc})"
+                self.access_reason = f"Allowed by {perm.permission_name} (condition: {perm.condition})"
                 return True
 
         self.access_reason = "No allow rule matched conditions"
@@ -261,9 +260,7 @@ class DocumentWithAccess(BaseModel):
                 continue
             if perm.action != action and perm.action != "admin":
                 continue
-            if not perm.conditions:
-                return True
-            if evaluate_conditions(perm.conditions, subject_attrs, resource_attrs):
+            if evaluate_condition(perm.condition, subject_attrs, resource_attrs):
                 return True
         return False
 
@@ -310,19 +307,34 @@ class UserPermissionWithGroupsView(BaseModel):
         return loader.load(self.id)
 
 
-# ── Helper ──
+# ── Scenario F: Scope pre-constraint (ER Diagram + AutoLoad + scope) ──
 
 
-def _describe_conditions(conditions: dict) -> str:
-    """Generate a human-readable description of ABAC conditions."""
-    if "and" in conditions:
-        parts = [_describe_conditions(c) for c in conditions["and"]]
-        return " AND ".join(parts)
-    if "or" in conditions:
-        parts = [_describe_conditions(c) for c in conditions["or"]]
-        return " OR ".join(parts)
+from .entities import AutoLoad, DepartmentEntity, DocumentEntity, ProjectEntity, UserEntity
 
-    field = conditions.get("field", "?")
-    op = conditions.get("op", "?")
-    value = conditions.get("value", "?")
-    return f"{field} {op} {value}"
+
+class DocumentScopeView(DocumentEntity):
+    """Document view for scope-constrained loading."""
+    pass
+
+
+class ProjectScopeView(ProjectEntity):
+    """Project view with scope-constrained document loading."""
+    documents: Annotated[list[DocumentScopeView], AutoLoad()] = []
+
+
+class DepartmentScopeView(DepartmentEntity):
+    """Department view with scope-constrained project loading."""
+    projects: Annotated[list[ProjectScopeView], AutoLoad()] = []
+
+
+class UserScopeView(UserEntity):
+    """Root view: user -> departments via scope-aware AutoLoad.
+
+    All levels (user → departments → projects → documents) use AutoLoad + scope.
+    The _access_scope_tree determines which departments the user can access:
+    - 'all': global permission, unconstrained
+    - 'empty': no permission
+    - [{'type':'departments','ids':[1],'children':[...]}]: scoped with nested constraints
+    """
+    departments: Annotated[list[DepartmentScopeView], AutoLoad()] = []

@@ -11,6 +11,46 @@ from pydantic_resolve.utils.depend import Loader
 logger = logging.getLogger(__name__)
 
 
+def resolve_scope_filter(
+    scope_tree: list | str | None,
+    field_name: str,
+):
+    """Extract ScopeFilter for field_name from scope tree.
+
+    Handles all scope tree formats:
+    - None: no constraint
+    - 'all': global permission, unconstrained
+    - 'empty': no permission
+    - list[ScopeNode]: find nodes matching field_name, merge ids + apply
+    """
+    from pydantic_resolve.types import ScopeFilter
+
+    if scope_tree is None:
+        return None
+    if scope_tree == 'all':
+        return ScopeFilter(ids=None)
+    if scope_tree == 'empty':
+        return ScopeFilter(ids=frozenset())
+    if isinstance(scope_tree, list):
+        matched = [e for e in scope_tree if e.type == field_name]
+        if not matched:
+            return None
+        ids: set[int] = set()
+        for entry in matched:
+            if entry.ids is not None:
+                ids.update(entry.ids)
+        return ScopeFilter(
+            ids=frozenset(ids) if ids else None,
+            apply=matched[0].apply,
+        )
+    return None
+
+
+def _find_scope_entries(scope_tree: list, field_name: str) -> list:
+    """Find all entries matching field_name in list-of-nodes scope tree."""
+    return [e for e in scope_tree if e.type == field_name]
+
+
 class QueryConfig(BaseModel):
     """Query method configuration for defining Query methods outside Entity and binding dynamically."""
     method: Callable
@@ -44,6 +84,10 @@ class Relationship(BaseModel):
     sort_field: Optional[str] = None  # Column name for ROW_NUMBER ORDER BY; auto-populated by ORM inspector
     default_page_size: int = 20
     max_page_size: int = 100
+
+    # Key enrichment: external layers (e.g. graphql pagination) register a
+    # callback to create enriched DataLoader keys (LoadCommand) at runtime.
+    key_builder: Callable[[Any, Any, str], Any] | None = None
 
     @property
     def is_list_relationship(self) -> bool:
@@ -522,7 +566,7 @@ class ErLoaderPreGenerator:
                 name=lookup_key,
             )
 
-            if relationship.loader is None:
+            if relationship.loader is None and relationship.page_loader is None:
                 raise AttributeError(f'Loader not provided in relationship for name "{field_name}" in class "{kls}"')
 
             # Validate that the annotation type is compatible with relationship.target
@@ -542,14 +586,40 @@ class ErLoaderPreGenerator:
                     return rel.fk_none_default_factory()
                 return None
 
-            def create_resolve_method(key: str, rel: Relationship):  # closure per field
-                def resolve_method(self, loader=Loader(rel.loader)):
+            def create_resolve_method(key: str, rel: Relationship, fld_name: str):  # closure per field
+                builder = rel.key_builder
+                # Use page_loader only when key_builder is registered (pagination enabled).
+                # When pagination is disabled but page_loader is configured, fall back to regular loader.
+                loader_ref = rel.page_loader if builder else rel.loader
+
+                def resolve_method(self, loader=Loader(loader_ref)):
                     fk = getattr(self, key)
                     if fk is None:
                         return _handle_fk_none(rel)
                     if rel.fk_fn is not None:
                         fk = rel.fk_fn(fk)
-                    return loader.load(fk)
+
+                    # Step 1: Pagination — key_builder creates enriched key
+                    key_obj = builder(fk, self, fld_name) if builder else fk
+
+                    # Step 2: Scope — read _access_scope_tree, attach scope_filter
+                    scope_tree = getattr(self, '_access_scope_tree', None)
+                    from pydantic_resolve.types import LoadCommand as _LC
+
+                    scope_filter = resolve_scope_filter(scope_tree, fld_name)
+
+                    if scope_filter is not None:
+                        if isinstance(key_obj, _LC):
+                            key_obj = _LC(
+                                fk_value=key_obj.fk_value,
+                                page_args=key_obj.page_args,
+                                scope_filter=scope_filter,
+                            )
+                        else:
+                            key_obj = _LC(fk_value=fk, scope_filter=scope_filter)
+
+                    return loader.load(key_obj)
+
                 resolve_method.__name__ = method_name
                 resolve_method.__qualname__ = f'{kls.__name__}.{method_name}'
                 return resolve_method
@@ -572,9 +642,9 @@ class ErLoaderPreGenerator:
                 setattr(kls, method_name, create_resolve_method_with_load_many(relationship.fk, relationship))
             elif relationship.is_list_relationship:
                 # One-to-many in Core API context: standard loader.load(fk)
-                setattr(kls, method_name, create_resolve_method(relationship.fk, relationship))
+                setattr(kls, method_name, create_resolve_method(relationship.fk, relationship, field_name))
             else:
-                setattr(kls, method_name, create_resolve_method(relationship.fk, relationship))
+                setattr(kls, method_name, create_resolve_method(relationship.fk, relationship, field_name))
 
             needs_rebuild = True
 
