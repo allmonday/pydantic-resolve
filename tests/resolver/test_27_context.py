@@ -50,7 +50,7 @@ async def test_1():
 @pytest.mark.asyncio
 async def test_2():
     earth = Earth()
-    with pytest.raises(AttributeError):
+    with pytest.raises(TypeError):
         await Resolver().resolve(earth)
 
 @pytest.mark.asyncio

@@ -57,6 +57,187 @@ async def role_loader(role_ids: list[int]):
 # ── Resource loaders ──
 
 
+async def user_departments_by_scope_loader(keys):
+    """Load departments by IDs from scope_filter.
+
+    Keys are LoadCommand(fk_value=user_id, scope_filter=ScopeFilter(ids=...)).
+    Pure data loading — no permission semantics.
+    ids=None means unconstrained (load all), ids=frozenset() means empty.
+    """
+    _count("user_departments_by_scope_loader")
+    from pydantic_resolve.types import LoadCommand
+    from sqlalchemy import select
+
+    from .models import Department
+
+    scope_filters = []
+    for k in keys:
+        if isinstance(k, LoadCommand):
+            scope_filters.append(k.scope_filter)
+        else:
+            scope_filters.append(None)
+
+    # Check for unconstrained requests
+    has_unconstrained = any(sf and sf.is_all for sf in scope_filters)
+
+    # Collect concrete IDs
+    all_ids: set[int] = set()
+    for sf in scope_filters:
+        if sf and sf.ids:
+            all_ids.update(sf.ids)
+
+    if not has_unconstrained and not all_ids:
+        return [[] for _ in keys]
+
+    async with session_factory() as session:
+        if has_unconstrained:
+            stmt = select(Department)
+        else:
+            stmt = select(Department).where(Department.id.in_(all_ids))
+
+        # Apply ABAC filter from scope_filter.filter_fn
+        for sf in scope_filters:
+            if sf and sf.filter_fn:
+                stmt = sf.filter_fn(stmt)
+                break
+
+        rows = (await session.scalars(stmt)).all()
+
+    obj_map = {d.id: d for d in rows}
+
+    results = []
+    for sf in scope_filters:
+        if sf is None:
+            results.append([])
+        elif sf.is_all:
+            results.append(list(obj_map.values()))
+        elif not sf.ids:
+            results.append([])
+        else:
+            results.append([obj_map[did] for did in sorted(sf.ids) if did in obj_map])
+    return results
+
+
+async def user_projects_by_scope_loader(keys):
+    """Load projects by scope_filter for direct User -> Project access.
+
+    Keys are LoadCommand(fk_value=user_id, scope_filter=ScopeFilter(ids=...)).
+    Pure data loading -- no permission semantics.
+    """
+    _count("user_projects_by_scope_loader")
+    from pydantic_resolve.types import LoadCommand
+    from sqlalchemy import select
+
+    from .models import Project
+
+    scope_filters = []
+    for k in keys:
+        if isinstance(k, LoadCommand):
+            scope_filters.append(k.scope_filter)
+        else:
+            scope_filters.append(None)
+
+    # Check for unconstrained requests
+    has_unconstrained = any(sf and sf.is_all for sf in scope_filters)
+
+    # Collect concrete IDs
+    all_ids: set[int] = set()
+    for sf in scope_filters:
+        if sf and sf.ids:
+            all_ids.update(sf.ids)
+
+    if not has_unconstrained and not all_ids:
+        return [[] for _ in keys]
+
+    async with session_factory() as session:
+        if has_unconstrained:
+            stmt = select(Project)
+        else:
+            stmt = select(Project).where(Project.id.in_(all_ids))
+
+        # Apply ABAC filter from scope_filter.filter_fn
+        for sf in scope_filters:
+            if sf and sf.filter_fn:
+                stmt = sf.filter_fn(stmt)
+                break
+
+        rows = (await session.scalars(stmt)).all()
+
+    obj_map = {p.id: p for p in rows}
+
+    results = []
+    for sf in scope_filters:
+        if sf is None:
+            results.append([])
+        elif sf.is_all:
+            results.append(list(obj_map.values()))
+        elif not sf.ids:
+            results.append([])
+        else:
+            results.append([obj_map[pid] for pid in sorted(sf.ids) if pid in obj_map])
+    return results
+
+
+async def user_documents_by_scope_loader(keys):
+    """Load documents by scope_filter for direct User → Document access.
+
+    Keys are LoadCommand(fk_value=user_id, scope_filter=ScopeFilter(ids=...)).
+    Pure data loading — no permission semantics.
+    """
+    _count("user_documents_by_scope_loader")
+    from pydantic_resolve.types import LoadCommand
+    from sqlalchemy import select
+
+    from .models import Document
+
+    scope_filters = []
+    for k in keys:
+        if isinstance(k, LoadCommand):
+            scope_filters.append(k.scope_filter)
+        else:
+            scope_filters.append(None)
+
+    # Check for unconstrained requests
+    has_unconstrained = any(sf and sf.is_all for sf in scope_filters)
+
+    # Collect concrete IDs
+    all_ids: set[int] = set()
+    for sf in scope_filters:
+        if sf and sf.ids:
+            all_ids.update(sf.ids)
+
+    if not has_unconstrained and not all_ids:
+        return [[] for _ in keys]
+
+    async with session_factory() as session:
+        if has_unconstrained:
+            stmt = select(Document)
+        else:
+            stmt = select(Document).where(Document.id.in_(all_ids))
+
+        # Apply ABAC filter from scope_filter.filter_fn
+        for sf in scope_filters:
+            if sf and sf.filter_fn:
+                stmt = sf.filter_fn(stmt)
+                break
+
+        rows = (await session.scalars(stmt)).all()
+
+    obj_map = {d.id: d for d in rows}
+
+    results = []
+    for sf in scope_filters:
+        if sf is None:
+            results.append([])
+        elif sf.is_all:
+            results.append(list(obj_map.values()))
+        elif not sf.ids:
+            results.append([])
+        else:
+            results.append([obj_map[did] for did in sorted(sf.ids) if did in obj_map])
+    return results
+
+
 async def departments_loader(department_ids: list[int]):
     """Batch load departments by ID."""
     _count("departments_loader")
@@ -67,6 +248,18 @@ async def departments_loader(department_ids: list[int]):
         result = await session.scalars(select(Department).where(Department.id.in_(department_ids)))
         rows = result.all()
     return list(build_object(rows, department_ids, lambda d: d.id))
+
+
+async def projects_loader(project_ids: list[int]):
+    """Batch load projects by ID."""
+    _count("projects_loader")
+    from .models import Project
+    from sqlalchemy import select
+
+    async with session_factory() as session:
+        result = await session.scalars(select(Project).where(Project.id.in_(project_ids)))
+        rows = result.all()
+    return list(build_object(rows, project_ids, lambda p: p.id))
 
 
 async def resources_by_keys_loader(keys: list[tuple[str, int]]):
@@ -197,21 +390,50 @@ async def role_permissions_loader(role_ids: list[int]):
             "resource_type_ref": rp.resource_type,
             "resource_id": rp.resource_id,
             "effect": rp.effect,
-            "conditions": rp.conditions,
+            "condition": rp.condition,
         })
     return [grouped.get(rid, []) for rid in role_ids]
 
 
 async def department_projects_loader(dept_ids: list[int]):
-    """Batch load projects for each department."""
+    """Batch load projects for each department.
+
+    Supports both raw FK (int) and LoadCommand keys with scope_filter.
+    """
     _count("department_projects_loader")
+    from pydantic_resolve.types import LoadCommand
     from .models import Project
     from sqlalchemy import select
 
+    # Unpack keys
+    fk_values = []
+    scope_filters = []
+    for k in dept_ids:
+        if isinstance(k, LoadCommand):
+            fk_values.append(k.fk_value)
+            scope_filters.append(k.scope_filter)
+        else:
+            fk_values.append(k)
+            scope_filters.append(None)
+
     async with session_factory() as session:
-        result = await session.scalars(
-            select(Project).where(Project.department_id.in_(dept_ids))
-        )
+        stmt = select(Project).where(Project.department_id.in_(fk_values))
+
+        # Apply scope_filter IDs as additional WHERE constraint
+        all_ids = set()
+        for sf in scope_filters:
+            if sf and sf.ids:
+                all_ids.update(sf.ids)
+        if all_ids:
+            stmt = stmt.where(Project.id.in_(all_ids))
+
+        # Apply ABAC filter from scope_filter.filter_fn
+        for sf in scope_filters:
+            if sf and sf.filter_fn:
+                stmt = sf.filter_fn(stmt)
+                break
+
+        result = await session.scalars(stmt)
         rows = result.all()
 
     grouped = defaultdict(list)
@@ -222,19 +444,56 @@ async def department_projects_loader(dept_ids: list[int]):
             "owner_id": r.owner_id,
             "visibility": r.visibility,
         })
-    return [grouped.get(did, []) for did in dept_ids]
+
+    # Post-filter by per-key scope
+    results = []
+    for fk, sf in zip(fk_values, scope_filters):
+        items = grouped.get(fk, [])
+        if sf and sf.ids:
+            items = [item for item in items if item["id"] in sf.ids]
+        results.append(items)
+    return results
 
 
 async def project_documents_loader(project_ids: list[int]):
-    """Batch load documents for each project."""
+    """Batch load documents for each project.
+
+    Supports both raw FK (int) and LoadCommand keys with scope_filter.
+    """
     _count("project_documents_loader")
+    from pydantic_resolve.types import LoadCommand
     from .models import Document
     from sqlalchemy import select
 
+    # Unpack keys
+    fk_values = []
+    scope_filters = []
+    for k in project_ids:
+        if isinstance(k, LoadCommand):
+            fk_values.append(k.fk_value)
+            scope_filters.append(k.scope_filter)
+        else:
+            fk_values.append(k)
+            scope_filters.append(None)
+
     async with session_factory() as session:
-        result = await session.scalars(
-            select(Document).where(Document.project_id.in_(project_ids))
-        )
+        stmt = select(Document).where(Document.project_id.in_(fk_values))
+
+        # Apply scope_filter IDs as additional WHERE constraint
+        all_ids = set()
+        for sf in scope_filters:
+            if sf and sf.ids:
+                all_ids.update(sf.ids)
+        if all_ids:
+            stmt = stmt.where(Document.id.in_(all_ids))
+
+        # Apply ABAC filter from scope_filter.filter_fn
+        for sf in scope_filters:
+            if sf and sf.filter_fn:
+                stmt = sf.filter_fn(stmt)
+                break
+
+        result = await session.scalars(stmt)
         rows = result.all()
 
     grouped = defaultdict(list)
@@ -246,7 +505,15 @@ async def project_documents_loader(project_ids: list[int]):
             "visibility": r.visibility,
             "project_id": r.project_id,
         })
-    return [grouped.get(pid, []) for pid in project_ids]
+
+    # Post-filter by per-key scope
+    results = []
+    for fk, sf in zip(fk_values, scope_filters):
+        items = grouped.get(fk, [])
+        if sf and sf.ids:
+            items = [item for item in items if item["id"] in sf.ids]
+        results.append(items)
+    return results
 
 
 # ── Permission check loaders ──
@@ -363,7 +630,7 @@ async def candidate_permissions_loader(keys: list[tuple[int, str, int, str]]):
                     select(
                         RolePermission.id.label("rp_id"),
                         RolePermission.effect,
-                        RolePermission.conditions,
+                        RolePermission.condition,
                         RolePermission.resource_type.label("rp_resource_type"),
                         RolePermission.resource_id.label("rp_resource_id"),
                         Permission.id.label("perm_id"),
@@ -397,7 +664,7 @@ async def candidate_permissions_loader(keys: list[tuple[int, str, int, str]]):
                                 "action": row.action,
                                 "resource_type": row.resource_type,
                                 "effect": row.effect,
-                                "conditions": row.conditions,
+                                "condition": row.condition,
                                 "matched_via": "direct-ancestor",
                             })
 
@@ -406,7 +673,7 @@ async def candidate_permissions_loader(keys: list[tuple[int, str, int, str]]):
                 select(
                     RolePermission.id.label("rp_id"),
                     RolePermission.effect,
-                    RolePermission.conditions,
+                    RolePermission.condition,
                     Permission.id.label("perm_id"),
                     Permission.name.label("perm_name"),
                     Permission.action,
@@ -438,7 +705,7 @@ async def candidate_permissions_loader(keys: list[tuple[int, str, int, str]]):
                             "action": row.action,
                             "resource_type": row.resource_type,
                             "effect": row.effect,
-                            "conditions": row.conditions,
+                            "condition": row.condition,
                             "matched_via": "direct-global",
                         })
 
@@ -473,7 +740,7 @@ async def candidate_permissions_loader(keys: list[tuple[int, str, int, str]]):
                     select(
                         RolePermission.id.label("rp_id"),
                         RolePermission.effect,
-                        RolePermission.conditions,
+                        RolePermission.condition,
                         RolePermission.resource_type.label("rp_resource_type"),
                         RolePermission.resource_id.label("rp_resource_id"),
                         Permission.id.label("perm_id"),
@@ -506,7 +773,7 @@ async def candidate_permissions_loader(keys: list[tuple[int, str, int, str]]):
                                 "action": row.action,
                                 "resource_type": row.resource_type,
                                 "effect": row.effect,
-                                "conditions": row.conditions,
+                                "condition": row.condition,
                                 "matched_via": "group-ancestor",
                             })
 
@@ -515,7 +782,7 @@ async def candidate_permissions_loader(keys: list[tuple[int, str, int, str]]):
                 select(
                     RolePermission.id.label("rp_id"),
                     RolePermission.effect,
-                    RolePermission.conditions,
+                    RolePermission.condition,
                     Permission.id.label("perm_id"),
                     Permission.name.label("perm_name"),
                     Permission.action,
@@ -547,8 +814,137 @@ async def candidate_permissions_loader(keys: list[tuple[int, str, int, str]]):
                             "action": row.action,
                             "resource_type": row.resource_type,
                             "effect": row.effect,
-                            "conditions": row.conditions,
+                            "condition": row.condition,
                             "matched_via": "group-global",
                         })
 
     return results
+
+
+# ── Entity-compatible loaders (for AutoLoad in ScopeComputeView) ──
+
+
+async def user_role_entities_loader(user_ids: list[int]):
+    """Batch load UserRole ORM objects grouped by user_id. Returns list[list]."""
+    _count("user_role_entities_loader")
+    from .models import UserRole
+    from sqlalchemy import select
+
+    async with session_factory() as session:
+        rows = (await session.scalars(
+            select(UserRole).where(UserRole.user_id.in_(user_ids))
+        )).all()
+
+    grouped: dict[int, list] = defaultdict(list)
+    for ur in rows:
+        grouped[ur.user_id].append(ur)
+    return [grouped.get(uid, []) for uid in user_ids]
+
+
+async def role_permission_rows_loader(role_ids: list[int]):
+    """Batch load RolePermission ORM objects grouped by role_id. Returns list[list].
+
+    Unlike role_permissions_loader (which joins Permission and returns dicts),
+    this returns raw RolePermission ORM objects for entity-compatible AutoLoad.
+    """
+    _count("role_permission_rows_loader")
+    from .models import RolePermission
+    from sqlalchemy import select
+
+    async with session_factory() as session:
+        rows = (await session.scalars(
+            select(RolePermission).where(RolePermission.role_id.in_(role_ids))
+        )).all()
+
+    grouped: dict[int, list] = defaultdict(list)
+    for rp in rows:
+        grouped[rp.role_id].append(rp)
+    return [grouped.get(rid, []) for rid in role_ids]
+
+
+async def group_role_entities_loader(group_ids: list[int]):
+    """Batch load GroupRole ORM objects grouped by group_id. Returns list[list]."""
+    _count("group_role_entities_loader")
+    from .models import GroupRole
+    from sqlalchemy import select
+
+    async with session_factory() as session:
+        rows = (await session.scalars(
+            select(GroupRole).where(GroupRole.group_id.in_(group_ids))
+        )).all()
+
+    grouped: dict[int, list] = defaultdict(list)
+    for gr in rows:
+        grouped[gr.group_id].append(gr)
+    return [grouped.get(gid, []) for gid in group_ids]
+
+
+# ── Scope tree helpers (extracted from compute_scope_tree) ──
+
+
+async def group_role_ids_loader(group_ids: list[int]):
+    """Batch load role IDs for each mail group via GroupRole table."""
+    _count("group_role_ids_loader")
+    from .models import GroupRole
+    from sqlalchemy import select
+
+    async with session_factory() as session:
+        rows = (await session.scalars(
+            select(GroupRole).where(GroupRole.group_id.in_(group_ids))
+        )).all()
+
+    grouped: dict[int, list[int]] = defaultdict(list)
+    for gr in rows:
+        grouped[gr.group_id].append(gr.role_id)
+    return [grouped.get(gid, []) for gid in group_ids]
+
+
+# ── Generic FK mapping loader ──
+
+
+def _make_mapping_loader(orm_kls, fk_field: str):
+    """Create a mapping loader: child_id -> parent_fk_value.
+
+    Generic replacement for project_dept_mapping_loader / doc_project_mapping_loader.
+    Given a list of child entity IDs, queries the child table and extracts
+    the FK field value for each, returning list[int | None].
+    """
+    async def loader(child_ids: list[int]) -> list[int | None]:
+        _count(f"mapping_{orm_kls.__tablename__}_{fk_field}")
+        from sqlalchemy import select
+
+        async with session_factory() as session:
+            rows = (await session.scalars(
+                select(orm_kls).where(orm_kls.id.in_(child_ids))
+            )).all()
+        mapping = {r.id: getattr(r, fk_field) for r in rows}
+        return [mapping.get(cid) for cid in child_ids]
+    return loader
+
+
+def _resolve_orm_model(resource_type: str):
+    """Resolve ORM model from resource_type by convention.
+    'project' -> models.Project, 'document' -> models.Document
+    """
+    from . import models
+    name = resource_type.capitalize()
+    if name == 'Department':
+        return models.Department
+    if name == 'Project':
+        return models.Project
+    if name == 'Document':
+        return models.Document
+    raise ValueError(f"Unknown resource_type: {resource_type}")
+
+
+async def permission_by_id_loader(permission_ids: list[int]):
+    """Batch load Permission ORM objects by ID. For ER Diagram relationship."""
+    _count("permission_by_id_loader")
+    from .models import Permission
+    from sqlalchemy import select
+
+    async with session_factory() as session:
+        rows = (await session.scalars(
+            select(Permission).where(Permission.id.in_(permission_ids))
+        )).all()
+    return list(build_object(rows, permission_ids, lambda p: p.id))

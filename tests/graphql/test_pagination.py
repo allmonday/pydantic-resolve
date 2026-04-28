@@ -1590,3 +1590,186 @@ class TestManyToManyPagination:
         assert alice["courses"]["items"] == []
         assert alice["courses"]["pagination"]["total_count"] == 4
         assert alice["courses"]["pagination"]["has_more"] is False
+
+
+# =====================================
+#j19880306
+# 1326759
+# a Test: Dict scope lookup
+# =====================================
+
+
+class TestDictScopeLookup:
+    """Test dict scope lookup returns correct ScopeFilter."""
+
+    def test_dict_with_matching_key(self):
+        from pydantic_resolve.types import ScopeFilter
+
+        scope = {"articles": ScopeFilter(ids=frozenset({1, 2, 3}))}
+        result = scope.get("articles")
+        assert isinstance(result, ScopeFilter)
+        assert result.ids == frozenset({1, 2, 3})
+
+    def test_dict_with_missing_key(self):
+        from pydantic_resolve.types import ScopeFilter
+
+        scope = {"other_field": ScopeFilter(ids=frozenset({1}))}
+        result = scope.get("articles")
+        assert result is None
+
+    def test_dict_with_is_all(self):
+        from pydantic_resolve.types import ScopeFilter
+
+        scope = {"articles": ScopeFilter(is_all=True)}
+        result = scope.get("articles")
+        assert result.is_all is True
+
+    def test_dict_with_filter_fn(self):
+        from pydantic_resolve.types import ScopeFilter
+
+        fn = lambda q: q
+        scope = {"articles": ScopeFilter(filter_fn=fn)}
+        result = scope.get("articles")
+        assert result.filter_fn is fn
+
+
+# =====================================
+# Test: Paged resolve method with scope
+# =====================================
+
+
+class TestPagedResolveMethodWithScope:
+    """Test _attach_paged_resolve_methods integrates scope into LoadCommand."""
+
+    def _make_model_with_resolve(self, user_scope=None):
+        """Build a dynamic model with a paginated resolve method.
+
+        Returns (model_class, captured_keys) where captured_keys collects
+        all keys passed to loader.load().
+        """
+        from pydantic import BaseModel
+        from pydantic_resolve.graphql.pagination.types import PageArgs
+        from pydantic_resolve.types import LoadCommand, ScopeFilter
+        from pydantic_resolve.utils.depend import Loader
+
+        captured_keys = []
+
+        async def fake_page_loader(keys):
+            return [[] for _ in keys]
+
+        def fake_key_builder(fk_value, instance, field_name):
+            page_args = getattr(instance, f'_pag_{field_name}', None)
+            if page_args is None:
+                page_args = PageArgs(default_page_size=20)
+            return LoadCommand(fk_value=fk_value, page_args=page_args)
+
+        rel = Relationship(
+            fk='author_id',
+            target=list,
+            name='articles',
+            loader=fake_page_loader,
+            page_loader=fake_page_loader,
+        )
+        rel.key_builder = fake_key_builder
+
+        # Build the same closure as _attach_paged_resolve_methods
+        def _make_resolve_method(r, fld_name, b):
+            def resolve_method(self, loader=Loader(r.page_loader), context=None):
+                fk = getattr(self, r.fk)
+                if fk is None:
+                    return None
+
+                key_obj = b(fk, self, fld_name)
+
+                scope_data = context.get('_user_scope') if context else None
+
+                if scope_data is not None:
+                    scope_filter = scope_data.get(fld_name)
+                    if scope_filter is None:
+                        scope_filter = ScopeFilter(ids=frozenset())
+                    from pydantic_resolve.types import LoadCommand
+                    if isinstance(key_obj, LoadCommand):
+                        key_obj = LoadCommand(
+                            fk_value=key_obj.fk_value,
+                            page_args=key_obj.page_args,
+                            scope_filter=scope_filter,
+                        )
+                    else:
+                        key_obj = LoadCommand(fk_value=fk, scope_filter=scope_filter)
+
+                captured_keys.append(key_obj)
+                return []
+            return resolve_method
+
+        method = _make_resolve_method(rel, 'articles', fake_key_builder)
+        method.__name__ = 'resolve_articles'
+
+        class FakeModel(BaseModel):
+            author_id: int = 1
+            articles: list = []
+
+            resolve_articles = method
+
+        return FakeModel, captured_keys
+
+    def test_no_scope_tree_produces_loadcommand_without_scope(self):
+        """When no _user_scope in context, key is LoadCommand with only page_args."""
+        from pydantic_resolve.types import LoadCommand
+
+        ModelCls, captured = self._make_model_with_resolve()
+
+        instance = ModelCls(author_id=42)
+        # No context → no scope system active
+        instance.resolve_articles()
+
+        assert len(captured) == 1
+        key = captured[0]
+        assert isinstance(key, LoadCommand)
+        assert key.fk_value == 42
+        assert key.page_args is not None
+        assert key.scope_filter is None
+
+    def test_rbac_scope_adds_scope_filter(self):
+        """When context has _user_scope with matching key, scope_filter.ids is attached."""
+        from pydantic_resolve.types import LoadCommand, ScopeFilter
+
+        ModelCls, captured = self._make_model_with_resolve()
+
+        instance = ModelCls(author_id=42)
+        ctx = {"_user_scope": {"articles": ScopeFilter(ids=frozenset({1, 3, 5}))}}
+        instance.resolve_articles(context=ctx)
+
+        assert len(captured) == 1
+        key = captured[0]
+        assert isinstance(key, LoadCommand)
+        assert key.fk_value == 42
+        assert key.page_args is not None  # pagination still present
+        assert key.scope_filter is not None
+        assert key.scope_filter.ids == frozenset({1, 3, 5})
+
+    def test_scope_for_unrelated_field_gives_empty_ids(self):
+        """When context _user_scope has no entry for the resolved field, scope_filter.ids is empty."""
+        from pydantic_resolve.types import LoadCommand, ScopeFilter
+
+        ModelCls, captured = self._make_model_with_resolve()
+
+        instance = ModelCls(author_id=42)
+        ctx = {"_user_scope": {"other_field": ScopeFilter(ids=frozenset({1}))}}
+        instance.resolve_articles(context=ctx)
+
+        assert len(captured) == 1
+        key = captured[0]
+        assert isinstance(key, LoadCommand)
+        assert key.scope_filter is not None
+        assert key.scope_filter.ids == frozenset()  # no permission for this field
+
+    def test_fk_none_returns_none(self):
+        """When FK is None, resolve returns None without calling loader."""
+        ModelCls, captured = self._make_model_with_resolve()
+
+        instance = ModelCls(author_id=0)
+        instance.author_id = None  # type: ignore
+        result = instance.resolve_articles()
+
+        assert result is None
+        assert len(captured) == 0

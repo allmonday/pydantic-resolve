@@ -91,6 +91,38 @@ def _apply_load_only(
     return stmt
 
 
+def _unpack_keys(keys):
+    """Unified key unpacking for all loader types.
+
+    Handles three key shapes:
+    - LoadCommand (new unified key with page_args + scope_filter)
+    - PageLoadCommand (legacy paginated key)
+    - Raw FK values (no enrichment)
+
+    Returns (fk_values, page_args, scope_filters_per_key).
+    """
+    from pydantic_resolve.types import LoadCommand
+
+    if not keys:
+        return [], None, []
+
+    first = keys[0]
+    if isinstance(first, LoadCommand):
+        fk_values = [k.fk_value for k in keys]
+        page_args = first.page_args  # same for all keys in batch
+        scope_filters = [k.scope_filter for k in keys]
+        return fk_values, page_args, scope_filters
+
+    # Legacy PageLoadCommand support
+    if hasattr(first, 'page_args') and hasattr(first, 'fk_value'):
+        fk_values = [k.fk_value for k in keys]
+        page_args = first.page_args
+        return fk_values, page_args, [None] * len(keys)
+
+    # Raw FK values
+    return list(keys), None, [None] * len(keys)
+
+
 def create_many_to_one_loader(
     *,
     source_orm_kls: type,
@@ -349,9 +381,10 @@ def create_page_many_to_many_loader(
             if not keys:
                 return []
 
-            first_cmd = keys[0]
-            page_args: PageArgs = first_cmd.page_args
-            fk_values = [cmd.fk_value for cmd in keys]
+            fk_values, page_args, scope_filters = _unpack_keys(keys)
+            if page_args is None:
+                from pydantic_resolve.graphql.pagination.types import PageArgs
+                page_args = PageArgs(default_page_size=20)
 
             effective_fields = _get_effective_query_fields(
                 self,
@@ -416,7 +449,7 @@ def create_page_many_to_many_loader(
                     total_counts[fk_val] = tc
 
                 # Fallback for parents with offset > total
-                missing_fks = [cmd.fk_value for cmd in keys if cmd.fk_value not in total_counts]
+                missing_fks = [fv for fv in fk_values if fv not in total_counts]
                 if missing_fks:
                     count_q = (
                         select(sec_local_col, func.count().label(tc_label))
@@ -429,12 +462,12 @@ def create_page_many_to_many_loader(
 
                 return [
                     _build_page_result(
-                        rows=[r for r, _ in grouped.get(cmd.fk_value, [])],
+                        rows=[r for r, _ in grouped.get(fv, [])],
                         page_args=page_args,
-                        total_count=total_counts.get(cmd.fk_value, 0),
-                        has_next_page=total_counts.get(cmd.fk_value, 0) >= end if cmd.fk_value in total_counts else False,
+                        total_count=total_counts.get(fv, 0),
+                        has_next_page=total_counts.get(fv, 0) >= end if fv in total_counts else False,
                     )
-                    for cmd in keys
+                    for fv in fk_values
                 ]
 
     _Loader.target_orm_kls = target_orm_kls
@@ -490,10 +523,11 @@ def create_page_one_to_many_loader(
             if not keys:
                 return []
 
-            # All keys share the same pagination args
-            first_cmd = keys[0]
-            page_args: PageArgs = first_cmd.page_args
-            fk_values = [cmd.fk_value for cmd in keys]
+            # Unpack keys: handles LoadCommand, PageLoadCommand, and raw FK
+            fk_values, page_args, scope_filters = _unpack_keys(keys)
+            if page_args is None:
+                from pydantic_resolve.graphql.pagination.types import PageArgs
+                page_args = PageArgs(default_page_size=20)
 
             effective_fields = _get_effective_query_fields(
                 self,
@@ -562,7 +596,7 @@ def create_page_one_to_many_loader(
                 # Fallback: when offset exceeds total_count for a parent,
                 # no rows are returned and total_counts is missing that key.
                 # Query counts separately for those parents.
-                missing_fks = [cmd.fk_value for cmd in keys if cmd.fk_value not in total_counts]
+                missing_fks = [fv for fv in fk_values if fv not in total_counts]
                 if missing_fks:
                     count_q = (
                         select(fk_col, func.count().label(tc_label))
@@ -575,12 +609,12 @@ def create_page_one_to_many_loader(
 
                 return [
                     _build_page_result(
-                        rows=[r for r, _ in grouped.get(cmd.fk_value, [])],
+                        rows=[r for r, _ in grouped.get(fv, [])],
                         page_args=page_args,
-                        total_count=total_counts.get(cmd.fk_value, 0),
-                        has_next_page=total_counts.get(cmd.fk_value, 0) >= end if cmd.fk_value in total_counts else False,
+                        total_count=total_counts.get(fv, 0),
+                        has_next_page=total_counts.get(fv, 0) >= end if fv in total_counts else False,
                     )
-                    for cmd in keys
+                    for fv in fk_values
                 ]
 
     _Loader.target_orm_kls = target_orm_kls

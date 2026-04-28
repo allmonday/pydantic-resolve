@@ -18,8 +18,10 @@ from pydantic_resolve.graphql.introspection import IntrospectionHelper
 from pydantic_resolve.graphql.query_parser import QueryParser
 from pydantic_resolve.graphql.response_builder import ResponseBuilder
 from pydantic_resolve.graphql.pagination.injector import inject_nested_pagination
+from pydantic_resolve.graphql.pagination.types import PageArgs
 from pydantic_resolve.graphql.schema_builder import SchemaBuilder
 from pydantic_resolve.graphql.graphiql import get_graphiql_html
+import pydantic_resolve.constant as const
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +55,7 @@ class GraphQLHandler:
 
         if enable_pagination:
             self._validate_pagination_sort_fields()
+            self._register_pagination_key_builders()
 
         # Create diagram-specific resolver class
         self.resolver_class = config_resolver(
@@ -109,6 +112,33 @@ class GraphQLHandler:
                 + "\n".join(errors)
                 + "\n\nSet order_by on the ORM relationship to enable pagination."
             )
+
+    def _register_pagination_key_builders(self):
+        """Register key_builder on relationships that have page_loader configured.
+
+        This allows ErLoaderPreGenerator to create paginated resolve methods
+        that produce LoadCommand keys with PageArgs.
+        """
+        from pydantic_resolve.types import LoadCommand
+        pag_prefix = const.GRAPHQL_PAGINATION_FIELD_PREFIX
+
+        for entity_cfg in self.er_diagram.entities:
+            for rel in entity_cfg.relationships:
+                if rel.page_loader is not None:
+                    rel.key_builder = self._create_pagination_key_builder(rel, pag_prefix)
+
+    @staticmethod
+    def _create_pagination_key_builder(rel: Relationship, pag_prefix: str):
+        """Create a key_builder callback for a paginated relationship."""
+        from pydantic_resolve.types import LoadCommand
+        default_page_size = rel.default_page_size
+
+        def builder(fk_value, instance, field_name):
+            page_args = getattr(instance, f'{pag_prefix}{field_name}', None)
+            if page_args is None:
+                page_args = PageArgs(default_page_size=default_page_size)
+            return LoadCommand(fk_value=fk_value, page_args=page_args)
+        return builder
 
     def _build_query_map(self) -> dict[str, tuple[type, Callable]]:
         """

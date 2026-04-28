@@ -74,6 +74,7 @@ async def _seed_data(session: AsyncSession):
         User(id=2, name="Bob", email="bob@example.com", level=2),
         User(id=3, name="Charlie", email="charlie@example.com", level=2),
         User(id=4, name="Diana", email="diana@example.com", level=1),
+        User(id=5, name="Eve", email="eve@example.com", level=1),
     ]
     session.add_all(users)
 
@@ -85,6 +86,7 @@ async def _seed_data(session: AsyncSession):
         UserDepartment(id=3, user_id=2, department_id=1),  # Bob → Engineering
         UserDepartment(id=4, user_id=3, department_id=2),  # Charlie → Marketing
         UserDepartment(id=5, user_id=4, department_id=2),  # Diana → Marketing
+        UserDepartment(id=6, user_id=5, department_id=1),  # Eve → Engineering
     ]
     session.add_all(user_departments)
 
@@ -93,6 +95,7 @@ async def _seed_data(session: AsyncSession):
         Role(id=1, name="admin", description="Full access to everything"),
         Role(id=2, name="manager", description="Manage resources in own department"),
         Role(id=3, name="viewer", description="Read public and internal resources"),
+        Role(id=4, name="restricted_viewer", description="Can only read specific department resources"),
     ]
     session.add_all(roles)
 
@@ -103,6 +106,7 @@ async def _seed_data(session: AsyncSession):
         UserRole(id=3, user_id=2, role_id=2),  # Bob is manager
         UserRole(id=4, user_id=3, role_id=2),  # Charlie is manager
         UserRole(id=5, user_id=4, role_id=3),  # Diana is viewer
+        UserRole(id=6, user_id=5, role_id=4),  # Eve is restricted_viewer
     ]
     session.add_all(user_roles)
 
@@ -162,55 +166,53 @@ async def _seed_data(session: AsyncSession):
     ]
     session.add_all(permissions)
 
-    # ── Role-Permissions (with ABAC conditions) ──
+    # ── Role-Permissions (with named conditions) ──
     # resource_type=NULL + resource_id=NULL means global permission.
+    # condition references a named condition defined in condition.py.
     role_permissions = [
         # Admin: no conditions, full access
         RolePermission(
             id=1, role_id=1, permission_id=1,
             resource_type=None, resource_id=None,
-            effect="allow", conditions=None,
+            effect="allow", condition=None,
         ),
         RolePermission(
             id=2, role_id=1, permission_id=2,
             resource_type=None, resource_id=None,
-            effect="allow", conditions=None,
+            effect="allow", condition=None,
         ),
 
-        # Manager: write in own department only (ABAC condition)
+        # Manager: write in own department, non-confidential only
         RolePermission(
             id=3, role_id=2, permission_id=3,
             resource_type=None, resource_id=None,
-            effect="allow",
-            conditions={"and": [
-                {"field": "resource.department_id", "op": "in", "value": "subject.department_ids"},
-                {"field": "resource.visibility", "op": "neq", "value": "confidential"},
-            ]},
+            effect="allow", condition="same_dept_non_confidential",
         ),
         # Manager: read in own department (including confidential)
         RolePermission(
             id=4, role_id=2, permission_id=4,
             resource_type=None, resource_id=None,
-            effect="allow",
-            conditions={"and": [
-                {"field": "resource.department_id", "op": "in", "value": "subject.department_ids"},
-            ]},
+            effect="allow", condition="same_dept",
         ),
 
-        # Viewer: read public and internal resources only (ABAC condition)
+        # Viewer: read public and internal resources only
         RolePermission(
             id=5, role_id=3, permission_id=5,
             resource_type=None, resource_id=None,
-            effect="allow",
-            conditions={"and": [
-                {"field": "resource.visibility", "op": "in", "value": ["public", "internal"]},
-            ]},
+            effect="allow", condition="public_internal_only",
         ),
         # Viewer: export documents only (Permission.resource_type="document")
         RolePermission(
             id=6, role_id=3, permission_id=6,
             resource_type=None, resource_id=None,
-            effect="allow", conditions=None,
+            effect="allow", condition=None,
+        ),
+
+        # Restricted viewer: read specific projects only (resource-scoped)
+        RolePermission(
+            id=7, role_id=4, permission_id=4,  # read_dept
+            resource_type="project", resource_id=1,  # Project Alpha only
+            effect="allow", condition=None,
         ),
     ]
     session.add_all(role_permissions)

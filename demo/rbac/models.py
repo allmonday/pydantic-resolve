@@ -10,7 +10,6 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
-    JSON,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -115,8 +114,8 @@ class RolePermission(Base):
     resource_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     resource_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     effect: Mapped[str] = mapped_column(String(8), default="allow")  # allow, deny
-    # ABAC conditions stored as JSON
-    conditions: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Named condition reference — actual condition logic is in condition.py
+    condition: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
     __table_args__ = (UniqueConstraint("role_id", "permission_id", "resource_type", "resource_id"),)
 

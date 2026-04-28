@@ -767,8 +767,10 @@ class ResponseBuilder:
         # This allows ErLoaderPreGenerator.prepare() to find original entity config
         setattr(dynamic_model, ENSURE_SUBSET_REFERENCE, entity)
 
-        # Attach resolve methods for paginated fields BEFORE pre-analyze,
-        # so the analysis scan discovers them and caches correct metadata.
+        # Attach resolve methods for paginated fields BEFORE pre-analyze.
+        # Paginated fields use Result types (not AutoLoad annotation), so
+        # ErLoaderPreGenerator won't handle them. These resolve methods use
+        # the key_builder registered on the Relationship by GraphQLHandler.
         self._attach_paged_resolve_methods(dynamic_model, pending_result_fields or [])
 
         # Pre-analyze the model if resolver_class is provided
@@ -811,40 +813,64 @@ class ResponseBuilder:
     def _attach_paged_resolve_methods(self, model: type[BaseModel], pending_fields: list) -> None:
         """Attach resolve methods for paginated fields.
 
-        These resolve methods bypass AutoLoad entirely. They read PageArgs
-        from hidden fields injected by _add_pagination_fields and create
-        PageLoadCommand keys for the paginated DataLoader.
+        Paginated fields use Result types (items + pagination) that don't carry
+        AutoLoad annotation, so ErLoaderPreGenerator skips them. This method
+        creates resolve methods that use the key_builder registered on the
+        Relationship, producing LoadCommand keys with page_args.
         """
         if not pending_fields:
             return
 
+        scope_enabled = self.er_diagram._scope_enabled
+
         for field_name, relationship in pending_fields:
-            # field_name is the relationship name (e.g. 'articles')
             method_name = f'resolve_{field_name}'
             if hasattr(model, method_name):
                 continue
 
-            def _make_resolve_method(rel: Relationship, fld_name: str):
-                from pydantic_resolve.graphql.pagination.types import PageArgs, PageLoadCommand
+            builder = relationship.key_builder
+            if builder is None:
+                continue  # No key_builder (pagination not enabled)
 
-                def resolve_method(self, loader=Loader(rel.page_loader)):
-                    fk = getattr(self, rel.fk)
-                    if fk is None:
-                        return None
+            def _make_resolve_method(rel: Relationship, fld_name: str, b, _scope_enabled: bool = False):
+                if _scope_enabled:
+                    def resolve_method(self, loader=Loader(rel.page_loader), context=None):
+                        fk = getattr(self, rel.fk)
+                        if fk is None:
+                            return None
 
-                    # Hidden fields use the field name
-                    page_args = getattr(self, f'{GRAPHQL_PAGINATION_FIELD_PREFIX}{fld_name}', None)
-                    if page_args is None:
-                        page_args = PageArgs(default_page_size=rel.default_page_size)
+                        key_obj = b(fk, self, fld_name)
 
-                    return loader.load(PageLoadCommand(
-                        fk_value=fk,
-                        page_args=page_args,
-                    ))
+                        from pydantic_resolve.types import LoadCommand, ScopeFilter
+
+                        scope_data = context.get('_user_scope') if context else None
+                        if scope_data is not None:
+                            scope_filter = scope_data.get(fld_name)
+                            if scope_filter is None:
+                                scope_filter = ScopeFilter(ids=frozenset())
+                            if isinstance(key_obj, LoadCommand):
+                                key_obj = LoadCommand(
+                                    fk_value=key_obj.fk_value,
+                                    page_args=key_obj.page_args,
+                                    scope_filter=scope_filter,
+                                )
+                            else:
+                                key_obj = LoadCommand(fk_value=fk, scope_filter=scope_filter)
+
+                        return loader.load(key_obj)
+                else:
+                    def resolve_method(self, loader=Loader(rel.page_loader)):
+                        fk = getattr(self, rel.fk)
+                        if fk is None:
+                            return None
+
+                        key_obj = b(fk, self, fld_name)
+
+                        return loader.load(key_obj)
 
                 return resolve_method
 
-            method = _make_resolve_method(relationship, field_name)
+            method = _make_resolve_method(relationship, field_name, builder, scope_enabled)
             method.__name__ = method_name
             method.__qualname__ = f'{model.__name__}.{method_name}'
             setattr(model, method_name, method)

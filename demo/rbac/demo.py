@@ -22,6 +22,7 @@ from .schemas import (
     DocumentListView,
     UserPermissionView,
     UserPermissionWithGroupsView,
+    UserScopeView,
 )
 
 
@@ -56,6 +57,7 @@ async def run():
         await _scenario_3_resource_hierarchy()
         await _scenario_4_batch_permission_check()
         await _scenario_5_mail_group_permissions()
+        await _scenario_6_scope_pre_constraint()
     finally:
         await cleanup_db()
 
@@ -251,6 +253,69 @@ async def _scenario_5_mail_group_permissions():
     print("\n  Key insight: Group-inherited permissions merge seamlessly")
     print("  with direct permissions in candidate_permissions_loader.")
     print("  The ABAC fine filter (post_*) evaluates all sources uniformly.")
+
+
+async def _scenario_6_scope_pre_constraint():
+    """Scenario 6: Scope pre-constraint with ER Diagram + AutoLoad.
+
+    All levels (User → Departments → Projects → Documents) use AutoLoad + scope.
+    User is an entity, departments loaded via scope-aware loader.
+    Compare with Scenario 3 which loads ALL data then filters via post_*.
+    """
+    _print_header("Scenario 6: Scope Pre-Constraint (ER Diagram + AutoLoad)")
+
+    # ── Demo 1: Eve (restricted_viewer) — resource-scoped permission ──
+    print("\n  ── Eve (restricted_viewer, resource-scoped) ──")
+    reset_counts()
+
+    eve = UserScopeView(id=5, name="Eve")
+
+    result = await Resolver(
+        context={'user_id': 5, 'action': 'read'},
+        enable_from_attribute_in_type_adapter=True,
+    ).resolve(eve)
+
+    _print_result(result, "Eve's accessible resources")
+
+    _print_query_counts()
+    print("\n  Eve can only see Project Alpha (project 1), no department wrapper")
+
+    # ── Demo 2: Alice (admin) — global permission -> is_all=True ──
+    print("\n  ── Alice (admin, global permission) ──")
+    reset_counts()
+
+    alice = UserScopeView(id=1, name="Alice")
+
+    result2 = await Resolver(
+        context={'user_id': 1, 'action': 'read'},
+        enable_from_attribute_in_type_adapter=True,
+    ).resolve(alice)
+
+    _print_result(result2, "Alice's accessible departments")
+    _print_query_counts()
+
+    # ── Demo 3: Bob (manager) — global ABAC permission ──
+    print("\n  ── Bob (manager, global ABAC permission) ──")
+    reset_counts()
+
+    bob = UserScopeView(id=2, name="Bob")
+
+    result3 = await Resolver(
+        context={'user_id': 2, 'action': 'read'},
+        enable_from_attribute_in_type_adapter=True,
+    ).resolve(bob)
+
+    _print_result(result3, "Bob's accessible departments")
+    _print_query_counts()
+
+    # ── Summary ──
+    print("\n  ── Key insight ──")
+    print("  scope_provider auto-computes scope from context={'user_id': ..., 'action': ...}")
+    print("  - Eve: {'projects': ScopeFilter(ids={1})} → direct project access")
+    print("  - Alice: {all keys: ScopeFilter(is_all=True)} → all levels unconstrained")
+    print("  - Bob: {'departments': ScopeFilter(ids={1}, filter_fn=...)} → ABAC-constrained")
+    print("  - No permission: {} → empty result")
+    print("  Scope pre-constraint is essential for pagination + permissions coexistence")
 
 
 def main():

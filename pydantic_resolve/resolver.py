@@ -57,6 +57,7 @@ class Resolver:
             loader_instances: dict[Any, Any] | None = None,
             ensure_type=False,
             context: dict[str, Any] | None = None,
+            user_scope: dict[str, Any] | None = None,
             debug=False,
             enable_from_attribute_in_type_adapter=False,
             annotation: type[T] | None=None,
@@ -123,7 +124,18 @@ class Resolver:
             or os.getenv("PYDANTIC_RESOLVE_ENABLE_FROM_ATTRIBUTE", "false").lower() == "true"
 
         self.ensure_type = ensure_type
-        self.context = MappingProxyType(context) if context else None
+
+        # Merge user_scope into context dict
+        _context = dict(context) if context else {}
+        if user_scope is not None:
+            if '_user_scope' in _context:
+                raise ValueError(
+                    'Conflict: context already contains "_user_scope". '
+                    'Use Resolver(user_scope=...) instead of manually setting context["_user_scope"].'
+                )
+            _context['_user_scope'] = user_scope
+
+        self.context = MappingProxyType(_context) if _context else None
         self.metadata = {}
         self.object_level_collect_alias_map_store: dict[int, dict] = {}
 
@@ -473,6 +485,17 @@ class Resolver:
             _set_metadata_to_cache(resolver_class_id, root_class, metadata)
             self.metadata = metadata
 
+        # Auto-inject scope from provider (if configured on ErDiagram)
+        er_diagram = getattr(self, const.ER_DIAGRAM, None)
+        if er_diagram and getattr(er_diagram, '_scope_provider', None):
+            provider = er_diagram._scope_provider
+            result = provider(self.context)
+            while iscoroutine(result) or asyncio.isfuture(result):
+                result = await result
+            _context = dict(self.context) if self.context else {}
+            _context['_user_scope'] = result
+            self.context = MappingProxyType(_context)
+
         self.loader_instance_cache = pydantic_resolve.loader_manager.validate_and_create_loader_instance(
             self.loader_params,
             self.global_loader_param,
@@ -480,10 +503,6 @@ class Resolver:
             self.metadata,
             self.context,
             split_loader_by_type=self.split_loader_by_type)
-        
-        has_context = analysis.has_context(self.metadata)
-        if has_context and self.context is None:
-            raise AttributeError('context is missing')
 
         self.ancestor_list = contextvars.ContextVar('ancestor_list', default=None)
             
