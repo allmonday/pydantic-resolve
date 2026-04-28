@@ -25,7 +25,7 @@ def test_scan_post_method_2():
         a: str
         def post_a(self, context, ancestor_context, parent):
             return 2 * self.a
-        
+
     result = _scan_post_method(A.post_a, 'post_a', None)
 
     assert result == {

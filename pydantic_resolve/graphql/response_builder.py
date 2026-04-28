@@ -821,6 +821,8 @@ class ResponseBuilder:
         if not pending_fields:
             return
 
+        scope_enabled = self.er_diagram._scope_enabled
+
         for field_name, relationship in pending_fields:
             method_name = f'resolve_{field_name}'
             if hasattr(model, method_name):
@@ -830,35 +832,45 @@ class ResponseBuilder:
             if builder is None:
                 continue  # No key_builder (pagination not enabled)
 
-            def _make_resolve_method(rel: Relationship, fld_name: str, b):
-                def resolve_method(self, loader=Loader(rel.page_loader)):
-                    fk = getattr(self, rel.fk)
-                    if fk is None:
-                        return None
+            def _make_resolve_method(rel: Relationship, fld_name: str, b, _scope_enabled: bool = False):
+                if _scope_enabled:
+                    def resolve_method(self, loader=Loader(rel.page_loader), context=None):
+                        fk = getattr(self, rel.fk)
+                        if fk is None:
+                            return None
 
-                    # Step 1: Pagination — key_builder creates enriched key
-                    key_obj = b(fk, self, fld_name)
+                        key_obj = b(fk, self, fld_name)
 
-                    # Step 2: Scope — read _access_scope_tree, attach scope_filter
-                    scope_tree = getattr(self, '_access_scope_tree', None)
-                    from pydantic_resolve.utils.er_diagram import resolve_scope_filter
-                    from pydantic_resolve.types import LoadCommand
+                        from pydantic_resolve.types import LoadCommand, ScopeFilter
 
-                    scope_filter = resolve_scope_filter(scope_tree, fld_name)
-                    if scope_filter is not None:
-                        if isinstance(key_obj, LoadCommand):
-                            key_obj = LoadCommand(
-                                fk_value=key_obj.fk_value,
-                                page_args=key_obj.page_args,
-                                scope_filter=scope_filter,
-                            )
-                        else:
-                            key_obj = LoadCommand(fk_value=fk, scope_filter=scope_filter)
+                        scope_data = context.get('_user_scope') if context else None
+                        if scope_data is not None:
+                            scope_filter = scope_data.get(fld_name)
+                            if scope_filter is None:
+                                scope_filter = ScopeFilter(ids=frozenset())
+                            if isinstance(key_obj, LoadCommand):
+                                key_obj = LoadCommand(
+                                    fk_value=key_obj.fk_value,
+                                    page_args=key_obj.page_args,
+                                    scope_filter=scope_filter,
+                                )
+                            else:
+                                key_obj = LoadCommand(fk_value=fk, scope_filter=scope_filter)
 
-                    return loader.load(key_obj)
+                        return loader.load(key_obj)
+                else:
+                    def resolve_method(self, loader=Loader(rel.page_loader)):
+                        fk = getattr(self, rel.fk)
+                        if fk is None:
+                            return None
+
+                        key_obj = b(fk, self, fld_name)
+
+                        return loader.load(key_obj)
+
                 return resolve_method
 
-            method = _make_resolve_method(relationship, field_name, builder)
+            method = _make_resolve_method(relationship, field_name, builder, scope_enabled)
             method.__name__ = method_name
             method.__qualname__ = f'{model.__name__}.{method_name}'
             setattr(model, method_name, method)

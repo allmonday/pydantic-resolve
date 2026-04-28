@@ -107,7 +107,7 @@ class PostMethodType(TypedDict):
     parent: bool
     ancestor_context: bool
     dataloaders: list[DataLoaderType]
-    collectors: list[CollectorType] 
+    collectors: list[CollectorType]
 
 class PostDefaultHandlerType(TypedDict):
     context: bool

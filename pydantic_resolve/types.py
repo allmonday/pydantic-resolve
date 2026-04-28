@@ -23,32 +23,6 @@ class ScopeFilter:
     filter_fn: Callable[[Any], Any] | None = None
 
 
-@dataclass
-class ScopeNode:
-    """A node in the access scope tree.
-
-    The scope tree is carried on entities via ``_access_scope_tree`` attribute.
-    Format: ``None | list[ScopeNode]``.
-
-    Each node targets a relationship field (``type``) and carries:
-    - is_all: unconstrained access at this level
-    - ids: specific resource IDs from RBAC
-    - filter_fn: ABAC attribute filter (SQL WHERE closure)
-    - children: nested constraints for child relationships
-    """
-
-    type: str  # Relationship / field name to match
-    is_all: bool = False  # True = unconstrained access
-    ids: list[int] | None = None  # RBAC: specific resource IDs
-    filter_fn: Callable[[Any], Any] | None = None  # ABAC: SQL WHERE closure
-    children: list['ScopeNode'] | None = None  # Nested scope nodes
-
-    def to_scope_filter(self) -> ScopeFilter:
-        """Convert this node to a flat ScopeFilter for DataLoader consumption."""
-        ids = frozenset(self.ids) if self.ids else None
-        return ScopeFilter(is_all=self.is_all, ids=ids, filter_fn=self.filter_fn)
-
-
 @dataclass(frozen=True)
 class LoadCommand:
     """Base class for enriched DataLoader keys.

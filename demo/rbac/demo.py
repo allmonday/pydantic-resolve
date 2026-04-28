@@ -264,21 +264,14 @@ async def _scenario_6_scope_pre_constraint():
     """
     _print_header("Scenario 6: Scope Pre-Constraint (ER Diagram + AutoLoad)")
 
-    from .scope import compute_scope_tree, inject_access_scope
-
     # ── Demo 1: Eve (restricted_viewer) — resource-scoped permission ──
     print("\n  ── Eve (restricted_viewer, resource-scoped) ──")
     reset_counts()
 
-    eve_scope = await compute_scope_tree(user_id=5, action="read")
-    print(f"\n  Scope tree for Eve:")
-    print(f"  {json.dumps(eve_scope, indent=4, default=str)}")
-
     eve = UserScopeView(id=5, name="Eve")
-    object.__setattr__(eve, '_access_scope_tree', eve_scope)
 
     result = await Resolver(
-        resolved_hooks=[inject_access_scope],
+        context={'user_id': 5, 'action': 'read'},
         enable_from_attribute_in_type_adapter=True,
     ).resolve(eve)
 
@@ -291,14 +284,10 @@ async def _scenario_6_scope_pre_constraint():
     print("\n  ── Alice (admin, global permission) ──")
     reset_counts()
 
-    alice_scope = await compute_scope_tree(user_id=1, action="read")
-    print(f"\n  Scope tree for Alice: {json.dumps(alice_scope, indent=4, default=str)}")
-
     alice = UserScopeView(id=1, name="Alice")
-    object.__setattr__(alice, '_access_scope_tree', alice_scope)
 
     result2 = await Resolver(
-        resolved_hooks=[inject_access_scope],
+        context={'user_id': 1, 'action': 'read'},
         enable_from_attribute_in_type_adapter=True,
     ).resolve(alice)
 
@@ -309,14 +298,10 @@ async def _scenario_6_scope_pre_constraint():
     print("\n  ── Bob (manager, global ABAC permission) ──")
     reset_counts()
 
-    bob_scope = await compute_scope_tree(user_id=2, action="read")
-    print(f"\n  Scope tree for Bob: {json.dumps(bob_scope, indent=4, default=str)}")
-
     bob = UserScopeView(id=2, name="Bob")
-    object.__setattr__(bob, '_access_scope_tree', bob_scope)
 
     result3 = await Resolver(
-        resolved_hooks=[inject_access_scope],
+        context={'user_id': 2, 'action': 'read'},
         enable_from_attribute_in_type_adapter=True,
     ).resolve(bob)
 
@@ -325,12 +310,11 @@ async def _scenario_6_scope_pre_constraint():
 
     # ── Summary ──
     print("\n  ── Key insight ──")
-    print("  All levels use AutoLoad + scope (User as entity, scope-aware loader)")
-    print("  - Eve: [ScopeNode(type='projects', ids=[1])] → direct project access, no ancestor tracing")
-    print("  - Alice: [ScopeNode(is_all=True)] → all departments, no constraint")
-    print("  - Bob: [ScopeNode(is_all=True, filter_fn=...)] → ABAC-constrained access")
-    print("  - No permission: [] → empty result")
-    print("  Strategy B: only explicitly authorized levels appear in scope tree")
+    print("  scope_provider auto-computes scope from context={'user_id': ..., 'action': ...}")
+    print("  - Eve: {'projects': ScopeFilter(ids={1})} → direct project access")
+    print("  - Alice: {all keys: ScopeFilter(is_all=True)} → all levels unconstrained")
+    print("  - Bob: {'departments': ScopeFilter(ids={1}, filter_fn=...)} → ABAC-constrained")
+    print("  - No permission: {} → empty result")
     print("  Scope pre-constraint is essential for pagination + permissions coexistence")
 
 

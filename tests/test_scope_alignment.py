@@ -1,7 +1,7 @@
 """Scope alignment validation tests.
 
-Validates that HIERARCHY levels stay aligned with:
-1. Explicitly declared entry entities (x ⊆ y)
+Validates that ScopeRegistry entries stay aligned with:
+1. Entity classes that have corresponding AutoLoad fields
 2. AutoLoad chain in the view model
 
 Run independently — no runtime dependencies.
@@ -66,21 +66,23 @@ def _walk(kls, names: set[str], visited: set):
 # ── Tests ──
 
 
-def test_hierarchy_subset_of_entry_entities():
-    """HIERARCHY levels must be subset of declared entry entities (x ⊆ y)."""
-    from demo.rbac.scope import HIERARCHY, SCOPE_ENTRY_ENTITIES, validate_scope_alignment
-
-    unaligned = validate_scope_alignment(HIERARCHY, SCOPE_ENTRY_ENTITIES)
-    assert unaligned == set(), f"Unaligned scope levels: {unaligned}"
-
-
-def test_hierarchy_matches_autoload_chain():
-    """Every HIERARCHY.relationship_name must appear in UserScopeView's AutoLoad chain."""
-    from demo.rbac.scope import HIERARCHY
+def test_scope_registry_matches_autoload_chain():
+    """Every scope_registry.scope_key must appear in UserScopeView's AutoLoad chain."""
+    from demo.rbac.scope import scope_registry
     from demo.rbac.schemas import UserScopeView
 
     autoload_names = extract_autoload_field_names(UserScopeView)
-    hierarchy_names = {lvl.relationship_name for lvl in HIERARCHY}
+    registry_keys = {entry.scope_key for entry in scope_registry.entries}
 
-    missing = hierarchy_names - autoload_names
-    assert missing == set(), f"Missing from AutoLoad chain: {missing}"
+    missing = registry_keys - autoload_names
+    assert missing == set(), f"Registry keys missing from AutoLoad chain: {missing}"
+
+
+def test_scope_registry_entries_are_valid():
+    """ScopeRegistry entries must have valid resource_type and scope_key."""
+    from demo.rbac.scope import scope_registry
+
+    for entry in scope_registry.entries:
+        assert entry.resource_type, f"Empty resource_type in entry: {entry}"
+        assert entry.scope_key, f"Empty scope_key in entry: {entry}"
+        assert isinstance(entry.entity_kls, type), f"entity_kls not a type: {entry.entity_kls}"

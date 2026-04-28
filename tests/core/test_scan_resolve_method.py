@@ -26,7 +26,7 @@ def test_scan_resolve_method_2():
         a: str
         def resolve_a(self, context, ancestor_context, parent):
             return 2 * self.a
-        
+
     result = _scan_resolve_method(A.resolve_a, 'resolve_a', None)
 
     assert result == {
@@ -47,7 +47,7 @@ def test_scan_resolve_method_3():
         a: str
         def resolve_a(self, context, ancestor_context, parent, loader=Loader(SampleLoader)):
             return 2 * self.a
-        
+
     result = _scan_resolve_method(A.resolve_a, 'resolve_a', None)
 
     assert result == {

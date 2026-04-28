@@ -181,5 +181,20 @@ class MailGroupEntity(BaseModel, BaseEntity):
 
 
 diagram = BaseEntity.get_diagram()
+
+
+async def _scope_provider(context):
+    """Adapter: extract user_id/action from Resolver context, compute scope."""
+    if context is None:
+        return {}
+    user_id = context.get('user_id')
+    if user_id is None:
+        return {}
+    from .scope import compute_user_scope
+    action = context.get('action', 'read')
+    return await compute_user_scope(user_id=user_id, action=action)
+
+
+diagram.enable_scope(scope_provider=_scope_provider)
 AutoLoad = diagram.create_auto_load()
 config_global_resolver(diagram)

@@ -1,15 +1,15 @@
-"""Scope tree computation and injection hook for RBAC demo.
+"""User scope computation and injection hook for RBAC demo.
 
 Provides:
-- compute_scope_tree: Build scope tree via Resolver + AutoLoad
-- inject_access_scope: resolved_hook for scope propagation
+- compute_user_scope: Build user scope dict via Resolver + AutoLoad
+- inject_user_scope: resolved_hook for scope propagation
 
-Scope tree format (_access_scope_tree):
-- None: no scope constraint (default)
-- list[ScopeNode]: scoped access, each node has is_all/ids/filter_fn/children
-  - []: no permission (empty)
-  - [ScopeNode(is_all=True)]: global permission, unconstrained
-  - [ScopeNode(ids=[1,2])]: scoped access with specific IDs
+User scope format (_user_scope):
+- None: scope system not active (default)
+- dict[str, ScopeFilter]: flat map keyed by relationship name
+  - {}: no permission at any level
+  - {"departments": ScopeFilter(is_all=True)}: global permission
+  - {"projects": ScopeFilter(ids=frozenset({1}))}: scoped access
 
 Relationships are declared in entities.py and traversed via AutoLoad.
 """
@@ -22,7 +22,7 @@ from typing import Annotated
 from pydantic import BaseModel
 
 from pydantic_resolve import ICollector, Loader, Resolver, SendTo
-from pydantic_resolve.types import ScopeNode
+from pydantic_resolve.types import ScopeFilter
 
 from .entities import (
     AutoLoad,
@@ -39,120 +39,53 @@ from .loaders import user_departments_loader, user_role_entities_loader
 
 
 # =====================================
-# Hierarchy descriptor
+# ScopeRegistry — resource_type → scope_key mapping
 # =====================================
 
 
 @dataclass(frozen=True)
-class HierarchyLevel:
-    """One level in the resource hierarchy.
+class ScopeRegistryEntry:
+    """Maps a permission resource_type to scope dict key and entity."""
 
-    Attributes:
-        resource_type: matches RolePermission.resource_type string
-        relationship_name: ScopeNode.type value (matches AutoLoad field name)
-        parent_fk_field: FK field on this entity pointing to parent; None for root
+    resource_type: str    # "project" — matches RolePermission.resource_type
+    scope_key: str        # "projects" — matches AutoLoad field name
+    entity_kls: type      # ProjectEntity — for validation
+
+
+class ScopeRegistry:
+    """Central registry for scope resource mapping.
+
+    Single source of truth mapping permission resource_type strings
+    to scope dict keys (relationship/AutoLoad field names) and entity classes.
     """
-    resource_type: str
-    relationship_name: str
-    parent_fk_field: str | None
+
+    def __init__(self):
+        self._entries: list[ScopeRegistryEntry] = []
+        self._by_resource_type: dict[str, ScopeRegistryEntry] = {}
+
+    def register(self, resource_type: str, scope_key: str, entity_kls: type):
+        entry = ScopeRegistryEntry(resource_type, scope_key, entity_kls)
+        self._entries.append(entry)
+        self._by_resource_type[resource_type] = entry
+
+    @property
+    def entries(self) -> list[ScopeRegistryEntry]:
+        return self._entries
+
+    def scope_key_for(self, resource_type: str) -> str | None:
+        entry = self._by_resource_type.get(resource_type)
+        return entry.scope_key if entry else None
 
 
-# Single source of truth for the resource hierarchy.
-# Adding a new level (e.g., Folder) only requires appending here.
-HIERARCHY = [
-    HierarchyLevel("department", "departments", None),
-    HierarchyLevel("project",    "projects",    "department_id"),
-    HierarchyLevel("document",   "documents",   "project_id"),
-]
-
-# Explicitly declared scope-relevant entities.
-# NOT auto-derived — UserEntity has non-scope relationships (e.g., UserRole)
-# that would cause false positives in alignment validation.
-SCOPE_ENTRY_ENTITIES = [DepartmentEntity, ProjectEntity, DocumentEntity]
+scope_registry = ScopeRegistry()
+scope_registry.register("department", "departments", DepartmentEntity)
+scope_registry.register("project",    "projects",    ProjectEntity)
+scope_registry.register("document",   "documents",   DocumentEntity)
 
 
-def validate_scope_alignment(
-    hierarchy: list[HierarchyLevel],
-    entry_entities: list[type],
-) -> set[str]:
-    """Validate that hierarchy levels are subset of declared entry entities.
-
-    Convention: DepartmentEntity -> "department" (strip "Entity", lowercase).
-    Returns set of unaligned resource_type strings (empty if valid).
-    """
-    declared_types = set()
-    for cls in entry_entities:
-        name = cls.__name__
-        if name.endswith("Entity"):
-            name = name[:-6]
-        declared_types.add(name.lower())
-
-    hierarchy_types = {lvl.resource_type for lvl in hierarchy}
-    return hierarchy_types - declared_types
-
-
-# =====================================
-# inject_access_scope resolved-hook
-# =====================================
-
-
-def inject_access_scope(parent, field_name, result):
-    """resolved-hook: propagate scope tree children to resolved items.
-
-    Called after each resolve method, before recursive traversal.
-    Reads _access_scope_tree from parent, finds entries matching field_name,
-    and injects children into resolved items by item ID.
-    """
-    scope_tree = getattr(parent, '_access_scope_tree', None)
-    if not scope_tree:
-        return
-
-    # Find entries matching current field_name
-    matched = [e for e in scope_tree if e.type == field_name]
-    if not matched:
-        return
-
-    items = _get_items(result)
-    if not items:
-        # Single object: merge children from all matched entries
-        all_children = []
-        for entry in matched:
-            if entry.children:
-                all_children.extend(entry.children)
-        if all_children and hasattr(result, '__dict__'):
-            object.__setattr__(result, '_access_scope_tree', all_children)
-        return
-
-    # List results: build map from item ID → children
-    id_to_children: dict[int, list] = {}
-    for entry in matched:
-        children = entry.children
-        if entry.is_all or entry.ids is None:
-            # Unconstrained → all items get same children
-            for item in items:
-                iid = getattr(item, 'id', None)
-                if iid is not None and children:
-                    id_to_children.setdefault(iid, []).extend(children)
-        else:
-            for iid in entry.ids:
-                if children:
-                    id_to_children.setdefault(iid, []).extend(children)
-
-    for item in items:
-        iid = getattr(item, 'id', None)
-        child_scope = id_to_children.get(iid)
-        if child_scope is not None:
-            object.__setattr__(item, '_access_scope_tree', child_scope)
-
-
-def _get_items(result):
-    """Extract items from result (list or paginated)."""
-    items = getattr(result, 'items', None)
-    if items:
-        return items
-    if isinstance(result, list):
-        return result
-    return None
+# inject_user_scope resolved-hook is no longer needed.
+# Scope is now passed via Resolver context={"_user_scope": scope_dict}
+# and read directly by AutoLoad-generated resolve methods.
 
 
 # =====================================
@@ -216,10 +149,10 @@ class ScopeGroupRoleView(GroupRoleEntity):
 
 
 class ScopeComputeView(BaseModel):
-    """Root model for computing scope tree via Resolver + AutoLoad.
+    """Root model for computing user scope via Resolver + AutoLoad.
 
     resolve_* loads initial data, AutoLoad traverses entity chain,
-    post_scope_tree aggregates and builds the scope tree.
+    post_user_scope aggregates and builds the flat scope dict.
     """
     user_id: int
     action: str = "read"
@@ -233,8 +166,8 @@ class ScopeComputeView(BaseModel):
     # Group-inherited roles — external API + resolve_*, then AutoLoad
     group_roles: list[ScopeGroupRoleView] = []
 
-    # Final result
-    scope_tree: list[ScopeNode] = []
+    # Final result: flat dict mapping scope_key → ScopeFilter
+    user_scope: dict[str, ScopeFilter] = {}
 
     def resolve_department_ids(self, loader=Loader(user_departments_loader)):
         return loader.load(self.user_id)
@@ -253,17 +186,17 @@ class ScopeComputeView(BaseModel):
         batches = await group_role_entities_loader(group_ids)
         return [gr for batch in batches for gr in batch]
 
-    async def post_scope_tree(self, collector=RolePermDedupCollector('all_perms')):
-        """Aggregate all permissions and build scope tree.
+    async def post_user_scope(self, collector=RolePermDedupCollector('all_perms')):
+        """Aggregate all permissions and build user scope dict.
 
         RolePermDedupCollector auto-collects from ScopeRoleView.role_permissions
         via SendTo, covering both user_roles and group_roles chains.
         """
         all_perms = collector.values()
         if not all_perms:
-            return []
+            return {}
 
-        # 2. Filter: effect=allow, action matches
+        # Filter: effect=allow, action matches
         filtered = [
             rp for rp in all_perms
             if rp.effect == "allow"
@@ -272,9 +205,9 @@ class ScopeComputeView(BaseModel):
         ]
 
         if not filtered:
-            return []
+            return {}
 
-        # 3. Check for global permissions (resource_type is None AND resource_id is None)
+        # Check for global permissions (resource_type is None AND resource_id is None)
         global_perms = [
             rp for rp in filtered
             if rp.resource_type is None and rp.resource_id is None
@@ -283,14 +216,15 @@ class ScopeComputeView(BaseModel):
         if global_perms:
             unconditional = [rp for rp in global_perms if rp.condition is None]
             if unconditional:
-                return [ScopeNode(type=HIERARCHY[0].relationship_name, is_all=True)]
+                # Global admin: all levels unconstrained
+                return {e.scope_key: ScopeFilter(is_all=True) for e in scope_registry.entries}
             return await self._build_global_scope(global_perms)
 
-        # 4. Build scope tree from resource-scoped permissions
+        # Build scope from resource-scoped permissions
         return await self._build_resource_scope(filtered)
 
     async def _build_global_scope(self, global_perms):
-        """Build scope tree for global permissions with named conditions."""
+        """Build scope dict for global permissions with named conditions."""
         from .condition import get_condition
 
         subject = {'department_ids': self.department_ids, 'user_id': self.user_id}
@@ -308,45 +242,54 @@ class ScopeComputeView(BaseModel):
                 merged_filter_fn = filter_fn
 
         if not merged_ids and not merged_filter_fn:
-            return []
+            return {}
 
-        return [ScopeNode(
-            type=HIERARCHY[0].relationship_name,
-            ids=sorted(merged_ids) if merged_ids else None,
-            filter_fn=merged_filter_fn,
-            children=None,
-        )]
+        ids = frozenset(merged_ids) if merged_ids else None
+        return {"departments": ScopeFilter(ids=ids, filter_fn=merged_filter_fn)}
 
     async def _build_resource_scope(self, filtered):
-        """Build flat scope nodes from resource-scoped permissions.
+        """Build flat scope dict from resource-scoped permissions.
 
-        Each authorized level produces a direct ScopeNode at the root of the tree.
-        No implicit ancestor tracing.
+        Each authorized level produces a direct entry in the dict.
         """
-        nodes = []
-        for lvl in HIERARCHY:
-            ids = sorted({
+        result: dict[str, ScopeFilter] = {}
+        for entry in scope_registry.entries:
+            ids = frozenset({
                 rp.resource_id for rp in filtered
-                if rp.resource_type == lvl.resource_type and rp.resource_id is not None
+                if rp.resource_type == entry.resource_type and rp.resource_id is not None
             })
             if ids:
-                nodes.append(ScopeNode(type=lvl.relationship_name, ids=ids))
-        return nodes
+                result[entry.scope_key] = ScopeFilter(ids=ids)
+        return result
 
 
 # =====================================
-# compute_scope_tree wrapper
+# compute_user_scope wrapper
 # =====================================
 
 
-async def compute_scope_tree(user_id: int, action: str = "read") -> list[ScopeNode]:
-    """Build scope tree for user+action using Resolver + AutoLoad.
+async def compute_user_scope(user_id: int, action: str = "read") -> dict[str, ScopeFilter]:
+    """Build user scope dict for user+action using Resolver + AutoLoad.
 
-    Returns list[ScopeNode]:
-    - []: no permission
-    - [ScopeNode(is_all=True)]: global permission, unconstrained
-    - [ScopeNode(ids=[...])]: scoped access
+    Returns dict[str, ScopeFilter]:
+    - {}: no permission
+    - {"departments": ScopeFilter(is_all=True)}: global permission
+    - {"projects": ScopeFilter(ids=frozenset({1}))}: scoped access
     """
     view = ScopeComputeView(user_id=user_id, action=action)
     view = await Resolver(enable_from_attribute_in_type_adapter=True).resolve(view)
-    return view.scope_tree
+    return view.user_scope
+
+
+async def scope_provider(context: dict | None) -> dict[str, ScopeFilter]:
+    """Adapter for ErDiagram.enable_scope(scope_provider=...).
+
+    Extracts user_id/action from Resolver context and delegates to compute_user_scope.
+    """
+    if context is None:
+        return {}
+    user_id = context.get('user_id')
+    if user_id is None:
+        return {}
+    action = context.get('action', 'read')
+    return await compute_user_scope(user_id=user_id, action=action)
