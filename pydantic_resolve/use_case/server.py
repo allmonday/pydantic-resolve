@@ -10,9 +10,11 @@ to AI agents via progressive disclosure:
 
 from __future__ import annotations
 
+import inspect
 import json
 from typing import TYPE_CHECKING, Any
 
+from fastmcp.server.context import Context
 from pydantic import BaseModel
 
 from pydantic_resolve.graphql.mcp.types.errors import (
@@ -26,6 +28,8 @@ from pydantic_resolve.use_case.types import UseCaseAppConfig
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
+
+    from pydantic_resolve.use_case.manager import UseCaseResources
 
 
 def create_use_case_mcp_server(
@@ -206,6 +210,7 @@ def create_use_case_mcp_server(
         service_name: str,
         method_name: str,
         params: str = "{}",
+        ctx: Context = None,
     ) -> dict[str, Any]:
         """Execute a use case method on a specific service.
 
@@ -283,6 +288,14 @@ def create_use_case_mcp_server(
         # Execute
         try:
             method = getattr(service_cls, method_name)
+
+            # Extract context and inject _context if method accepts it
+            context = await _extract_context(app, ctx)
+            if context is not None:
+                sig = inspect.signature(method)
+                if "_context" in sig.parameters:
+                    kwargs["_context"] = context
+
             result = await method(**kwargs)
         except TypeError as e:
             return create_error_response(
@@ -305,6 +318,17 @@ def create_use_case_mcp_server(
             f"to explore more methods."
         )
         return response
+
+    async def _extract_context(
+        app: "UseCaseResources", ctx: "Context"
+    ) -> dict | None:
+        """Call the app's context_extractor if configured, returning a context dict."""
+        if app.context_extractor is None or ctx is None:
+            return None
+        result = app.context_extractor(ctx)
+        if inspect.isawaitable(result):
+            return await result
+        return result
 
     return mcp
 

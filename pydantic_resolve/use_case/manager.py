@@ -7,7 +7,7 @@ subclasses. Follows the same pattern as GraphQL MCP's MultiAppManager.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from pydantic_resolve.use_case.introspector import ServiceIntrospector
 from pydantic_resolve.use_case.types import UseCaseAppConfig
@@ -25,12 +25,14 @@ class UseCaseResources:
         description: Application description
         introspector: ServiceIntrospector for method discovery
         services: Mapping of service name to service class
+        context_extractor: Optional callback to extract request-scoped context
     """
 
     name: str
     description: str
     introspector: ServiceIntrospector
     services: dict[str, type["UseCaseService"]] = field(default_factory=dict)
+    context_extractor: Callable[[Any], dict | Awaitable[dict]] | None = field(default=None)
 
     @property
     def service_names(self) -> set[str]:
@@ -91,6 +93,7 @@ class UseCaseManager:
             description=description,
             introspector=introspector,
             services=service_map,
+            context_extractor=config.context_extractor,
         )
 
     def _register_app(self, resources: UseCaseResources) -> None:

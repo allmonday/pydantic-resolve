@@ -644,6 +644,147 @@ class OptionalListDTO(BaseModel):
     items: list[int] | None = None
 
 
+# ──────────────────────────────────────────────────
+# Tests: context_extractor support
+# ──────────────────────────────────────────────────
+
+
+class ContextAwareService(UseCaseService):
+    """Service with _context-aware methods."""
+
+    @classmethod
+    async def get_my_items(cls, _context: dict = {}) -> list[str]:
+        """Return items filtered by context user_id."""
+        user_id = _context.get("user_id")
+        if user_id == 1:
+            return ["alice_item_1", "alice_item_2"]
+        return ["guest_item"]
+
+    @classmethod
+    async def list_items(cls) -> list[str]:
+        """Return all items (no context needed)."""
+        return ["item_1", "item_2"]
+
+
+class TestContextExtractor:
+    """Tests for context_extractor support in UseCaseAppConfig."""
+
+    @pytest.mark.asyncio
+    async def test_context_injected_when_method_accepts_it(self):
+        """_context is injected when method has _context parameter."""
+        received_context = {}
+
+        def my_extractor(ctx) -> dict:
+            return {"user_id": 1}
+
+        server = create_use_case_mcp_server(
+            apps=[
+                UseCaseAppConfig(
+                    name="test",
+                    services=[ContextAwareService],
+                    context_extractor=my_extractor,
+                ),
+            ],
+        )
+        # call_tool passes a mock context
+        result = await server.call_tool(
+            "call_use_case",
+            {
+                "app_name": "test",
+                "service_name": "ContextAwareService",
+                "method_name": "get_my_items",
+                "params": "{}",
+            },
+        )
+        data = json.loads(result.content[0].text)
+        assert data["success"] is True
+        assert data["data"] == ["alice_item_1", "alice_item_2"]
+
+    @pytest.mark.asyncio
+    async def test_context_not_injected_when_method_lacks_it(self):
+        """Methods without _context parameter work normally with context_extractor configured."""
+
+        def my_extractor(ctx) -> dict:
+            return {"user_id": 1}
+
+        server = create_use_case_mcp_server(
+            apps=[
+                UseCaseAppConfig(
+                    name="test",
+                    services=[ContextAwareService],
+                    context_extractor=my_extractor,
+                ),
+            ],
+        )
+        result = await server.call_tool(
+            "call_use_case",
+            {
+                "app_name": "test",
+                "service_name": "ContextAwareService",
+                "method_name": "list_items",
+                "params": "{}",
+            },
+        )
+        data = json.loads(result.content[0].text)
+        assert data["success"] is True
+        assert data["data"] == ["item_1", "item_2"]
+
+    @pytest.mark.asyncio
+    async def test_no_context_extractor_backward_compatible(self):
+        """Without context_extractor, _context parameter gets default value."""
+
+        server = create_use_case_mcp_server(
+            apps=[
+                UseCaseAppConfig(
+                    name="test",
+                    services=[ContextAwareService],
+                ),
+            ],
+        )
+        result = await server.call_tool(
+            "call_use_case",
+            {
+                "app_name": "test",
+                "service_name": "ContextAwareService",
+                "method_name": "get_my_items",
+                "params": "{}",
+            },
+        )
+        data = json.loads(result.content[0].text)
+        assert data["success"] is True
+        # _context defaults to {}, so user_id is None -> returns guest_item
+        assert data["data"] == ["guest_item"]
+
+    @pytest.mark.asyncio
+    async def test_async_context_extractor(self):
+        """Async context_extractor functions are supported."""
+
+        async def async_extractor(ctx) -> dict:
+            return {"user_id": 1}
+
+        server = create_use_case_mcp_server(
+            apps=[
+                UseCaseAppConfig(
+                    name="test",
+                    services=[ContextAwareService],
+                    context_extractor=async_extractor,
+                ),
+            ],
+        )
+        result = await server.call_tool(
+            "call_use_case",
+            {
+                "app_name": "test",
+                "service_name": "ContextAwareService",
+                "method_name": "get_my_items",
+                "params": "{}",
+            },
+        )
+        data = json.loads(result.content[0].text)
+        assert data["success"] is True
+        assert data["data"] == ["alice_item_1", "alice_item_2"]
+
+
 class TestOptionalListNullability:
     """Fix 5: list[X] | None should produce [X!], not [X!]!."""
 
