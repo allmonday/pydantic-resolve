@@ -300,18 +300,6 @@ class IntrospectionGenerator(SchemaGenerator):
         """Collect input types from query/mutation maps."""
         return self.collector.collect_input_types(self.query_map, self.mutation_map)
 
-    def _collect_from_method(self, method: Callable, collector: Callable[[Any], None]) -> None:
-        """Collect types from method parameters."""
-        try:
-            sig = inspect.signature(method)
-            for param_name, param in sig.parameters.items():
-                if param_name in ('self', 'cls'):
-                    continue
-                if param.annotation != inspect.Parameter.empty:
-                    collector(param.annotation)
-        except Exception:
-            pass
-
     def _build_object_type(self, entity: type) -> GraphQLType:
         """Build introspection OBJECT type."""
         return {
