@@ -4,6 +4,20 @@
 - **Minor (x.Y.0)**: New features, backward compatible
 - **Patch (x.y.Z)**: Bug fixes and minor improvements
 
+## 5.4
+
+### 5.4.0 (2026-5-8)
+
+- feat:
+  - **UseCase MCP server**: multi-app management MCP server that exposes UseCaseService methods to AI agents via progressive disclosure (list_apps → list_services → describe_service → call_use_case)
+  - **UseCase `FromContext` annotation**: methods can declare parameters annotated with `FromContext` to receive values from request context, with `context_extractor` support for async extraction
+  - **`get_return_annotation()` utility**: extract return type annotation from methods (handles classmethod, `__future__` annotations, string fallback) for convenient FastAPI `response_model` usage
+- refactor:
+  - Update TypeMapper and SDLBuilder to use new mapping methods and improve type resolution
+  - Remove unused method for collecting types from method parameters
+  - Consolidate type checking in `introspector.py` to use shared utilities from `utils/types.py` (`_is_list`, `_is_optional`, `get_core_types`), eliminating duplicate type-handling code
+  - Simplify `_collect_dto_types` with `get_core_types` for one-pass type unwrapping
+
 ## 5.3
 
 ### 5.3.1 (2026-4-22)
