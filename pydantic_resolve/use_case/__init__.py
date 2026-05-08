@@ -37,7 +37,8 @@ Example:
 """
 
 from pydantic_resolve.use_case.business import UseCaseService
+from pydantic_resolve.use_case.context import FromContext
 from pydantic_resolve.use_case.server import create_use_case_mcp_server
 from pydantic_resolve.use_case.types import UseCaseAppConfig
 
-__all__ = ["create_use_case_mcp_server", "UseCaseService", "UseCaseAppConfig"]
+__all__ = ["create_use_case_mcp_server", "UseCaseService", "UseCaseAppConfig", "FromContext"]

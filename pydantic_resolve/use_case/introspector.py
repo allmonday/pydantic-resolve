@@ -8,12 +8,15 @@ from __future__ import annotations
 
 import inspect
 import typing
-import types as _types
+from types import UnionType as _UnionType
 from typing import Any, get_args, get_origin
 
 from pydantic import BaseModel
 
 from pydantic_resolve.use_case.business import USE_CASE_METHODS_ATTR, UseCaseService
+from pydantic_resolve.utils.types import _is_list, _is_optional, get_core_types, get_return_annotation
+
+_UNION_ORIGINS = (typing.Union, _UnionType)
 
 # ──────────────────────────────────────────────────
 # SDL type name conversion
@@ -38,10 +41,8 @@ def _type_to_sdl_name(anno: Any) -> str:
     if isinstance(anno, str):
         return "String"
 
-    origin = get_origin(anno)
-
     # Handle list[X]
-    if origin is list:
+    if _is_list(anno):
         args = get_args(anno)
         if args:
             inner = _type_to_sdl_name(args[0])
@@ -49,7 +50,8 @@ def _type_to_sdl_name(anno: Any) -> str:
         return "[String!]!"
 
     # Handle Optional[X] / Union[X, None]
-    if origin is typing.Union or isinstance(anno, _types.UnionType):
+    origin = get_origin(anno)
+    if origin in _UNION_ORIGINS:
         args = get_args(anno)
         non_none = [a for a in args if a is not type(None)]
         has_none = any(a is type(None) for a in args)
@@ -103,12 +105,12 @@ def _type_to_legacy_name(anno: Any) -> str:
 
     origin = get_origin(anno)
 
-    if origin is list:
+    if _is_list(anno):
         args = get_args(anno)
         inner = _type_to_legacy_name(args[0]) if args else "any"
         return f"list[{inner}]"
 
-    if origin is typing.Union or isinstance(anno, _types.UnionType):
+    if origin in _UNION_ORIGINS:
         args = get_args(anno)
         non_none = [a for a in args if a is not type(None)]
         has_none = any(a is type(None) for a in args)
@@ -141,20 +143,6 @@ def _type_to_legacy_name(anno: Any) -> str:
 # ──────────────────────────────────────────────────
 # SDL type definition generation
 # ──────────────────────────────────────────────────
-
-
-def _is_optional_type(anno: Any) -> bool:
-    """Check if a type annotation is Optional (X | None)."""
-    if anno is None:
-        return True
-
-    origin = get_origin(anno)
-
-    if origin is typing.Union or isinstance(anno, _types.UnionType):
-        args = get_args(anno)
-        return any(a is type(None) for a in args)
-
-    return False
 
 
 def _is_excluded_field(field_name: str, dto_class: type[BaseModel]) -> bool:
@@ -202,7 +190,7 @@ def _generate_dto_sdl(dto_class: type[BaseModel], visited: set[str] | None = Non
         sdl_type = _type_to_sdl_name(anno)
 
         # Add ! for required (non-Optional) fields, unless already ends with !
-        if not _is_optional_type(anno) and not sdl_type.endswith("!"):
+        if not _is_optional(anno) and not sdl_type.endswith("!"):
             sdl_type += "!"
 
         # Add field description if present
@@ -224,46 +212,19 @@ def _collect_dto_types(
     if anno is None or anno is inspect.Parameter.empty or isinstance(anno, str):
         return []
 
-    origin = get_origin(anno)
-
-    # Handle list[X]
-    if origin is list:
-        args = get_args(anno)
-        if args:
-            return _collect_dto_types(args[0], visited)
-        return []
-
-    # Handle Optional[X] / Union
-    if origin is typing.Union or isinstance(anno, _types.UnionType):
-        args = get_args(anno)
-        results: list[type[BaseModel]] = []
-        for a in args:
-            if a is not type(None):
-                results.extend(_collect_dto_types(a, visited))
-        return results
-
-    # Handle Annotated[X, ...]
-    if origin is typing.Annotated:
-        args = get_args(anno)
-        if args:
-            return _collect_dto_types(args[0], visited)
-        return []
-
-    # Handle BaseModel subclasses
-    if isinstance(anno, type) and issubclass(anno, BaseModel):
-        name = anno.__name__
-        if name in visited:
-            return []
-        visited.add(name)
-
-        result = [anno]
-        # Recurse into fields to find nested DTOs
-        for _fn, fi in anno.model_fields.items():
-            if fi.annotation:
-                result.extend(_collect_dto_types(fi.annotation, visited))
-        return result
-
-    return []
+    core_types = get_core_types(anno)
+    results: list[type[BaseModel]] = []
+    for tp in core_types:
+        if isinstance(tp, type) and issubclass(tp, BaseModel):
+            name = tp.__name__
+            if name in visited:
+                continue
+            visited.add(name)
+            results.append(tp)
+            for _fn, fi in tp.model_fields.items():
+                if fi.annotation:
+                    results.extend(_collect_dto_types(fi.annotation, visited))
+    return results
 
 
 # ──────────────────────────────────────────────────
@@ -319,13 +280,13 @@ def _type_to_param_schema(anno: Any) -> dict[str, Any]:
 
     origin = get_origin(anno)
 
-    if origin is list:
+    if _is_list(anno):
         args = get_args(anno)
         if args:
             return {"type": "array", "items": _type_to_param_schema(args[0])}
         return {"type": "array"}
 
-    if origin is typing.Union or isinstance(anno, _types.UnionType):
+    if origin in _UNION_ORIGINS:
         args = get_args(anno)
         non_none = [a for a in args if a is not type(None)]
         has_none = any(a is type(None) for a in args)
@@ -514,7 +475,7 @@ class ServiceIntrospector:
             pass
 
         parameters = self._extract_parameters(func, hints)
-        return_anno = hints.get("return") or self._get_return_anno_from_sig(func)
+        return_anno = get_return_annotation(method)
 
         # Build SDL signature: method_name(param: Type, ...): ReturnType
         # Use raw annotations for SDL to preserve DTO names, list syntax, etc.
@@ -580,17 +541,3 @@ class ServiceIntrospector:
             params[param_name] = schema
 
         return params
-
-    def _get_return_anno_from_sig(self, func: Any) -> Any:
-        """Fallback: get return annotation from inspect.signature."""
-        try:
-            sig = inspect.signature(func)
-        except (ValueError, TypeError):
-            return None
-
-        if sig.return_annotation is inspect.Signature.empty:
-            return None
-        anno = sig.return_annotation
-        if isinstance(anno, str):
-            anno = _try_eval_simple_type(anno)
-        return anno

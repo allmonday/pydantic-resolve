@@ -1,12 +1,15 @@
 """Demo UseCase MCP server with context extraction from HTTP headers.
 
-This example demonstrates how to extract request-scoped context
-(e.g., user identity from Authorization header) and pass it through
-to UseCaseService methods via the ``_context`` parameter.
+This example demonstrates how to use ``Annotated[type, FromContext()]`` to
+mark method parameters that should be injected from the MCP context_extractor,
+while keeping the method signature identical for FastAPI usage.
 
-It extends the base mcp_server demo by adding:
-- A context_extractor that parses the Authorization header
-- A get_my_tasks method that filters tasks by the authenticated user
+Flow:
+    HTTP Request (Authorization: Bearer <user_id>)
+      -> FastMCP Context (ctx)
+        -> context_extractor(ctx) -> {"user_id": <user_id>}
+          -> call_use_case merges context into kwargs
+            -> TaskService.get_my_tasks(user_id=<user_id>)
 
 Usage:
     # Run with streamable-http transport
@@ -23,13 +26,6 @@ Usage:
     #    curl -X POST http://localhost:8006/mcp/ \
     #      -H "Content-Type: application/json" \
     #      -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"call_use_case","arguments":{"app_name":"sprint","service_name":"TaskService","method_name":"list_tasks","params":"{}"}},"id":2}'
-
-Flow:
-    HTTP Request (Authorization: Bearer <user_id>)
-      -> FastMCP Context (ctx)
-        -> context_extractor(ctx) -> {"user_id": <user_id>}
-          -> call_use_case(..., _context={"user_id": ...})
-            -> TaskService.get_my_tasks(_context={"user_id": ...})
 """
 
 from typing import Annotated
@@ -43,6 +39,7 @@ from pydantic_resolve import ErDiagram, DefineSubset, config_resolver
 from pydantic_resolve.integration.mapping import Mapping
 from pydantic_resolve.integration.sqlalchemy import build_relationship
 from pydantic_resolve.use_case import (
+    FromContext,
     UseCaseAppConfig,
     UseCaseService,
     create_use_case_mcp_server,
@@ -175,15 +172,12 @@ class TaskService(UseCaseService):
         return await MyResolver(enable_from_attribute_in_type_adapter=True).resolve(dtos)
 
     @classmethod
-    async def get_my_tasks(cls, _context: dict = {}) -> list[TaskSummary]:
+    async def get_my_tasks(cls, user_id: Annotated[int, FromContext()]) -> list[TaskSummary]:
         """Get tasks owned by the authenticated user.
 
-        Uses _context injected from the Authorization header.
+        user_id is injected from context_extractor (MCP) or passed
+        directly (FastAPI). The method signature is identical in both.
         """
-        user_id = _context.get("user_id")
-        if user_id is None:
-            return []
-
         async with session_factory() as session:
             result = await session.execute(
                 select(TaskOrm)

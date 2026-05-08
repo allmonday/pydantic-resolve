@@ -1,11 +1,13 @@
 from pydantic_resolve.utils.types import (
     _is_list,
-    get_core_types, 
+    get_core_types,
     shelling_type,
     get_class_field_annotations,
-    _is_optional
+    _is_optional,
+    get_return_annotation,
 )
 from typing import Optional, Union, List, Dict, Tuple, Set
+from pydantic import BaseModel
 import pytest
 
 @pytest.mark.parametrize(
@@ -201,3 +203,69 @@ def test_non_list_container_types(annotation):
     assert not _is_list(annotation)
     # These should return as single types
     assert get_core_types(annotation) == (annotation,)
+
+
+# ── get_return_annotation tests ──
+
+
+class _UserDTO(BaseModel):
+    id: int
+    name: str
+
+
+class _SimpleService:
+    @classmethod
+    def get_user(cls, user_id: int) -> _UserDTO:
+        ...
+
+    @classmethod
+    def list_users(cls) -> list[_UserDTO]:
+        ...
+
+    @classmethod
+    def get_optional(cls) -> Optional[_UserDTO]:
+        ...
+
+    def regular_method(self) -> str:
+        ...
+
+    @classmethod
+    def no_return_annotation(cls):
+        ...
+
+    @classmethod
+    def none_return(cls) -> None:
+        ...
+
+
+def test_return_annotation_classmethod_dto():
+    assert get_return_annotation(_SimpleService.get_user) is _UserDTO
+
+
+def test_return_annotation_list():
+    result = get_return_annotation(_SimpleService.list_users)
+    assert result == list[_UserDTO]
+
+
+def test_return_annotation_optional():
+    result = get_return_annotation(_SimpleService.get_optional)
+    assert result == Optional[_UserDTO]
+
+
+def test_return_annotation_regular_method():
+    assert get_return_annotation(_SimpleService.regular_method) is str
+
+
+def test_return_annotation_none_return():
+    assert get_return_annotation(_SimpleService.none_return) is type(None)
+
+
+def test_return_annotation_missing():
+    assert get_return_annotation(_SimpleService.no_return_annotation) is None
+
+
+def test_return_annotation_plain_function():
+    def greet(name: str) -> str:
+        return f"hello {name}"
+
+    assert get_return_annotation(greet) is str

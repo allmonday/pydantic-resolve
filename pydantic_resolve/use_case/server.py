@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import inspect
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any, get_args, get_origin, get_type_hints
 
 from fastmcp.server.context import Context
 from pydantic import BaseModel
@@ -23,6 +23,7 @@ from pydantic_resolve.graphql.mcp.types.errors import (
     create_success_response,
 )
 from pydantic_resolve.use_case.business import USE_CASE_METHODS_ATTR
+from pydantic_resolve.use_case.context import FromContext
 from pydantic_resolve.use_case.manager import UseCaseManager
 from pydantic_resolve.use_case.types import UseCaseAppConfig
 
@@ -210,7 +211,7 @@ def create_use_case_mcp_server(
         service_name: str,
         method_name: str,
         params: str = "{}",
-        ctx: Context = None,
+        ctx: Context = None,  # type: ignore[assignment]
     ) -> dict[str, Any]:
         """Execute a use case method on a specific service.
 
@@ -289,12 +290,22 @@ def create_use_case_mcp_server(
         try:
             method = getattr(service_cls, method_name)
 
-            # Extract context and inject _context if method accepts it
+            # Extract context and merge FromContext params into kwargs
             context = await _extract_context(app, ctx)
-            if context is not None:
+            from_context_params = _get_from_context_params(method)
+            if from_context_params:
+                if context is None:
+                    context = {}
                 sig = inspect.signature(method)
-                if "_context" in sig.parameters:
-                    kwargs["_context"] = context
+                for param_name in from_context_params:
+                    if param_name in context:
+                        kwargs[param_name] = context[param_name]
+                    elif param_name not in kwargs and sig.parameters[param_name].default is inspect.Parameter.empty:
+                        return create_error_response(
+                            f"Required FromContext parameter '{param_name}' "
+                            f"not found in context for {service_name}.{method_name}",
+                            MCPErrors.VALIDATION_ERROR,
+                        )
 
             result = await method(**kwargs)
         except TypeError as e:
@@ -329,6 +340,23 @@ def create_use_case_mcp_server(
         if inspect.isawaitable(result):
             return await result
         return result
+
+    def _get_from_context_params(method: callable) -> set[str]:
+        """Return parameter names annotated with FromContext."""
+        from_context_params = set()
+        try:
+            hints = get_type_hints(method, include_extras=True)
+        except Exception:
+            hints = {}
+        sig = inspect.signature(method)
+        for name in sig.parameters:
+            annotation = hints.get(name)
+            if annotation is not None and get_origin(annotation) is Annotated:
+                for arg in get_args(annotation):
+                    if isinstance(arg, FromContext):
+                        from_context_params.add(name)
+                        break
+        return from_context_params
 
     return mcp
 

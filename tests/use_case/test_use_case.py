@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+from typing import Annotated
 
 import pytest
 from pydantic import BaseModel
 
 from pydantic_resolve.use_case.business import UseCaseService
+from pydantic_resolve.use_case.context import FromContext
 from pydantic_resolve.use_case.introspector import (
     ServiceIntrospector,
     _generate_dto_sdl,
@@ -650,15 +652,33 @@ class OptionalListDTO(BaseModel):
 
 
 class ContextAwareService(UseCaseService):
-    """Service with _context-aware methods."""
+    """Service with FromContext-annotated methods."""
 
     @classmethod
-    async def get_my_items(cls, _context: dict = {}) -> list[str]:
-        """Return items filtered by context user_id."""
-        user_id = _context.get("user_id")
+    async def get_my_items(cls, user_id: Annotated[int, FromContext()]) -> list[str]:
+        """Return items filtered by user_id."""
         if user_id == 1:
             return ["alice_item_1", "alice_item_2"]
-        return ["guest_item"]
+        return [f"user_{user_id}_item"]
+
+    @classmethod
+    async def get_my_items_with_tenant(
+        cls,
+        user_id: Annotated[int, FromContext()],
+        tenant_id: Annotated[str, FromContext()],
+    ) -> list[str]:
+        """Return items filtered by user_id and tenant_id."""
+        return [f"{tenant_id}:{user_id}_item"]
+
+    @classmethod
+    async def get_optional_item(
+        cls,
+        user_id: Annotated[int, FromContext()] = 0,
+    ) -> list[str]:
+        """Return items with optional user_id from context."""
+        if user_id == 0:
+            return ["guest_item"]
+        return [f"user_{user_id}_item"]
 
     @classmethod
     async def list_items(cls) -> list[str]:
@@ -666,13 +686,12 @@ class ContextAwareService(UseCaseService):
         return ["item_1", "item_2"]
 
 
-class TestContextExtractor:
-    """Tests for context_extractor support in UseCaseAppConfig."""
+class TestFromContext:
+    """Tests for FromContext annotation support in UseCaseAppConfig."""
 
     @pytest.mark.asyncio
-    async def test_context_injected_when_method_accepts_it(self):
-        """_context is injected when method has _context parameter."""
-        received_context = {}
+    async def test_from_context_param_injected(self):
+        """FromContext parameter receives value from context_extractor."""
 
         def my_extractor(ctx) -> dict:
             return {"user_id": 1}
@@ -686,7 +705,6 @@ class TestContextExtractor:
                 ),
             ],
         )
-        # call_tool passes a mock context
         result = await server.call_tool(
             "call_use_case",
             {
@@ -701,8 +719,37 @@ class TestContextExtractor:
         assert data["data"] == ["alice_item_1", "alice_item_2"]
 
     @pytest.mark.asyncio
-    async def test_context_not_injected_when_method_lacks_it(self):
-        """Methods without _context parameter work normally with context_extractor configured."""
+    async def test_multiple_from_context_params(self):
+        """Multiple FromContext parameters are all injected."""
+
+        def my_extractor(ctx) -> dict:
+            return {"user_id": 1, "tenant_id": "acme"}
+
+        server = create_use_case_mcp_server(
+            apps=[
+                UseCaseAppConfig(
+                    name="test",
+                    services=[ContextAwareService],
+                    context_extractor=my_extractor,
+                ),
+            ],
+        )
+        result = await server.call_tool(
+            "call_use_case",
+            {
+                "app_name": "test",
+                "service_name": "ContextAwareService",
+                "method_name": "get_my_items_with_tenant",
+                "params": "{}",
+            },
+        )
+        data = json.loads(result.content[0].text)
+        assert data["success"] is True
+        assert data["data"] == ["acme:1_item"]
+
+    @pytest.mark.asyncio
+    async def test_non_from_context_method_unaffected(self):
+        """Methods without FromContext parameters work normally."""
 
         def my_extractor(ctx) -> dict:
             return {"user_id": 1}
@@ -730,8 +777,66 @@ class TestContextExtractor:
         assert data["data"] == ["item_1", "item_2"]
 
     @pytest.mark.asyncio
-    async def test_no_context_extractor_backward_compatible(self):
-        """Without context_extractor, _context parameter gets default value."""
+    async def test_required_from_context_missing_returns_error(self):
+        """Required FromContext parameter missing from context returns error."""
+
+        def my_extractor(ctx) -> dict:
+            return {}  # no user_id
+
+        server = create_use_case_mcp_server(
+            apps=[
+                UseCaseAppConfig(
+                    name="test",
+                    services=[ContextAwareService],
+                    context_extractor=my_extractor,
+                ),
+            ],
+        )
+        result = await server.call_tool(
+            "call_use_case",
+            {
+                "app_name": "test",
+                "service_name": "ContextAwareService",
+                "method_name": "get_my_items",
+                "params": "{}",
+            },
+        )
+        data = json.loads(result.content[0].text)
+        assert data["success"] is False
+        assert "user_id" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_optional_from_context_uses_default(self):
+        """FromContext parameter with default uses default when context is empty."""
+
+        def my_extractor(ctx) -> dict:
+            return {}  # no user_id
+
+        server = create_use_case_mcp_server(
+            apps=[
+                UseCaseAppConfig(
+                    name="test",
+                    services=[ContextAwareService],
+                    context_extractor=my_extractor,
+                ),
+            ],
+        )
+        result = await server.call_tool(
+            "call_use_case",
+            {
+                "app_name": "test",
+                "service_name": "ContextAwareService",
+                "method_name": "get_optional_item",
+                "params": "{}",
+            },
+        )
+        data = json.loads(result.content[0].text)
+        assert data["success"] is True
+        assert data["data"] == ["guest_item"]
+
+    @pytest.mark.asyncio
+    async def test_no_context_extractor_required_param_fails(self):
+        """Without context_extractor, required FromContext param fails."""
 
         server = create_use_case_mcp_server(
             apps=[
@@ -751,8 +856,32 @@ class TestContextExtractor:
             },
         )
         data = json.loads(result.content[0].text)
+        assert data["success"] is False
+        assert "user_id" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_no_context_extractor_optional_param_uses_default(self):
+        """Without context_extractor, optional FromContext param uses default."""
+
+        server = create_use_case_mcp_server(
+            apps=[
+                UseCaseAppConfig(
+                    name="test",
+                    services=[ContextAwareService],
+                ),
+            ],
+        )
+        result = await server.call_tool(
+            "call_use_case",
+            {
+                "app_name": "test",
+                "service_name": "ContextAwareService",
+                "method_name": "get_optional_item",
+                "params": "{}",
+            },
+        )
+        data = json.loads(result.content[0].text)
         assert data["success"] is True
-        # _context defaults to {}, so user_id is None -> returns guest_item
         assert data["data"] == ["guest_item"]
 
     @pytest.mark.asyncio

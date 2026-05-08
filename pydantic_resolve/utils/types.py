@@ -12,6 +12,8 @@ except Exception:  # pragma: no cover
         pass
     TypeAliasType = _DummyTypeAliasType  # type: ignore
 
+import inspect
+import typing
 from typing import get_origin, get_args
 
 
@@ -107,5 +109,41 @@ def get_class_field_annotations(cls: Type):
 
 def get_type(v):
     return v.annotation
+
+
+def get_return_annotation(method) -> type | None:
+    """Get the return type annotation of a method.
+
+    Handles classmethod, ``from __future__ import annotations``,
+    and simple string annotations.  Returns ``None`` when no return
+    annotation is available.
+    """
+    func = method.__func__ if isinstance(method, classmethod) else method
+
+    try:
+        hints = typing.get_type_hints(func)
+    except Exception:
+        hints = {}
+
+    ret = hints.get("return")
+    if ret is not None:
+        return ret
+
+    # Fallback: inspect signature (covers unresolved string annotations)
+    try:
+        sig = inspect.signature(func)
+    except (ValueError, TypeError):
+        return None
+
+    anno = sig.return_annotation
+    if anno is inspect.Signature.empty:
+        return None
+
+    if isinstance(anno, str):
+        _BUILTIN_TYPES = {"int": int, "float": float, "str": str, "bool": bool, "dict": dict, "list": list}
+        stripped = anno.strip().strip("'\"")
+        return _BUILTIN_TYPES.get(stripped, anno)
+
+    return anno
 
 
