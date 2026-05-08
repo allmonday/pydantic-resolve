@@ -296,44 +296,6 @@ class IntrospectionGenerator(SchemaGenerator):
         # Collect input types
         self._input_types = self._collect_input_types_from_maps()
 
-    def _collect_nested_pydantic_types(
-        self,
-        entities: list[type],
-        visited: Optional[set[str]] = None
-    ) -> dict[str, type]:
-        """Recursively collect all Pydantic BaseModel types."""
-        if visited is None:
-            visited = set()
-
-        collected: dict[str, type] = {}
-
-        for entity in entities:
-            type_name = entity.__name__
-            if type_name in visited:
-                continue
-            visited.add(type_name)
-
-            try:
-                type_hints = get_type_hints(entity)
-            except Exception:
-                type_hints = getattr(entity, '__annotations__', {})
-
-            for field_name, field_type in type_hints.items():
-                if field_name.startswith('__'):
-                    continue
-
-                core_types = get_core_types(field_type)
-                for core_type in core_types:
-                    if safe_issubclass(core_type, BaseModel):
-                        if core_type.__name__ not in collected and core_type.__name__ not in visited:
-                            collected[core_type.__name__] = core_type
-
-        if collected:
-            nested = self._collect_nested_pydantic_types(list(collected.values()), visited)
-            collected.update(nested)
-
-        return collected
-
     def _collect_input_types_from_maps(self) -> set[type]:
         """Collect input types from query/mutation maps."""
         return self.collector.collect_input_types(self.query_map, self.mutation_map)

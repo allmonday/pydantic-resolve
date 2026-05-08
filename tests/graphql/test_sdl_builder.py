@@ -60,50 +60,50 @@ class TestMapPythonTypeToGql:
 
     def test_scalar_types(self):
         """Test basic scalar type mapping."""
-        assert self.builder._map_python_type_to_gql(str) == "String!"
-        assert self.builder._map_python_type_to_gql(int) == "Int!"
-        assert self.builder._map_python_type_to_gql(bool) == "Boolean!"
-        assert self.builder._map_python_type_to_gql(float) == "Float!"
+        assert self.builder.mapper.map_to_sdl(str) == "String!"
+        assert self.builder.mapper.map_to_sdl(int) == "Int!"
+        assert self.builder.mapper.map_to_sdl(bool) == "Boolean!"
+        assert self.builder.mapper.map_to_sdl(float) == "Float!"
 
     def test_optional_scalar(self):
         """Test Optional[T] mapping - should remove ! for optional."""
         # Optional[T] in output types still has ! (GraphQL convention)
-        result = self.builder._map_python_type_to_gql(Optional[str])
+        result = self.builder.mapper.map_to_sdl(Optional[str])
         # The current implementation adds ! even for Optional in output types
         # This is consistent with GraphQL best practices for output types
         assert "String" in result
 
     def test_list_type(self):
         """Test list[T] mapping."""
-        result = self.builder._map_python_type_to_gql(List[int])
+        result = self.builder.mapper.map_to_sdl(List[int])
         assert result == "[Int!]!"
 
     def test_list_of_optional(self):
         """Test list[Optional[T]] mapping."""
-        result = self.builder._map_python_type_to_gql(List[Optional[str]])
+        result = self.builder.mapper.map_to_sdl(List[Optional[str]])
         assert "String" in result
         assert result.startswith("[")
         assert result.endswith("]!")
 
     def test_enum_type(self):
         """Test enum type mapping."""
-        result = self.builder._map_python_type_to_gql(SampleStatus)
+        result = self.builder.mapper.map_to_sdl(SampleStatus)
         assert result == "SampleStatus!"
 
     def test_entity_type(self):
         """Test entity type mapping (BaseModel subclass)."""
-        result = self.builder._map_python_type_to_gql(SampleUser)
+        result = self.builder.mapper.map_to_sdl(SampleUser)
         assert result == "SampleUser!"
 
     def test_forward_ref_string_annotation(self):
         """Test string annotation like 'SampleUser' resolves to entity."""
         # String annotations should be resolved to entity types
-        result = self.builder._map_python_type_to_gql('SampleUser')
+        result = self.builder.mapper.map_to_sdl('SampleUser')
         assert result == "SampleUser!"
 
     def test_list_of_forward_ref(self):
         """Test list['SampleUser'] resolves correctly."""
-        result = self.builder._map_python_type_to_gql(List['SampleUser'])
+        result = self.builder.mapper.map_to_sdl(List['SampleUser'])
         assert result == "[SampleUser!]!"
 
     def test_unknown_type_fallback(self):
@@ -112,7 +112,7 @@ class TestMapPythonTypeToGql:
         class UnknownType:
             pass
         # get_core_types might return empty, causing fallback to String!
-        result = self.builder._map_python_type_to_gql(UnknownType)
+        result = self.builder.mapper.map_to_sdl(UnknownType)
         # Should either map to something or fall back gracefully
         assert result  # Just verify it doesn't crash
 
@@ -127,29 +127,29 @@ class TestMapPythonTypeToGqlForInput:
 
     def test_optional_in_input_removes_exclamation(self):
         """Test Optional[T] in input types removes !."""
-        result = self.builder._map_python_type_to_gql(Optional[str], is_input=True)
+        result = self.builder.mapper.map_to_sdl(Optional[str], is_input=True)
         # Input types: Optional fields should not have !
         assert result == "String"  # No !
 
     def test_required_in_input_has_exclamation(self):
         """Test required fields in input types have !."""
-        result = self.builder._map_python_type_to_gql(str, is_input=True)
+        result = self.builder.mapper.map_to_sdl(str, is_input=True)
         assert result == "String!"
 
     def test_list_in_input(self):
         """Test list[T] in input types."""
-        result = self.builder._map_python_type_to_gql(List[str], is_input=True)
+        result = self.builder.mapper.map_to_sdl(List[str], is_input=True)
         assert result == "[String!]!"
 
     def test_list_of_optional_in_input(self):
         """Test list[Optional[T]] in input types."""
-        result = self.builder._map_python_type_to_gql(List[Optional[str]], is_input=True)
+        result = self.builder.mapper.map_to_sdl(List[Optional[str]], is_input=True)
         # List elements should have ! but inner optional should not
         assert "[String!]" in result or "[String]" in result
 
     def test_enum_in_input(self):
         """Test enum in input types."""
-        result = self.builder._map_python_type_to_gql(SampleStatus, is_input=True)
+        result = self.builder.mapper.map_to_sdl(SampleStatus, is_input=True)
         assert result == "SampleStatus!"
 
 
