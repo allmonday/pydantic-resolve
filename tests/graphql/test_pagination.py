@@ -10,7 +10,7 @@ Covers:
 
 import pytest
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import ForeignKey, Integer, String, select
+from sqlalchemy import Column, ForeignKey, Integer, String, Table, select
 from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
@@ -1237,9 +1237,6 @@ class TestEmptyPageTotalCount:
 # =====================================
 
 
-# Association table for Student <-> Course M2M
-from sqlalchemy import Table, Column, ForeignKey as SAFK, Integer as SAInteger
-
 # Use a separate declarative base to avoid table name conflicts with earlier tests
 
 
@@ -1250,8 +1247,8 @@ class M2MBase(DeclarativeBase):
 student_course = Table(
     "student_course",
     M2MBase.metadata,
-    Column("student_id", SAInteger, SAFK("m2m_student.id"), primary_key=True),
-    Column("course_id", SAInteger, SAFK("m2m_course.id"), primary_key=True),
+    Column("student_id", Integer, ForeignKey("m2m_student.id"), primary_key=True),
+    Column("course_id", Integer, ForeignKey("m2m_course.id"), primary_key=True),
 )
 
 
