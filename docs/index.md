@@ -67,6 +67,7 @@ Once you understand the core model, these pages go deeper into specific areas:
 | [FastAPI Integration](./fastapi_integration.md) | Use Resolver in FastAPI endpoints with dependency injection |
 | [GraphQL Guide](./graphql_guide.md) | Generate and serve GraphQL from ERD |
 | [MCP Service](./mcp_service.md) | Expose GraphQL APIs to AI agents |
+| [UseCase MCP Service](./use_case_mcp_service.md) | Expose business services to AI agents via progressive disclosure |
 
 ### API Reference
 
@@ -79,3 +80,4 @@ Detailed signatures and parameters for all public APIs:
 - [DefineSubset](./api_subset.md) — `DefineSubset`, `SubsetConfig`
 - [GraphQL API](./api_graphql.md) — `GraphQLHandler`, `@query`, `@mutation`
 - [MCP API](./api_mcp.md) — `create_mcp_server`, `AppConfig`
+- [UseCase MCP API](./api_use_case_mcp.md) — `create_use_case_mcp_server`, `UseCaseService`, `FromContext`

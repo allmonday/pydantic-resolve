@@ -195,3 +195,26 @@ class SprintView(BaseModel):
     def post_default_handler(self):
         self.summary = f"{self.task_count} tasks"
 ```
+
+## get_return_annotation
+
+```python
+from pydantic_resolve.utils.types import get_return_annotation
+
+get_return_annotation(method) -> type | None
+```
+
+Extracts the return type annotation from a method. Handles classmethods, `from __future__ import annotations`, and string annotation fallbacks. Returns `None` when no return annotation is available.
+
+Useful for extracting `response_model` from `UseCaseService` classmethods:
+
+```python
+from pydantic_resolve.utils.types import get_return_annotation
+
+@app.get(
+    "/api/sprints/{sprint_id}",
+    response_model=get_return_annotation(SprintService.get_sprint),
+)
+async def get_sprint(sprint_id: int):
+    return await SprintService.get_sprint(sprint_id=sprint_id)
+```

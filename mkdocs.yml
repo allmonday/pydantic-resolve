@@ -64,6 +64,7 @@ nav:
     - FastAPI Integration: ./fastapi_integration.md
     - GraphQL Guide: ./graphql_guide.md
     - MCP Service: ./mcp_service.md
+    - UseCase MCP Service: ./use_case_mcp_service.md
     - Voyager Visualization: ./voyager_guide.md
   - API Reference:
     - Resolver: ./api_resolver.md
@@ -73,6 +74,7 @@ nav:
     - DefineSubset: ./api_subset.md
     - GraphQL API: ./api_graphql.md
     - MCP API: ./api_mcp.md
+    - UseCase MCP API: ./api_use_case_mcp.md
   - Reference:
     - Migration Guide: ./migration.md
     - Changelog: ./changelog.md
@@ -121,6 +123,7 @@ plugins:
             FastAPI Integration: "FastAPI 集成"
             GraphQL Guide: "GraphQL 指南"
             MCP Service: "MCP 服务"
+            UseCase MCP Service: "UseCase MCP 服务"
             Voyager Visualization: "Voyager 可视化"
             Resolver: "Resolver"
             DataLoader Utilities: "DataLoader 工具"
@@ -129,6 +132,7 @@ plugins:
             DefineSubset: "DefineSubset"
             GraphQL API: "GraphQL API"
             MCP API: "MCP API"
+            UseCase MCP API: "UseCase MCP API"
             Change log: "变更记录"
             Migration Guide: "迁移指南"
             "Reframing Data Assembly: pydantic-resolve vs SQLAlchemy ORM": "重塑数据构建的开发体验：pydantic-resolve vs SQLAlchemy ORM 查询对比"
