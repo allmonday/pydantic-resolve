@@ -6,15 +6,18 @@ It supports multiple output formats (SDL string, Introspection dict) through a u
 internal representation.
 """
 
-from dataclasses import dataclass
-from typing import Any, ForwardRef, Optional, get_args
+from dataclasses import dataclass, field
+from typing import Any, ForwardRef, Optional, get_args, TYPE_CHECKING
 
 from pydantic import BaseModel
 
 from .type_registry import FieldInfo, ArgumentInfo
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.types import get_core_types, _is_optional, _is_list
-from pydantic_resolve.graphql.type_mapping import map_scalar_type
+from pydantic_resolve.graphql.type_mapping import map_scalar_type, is_enum_type
+
+if TYPE_CHECKING:
+    from pydantic_resolve.utils.er_diagram import ErDiagram
 
 
 @dataclass
@@ -67,6 +70,28 @@ class TypeMapper:
     SDL and Introspection generators.
     """
 
+    def __init__(self, er_diagram: Optional['ErDiagram'] = None):
+        self._er_diagram = er_diagram
+
+    def _get_entity_by_name(self, name: str):
+        """Find entity class by name from ERD."""
+        if self._er_diagram is None:
+            return None
+        for cfg in self._er_diagram.entities:
+            if cfg.kls.__name__ == name:
+                return cfg.kls
+        return None
+
+    def _resolve_type(self, core_type: Any) -> Any:
+        """Resolve ForwardRef or string type names to actual entity classes."""
+        if isinstance(core_type, ForwardRef):
+            resolved = self._get_entity_by_name(core_type.__forward_arg__)
+            return resolved if resolved else core_type
+        if isinstance(core_type, str):
+            resolved = self._get_entity_by_name(core_type)
+            return resolved if resolved else core_type
+        return core_type
+
     def map_to_graphql_type(
         self,
         python_type: type,
@@ -92,13 +117,24 @@ class TypeMapper:
 
         core_type = core_types[0]
 
-        # Handle ForwardRef
+        # Resolve ForwardRef/string to actual entity class
+        core_type = self._resolve_type(core_type)
+
+        # Handle unresolved ForwardRef
         if isinstance(core_type, ForwardRef):
             type_name = core_type.__forward_arg__
             return GraphQLTypeInfo(
                 kind="INPUT_OBJECT" if is_input else "OBJECT",
                 name=type_name,
                 description=f"{type_name} type"
+            )
+
+        # Handle unresolved string type names
+        if isinstance(core_type, str):
+            return GraphQLTypeInfo(
+                kind="INPUT_OBJECT" if is_input else "OBJECT",
+                name=core_type,
+                description=f"{core_type} type"
             )
 
         # Check if it's list[T]
@@ -128,6 +164,14 @@ class TypeMapper:
                 description=f"{core_type.__name__} type"
             )
 
+        # Handle enum types
+        if is_enum_type(core_type):
+            return GraphQLTypeInfo(
+                kind="ENUM",
+                name=core_type.__name__,
+                description=f"{core_type.__name__} enum"
+            )
+
         # Handle scalar types
         scalar_name = map_scalar_type(core_type)
         return GraphQLTypeInfo(
@@ -136,23 +180,28 @@ class TypeMapper:
             description=self._get_scalar_description(scalar_name)
         )
 
-    def map_to_sdl(self, python_type: type, is_input: bool = False, required: bool = True) -> str:
+    def map_to_sdl(self, python_type: type, is_input: bool = False) -> str:
         """
         Map Python type to SDL type string.
 
         Args:
             python_type: Python type
-            is_input: Whether this is for an input type
-            required: Whether to add ! suffix for required fields
+            is_input: Whether this is for an input type.
+                When True, Optional[T] fields produce "T" (no ! suffix).
 
         Returns:
             SDL type string (e.g., "String!", "[User!]!")
         """
+        is_optional = _is_optional(python_type)
         gql_type = self.map_to_graphql_type(python_type, is_input)
         sdl = gql_type.to_sdl()
 
-        # Add NON_NULL wrapper if required and not already wrapped
-        if required and not sdl.endswith('!'):
+        # Add NON_NULL wrapper if not already wrapped.
+        # For Optional[T] in input types, skip the ! suffix.
+        if is_optional and is_input:
+            return sdl.rstrip('!')
+
+        if not sdl.endswith('!'):
             sdl = f"{sdl}!"
 
         return sdl

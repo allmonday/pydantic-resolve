@@ -48,7 +48,7 @@ class SchemaGenerator(ABC):
         # Shared components
         self.registry = TypeRegistry()
         self.collector = TypeCollector(er_diagram, self.registry)
-        self.mapper = TypeMapper()
+        self.mapper = TypeMapper(er_diagram)
 
         # Query and mutation maps (set by subclasses if needed)
         self.query_map: dict[str, tuple[type, Callable]] = {}

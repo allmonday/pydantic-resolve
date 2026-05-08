@@ -6,7 +6,7 @@ using the unified type collection and mapping logic.
 """
 
 import inspect
-from typing import ForwardRef, get_args, get_type_hints
+from typing import ForwardRef, get_type_hints
 
 from pydantic import BaseModel
 
@@ -14,7 +14,7 @@ from pydantic_resolve.graphql.schema.generators.base import SchemaGenerator
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.er_diagram import Relationship
 from pydantic_resolve.utils.types import get_core_types, _is_optional, _is_list
-from pydantic_resolve.graphql.type_mapping import map_scalar_type, is_enum_type, get_enum_names
+from pydantic_resolve.graphql.type_mapping import is_enum_type, get_enum_names
 from pydantic_resolve.graphql.exceptions import FieldNameConflictError
 
 
@@ -81,7 +81,7 @@ class SDLBuilder(SchemaGenerator):
                 self._add_enum_definitions(cls, enum_defs, processed_enums)
 
         # Collect and generate Input Types
-        input_types = self._collect_input_types()
+        input_types = self.collector.collect_input_types()
         for input_type in input_types:
             if input_type not in processed_input_types:
                 input_def = self._build_input_definition(input_type)
@@ -172,7 +172,7 @@ class SDLBuilder(SchemaGenerator):
             if field_name in relationship_field_names:
                 continue
 
-            gql_type = self._map_python_type_to_gql(field_type)
+            gql_type = self.mapper.map_to_sdl(field_type)
             fields.append(f"  {field_name}: {gql_type}")
 
         # Process relationships using unified type mapping
@@ -197,13 +197,13 @@ class SDLBuilder(SchemaGenerator):
                                 fields.append(f"  {field_name}{args_str}: {result_type_name}!")
                         else:
                             # Raw list: posts: [PostEntity!]!
-                            gql_type = self._map_python_type_to_gql(rel.target)
+                            gql_type = self.mapper.map_to_sdl(rel.target)
                             if rel.description:
                                 fields.append(f'  """{rel.description}"""\n  {field_name}: {gql_type}')
                             else:
                                 fields.append(f"  {field_name}: {gql_type}")
                     else:
-                        gql_type = self._map_python_type_to_gql(rel.target)
+                        gql_type = self.mapper.map_to_sdl(rel.target)
                         if rel.description:
                             fields.append(f'  """{rel.description}"""\n  {field_name}: {gql_type}')
                         else:
@@ -224,7 +224,7 @@ class SDLBuilder(SchemaGenerator):
             if field_name.startswith('__'):
                 continue
 
-            gql_type = self._map_python_type_to_gql(field_type)
+            gql_type = self.mapper.map_to_sdl(field_type)
             fields.append(f"  {field_name}: {gql_type}")
 
         return f"type {kls.__name__} {{\n" + "\n".join(fields) + "\n}"
@@ -242,79 +242,10 @@ class SDLBuilder(SchemaGenerator):
             if field_name.startswith('__'):
                 continue
 
-            gql_type = self._map_python_type_to_gql(field_type, is_input=True)
+            gql_type = self.mapper.map_to_sdl(field_type, is_input=True)
             fields.append(f"  {field_name}: {gql_type}")
 
         return f"input {kls.__name__} {{\n" + "\n".join(fields) + "\n}"
-
-    def _map_python_type_to_gql(self, python_type: type, is_input: bool = False) -> str:
-        """Map Python type to GraphQL type string.
-
-        Args:
-            python_type: Python type to map
-            is_input: If True, Optional[T] will not have ! (for input types)
-
-        Returns:
-            GraphQL type string with appropriate nullability
-        """
-        from typing import ForwardRef
-
-        # Handle Optional[T] (Union[T, None])
-        if _is_optional(python_type):
-            args = get_args(python_type)
-            non_none_args = [a for a in args if a is not type(None)]
-            if non_none_args:
-                inner_gql = self._map_python_type_to_gql(non_none_args[0], is_input)
-                # For input types, Optional fields should not have !
-                if is_input:
-                    return inner_gql.rstrip('!')
-                return inner_gql
-
-        # Check if it's list[T]
-        if _is_list(python_type):
-            args = get_args(python_type)
-            if args:
-                inner_gql = self._map_python_type_to_gql(args[0], is_input)
-                # List elements should always have ! in GraphQL
-                if not inner_gql.endswith('!'):
-                    inner_gql = inner_gql + '!'
-                return f"[{inner_gql}]!"
-            return "[String!]!"
-
-        core_types = get_core_types(python_type)
-        if not core_types:
-            return "String!"
-
-        core_type = core_types[0]
-
-        # Handle ForwardRef
-        if isinstance(core_type, ForwardRef):
-            type_name = core_type.__forward_arg__
-            entity_kls = self._get_entity_by_name(type_name)
-            if entity_kls:
-                core_type = entity_kls
-
-        # Handle string type names that correspond to entity types
-        if isinstance(core_type, str):
-            entity_kls = self._get_entity_by_name(core_type)
-            if entity_kls:
-                core_type = entity_kls
-
-        # Map the core type
-        if is_enum_type(core_type):
-            return f"{core_type.__name__}!"
-        elif safe_issubclass(core_type, BaseModel):
-            return f"{core_type.__name__}!"
-        else:
-            scalar_name = map_scalar_type(core_type)
-            return f"{scalar_name}!"
-
-    def _get_entity_by_name(self, name: str):
-        """Find entity class by name from ERD."""
-        for cfg in self.er_diagram.entities:
-            if cfg.kls.__name__ == name:
-                return cfg.kls
-        return None
 
     def _extract_query_methods(self, entity: type) -> list[dict]:
         """Extract all @query decorated methods."""
@@ -332,7 +263,7 @@ class SDLBuilder(SchemaGenerator):
         params = []
         for p in method_info['params']:
             try:
-                gql_type = self._map_python_type_to_gql(p['type'])
+                gql_type = self.mapper.map_to_sdl(p['type'])
             except Exception:
                 gql_type = 'Any'
 
@@ -386,15 +317,15 @@ class SDLBuilder(SchemaGenerator):
         """Map return type to GraphQL type."""
         core_types = get_core_types(return_type)
         if not core_types:
-            return self._map_python_type_to_gql(return_type)
+            return self.mapper.map_to_sdl(return_type)
 
         core_type = core_types[0]
 
         if _is_list(return_type):
-            inner_gql = self._map_python_type_to_gql(core_type)
+            inner_gql = self.mapper.map_to_sdl(core_type)
             return f"[{inner_gql}]"
 
-        return self._map_python_type_to_gql(return_type)
+        return self.mapper.map_to_sdl(return_type)
 
     def _validate_all_entities(self) -> None:
         """Validate field name conflicts for all entities."""
@@ -422,98 +353,6 @@ class SDLBuilder(SchemaGenerator):
                 field_name=field_name,
                 conflict_type="SCALAR_CONFLICT"
             )
-
-    def _collect_nested_pydantic_types(self, processed_types: set) -> set:
-        """Recursively collect all nested Pydantic BaseModel types,
-        including types from Relationship.target."""
-        nested_types = set()
-        types_to_check = list(processed_types)
-
-        # Add target from relationships to types_to_check
-        for entity_cfg in self.er_diagram.entities:
-            for rel in entity_cfg.relationships:
-                if isinstance(rel, Relationship):
-                    # get_core_types handles list[T] and Optional[T] unwrapping
-                    for target_class in get_core_types(rel.target):
-                        if safe_issubclass(target_class, BaseModel):
-                            if target_class not in processed_types and target_class not in nested_types:
-                                nested_types.add(target_class)
-                                types_to_check.append(target_class)
-
-        # Recursively scan all types (existing logic handles nested fields)
-        while types_to_check:
-            current_type = types_to_check.pop()
-
-            try:
-                type_hints = get_type_hints(current_type)
-            except Exception:
-                continue
-
-            for field_type in type_hints.values():
-                for core_type in get_core_types(field_type):
-                    if safe_issubclass(core_type, BaseModel):
-                        if core_type not in processed_types and core_type not in nested_types:
-                            nested_types.add(core_type)
-                            types_to_check.append(core_type)
-
-        return nested_types
-
-    def _collect_input_types(self) -> set:
-        """Collect all BaseModel types from method parameters as Input Types."""
-        input_types = set()
-        visited = set()
-
-        def collect_from_type(param_type):
-            core_types = get_core_types(param_type)
-
-            for core_type in core_types:
-                if safe_issubclass(core_type, BaseModel):
-                    type_name = core_type.__name__
-                    if type_name not in visited:
-                        visited.add(type_name)
-                        input_types.add(core_type)
-
-                        try:
-                            type_hints = get_type_hints(core_type)
-                            for field_type in type_hints.values():
-                                collect_from_type(field_type)
-                        except Exception:
-                            pass
-
-        for entity_cfg in self.er_diagram.entities:
-            query_methods = self._extract_query_methods(entity_cfg.kls)
-            for method_info in query_methods:
-                method = method_info.get('method')
-                if method:
-                    try:
-                        sig = inspect.signature(method)
-                        for param_name, param in sig.parameters.items():
-                            if param_name in ('self', 'cls'):
-                                continue
-                            if param_name == '_context':
-                                continue
-                            if param.annotation != inspect.Parameter.empty:
-                                collect_from_type(param.annotation)
-                    except Exception:
-                        pass
-
-            mutation_methods = self._extract_mutation_methods(entity_cfg.kls)
-            for method_info in mutation_methods:
-                method = method_info.get('method')
-                if method:
-                    try:
-                        sig = inspect.signature(method)
-                        for param_name, param in sig.parameters.items():
-                            if param_name in ('self', 'cls'):
-                                continue
-                            if param_name == '_context':
-                                continue
-                            if param.annotation != inspect.Parameter.empty:
-                                collect_from_type(param.annotation)
-                    except Exception:
-                        pass
-
-        return input_types
 
     def _build_enum_definition(self, enum_class: type) -> str:
         """Generate GraphQL enum definition.
@@ -667,7 +506,7 @@ class SDLBuilder(SchemaGenerator):
                 # Handle ForwardRef by resolving to actual class
                 if isinstance(core_type, ForwardRef):
                     type_name = core_type.__forward_arg__
-                    resolved = self._get_entity_by_name(type_name)
+                    resolved = self.mapper._get_entity_by_name(type_name)
                     if resolved:
                         core_type = resolved
                     else:
@@ -675,7 +514,7 @@ class SDLBuilder(SchemaGenerator):
 
                 # Handle string type names that correspond to entity types
                 if isinstance(core_type, str):
-                    resolved = self._get_entity_by_name(core_type)
+                    resolved = self.mapper._get_entity_by_name(core_type)
                     if resolved:
                         core_type = resolved
                     else:
@@ -763,7 +602,7 @@ class SDLBuilder(SchemaGenerator):
             if entity_cfg and self._is_relationship_field(entity_cfg, field_name):
                 continue
 
-            gql_type = self._map_python_type_to_gql(field_type)
+            gql_type = self.mapper.map_to_sdl(field_type)
             fields.append(f"  {field_name}: {gql_type}")
 
         # Process relationship fields
@@ -782,7 +621,7 @@ class SDLBuilder(SchemaGenerator):
                             args_str = "(limit: Int, offset: Int)"
                             fields.append(f"  {field_name}{args_str}: {result_type_name}!")
                         else:
-                            gql_type = self._map_python_type_to_gql(rel.target)
+                            gql_type = self.mapper.map_to_sdl(rel.target)
                             fields.append(f"  {field_name}: {gql_type}")
 
         # Build type definition

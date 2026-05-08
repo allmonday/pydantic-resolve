@@ -13,6 +13,7 @@ class MCPErrors(str, Enum):
     TYPE_NOT_FOUND = "type_not_found"
     OPERATION_NOT_FOUND = "operation_not_found"
     MISSING_REQUIRED_FIELD = "missing_required_field"
+    VALIDATION_ERROR = "validation_error"
     INTERNAL_ERROR = "internal_error"
 
 
