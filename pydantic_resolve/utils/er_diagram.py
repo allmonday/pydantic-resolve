@@ -4,11 +4,15 @@ from pydantic import BaseModel, model_validator, Field
 import logging
 import importlib
 import functools
+import weakref
 import pydantic_resolve.constant as const
 from pydantic_resolve.utils import class_util, types
 from pydantic_resolve.utils.depend import Loader
 
 logger = logging.getLogger(__name__)
+
+# Module-level registry: kls -> [Entity], for external ErDiagram lookup
+_er_entity_registry: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 
 
 class QueryConfig(BaseModel):
@@ -152,6 +156,14 @@ class ErDiagram(BaseModel):
 
         # Dynamically bind queries and mutations
         self._bind_query_mutation_methods()
+
+        # Register entities for external ErDiagram lookup
+        for cfg in cfgs:
+            existing = list(_er_entity_registry.get(cfg.kls, []))
+            if cfg not in existing:
+                existing.append(cfg)
+            _er_entity_registry[cfg.kls] = existing
+
         return self
 
     description: str | None = None
@@ -234,25 +246,6 @@ class ErDiagram(BaseModel):
 
                 # Bind as classmethod
                 setattr(kls, method_name, classmethod(mutation_wrapper))
-
-    def create_auto_load(self):
-        """Create an AutoLoad factory bound to this diagram's relationships.
-
-        Returns a callable that creates LoaderInfo instances with embedded
-        entity/relationship data.
-
-        Usage:
-            AutoLoad = diagram.create_auto_load()
-
-            class MyResponse(Biz):
-                user: Annotated[Optional[User], AutoLoad()] = None
-        """
-        er_configs_map = {config.kls: config for config in self.entities}
-
-        def _auto_load(origin: str | None = None) -> LoaderInfo:
-            return LoaderInfo(origin=origin, _er_configs_map=er_configs_map)
-
-        return _auto_load
 
     def add_relationship(self, entities: list[Entity]) -> "ErDiagram":
         """Return a new ErDiagram with entities merged by class.
@@ -365,9 +358,21 @@ class BaseEntity:  # just type (TODO: optimize)
 
 @dataclass
 class LoaderInfo:
-    """Marker annotation - field name from annotation identifies the relationship."""
+    """Marker annotation for explicit AutoLoad (with origin mapping)."""
     origin: str | None = None
-    _er_configs_map: dict | None = None  # {type: Entity}, set by create_auto_load()
+
+
+def AutoLoad(origin: str | None = None) -> LoaderInfo:
+    """Create an AutoLoad marker for explicit relationship resolution.
+
+    Use when field name differs from relationship name::
+
+        class TaskView(TaskEntity):
+            my_owner: Annotated[Optional[UserEntity], AutoLoad(origin='owner')] = None
+
+    When field name matches relationship name, no annotation is needed (implicit).
+    """
+    return LoaderInfo(origin=origin)
 
 
 def base_entity() -> type[BaseEntity]:
@@ -474,12 +479,28 @@ class ErLoaderPreGenerator:
     def __init__(self, er_diagram: ErDiagram | None) -> None:
         self.er_configs_map = {config.kls: config for config in er_diagram.entities} if er_diagram else None
 
+    def _identify_entity_by_mro(self, kls: type) -> Entity | None:
+        """Find the first Entity in kls's MRO registered in the diagram.
+
+        Walks kls.__mro__ and for each base, checks er_configs_map keys
+        via is_compatible_type (supports subclass and subset chains).
+        Returns None if no match found.
+        """
+        if self.er_configs_map is None:
+            return None
+
+        for base in kls.__mro__:
+            for entity_kls, cfg in self.er_configs_map.items():
+                if class_util.is_compatible_type(base, entity_kls):
+                    return cfg
+        return None
+
     def _identify_entity(self, target: type) -> Entity:
-        """Locate the matching ErConfig for a target class via compatibility check."""
-        for kls, cfg in self.er_configs_map.items():
-            if class_util.is_compatible_type(target, kls):
-                return cfg
-        raise AttributeError(f'No ErConfig found for {target}')
+        """Locate the matching ErConfig for a target class via MRO + compatibility check."""
+        result = self._identify_entity_by_mro(target)
+        if result is None:
+            raise AttributeError(f'No ErConfig found for {target}')
+        return result
 
     def _identify_relationship(self, config: Entity, name: str) -> Relationship:
         """Find the relationship matching name."""
@@ -490,25 +511,71 @@ class ErLoaderPreGenerator:
             f'Relationship with name "{name}" not found in "{config.kls}"'
         )
 
+    def _generate_resolve_method(self, kls: type, field_name: str, relationship: Relationship) -> None:
+        """Generate and attach a resolve_* method on kls for the given field/relationship."""
+        method_name = f'{const.RESOLVE_PREFIX}{field_name}'
+
+        def _handle_fk_none(rel: Relationship):
+            fields_set = getattr(rel, 'model_fields_set', set())
+            if 'fk_none_default' in fields_set:
+                return rel.fk_none_default
+            if rel.fk_none_default_factory is not None:
+                return rel.fk_none_default_factory()
+            return None
+
+        def create_resolve_method(key: str, rel: Relationship):
+            def resolve_method(self, loader=Loader(rel.loader)):
+                fk = getattr(self, key)
+                if fk is None:
+                    return _handle_fk_none(rel)
+                if rel.fk_fn is not None:
+                    fk = rel.fk_fn(fk)
+                return loader.load(fk)
+            resolve_method.__name__ = method_name
+            resolve_method.__qualname__ = f'{kls.__name__}.{method_name}'
+            return resolve_method
+
+        def create_resolve_method_with_load_many(key: str, rel: Relationship):
+            def resolve_method(self, loader=Loader(rel.loader)):
+                fk = getattr(self, key)
+                if fk is None:
+                    return _handle_fk_none(rel)
+                if rel.load_many_fn is not None:
+                    fk = rel.load_many_fn(fk)
+                return loader.load_many(fk)
+            resolve_method.__name__ = method_name
+            resolve_method.__qualname__ = f'{kls.__name__}.{method_name}'
+            return resolve_method
+
+        if relationship.load_many:
+            setattr(kls, method_name, create_resolve_method_with_load_many(relationship.fk, relationship))
+        elif relationship.is_list_relationship:
+            setattr(kls, method_name, create_resolve_method(relationship.fk, relationship))
+        else:
+            setattr(kls, method_name, create_resolve_method(relationship.fk, relationship))
+
     def prepare(self, kls: type):
-        """Auto-generate resolve_XXX methods for fields annotated with AutoLoad metadata.
+        """Auto-generate resolve_* methods in two phases.
 
-        For each pydantic field carrying AutoLoad, create a resolve method that uses the
-        corresponding relationship's loader via LoaderDepend.
+        Phase 1 (explicit): Fields annotated with LoaderInfo (AutoLoad) metadata.
+        Phase 2 (implicit): Fields whose names match a relationship name in the
+        ER Diagram, even without explicit annotation.
         """
-        auto_loader_fields = list(_get_pydantic_field_items_with_load_by(kls))
-
-        if not auto_loader_fields:
+        if self.er_configs_map is None:
             return
 
-        if self.er_configs_map is None:
-            raise ValueError('er_configs_map is None, cannot identify config')
-
-        config = self._identify_entity(kls)
+        config = self._identify_entity_by_mro(kls)
+        if config is None:
+            return
 
         needs_rebuild = False
+        explicit_fields: set[str] = set()
+
+        # === Phase 1: Explicit AutoLoad (LoaderInfo annotation) ===
+        auto_loader_fields = list(_get_pydantic_field_items_with_load_by(kls))
 
         for field_name, annotation, loader_info in auto_loader_fields:
+            explicit_fields.add(field_name)
             method_name = f'{const.RESOLVE_PREFIX}{field_name}'
             if hasattr(kls, method_name):
                 logger.warning(
@@ -517,15 +584,11 @@ class ErLoaderPreGenerator:
                 continue
 
             lookup_key = loader_info.origin if loader_info.origin else field_name
-            relationship = self._identify_relationship(
-                config=config,
-                name=lookup_key,
-            )
+            relationship = self._identify_relationship(config=config, name=lookup_key)
 
             if relationship.loader is None:
                 raise AttributeError(f'Loader not provided in relationship for name "{field_name}" in class "{kls}"')
 
-            # Validate that the annotation type is compatible with relationship.target
             if not class_util.is_compatible_type(annotation, relationship.target):
                 raise TypeError(
                     f'Type mismatch in {kls.__name__}.{field_name}: '
@@ -533,49 +596,37 @@ class ErLoaderPreGenerator:
                     f'relationship target {relationship.target} (name="{lookup_key}")'
                 )
 
-            def _handle_fk_none(rel: Relationship):
-                """Common logic for handling None foreign key values."""
-                fields_set = getattr(rel, 'model_fields_set', set())
-                if 'fk_none_default' in fields_set:
-                    return rel.fk_none_default  # may be None intentionally
-                if rel.fk_none_default_factory is not None:
-                    return rel.fk_none_default_factory()
-                return None
+            self._generate_resolve_method(kls, field_name, relationship)
+            needs_rebuild = True
 
-            def create_resolve_method(key: str, rel: Relationship):  # closure per field
-                def resolve_method(self, loader=Loader(rel.loader)):
-                    fk = getattr(self, key)
-                    if fk is None:
-                        return _handle_fk_none(rel)
-                    if rel.fk_fn is not None:
-                        fk = rel.fk_fn(fk)
-                    return loader.load(fk)
-                resolve_method.__name__ = method_name
-                resolve_method.__qualname__ = f'{kls.__name__}.{method_name}'
-                return resolve_method
+        # === Phase 2: Implicit matching (field name == relationship name) ===
+        relationship_name_map = {rel.name: rel for rel in config.relationships}
 
-            def create_resolve_method_with_load_many(key: str, rel: Relationship):  # closure per field
-                def resolve_method(self, loader=Loader(rel.loader)):
-                    fk = getattr(self, key)
-                    if fk is None:
-                        return _handle_fk_none(rel)
-                    if rel.load_many_fn is not None:
-                        fk = rel.load_many_fn(fk)
-                    return loader.load_many(fk)
-                resolve_method.__name__ = method_name
-                resolve_method.__qualname__ = f'{kls.__name__}.{method_name}'
-                return resolve_method
+        for field_name, field_info in kls.model_fields.items():
+            if field_name in explicit_fields:
+                continue
 
-            if relationship.load_many:
-                # load_many: FK is a list of values, uses loader.load_many()
-                # This is a Core API pattern (e.g., fk='user_ids', load_many=True)
-                setattr(kls, method_name, create_resolve_method_with_load_many(relationship.fk, relationship))
-            elif relationship.is_list_relationship:
-                # One-to-many in Core API context: standard loader.load(fk)
-                setattr(kls, method_name, create_resolve_method(relationship.fk, relationship))
-            else:
-                setattr(kls, method_name, create_resolve_method(relationship.fk, relationship))
+            method_name = f'{const.RESOLVE_PREFIX}{field_name}'
+            if hasattr(kls, method_name):
+                if field_name in relationship_name_map:
+                    logger.warning(
+                        f'{method_name} already exists in {kls}, '
+                        f'implicit AutoLoad for relationship "{field_name}" skipped.'
+                    )
+                continue
 
+            if field_name not in relationship_name_map:
+                continue
+
+            relationship = relationship_name_map[field_name]
+
+            if relationship.loader is None:
+                continue
+
+            if not class_util.is_compatible_type(field_info.annotation, relationship.target):
+                continue
+
+            self._generate_resolve_method(kls, field_name, relationship)
             needs_rebuild = True
 
         if needs_rebuild:

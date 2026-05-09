@@ -84,7 +84,6 @@ class ResponseBuilder:
         self.resolver_class = resolver_class
         self.enable_from_attribute_in_type_adapter = enable_from_attribute_in_type_adapter
         self.enable_pagination = enable_pagination
-        self._create_auto_load = er_diagram.create_auto_load()
         # Bind lru_cache to instance method
         # This provides LRU eviction + thread safety + instance isolation
         self._build_cached = lru_cache(maxsize=256)(self._build_model_impl)
@@ -132,7 +131,7 @@ class ResponseBuilder:
             1. UserEntity → UserResponse (id, name, posts)
             2. posts field triggers recursive call
             3. PostEntity → PostResponse (title)
-            4. Inject AutoLoad annotation for relationship resolution
+            4. Implicit AutoLoad resolves relationships via field name matching
 
         Output (dynamic models):
             class PostResponse(BaseModel):
@@ -141,7 +140,7 @@ class ResponseBuilder:
             class UserResponse(BaseModel):
                 id: int
                 name: str
-                posts: Annotated[list[PostResponse], AutoLoad()] = []
+                posts: list[PostResponse] = []
 
         Key Implementation Details:
         ─────────────────────────────────────────────────────────────────
@@ -364,7 +363,7 @@ class ResponseBuilder:
         After:
             field_definitions = {'name': (str, ...), 'id': (int, ...)}
 
-        Why: AutoLoad() needs the FK field to fetch related posts
+        Why: implicit AutoLoad needs the FK field to fetch related posts
         ─────────────────────────────────────────────────────────────────
         """
         selected_fields = set(field_selection.sub_fields.keys()) if field_selection.sub_fields else set()
@@ -535,11 +534,11 @@ class ResponseBuilder:
         Process:
             1. 'posts' not in field_definitions (not a direct field)
             2. _find_relationship('posts') finds the Relationship
-            3. _build_relationship_field() creates AutoLoad annotation
+            3. _build_relationship_field() creates field type (implicit AutoLoad)
 
         Result:
             field_definitions['posts'] = (
-                Annotated[list[PostResponse], AutoLoad()],
+                list[PostResponse],
                 []
             )
         ─────────────────────────────────────────────────────────────────
@@ -578,7 +577,7 @@ class ResponseBuilder:
         Handles two cases:
         1. Paginated list field (when enable_pagination and page_loader): Result type with
            directly attached resolve method (bypasses AutoLoad entirely)
-        2. Regular list/many-to-one field: Annotated with AutoLoad()
+        2. Regular list/many-to-one field: implicit AutoLoad via field name matching
         """
         target_kls = relationship.target
         is_paginated = (
@@ -590,10 +589,8 @@ class ResponseBuilder:
 
         # Handle scalar targets (str, int, etc.) — skip recursive model building
         if self._is_scalar_relationship(relationship):
-            _AutoLoad = self._create_auto_load
-            base_type = Annotated[Optional[target_kls], _AutoLoad()]
             return (
-                base_type,
+                Optional[target_kls],
                 Field(
                     default=None,
                     validation_alias=validation_alias,
@@ -604,9 +601,6 @@ class ResponseBuilder:
         actual_entity = self._extract_entity_type(target_kls)
         if actual_entity is None:
             return None
-
-        # Build annotated type with AutoLoad
-        _AutoLoad = self._create_auto_load
 
         if _is_list(target_kls) and is_paginated:
             # Paginated field: build {Entity}Result type
@@ -653,13 +647,12 @@ class ResponseBuilder:
             )
 
         elif _is_list(target_kls):
-            # Regular list field: standard AutoLoad
+            # Regular list field: implicit AutoLoad via field name matching
             nested_model = self.build_response_model(
                 actual_entity, selection, parent_path
             )
-            base_type = Annotated[list[nested_model], _AutoLoad()]
             return (
-                base_type,
+                list[nested_model],
                 Field(
                     default=[],
                     validation_alias=validation_alias,
@@ -667,13 +660,12 @@ class ResponseBuilder:
             )
 
         else:
-            # Many-to-one: Optional with AutoLoad
+            # Many-to-one: implicit AutoLoad via field name matching
             nested_model = self.build_response_model(
                 actual_entity, selection, parent_path
             )
-            base_type = Annotated[Optional[nested_model], _AutoLoad()]
             return (
-                base_type,
+                Optional[nested_model],
                 Field(
                     default=None,
                     validation_alias=validation_alias,

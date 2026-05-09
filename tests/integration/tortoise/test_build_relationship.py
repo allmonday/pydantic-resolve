@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Annotated
-
 import pytest
 from pydantic import BaseModel, ConfigDict
 from tortoise.expressions import Q
@@ -34,12 +32,11 @@ async def test_resolver_with_built_relationship(orm_mappings, seeded_db):
     entities = build_relationship(mappings=orm_mappings)
 
     diagram = ErDiagram(entities=[]).add_relationship(entities)
-    AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
 
-        school: Annotated[SchoolDTO | None, AutoLoad()] = None
-        courses: Annotated[list[CourseDTO], AutoLoad()] = []
+        school: SchoolDTO | None = None
+        courses: list[CourseDTO] = []
 
     MyResolver = config_resolver("TortoiseContribResolver", er_diagram=diagram)
 
@@ -83,12 +80,11 @@ async def test_build_relationship_with_default_filter(seeded_db):
     )
 
     diagram = ErDiagram(entities=[]).add_relationship(entities)
-    AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
 
-        school: Annotated[SchoolDTO | None, AutoLoad()] = None
-        courses: Annotated[list[CourseDTO], AutoLoad()] = []
+        school: SchoolDTO | None = None
+        courses: list[CourseDTO] = []
 
     MyResolver = config_resolver("TortoiseContribFilteredResolver", er_diagram=diagram)
 
@@ -121,11 +117,10 @@ async def test_mapping_filter_empty_list_resets_global_default(seeded_db):
     )
 
     diagram = ErDiagram(entities=[]).add_relationship(entities)
-    AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
 
-        school: Annotated[SchoolDTO | None, AutoLoad()] = None
+        school: SchoolDTO | None = None
 
     MyResolver = config_resolver("TortoiseContribResetResolver", er_diagram=diagram)
 
@@ -158,12 +153,11 @@ async def test_mapping_filter_non_empty_overrides_global_default(seeded_db):
     )
 
     diagram = ErDiagram(entities=[]).add_relationship(entities)
-    AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
- 
-        school: Annotated[SchoolDTO | None, AutoLoad()] = None
-        courses: Annotated[list[CourseDTO], AutoLoad()] = []
+
+        school: SchoolDTO | None = None
+        courses: list[CourseDTO] = []
 
     MyResolver = config_resolver("TortoiseContribOverrideResolver", er_diagram=diagram)
 
@@ -202,12 +196,11 @@ async def test_contrib_loader_uses_query_meta_fields(seeded_db):
     )
 
     diagram = ErDiagram(entities=[]).add_relationship(entities)
-    AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
 
-        school: Annotated[SchoolNameDTO | None, AutoLoad()] = None
-        courses: Annotated[list[CourseTitleDTO], AutoLoad()] = []
+        school: SchoolNameDTO | None = None
+        courses: list[CourseTitleDTO] = []
 
     MyResolver = config_resolver("TortoiseContribQueryMetaResolver", er_diagram=diagram)
 

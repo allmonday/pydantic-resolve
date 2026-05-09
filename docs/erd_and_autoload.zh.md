@@ -202,6 +202,22 @@ diagram = ErDiagram(
 - 当关系元数据自然属于实体类型时，使用 `__relationships__`
 - 当关系元数据应该与类型定义分离时，使用外部 `ErDiagram(...)`
 
+## 外部 ErDiagram：一个项目只用一个 Diagram
+
+使用外部 `ErDiagram(...)` 声明时，所有实体类会注册到一个共享的内部 registry 中。如果多个 `ErDiagram` 实例注册了同一个实体类但关系不同，行为将不可预测：
+
+- **同名关系、不同 FK** — 在类定义时抛出 `ValueError`（检测到歧义）。
+- **不同名关系** — 来自所有 diagram 的关系被静默合并。`DefineSubset` 看到的是所有已注册关系的并集，而不是某个特定 diagram 的关系。
+
+`base_entity()` 不存在此问题，因为它通过 MRO 定位唯一的 diagram。
+
+**建议：一个项目只创建一个 `ErDiagram` 实例。** 如果需要合并来自不同来源的关系，使用 `add_relationship()` 将它们合并到同一个 diagram：
+
+```python
+diagram = ErDiagram(entities=[...])
+diagram = diagram.add_relationship(more_entities)
+```
+
 ## AutoLoad 如何工作
 
 `AutoLoad` 并不是魔法。它是一个注释，解析器识别并在分析时将其转换为 `resolve_*` 方法。

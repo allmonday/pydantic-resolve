@@ -202,6 +202,22 @@ In short:
 - use `__relationships__` when relationship metadata belongs naturally on the entity type
 - use external `ErDiagram(...)` when relationship metadata should stay separate from the type definition
 
+## External ErDiagram: One Diagram Per Project
+
+When using external `ErDiagram(...)` declarations, all entity classes are registered in a shared internal registry. If multiple `ErDiagram` instances register the same entity class with different relationships, the results are unpredictable:
+
+- **Same relationship name, different FK** — a `ValueError` is raised at class-definition time (ambiguity detected).
+- **Different relationship names** — relationships from all diagrams are silently merged. `DefineSubset` sees the union of all registered relationships, not the ones from a specific diagram.
+
+This is not an issue with `base_entity()`, which uses MRO to locate the single authoritative diagram.
+
+**Recommendation:** create only one `ErDiagram` instance per project. If you need to combine relationships from different sources, use `add_relationship()` to merge them into a single diagram:
+
+```python
+diagram = ErDiagram(entities=[...])
+diagram = diagram.add_relationship(more_entities)
+```
+
 ## How AutoLoad Works
 
 `AutoLoad` is not magic. It is an annotation that the resolver recognizes and converts into a `resolve_*` method at analysis time.

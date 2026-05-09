@@ -1,5 +1,5 @@
 import pytest
-from typing import Optional, Annotated, List
+from typing import Optional, List
 from pydantic import BaseModel
 from pydantic_resolve.utils.resolver_configurator import config_global_resolver
 from pydantic_resolve import Entity, Relationship, DefineSubset, ErDiagram, Resolver
@@ -83,8 +83,6 @@ diagram = ErDiagram(
     ]
 )
 
-AutoLoad = diagram.create_auto_load()
-
 
 @pytest.fixture(autouse=True)
 def setup_global_resolver():
@@ -95,10 +93,10 @@ def setup_global_resolver():
 class BizCase1(DefineSubset):
     __pydantic_resolve_subset__ = (Biz, ('id', 'name', 'user_id'))
 
-    user: Annotated[Optional[User], AutoLoad()] = None
-    foos: Annotated[List[Foo], AutoLoad()] = []
-    bars: Annotated[List[Bar], AutoLoad()] = []
-    special_bars: Annotated[list[Bar], AutoLoad()] = []
+    user: Optional[User] = None
+    foos: List[Foo] = []
+    bars: List[Bar] = []
+    special_bars: list[Bar] = []
     
 
 @pytest.mark.asyncio

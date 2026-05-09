@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from pydantic_resolve.graphql.schema.generators.base import SchemaGenerator
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.er_diagram import Relationship
-from pydantic_resolve.utils.types import get_core_types, _is_optional, _is_list
+from pydantic_resolve.utils.types import get_core_types, _is_list
 from pydantic_resolve.graphql.type_mapping import is_enum_type, get_enum_names
 from pydantic_resolve.graphql.exceptions import FieldNameConflictError
 

@@ -12,7 +12,7 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 
-from pydantic_resolve import ErDiagram, DefineSubset, config_resolver
+from pydantic_resolve import ErDiagram, DefineSubset, config_resolver, AutoLoad
 from pydantic_resolve.integration.mapping import Mapping
 from pydantic_resolve.integration.sqlalchemy import build_relationship
 from pydantic_resolve.use_case import UseCaseService, UseCaseAppConfig, create_use_case_mcp_server
@@ -69,7 +69,6 @@ entities = build_relationship(
 )
 
 diagram = ErDiagram(entities=[]).add_relationship(entities)
-AutoLoad = diagram.create_auto_load()
 MyResolver = config_resolver("UseCaseDemoResolver", er_diagram=diagram)
 
 

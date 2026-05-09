@@ -5,7 +5,7 @@ import copy
 import pydantic_resolve.constant as const
 from pydantic_resolve.utils.expose import ExposeAs
 from pydantic_resolve.utils.collector import SendTo
-from pydantic_resolve.utils.er_diagram import LoaderInfo
+from pydantic_resolve.utils.er_diagram import LoaderInfo, Relationship
 from pydantic_resolve.utils import class_util
 class SubsetConfig(BaseModel):
     kls: type[BaseModel]  # parent class
@@ -176,53 +176,113 @@ def _apply_config_modifiers_to_field(
     return result
 
 
+def _collect_relationship_candidates_from_mro(
+    parent_kls: type[BaseModel],
+) -> dict[str, list[Relationship]] | None:
+    """Collect candidate relationships visible to parent_kls.
+
+    For inline base_entity() diagrams there is a single authoritative diagram.
+    For external ErDiagram registrations, multiple entity configs may exist for the
+    same parent class; those candidates are merged and ambiguity is checked lazily
+    when a specific relationship is requested.
+    """
+    # Path 1: base_entity() diagram via MRO
+    for base in parent_kls.__mro__:
+        if hasattr(base, 'get_diagram') and hasattr(base, 'entities'):
+            try:
+                diagram = base.get_diagram()
+                relationship_candidates: dict[str, list[Relationship]] = {}
+                for entity_cfg in diagram.entities:
+                    if not class_util.is_compatible_type(parent_kls, entity_cfg.kls):
+                        continue
+                    for rel in entity_cfg.relationships:
+                        relationship_candidates.setdefault(rel.name, []).append(rel)
+                return relationship_candidates or None
+            except Exception:
+                continue
+
+    # Path 2: external ErDiagram registry
+    from pydantic_resolve.utils.er_diagram import _er_entity_registry
+    relationship_candidates: dict[str, list[Relationship]] = {}
+    for base in parent_kls.__mro__:
+        for entity_cfg in _er_entity_registry.get(base, []):
+            if not class_util.is_compatible_type(parent_kls, entity_cfg.kls):
+                continue
+            for rel in entity_cfg.relationships:
+                relationship_candidates.setdefault(rel.name, []).append(rel)
+
+    return relationship_candidates or None
+
+
+def _select_relationship(
+    parent_kls: type[BaseModel],
+    lookup_key: str,
+    relationship_candidates: dict[str, list[Relationship]] | None,
+) -> Relationship | None:
+    """Select a relationship by name, rejecting ambiguous external mappings."""
+    if relationship_candidates is None:
+        return None
+
+    candidates = relationship_candidates.get(lookup_key, [])
+    if not candidates:
+        return None
+
+    fk_values = {rel.fk for rel in candidates}
+    if len(fk_values) > 1:
+        raise ValueError(
+            f'Ambiguous external ErDiagram relationship "{lookup_key}" for '
+            f'{parent_kls.__name__}: multiple foreign keys found {sorted(fk_values)}. '
+            'DefineSubset cannot infer which external ErDiagram to use. '
+            'Use base_entity().get_diagram(), select the FK field explicitly, '
+            'or avoid conflicting external diagrams for the same model.'
+        )
+
+    return candidates[0]
+
+
+def _inject_hidden_fk_field(
+    field_definitions: dict[str, Any],
+    parent_kls: type[BaseModel],
+    fk: str,
+) -> None:
+    """Inject the FK field needed by AutoLoad if it is missing from the subset."""
+    if fk in field_definitions or fk not in parent_kls.model_fields:
+        return
+
+    parent_field = parent_kls.model_fields[fk]
+    field_definitions[fk] = (
+        parent_field.annotation,
+        FieldInfo(
+            annotation=parent_field.annotation,
+            default=None,
+            exclude=True,
+        ),
+    )
+
+
 def _auto_add_fk_fields(
     extra_fields: dict[str, tuple[Any, Any]],
     parent_kls: type[BaseModel],
     field_definitions: dict[str, Any],
 ) -> None:
-    """Auto-add FK fields from AutoLoad annotations in extra_fields.
+    """Auto-add FK fields for fields that will trigger implicit or explicit AutoLoad.
 
-    When a DefineSubset class declares a field with AutoLoad() annotation, the
-    generated resolve method needs a FK field to load data, but that FK field may
-    not be included in the subset's selected fields.
-
-    Example scenario:
-        class Biz(BaseModel):
-            id: int
-            name: str
-            user_id: int  # FK field
-
-        class BizSubset(DefineSubset):
-            __pydantic_resolve_subset__ = (Biz, ['id'])  # only selected 'id'
-
-            user: Annotated[Optional[User], AutoLoad()] = None  # needs user_id
-
-    AutoLoad generates resolve_user which calls getattr(self, 'user_id'), but
-    BizSubset has no user_id field — this would fail at runtime.
-
-    This function solves the problem by:
-        1. Scanning extra_fields for Annotated[..., LoaderInfo] metadata
-        2. Extracting LoaderInfo._er_configs_map (entity → Entity config mapping)
-        3. Finding the Entity matching parent_kls (e.g. Biz)
-        4. Looking up the Relationship by name (field name or origin)
-        5. Getting rel.fk (e.g. 'user_id'), and adding it to field_definitions
-           with exclude=True if not already present
-
-    Result: BizSubset will have:
-        - id: int (user selected)
-        - user_id: int (auto-added, exclude=True, hidden from serialization)
-        - user: Annotated[Optional[User], AutoLoad()] = None (user declared)
-
-    This logic was moved from ErLoaderPreGenerator.prepare() because FK field
-    injection is a subset construction concern, not a resolve method generation
-    concern. Placing it here ensures all fields are ready before create_model().
+    Phase 1 (explicit): Fields with LoaderInfo annotation — existing behavior.
+    Phase 2 (implicit): Fields whose names match a relationship name in the ER Diagram,
+    even without LoaderInfo annotation.
 
     Args:
         extra_fields: New fields declared on the DefineSubset class body.
         parent_kls: The parent BaseModel class being subsetted.
         field_definitions: Field definitions dict being built (mutated in-place).
     """
+    relationship_candidates = _collect_relationship_candidates_from_mro(parent_kls)
+    if relationship_candidates is None:
+        return
+
+    explicit_fields: set[str] = set()
+
+    # === Phase 1: Explicit AutoLoad (LoaderInfo annotation) ===
     for fname, (anno, _default) in extra_fields.items():
         # Extract metadata from Annotated type
         origin = get_origin(anno)
@@ -233,33 +293,25 @@ def _auto_add_fk_fields(
         for arg in args[1:]:  # skip first arg (the actual type)
             if not isinstance(arg, LoaderInfo):
                 continue
-            if arg._er_configs_map is None:
-                continue
 
-            # Find entity matching parent_kls
-            for entity_kls, entity_cfg in arg._er_configs_map.items():
-                if not class_util.is_compatible_type(parent_kls, entity_kls):
-                    continue
+            explicit_fields.add(fname)
 
-                lookup_key = arg.origin if arg.origin else fname
-                for rel in entity_cfg.relationships:
-                    if rel.name != lookup_key:
-                        continue
-
-                    fk = rel.fk
-                    if fk not in field_definitions and fk in parent_kls.model_fields:
-                        parent_field = parent_kls.model_fields[fk]
-                        field_definitions[fk] = (
-                            parent_field.annotation,
-                            FieldInfo(
-                                annotation=parent_field.annotation,
-                                default=None,
-                                exclude=True,
-                            ),
-                        )
-                    break
-                break
+            lookup_key = arg.origin if arg.origin else fname
+            relationship = _select_relationship(parent_kls, lookup_key, relationship_candidates)
+            if relationship is not None:
+                _inject_hidden_fk_field(field_definitions, parent_kls, relationship.fk)
             break
+
+    # === Phase 2: Implicit matching (field name == relationship name) ===
+    for fname, (anno, _default) in extra_fields.items():
+        if fname in explicit_fields:
+            continue
+
+        relationship = _select_relationship(parent_kls, fname, relationship_candidates)
+        if relationship is None:
+            continue
+
+        _inject_hidden_fk_field(field_definitions, parent_kls, relationship.fk)
 
 
 class SubsetMeta(type):

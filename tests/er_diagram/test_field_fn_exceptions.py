@@ -5,7 +5,7 @@ This module tests how exceptions from field_fn and load_many_fn functions
 are handled during data resolution.
 """
 import pytest
-from typing import Optional, Annotated, List
+from typing import Optional, List
 from pydantic import BaseModel
 
 from pydantic_resolve import (
@@ -74,11 +74,9 @@ async def test_field_fn_raises_value_error():
         ]
     )
 
-    AutoLoad = diagram.create_auto_load()
-
     # OrderResponse must inherit from Order to be compatible with the Entity config
     class OrderResponse(Order):
-        user: Annotated[Optional[User], AutoLoad()] = None
+        user: Optional[User] = None
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -110,10 +108,8 @@ async def test_field_fn_with_none_value():
         ]
     )
 
-    AutoLoad = diagram.create_auto_load()
-
     class OrderResponse(Order):
-        user: Annotated[Optional[User], AutoLoad()] = None
+        user: Optional[User] = None
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -147,10 +143,8 @@ async def test_field_fn_returns_none():
         ]
     )
 
-    AutoLoad = diagram.create_auto_load()
-
     class OrderResponse(Order):
-        user: Annotated[Optional[User], AutoLoad()] = None
+        user: Optional[User] = None
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -181,10 +175,8 @@ async def test_field_fn_returns_incompatible_type():
         ]
     )
 
-    AutoLoad = diagram.create_auto_load()
-
     class OrderResponse(Order):
-        user: Annotated[Optional[User], AutoLoad()] = None
+        user: Optional[User] = None
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -214,10 +206,8 @@ async def test_load_many_fn_with_none_field_value():
         ]
     )
 
-    AutoLoad = diagram.create_auto_load()
-
     class OrderResponse(Order):
-        users: Annotated[List[User], AutoLoad()] = []
+        users: List[User] = []
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -250,10 +240,8 @@ async def test_load_many_fn_returns_none():
         ]
     )
 
-    AutoLoad = diagram.create_auto_load()
-
     class OrderResponse(Order):
-        users: Annotated[List[User], AutoLoad()] = []
+        users: List[User] = []
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -284,10 +272,8 @@ async def test_load_many_fn_returns_non_iterable():
         ]
     )
 
-    AutoLoad = diagram.create_auto_load()
-
     class OrderResponse(Order):
-        users: Annotated[List[User], AutoLoad()] = []
+        users: List[User] = []
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -317,10 +303,8 @@ async def test_field_fn_with_valid_transformation():
         ]
     )
 
-    AutoLoad = diagram.create_auto_load()
-
     class OrderResponse(Order):
-        user: Annotated[Optional[User], AutoLoad()] = None
+        user: Optional[User] = None
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 
@@ -351,10 +335,8 @@ async def test_load_many_fn_with_valid_transformation():
         ]
     )
 
-    AutoLoad = diagram.create_auto_load()
-
     class OrderResponse(Order):
-        users: Annotated[List[User], AutoLoad()] = []
+        users: List[User] = []
 
     MyResolver = config_resolver('MyResolver', er_diagram=diagram)
 

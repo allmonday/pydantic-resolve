@@ -16,7 +16,7 @@ from pydantic_resolve.utils.depend import Loader
 from pydantic_resolve.utils.subset import DefineSubset, SubsetConfig
 from pydantic_resolve.utils.openapi import (
     serialization)
-from pydantic_resolve.utils.er_diagram import Relationship, Entity, ErDiagram, base_entity, QueryConfig, MutationConfig
+from pydantic_resolve.utils.er_diagram import Relationship, Entity, ErDiagram, base_entity, QueryConfig, MutationConfig, AutoLoad
 from pydantic_resolve.utils.resolver_configurator import config_resolver, config_global_resolver, reset_global_resolver
 from pydantic_resolve.utils.expose import ExposeAs
 
@@ -68,6 +68,7 @@ __all__ = [
     'Relationship',
     'ErDiagram',
     'base_entity',
+    'AutoLoad',
     'QueryConfig',
     'MutationConfig',
 

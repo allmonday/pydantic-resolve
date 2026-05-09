@@ -15,6 +15,31 @@ class MySubset(DefineSubset):
 
 Creates a new Pydantic model with selected fields from the source entity. You can add additional fields (including `AutoLoad` annotations) on top.
 
+If an added field maps to an ERD relationship, `DefineSubset` automatically injects the required FK field as a hidden `exclude=True` field when needed. This works for both:
+
+- implicit relationship matching by field name
+- explicit `AutoLoad(origin=...)` aliases
+
+Example:
+
+```python
+class TaskCard(DefineSubset):
+    __subset__ = (TaskEntity, ('id', 'title'))
+
+    # field name differs from relationship name `owner`
+    my_owner: Annotated[Optional[UserEntity], AutoLoad(origin='owner')] = None
+```
+
+Even though `owner_id` is not part of the subset fields, `DefineSubset` adds it internally so the generated resolve method can still load `my_owner`.
+
+### External ErDiagram Constraint
+
+When `DefineSubset` relies on external `ErDiagram(...)` definitions instead of `base_entity()`, it may need to infer the FK field before a resolver instance is created.
+
+If multiple external diagrams register the same model class with the same relationship `name` but different `fk` values, subset construction is ambiguous and now raises `ValueError`.
+
+Keep one authoritative external relationship definition per `(model class, relationship name)`, or explicitly include the FK field in the subset so no hidden-field inference is needed.
+
 ### Tuple Form
 
 ```python

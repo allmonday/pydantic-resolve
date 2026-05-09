@@ -95,14 +95,6 @@ ErDiagram(
 | `entities` | `list[Entity]` | All entity definitions |
 | `description` | `str \| None` | Optional diagram description |
 
-### create_auto_load()
-
-```python
-AutoLoad = diagram.create_auto_load() -> Callable
-```
-
-Creates an annotation factory bound to this diagram. Use in `Annotated` type hints.
-
 ### add_relationship()
 
 ```python
@@ -110,6 +102,47 @@ merged = diagram.add_relationship(entities: list[Entity]) -> ErDiagram
 ```
 
 Merges external entities (e.g., from ORM) into the diagram. Returns a new `ErDiagram`.
+
+### External Diagram Ambiguity
+
+`base_entity()` diagrams are scoped to a single model family, so relationship lookup is naturally unambiguous.
+
+External diagrams are different. If the same model class appears in multiple external `ErDiagram` instances, and those diagrams define the same relationship `name` with different `fk` fields, `pydantic-resolve` now raises `ValueError` instead of silently picking the last registered diagram.
+
+This matters when the library must infer relationship metadata outside the resolver-specific diagram, especially for:
+
+- `DefineSubset` auto-adding hidden FK fields
+- implicit relationship resolution by field name
+- explicit `AutoLoad(origin=...)` on subset-only fields
+
+Example of an ambiguous setup:
+
+```python
+ErDiagram(entities=[
+    Entity(kls=TaskEntity, relationships=[
+        Relationship(fk='owner_id', target=UserEntity, name='user', loader=user_loader),
+    ])
+])
+
+ErDiagram(entities=[
+    Entity(kls=TaskEntity, relationships=[
+        Relationship(fk='manager_id', target=UserEntity, name='user', loader=user_loader),
+    ])
+])
+
+class TaskSummary(DefineSubset):
+    __subset__ = (TaskEntity, ('id',))
+    user: Optional[UserEntity] = None
+
+# Raises ValueError: ambiguous external ErDiagram relationship "user"
+```
+
+Use one of these patterns to avoid ambiguity:
+
+- Prefer `base_entity()` + `BaseEntity.get_diagram()` when the models belong to one domain.
+- Keep one authoritative external `ErDiagram` per model class and relationship name.
+- If multiple external diagrams are unavoidable, do not reuse the same relationship `name` for different FK meanings on the same model class.
+- In `DefineSubset`, explicitly include the FK field yourself if you do not want subset construction to infer it.
 
 ## AutoLoad
 
@@ -119,10 +152,21 @@ AutoLoad(origin: str | None = None)
 
 Annotation for auto-resolving fields via ERD relationships.
 
+When the field name already matches `Relationship.name`, you usually do not need `AutoLoad()` at all:
+
 ```python
 class TaskView(TaskEntity):
-    owner: Annotated[Optional[UserEntity], AutoLoad()] = None
-    # or with explicit relationship name:
+    owner: Optional[UserEntity] = None
+```
+
+Use `AutoLoad(origin=...)` only when the field name differs from the relationship name.
+
+```python
+class TaskView(TaskEntity):
+    # explicit alias for relationship name `owner`
+    my_owner: Annotated[Optional[UserEntity], AutoLoad(origin='owner')] = None
+
+    # explicit alias for relationship name `tasks`
     items: Annotated[list[TaskEntity], AutoLoad(origin='tasks')] = []
 ```
 
