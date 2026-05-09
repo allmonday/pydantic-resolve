@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Annotated
-
 import pytest
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
@@ -49,12 +47,11 @@ async def test_resolver_with_built_relationship(
     entities = build_relationship(mappings=orm_mappings, session_factory=session_factory)
 
     diagram = ErDiagram(entities=[]).add_relationship(entities)
-    AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
 
-        school: Annotated[SchoolDTO | None, AutoLoad()] = None
-        courses: Annotated[list[CourseDTO], AutoLoad()] = []
+        school: SchoolDTO | None = None
+        courses: list[CourseDTO] = []
 
     MyResolver = config_resolver("SQLAlchemyContribResolver", er_diagram=diagram)
 
@@ -114,12 +111,11 @@ async def test_build_relationship_with_default_filter(
     )
 
     diagram = ErDiagram(entities=[]).add_relationship(entities)
-    AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
 
-        school: Annotated[SchoolDTO | None, AutoLoad()] = None
-        courses: Annotated[list[CourseDTO], AutoLoad()] = []
+        school: SchoolDTO | None = None
+        courses: list[CourseDTO] = []
 
     MyResolver = config_resolver("SQLAlchemyContribFilteredResolver", er_diagram=diagram)
 
@@ -167,11 +163,10 @@ async def test_mapping_filter_empty_list_resets_global_default(
     )
 
     diagram = ErDiagram(entities=[]).add_relationship(entities)
-    AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
 
-        school: Annotated[SchoolDTO | None, AutoLoad()] = None
+        school: SchoolDTO | None = None
 
     MyResolver = config_resolver("SQLAlchemyContribResetResolver", er_diagram=diagram)
 
@@ -221,12 +216,11 @@ async def test_mapping_filter_non_empty_overrides_global_default(
     )
 
     diagram = ErDiagram(entities=[]).add_relationship(entities)
-    AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
 
-        school: Annotated[SchoolDTO | None, AutoLoad()] = None
-        courses: Annotated[list[CourseDTO], AutoLoad()] = []
+        school: SchoolDTO | None = None
+        courses: list[CourseDTO] = []
 
     MyResolver = config_resolver("SQLAlchemyContribOverrideResolver", er_diagram=diagram)
 
@@ -274,12 +268,11 @@ async def test_contrib_loader_uses_query_meta_fields(
     )
 
     diagram = ErDiagram(entities=[]).add_relationship(entities)
-    AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
 
-        school: Annotated[SchoolNameDTO | None, AutoLoad()] = None
-        courses: Annotated[list[CourseTitleDTO], AutoLoad()] = []
+        school: SchoolNameDTO | None = None
+        courses: list[CourseTitleDTO] = []
 
     MyResolver = config_resolver("SQLAlchemyContribQueryMetaResolver", er_diagram=diagram)
 
@@ -331,11 +324,10 @@ async def test_resolver_with_reverse_one_to_one(
     )
 
     diagram = ErDiagram(entities=[]).add_relationship(entities)
-    AutoLoad = diagram.create_auto_load()
 
     class StudentView(StudentDTO):
 
-        profile: Annotated[StudentProfileDTO | None, AutoLoad()] = None
+        profile: StudentProfileDTO | None = None
 
     MyResolver = config_resolver("SA_RO2OResolver", er_diagram=diagram)
 
@@ -384,15 +376,14 @@ async def test_dataloader_reused_for_multiple_dto_to_same_orm(
     )
 
     diagram = ErDiagram(entities=[]).add_relationship(entities)
-    AutoLoad = diagram.create_auto_load()
 
     class StudentBizAView(StudentBizA):
 
-        school: Annotated[SchoolDTO | None, AutoLoad()] = None
+        school: SchoolDTO | None = None
 
     class StudentBizBView(StudentBizB):
 
-        school: Annotated[SchoolDTO | None, AutoLoad()] = None
+        school: SchoolDTO | None = None
 
     class RootView(BaseModel):
         biz_a_students: list[StudentBizAView] = []

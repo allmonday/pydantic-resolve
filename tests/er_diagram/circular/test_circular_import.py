@@ -93,44 +93,26 @@ def test_module_path_syntax_with_simple_class():
 
 def test_create_auto_load_with_circular_module_path_references():
     """
-    Test that diagram.create_auto_load() does not introduce extra circular-import
-    problems when the ERD itself uses module-path string targets.
+    Test that circular references with module-path string targets work correctly.
 
-    This also verifies that DefineSubset can consume the diagram-bound AutoLoad
-    metadata and auto-inject missing FK fields from both sides of a circular
-    entity relationship.
+    This verifies that DefineSubset can auto-inject missing FK fields from both
+    sides of a circular entity relationship.
     """
-    from typing import Annotated, Optional
+    from typing import Optional
 
     from pydantic_resolve import DefineSubset
-    from pydantic_resolve.utils.er_diagram import LoaderInfo
     from tests.er_diagram.circular.entities.user import UserEntity
     from tests.er_diagram.circular.entities.post import PostEntity
-    from tests.er_diagram.circular.entities import BaseEntity
-
-    diagram = BaseEntity.get_diagram()
-    AutoLoad = diagram.create_auto_load()
 
     class UserSubset(DefineSubset):
         __subset__ = (UserEntity, ['name'])
 
-        posts: Annotated[list[PostEntity], AutoLoad()] = []
+        posts: list[PostEntity] = []
 
     class PostSubset(DefineSubset):
         __subset__ = (PostEntity, ['id'])
 
-        user: Annotated[Optional[UserEntity], AutoLoad()] = None
-
-    user_meta = next(
-        meta for meta in UserSubset.model_fields['posts'].metadata if isinstance(meta, LoaderInfo)
-    )
-    post_meta = next(
-        meta for meta in PostSubset.model_fields['user'].metadata if isinstance(meta, LoaderInfo)
-    )
-
-    assert user_meta._er_configs_map is not None
-    assert user_meta._er_configs_map is post_meta._er_configs_map
-    assert set(user_meta._er_configs_map.keys()) == {UserEntity, PostEntity}
+        user: Optional[UserEntity] = None
 
     # UserSubset omits id, but posts relationship needs fk='id'.
     assert 'id' in UserSubset.model_fields

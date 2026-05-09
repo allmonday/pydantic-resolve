@@ -4,6 +4,25 @@
 - **Minor (x.Y.0)**: New features, backward compatible
 - **Patch (x.y.Z)**: Bug fixes and minor improvements
 
+## 5.5
+
+### 5.5.0 (2026-5-9)
+
+This release introduces breaking changes to the AutoLoad API. See [Migration Guide — v5.4 to v5.5](./migration.md#v54-to-v55) for upgrade instructions.
+
+- feat:
+  - **Implicit AutoLoad**: fields whose names match a relationship `name` in the ER Diagram are automatically resolved without requiring `Annotated[..., AutoLoad()]` annotation. Explicit `AutoLoad(origin=...)` is still needed when the field name differs from the relationship name
+  - **Standalone `AutoLoad` function**: `AutoLoad` is now a module-level function (`from pydantic_resolve import AutoLoad`) instead of a factory created via `diagram.create_auto_load()`. No diagram binding required
+  - **Ambiguity detection for external ErDiagram**: when multiple `ErDiagram` instances register conflicting relationships (same name, different FK) for the same entity class, `DefineSubset` raises `ValueError` at class-definition time instead of silently using the last registration
+- break:
+  - **`ErDiagram.create_auto_load()` removed**: replaced by standalone `AutoLoad()` function. See [Migration Guide](./migration.md) for details
+  - **`LoaderInfo._er_configs_map` removed**: no longer used; relationship lookup now goes through MRO + global registry
+- refactor:
+  - `ErLoaderPreGenerator.prepare()` restructured into Phase 1 (explicit AutoLoad) and Phase 2 (implicit matching by field name), consistent with `DefineSubset` FK injection logic
+  - `DefineSubset` FK auto-injection unified via `_collect_relationship_candidates_from_mro` + `_select_relationship`, removing direct dependency on `LoaderInfo._er_configs_map`
+  - `ResponseBuilder` uses implicit AutoLoad for dynamic GraphQL response models, removing `Annotated[..., AutoLoad()]` wrapping
+  - `ErDiagram` registration changed from overwrite (`kls -> Entity`) to append (`kls -> [Entity]`) to support ambiguity detection
+
 ## 5.4
 
 ### 5.4.0 (2026-5-8)

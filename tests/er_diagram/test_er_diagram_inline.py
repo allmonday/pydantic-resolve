@@ -1,5 +1,5 @@
 import pytest
-from typing import Optional, Annotated, List
+from typing import Optional, List
 from pydantic import BaseModel
 from pydantic_resolve import config_resolver
 from pydantic_resolve import Relationship, DefineSubset, ensure_subset, base_entity
@@ -105,18 +105,14 @@ class Biz(BaseModel, BASE_ENTITY):
     user_ids_str:str = ''
 
 
-# Get AutoLoad from the diagram
-AutoLoad = BASE_ENTITY.get_diagram().create_auto_load()
-
-
 class BizCase1(Biz):
-    user: Annotated[Optional[User], AutoLoad()] = None
-    foos: Annotated[List[Foo], AutoLoad()] = []
-    foos_in_str: Annotated[List[str], AutoLoad()] = []
-    bars: Annotated[List[Bar], AutoLoad()] = []
-    special_bars: Annotated[list[Bar], AutoLoad()] = []
-    users_a: Annotated[list[User], AutoLoad()] = []
-    users_b: Annotated[list[User], AutoLoad()] = []
+    user: Optional[User] = None
+    foos: List[Foo] = []
+    foos_in_str: List[str] = []
+    bars: List[Bar] = []
+    special_bars: list[Bar] = []
+    users_a: list[User] = []
+    users_b: list[User] = []
     
 
 @pytest.mark.asyncio
@@ -143,7 +139,7 @@ class SubUser(DefineSubset):
     __pydantic_resolve_subset__ = (User, ['id'])
 
 class BizCase2(Biz):
-    user: Annotated[Optional[SubUser], AutoLoad()] = None
+    user: Optional[SubUser] = None
 
 @pytest.mark.asyncio
 async def test_resolver_factory_with_er_configs_inherit_2():
@@ -156,7 +152,7 @@ async def test_resolver_factory_with_er_configs_inherit_2():
 class BizCase3(DefineSubset):
     __pydantic_resolve_subset__ = (Biz, ['id', 'user_id'])
 
-    user: Annotated[Optional[User], AutoLoad()] = None
+    user: Optional[User] = None
 
 
 @pytest.mark.asyncio
@@ -171,8 +167,8 @@ class BizCase5(BaseModel):
     id: int
     user_id: int
 
-    user: Annotated[Optional[User], AutoLoad()] = None
-    # foos_in_str_x: Annotated[List[str], AutoLoad()] = []
+    user: Optional[User] = None
+    # foos_in_str_x: List[str] = []
 
 
 @pytest.mark.asyncio

@@ -6,7 +6,7 @@ It supports multiple output formats (SDL string, Introspection dict) through a u
 internal representation.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, ForwardRef, Optional, get_args, TYPE_CHECKING
 
 from pydantic import BaseModel

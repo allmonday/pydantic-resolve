@@ -1,5 +1,95 @@
 # Migration Guide
 
+## v5.4 to v5.5
+
+v5.5 simplifies the AutoLoad API and adds implicit relationship resolution. Two breaking changes affect code that uses ER Diagram.
+
+### 1. `diagram.create_auto_load()` replaced by standalone `AutoLoad()`
+
+The diagram-bound factory is removed. `AutoLoad` is now a direct import from `pydantic_resolve`.
+
+```python
+# v5.4
+diagram = BaseEntity.get_diagram()
+AutoLoad = diagram.create_auto_load()       # factory bound to diagram
+config_global_resolver(diagram)
+
+class TaskView(TaskEntity):
+    owner: Annotated[Optional[UserEntity], AutoLoad()] = None
+
+# v5.5
+from pydantic_resolve import AutoLoad       # standalone import
+
+class TaskView(TaskEntity):
+    owner: Annotated[Optional[UserEntity], AutoLoad()] = None
+```
+
+The `config_global_resolver(diagram)` or `config_resolver(...)` call is still required — it tells the resolver which diagram to use for relationship lookup.
+
+### 2. Implicit AutoLoad (no annotation needed for matching names)
+
+When a field name matches a relationship `name`, the resolver automatically generates the resolve method. No `AutoLoad()` annotation is required.
+
+```python
+# v5.4 — explicit annotation required
+class TaskView(TaskEntity):
+    owner: Annotated[Optional[UserEntity], AutoLoad()] = None
+
+# v5.5 — implicit when name matches
+class TaskView(TaskEntity):
+    owner: Optional[UserEntity] = None       # auto-resolved via relationship name 'owner'
+```
+
+Explicit `AutoLoad(origin=...)` is still needed when the field name differs from the relationship name:
+
+```python
+class TaskView(TaskEntity):
+    my_owner: Annotated[Optional[UserEntity], AutoLoad(origin='owner')] = None
+```
+
+### 3. `LoaderInfo._er_configs_map` removed
+
+This internal field was previously set by `create_auto_load()`. If you were directly accessing it, switch to using the relationship lookup via the diagram or `config_resolver`.
+
+### 4. External `ErDiagram` ambiguity is now explicit
+
+In v5.5, `AutoLoad()` is no longer bound to one diagram instance. That simplifies regular usage, but it also means some setup-time inference must look up relationship metadata by model class and relationship name.
+
+For `base_entity()` diagrams, this is still unambiguous because one model family has one authoritative diagram.
+
+For external `ErDiagram(...)` definitions, ambiguity can appear if multiple diagrams register the same model class with the same relationship `name` but different `fk` values. In that case, `pydantic-resolve` now raises `ValueError` instead of silently using the last registration.
+
+This most commonly appears in `DefineSubset` when hidden FK fields must be auto-added:
+
+```python
+ErDiagram(entities=[
+    Entity(kls=TaskEntity, relationships=[
+        Relationship(fk='owner_id', target=UserEntity, name='user', loader=user_loader),
+    ])
+])
+
+ErDiagram(entities=[
+    Entity(kls=TaskEntity, relationships=[
+        Relationship(fk='manager_id', target=UserEntity, name='user', loader=user_loader),
+    ])
+])
+
+class TaskSummary(DefineSubset):
+    __subset__ = (TaskEntity, ('id',))
+    user: Optional[UserEntity] = None
+
+# v5.5+: raises ValueError instead of silently picking one FK
+```
+
+Recommended migration path:
+
+- Prefer `base_entity()` for one domain model family.
+- Keep one authoritative external ER definition per `(model class, relationship name)`.
+- If you intentionally need different meanings, give them different relationship names.
+- If subset construction should not infer the FK automatically, include the FK field explicitly in the subset.
+
+---
+
 ## v4 to v5
 
 v5.0 introduces one breaking rename. New features (ORM integration, GraphiQL, MCP schema) are additive and documented separately.

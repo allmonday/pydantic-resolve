@@ -15,6 +15,31 @@ class MySubset(DefineSubset):
 
 从源实体创建一个包含选定字段的新 Pydantic 模型。你可以在其上添加额外字段（包括 `AutoLoad` 注解）。
 
+如果新增字段对应一个 ERD 关系，`DefineSubset` 会在需要时自动把所需的 FK 字段补成一个隐藏的 `exclude=True` 字段。下面两种情况都适用：
+
+- 字段名与关系名一致时的隐式匹配
+- 使用 `AutoLoad(origin=...)` 的显式别名
+
+例如：
+
+```python
+class TaskCard(DefineSubset):
+    __subset__ = (TaskEntity, ('id', 'title'))
+
+    # 字段名和关系名 `owner` 不一致
+    my_owner: Annotated[Optional[UserEntity], AutoLoad(origin='owner')] = None
+```
+
+即使 `owner_id` 不在 subset 字段列表中，`DefineSubset` 仍会在内部补上它，这样自动生成的 resolve 方法才能继续加载 `my_owner`。
+
+### 外部 ErDiagram 约束
+
+当 `DefineSubset` 依赖外部 `ErDiagram(...)`，而不是 `base_entity()` 时，它可能需要在 resolver 实例创建之前就推断 FK 字段。
+
+如果多个外部 diagram 为同一个模型类注册了同一个关系名，但使用了不同的 `fk` 值，subset 构建阶段就没有办法判断该选哪一个，因此现在会直接抛出 `ValueError`。
+
+建议对每个 `(模型类, 关系名)` 只保留一个权威的外部关系定义；如果你不想让 subset 去推断隐藏 FK，也可以直接把 FK 字段显式选进 subset。
+
 ### 元组形式
 
 ```python

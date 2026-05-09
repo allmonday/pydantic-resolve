@@ -1,5 +1,5 @@
 import pytest
-from typing import Optional, Annotated
+from typing import Optional
 from pydantic import BaseModel
 from pydantic_resolve import config_resolver
 from pydantic_resolve import Entity, Relationship, ErDiagram
@@ -51,11 +51,9 @@ diagram = ErDiagram(
     ]
 )
 
-AutoLoad = diagram.create_auto_load()
-
 class BizCase1(Biz):
-    user: Annotated[Optional[User], AutoLoad()] = None
-    bars: Annotated[list[Bar], AutoLoad()] = []
+    user: Optional[User] = None
+    bars: list[Bar] = []
     
 
 @pytest.mark.asyncio

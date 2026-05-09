@@ -6,7 +6,7 @@ but there is no ForeignKey() constraint on dept_code and Department.code is not 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable
-from typing import Annotated, Optional
+from typing import Optional
 
 import pytest
 from pydantic import BaseModel, ConfigDict
@@ -151,12 +151,11 @@ async def test_resolver_loads_data_without_db_fk(
     )
 
     diagram = ErDiagram(entities=[]).add_relationship(entities)
-    AutoLoad = diagram.create_auto_load()
 
     class EmployeeView(EmployeeDTO):
         model_config = ConfigDict(from_attributes=True)
 
-        department: Annotated[Optional[DepartmentDTO], AutoLoad()] = None
+        department: Optional[DepartmentDTO] = None
 
     MyResolver = config_resolver("SA_NoDbFkResolver", er_diagram=diagram)
 
