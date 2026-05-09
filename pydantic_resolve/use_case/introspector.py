@@ -379,6 +379,15 @@ class ServiceIntrospector:
 
         for method_name in getattr(service_cls, USE_CASE_METHODS_ATTR):
             method_info = self._extract_method_info(service_cls, method_name)
+            # Attach kind from __use_case_methods__ metadata
+            method_meta = getattr(service_cls, USE_CASE_METHODS_ATTR).get(
+                method_name, {}
+            )
+            method_info["kind"] = (
+                method_meta.get("kind", "query")
+                if isinstance(method_meta, dict)
+                else "query"
+            )
             methods.append(method_info)
 
             # Collect DTO types from return value
@@ -411,6 +420,7 @@ class ServiceIntrospector:
                     "signature": m["signature"],
                     "signature_sdl": m["signature_sdl"],
                     "parameters": m["parameters"],
+                    "kind": m["kind"],
                 }
             )
 

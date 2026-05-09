@@ -27,6 +27,7 @@ pip install pydantic-resolve[mcp]
 
 ```python
 from pydantic import BaseModel
+from pydantic_resolve import query
 from pydantic_resolve.use_case import UseCaseService
 
 
@@ -44,7 +45,7 @@ class TaskSummary(BaseModel):
 class UserService(UseCaseService):
     """User management service."""
 
-    @classmethod
+    @query
     async def list_users(cls) -> list[UserSummary]:
         """Get all users."""
         ...
@@ -53,18 +54,18 @@ class UserService(UseCaseService):
 class TaskService(UseCaseService):
     """Task management service."""
 
-    @classmethod
+    @query
     async def list_tasks(cls) -> list[TaskSummary]:
         """Get all tasks."""
         ...
 
-    @classmethod
+    @query
     async def get_task(cls, task_id: int) -> TaskSummary | None:
         """Get a task by ID."""
         ...
 ```
 
-`UseCaseService` uses a metaclass to automatically discover `async classmethod` definitions. Docstrings become descriptions visible to AI agents.
+`UseCaseService` uses a metaclass to automatically discover methods decorated with `@query` or `@mutation`. Docstrings become descriptions visible to AI agents.
 
 ### 2. Create MCP server
 
@@ -111,10 +112,11 @@ When a method needs user identity or other request-scoped data, use `FromContext
 
 ```python
 from typing import Annotated
+from pydantic_resolve import query
 from pydantic_resolve.use_case import UseCaseService, FromContext
 
 class TaskService(UseCaseService):
-    @classmethod
+    @query
     async def get_my_tasks(
         cls,
         user_id: Annotated[int, FromContext()],
@@ -193,6 +195,42 @@ async def get_task(task_id: int):
 ```
 
 `get_return_annotation` extracts the return type from the classmethod, so you can use it as FastAPI's `response_model` without repeating the type.
+
+## Control Mutation Visibility
+
+By default, all methods (both `@query` and `@mutation`) are visible to AI agents. To hide mutation methods from a specific app, set `enable_mutation=False`:
+
+```python
+from pydantic_resolve import query, mutation
+
+class TaskService(UseCaseService):
+    @query
+    async def list_tasks(cls) -> list[TaskSummary]:
+        """Get all tasks."""
+        ...
+
+    @mutation
+    async def create_task(cls, title: str) -> TaskSummary:
+        """Create a new task."""
+        ...
+
+mcp = create_use_case_mcp_server(
+    apps=[
+        UseCaseAppConfig(
+            name="readonly-project",
+            services=[TaskService],
+            enable_mutation=False,  # hide mutation methods
+        ),
+    ],
+)
+```
+
+When `enable_mutation=False`:
+- `list_services` excludes mutation methods from the count
+- `describe_service` omits mutation methods from the response
+- `call_use_case` returns an error if a mutation method is called
+
+This is useful for providing read-only access to AI agents while keeping write operations restricted.
 
 ## Multi-App Support
 

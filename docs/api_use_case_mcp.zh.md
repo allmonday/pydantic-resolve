@@ -38,6 +38,7 @@ UseCaseAppConfig(
     name: str,
     services: list[type[UseCaseService]],
     description: str | None = None,
+    enable_mutation: bool = True,
     context_extractor: Callable | None = None,
 )
 ```
@@ -47,6 +48,7 @@ UseCaseAppConfig(
 | `name` | `str` | 应用名称（必填） |
 | `services` | `list[type[UseCaseService]]` | UseCaseService 子类列表（必填） |
 | `description` | `str \| None` | 应用描述，供 AI agent 参考 |
+| `enable_mutation` | `bool` | mutation 方法是否在 MCP 中可见（默认：`True`） |
 | `context_extractor` | `Callable \| None` | 从请求中提取上下文的回调函数 |
 
 ### context_extractor
@@ -92,21 +94,23 @@ HTTP 请求 (Authorization: Bearer <token>)
 
 ```python
 from pydantic_resolve.use_case import UseCaseService
+from pydantic_resolve import query, mutation
 
 class MyService(UseCaseService):
     """服务描述（AI agent 可见）。"""
 
-    @classmethod
+    @query
     async def my_method(cls, param1: int) -> MyDTO:
         """方法描述（AI agent 可见）。"""
         ...
 ```
 
-业务服务的基类。`BusinessMeta` 元类会自动发现 `async classmethod` 定义并存储供内省使用。
+业务服务的基类。`BusinessMeta` 元类会自动发现被 `@query` 或 `@mutation` 装饰的方法并存储供内省使用。
 
 **约定：**
 
-- 方法必须是 `@classmethod` + `async`
+- 方法必须使用 `@query` 或 `@mutation` 装饰器（来自 `pydantic_resolve`）
+- 方法必须是 `async`
 - 私有方法（以 `_` 开头）和 `get_tag_name` 会被排除
 - 类和方法的 docstring 会作为描述展示给 AI agent
 - 返回类型注解用于 SDL 类型生成
@@ -143,7 +147,7 @@ user_id: Annotated[int, FromContext()]
 
 ```python
 class TaskService(UseCaseService):
-    @classmethod
+    @query
     async def get_my_tasks(
         cls,
         user_id: Annotated[int, FromContext()],

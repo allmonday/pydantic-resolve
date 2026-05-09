@@ -38,6 +38,7 @@ UseCaseAppConfig(
     name: str,
     services: list[type[UseCaseService]],
     description: str | None = None,
+    enable_mutation: bool = True,
     context_extractor: Callable | None = None,
 )
 ```
@@ -47,6 +48,7 @@ UseCaseAppConfig(
 | `name` | `str` | Application name (required) |
 | `services` | `list[type[UseCaseService]]` | List of UseCaseService subclasses (required) |
 | `description` | `str \| None` | Application description for AI agents |
+| `enable_mutation` | `bool` | Whether mutation methods are visible in MCP (default: `True`) |
 | `context_extractor` | `Callable \| None` | Callback to extract request-scoped context |
 
 ### context_extractor
@@ -92,21 +94,23 @@ HTTP Request (Authorization: Bearer <token>)
 
 ```python
 from pydantic_resolve.use_case import UseCaseService
+from pydantic_resolve import query, mutation
 
 class MyService(UseCaseService):
     """Service description (used by AI agents)."""
 
-    @classmethod
+    @query
     async def my_method(cls, param1: int) -> MyDTO:
         """Method description (used by AI agents)."""
         ...
 ```
 
-Base class for business service definitions. The `BusinessMeta` metaclass automatically discovers `async classmethod` definitions and stores them for introspection.
+Base class for business service definitions. The `BusinessMeta` metaclass automatically discovers methods decorated with `@query` or `@mutation` and stores them for introspection.
 
 **Conventions:**
 
-- Methods must be `@classmethod` + `async`
+- Methods must be decorated with `@query` or `@mutation` (from `pydantic_resolve`)
+- Methods must be `async`
 - Private methods (prefixed with `_`) and `get_tag_name` are excluded from discovery
 - Docstrings on the class and methods become descriptions visible to AI agents
 - Return type annotations are used for SDL type generation
@@ -143,7 +147,7 @@ Marker annotation for method parameters that should receive values from `context
 
 ```python
 class TaskService(UseCaseService):
-    @classmethod
+    @query
     async def get_my_tasks(
         cls,
         user_id: Annotated[int, FromContext()],

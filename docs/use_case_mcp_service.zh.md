@@ -27,6 +27,7 @@ pip install pydantic-resolve[mcp]
 
 ```python
 from pydantic import BaseModel
+from pydantic_resolve import query
 from pydantic_resolve.use_case import UseCaseService
 
 
@@ -44,7 +45,7 @@ class TaskSummary(BaseModel):
 class UserService(UseCaseService):
     """用户管理服务。"""
 
-    @classmethod
+    @query
     async def list_users(cls) -> list[UserSummary]:
         """获取所有用户。"""
         ...
@@ -53,18 +54,18 @@ class UserService(UseCaseService):
 class TaskService(UseCaseService):
     """任务管理服务。"""
 
-    @classmethod
+    @query
     async def list_tasks(cls) -> list[TaskSummary]:
         """获取所有任务。"""
         ...
 
-    @classmethod
+    @query
     async def get_task(cls, task_id: int) -> TaskSummary | None:
         """根据 ID 获取任务。"""
         ...
 ```
 
-`UseCaseService` 通过元类自动发现 `async classmethod` 定义。类和方法的 docstring 会作为描述展示给 AI agent。
+`UseCaseService` 通过元类自动发现被 `@query` 或 `@mutation` 装饰的方法。类和方法的 docstring 会作为描述展示给 AI agent。
 
 ### 2. 创建 MCP 服务
 
@@ -111,10 +112,11 @@ Layer 3: call_use_case     → "执行某个方法"
 
 ```python
 from typing import Annotated
+from pydantic_resolve import query
 from pydantic_resolve.use_case import UseCaseService, FromContext
 
 class TaskService(UseCaseService):
-    @classmethod
+    @query
     async def get_my_tasks(
         cls,
         user_id: Annotated[int, FromContext()],
@@ -193,6 +195,42 @@ async def get_task(task_id: int):
 ```
 
 `get_return_annotation` 从 classmethod 中提取返回类型，用作 FastAPI 的 `response_model`，无需重复声明类型。
+
+## 控制 Mutation 可见性
+
+默认情况下，所有方法（`@query` 和 `@mutation`）都对 AI agent 可见。要隐藏某个应用的 mutation 方法，设置 `enable_mutation=False`：
+
+```python
+from pydantic_resolve import query, mutation
+
+class TaskService(UseCaseService):
+    @query
+    async def list_tasks(cls) -> list[TaskSummary]:
+        """获取所有任务。"""
+        ...
+
+    @mutation
+    async def create_task(cls, title: str) -> TaskSummary:
+        """创建新任务。"""
+        ...
+
+mcp = create_use_case_mcp_server(
+    apps=[
+        UseCaseAppConfig(
+            name="readonly-project",
+            services=[TaskService],
+            enable_mutation=False,  # 隐藏 mutation 方法
+        ),
+    ],
+)
+```
+
+当 `enable_mutation=False` 时：
+- `list_services` 的方法计数不包含 mutation
+- `describe_service` 的返回结果中不包含 mutation 方法
+- `call_use_case` 调用 mutation 方法会返回错误
+
+适用于需要向 AI agent 提供只读访问权限，同时限制写操作的场景。
 
 ## 多应用支持
 

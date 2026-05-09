@@ -12,7 +12,7 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 
-from pydantic_resolve import ErDiagram, DefineSubset, config_resolver, AutoLoad
+from pydantic_resolve import ErDiagram, DefineSubset, config_resolver, AutoLoad, query
 from pydantic_resolve.integration.mapping import Mapping
 from pydantic_resolve.integration.sqlalchemy import build_relationship
 from pydantic_resolve.use_case import UseCaseService, UseCaseAppConfig, create_use_case_mcp_server
@@ -107,7 +107,7 @@ class SprintSummary(DefineSubset):
 class UserService(UseCaseService):
     """User management service."""
 
-    @classmethod
+    @query
     async def list_users(cls) -> list[UserSummary]:
         """Get all users."""
         async with session_factory() as session:
@@ -116,7 +116,7 @@ class UserService(UseCaseService):
         dtos = [UserSummary.model_validate(r) for r in rows]
         return await MyResolver(enable_from_attribute_in_type_adapter=True).resolve(dtos)
 
-    @classmethod
+    @query
     async def get_user(cls, user_id: int) -> UserSummary | None:
         """Get a user by ID."""
         async with session_factory() as session:
@@ -134,7 +134,7 @@ class UserService(UseCaseService):
 class TaskService(UseCaseService):
     """Task management service."""
 
-    @classmethod
+    @query
     async def list_tasks(cls) -> list[TaskSummary]:
         """Get all tasks with auto-loaded owner."""
         async with session_factory() as session:
@@ -143,7 +143,7 @@ class TaskService(UseCaseService):
         dtos = [TaskSummary.model_validate(r) for r in rows]
         return await MyResolver(enable_from_attribute_in_type_adapter=True).resolve(dtos)
 
-    @classmethod
+    @query
     async def get_tasks_by_sprint(cls, sprint_id: int) -> list[TaskSummary]:
         """Get tasks filtered by sprint ID."""
         async with session_factory() as session:
@@ -156,7 +156,7 @@ class TaskService(UseCaseService):
         dtos = [TaskSummary.model_validate(r) for r in rows]
         return await MyResolver(enable_from_attribute_in_type_adapter=True).resolve(dtos)
 
-    @classmethod
+    @query
     async def get_task(cls, task_id: int) -> TaskSummary | None:
         """Get a task by ID."""
         async with session_factory() as session:
@@ -174,7 +174,7 @@ class TaskService(UseCaseService):
 class SprintService(UseCaseService):
     """Sprint management service with task statistics."""
 
-    @classmethod
+    @query
     async def list_sprints(cls) -> list[SprintSummary]:
         """Get all sprints with tasks and statistics."""
         async with session_factory() as session:
@@ -183,7 +183,7 @@ class SprintService(UseCaseService):
         dtos = [SprintSummary.model_validate(r) for r in rows]
         return await MyResolver(enable_from_attribute_in_type_adapter=True).resolve(dtos)
 
-    @classmethod
+    @query
     async def get_sprint(cls, sprint_id: int) -> SprintSummary | None:
         """Get a sprint by ID with tasks and statistics."""
         async with session_factory() as session:

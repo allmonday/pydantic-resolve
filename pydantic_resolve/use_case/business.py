@@ -1,7 +1,8 @@
 """UseCaseService base class and BusinessMeta metaclass.
 
 Provides the foundation for defining business service classes whose
-async classmethods are automatically discovered and exposed via MCP.
+methods decorated with @query or @mutation are automatically discovered
+and exposed via MCP.
 """
 
 from __future__ import annotations
@@ -9,14 +10,35 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+import pydantic_resolve.constant as const
+
 USE_CASE_METHODS_ATTR = "__use_case_methods__"
 
 
-class BusinessMeta(type):
-    """Metaclass that collects async classmethod info for introspection.
+def _get_method_kind(func: Any) -> str | None:
+    """Return 'query' or 'mutation' if func is marked by decorator, else None."""
+    if getattr(func, const.GRAPHQL_QUERY_ATTR, False):
+        return "query"
+    if getattr(func, const.GRAPHQL_MUTATION_ATTR, False):
+        return "mutation"
+    return None
 
-    Scans the class namespace for async classmethods and stores them
-    in ``__use_case_methods__`` for use by ServiceIntrospector.
+
+def _get_method_description(func: Any) -> str:
+    """Return the description stored by @query/@mutation decorator."""
+    return (
+        getattr(func, const.GRAPHQL_QUERY_DESCRIPTION_ATTR, None)
+        or getattr(func, const.GRAPHQL_MUTATION_DESCRIPTION_ATTR, None)
+        or ""
+    )
+
+
+class BusinessMeta(type):
+    """Metaclass that collects @query/@mutation decorated methods for introspection.
+
+    Scans the class namespace for async classmethods marked with ``@query`` or
+    ``@mutation`` decorators and stores their metadata in
+    ``__use_case_methods__`` for use by ServiceIntrospector.
     """
 
     def __new__(mcs, name: str, bases: tuple, namespace: dict, **kwargs):
@@ -29,8 +51,8 @@ class BusinessMeta(type):
             setattr(cls, USE_CASE_METHODS_ATTR, {})
             return cls
 
-        # Collect async classmethods from this class and bases
-        methods: dict[str, Any] = {}
+        # Collect decorated methods from this class and bases
+        methods: dict[str, dict[str, Any]] = {}
 
         # First collect from bases
         for base in bases:
@@ -44,10 +66,23 @@ class BusinessMeta(type):
             if attr_name.startswith("_") or attr_name in _EXCLUDED_METHODS:
                 continue
 
-            # Check if it's a classmethod wrapping an async function
             func = _unwrap_classmethod(attr_value)
-            if func is not None and asyncio.iscoroutinefunction(func):
-                methods[attr_name] = attr_value
+            if func is None:
+                continue
+
+            # Only discover methods marked with @query or @mutation
+            kind = _get_method_kind(func)
+            if kind is None:
+                continue
+
+            if not asyncio.iscoroutinefunction(func):
+                continue
+
+            methods[attr_name] = {
+                "method": attr_value,
+                "kind": kind,
+                "description": _get_method_description(func),
+            }
 
         setattr(cls, USE_CASE_METHODS_ATTR, methods)
         return cls
@@ -63,27 +98,29 @@ def _unwrap_classmethod(value: Any) -> Any | None:
 class UseCaseService(metaclass=BusinessMeta):
     """Base class for business service definitions.
 
-    Subclasses define async classmethods that represent use case operations.
-    The BusinessMeta metaclass automatically discovers these methods
-    and makes them available for introspection.
+    Subclasses define async methods decorated with ``@query`` or ``@mutation``
+    that represent use case operations. The BusinessMeta metaclass automatically
+    discovers these methods and makes them available for introspection.
 
     Example::
+
+        from pydantic_resolve import query, mutation
 
         class SprintService(UseCaseService):
             '''Sprint management service.'''
 
-            @classmethod
+            @query
             async def list_sprints(cls) -> list[SprintSummary]:
                 '''Get all sprints.'''
                 ...
 
-            @classmethod
-            async def get_sprint(cls, sprint_id: int) -> SprintSummary | None:
-                '''Get a sprint by ID.'''
+            @mutation
+            async def create_sprint(cls, name: str) -> SprintSummary:
+                '''Create a new sprint.'''
                 ...
     """
 
-    __use_case_methods__: dict[str, Any]
+    __use_case_methods__: dict[str, dict[str, Any]]
 
     @classmethod
     def get_tag_name(cls) -> str:

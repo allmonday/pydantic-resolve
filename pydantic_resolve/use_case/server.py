@@ -140,6 +140,18 @@ def create_use_case_mcp_server(
             app = manager.get_app(app_name)
             services_info = app.introspector.list_services()
 
+            # Filter mutation methods from count when disabled
+            if not app.enable_mutation:
+                for svc in services_info:
+                    service_cls = app.services.get(svc["name"])
+                    if service_cls:
+                        all_methods = getattr(service_cls, USE_CASE_METHODS_ATTR)
+                        svc["methods_count"] = sum(
+                            1
+                            for m in all_methods.values()
+                            if isinstance(m, dict) and m.get("kind") != "mutation"
+                        )
+
             service_names = [s["name"] for s in services_info]
             hint = (
                 f"Working with app '{app_name}'. "
@@ -189,6 +201,14 @@ def create_use_case_mcp_server(
                 )
 
             method_names = [m["name"] for m in info.get("methods", [])]
+
+            # Filter mutation methods when disabled
+            if not app.enable_mutation:
+                info["methods"] = [
+                    m for m in info.get("methods", []) if m.get("kind") != "mutation"
+                ]
+                method_names = [m["name"] for m in info["methods"]]
+
             hint = (
                 f"Methods in '{service_name}' (app: '{app_name}'): {method_names}. "
                 f"Use call_use_case(app_name='{app_name}', "
@@ -283,6 +303,18 @@ def create_use_case_mcp_server(
             return create_error_response(
                 f"Method '{method_name}' not found in service '{service_name}'. "
                 f"Available methods: {available}",
+                MCPErrors.OPERATION_NOT_FOUND,
+            )
+
+        # Check mutation permission
+        method_meta = methods.get(method_name, {})
+        method_kind = (
+            method_meta.get("kind", "query") if isinstance(method_meta, dict) else "query"
+        )
+        if not app.enable_mutation and method_kind == "mutation":
+            return create_error_response(
+                f"Method '{method_name}' is a mutation and mutations are disabled "
+                f"for app '{app_name}'.",
                 MCPErrors.OPERATION_NOT_FOUND,
             )
 

@@ -4,6 +4,20 @@
 - **Minor (x.Y.0)**: New features, backward compatible
 - **Patch (x.y.Z)**: Bug fixes and minor improvements
 
+## 5.6
+
+### 5.6.0 (2026-5-9)
+
+This release introduces breaking changes to the UseCaseService API. Methods must now be decorated with `@query` or `@mutation` instead of using `@classmethod`.
+
+- feat:
+  - **`@query` / `@mutation` decorators for UseCaseService**: UseCaseService methods now use `@query` and `@mutation` decorators (from `pydantic_resolve`) instead of `@classmethod`. The decorators reuse the same implementation as GraphQL, automatically converting methods to classmethods and setting metadata
+  - **`enable_mutation` app-level control**: New `UseCaseAppConfig(enable_mutation=False)` option to hide mutation methods from MCP tools. When disabled, `list_services` excludes mutations from count, `describe_service` omits mutation methods, and `call_use_case` blocks mutation calls
+  - **`kind` field in `describe_service`**: Each method in `describe_service` response now includes a `kind` field (`"query"` or `"mutation"`) for AI agents to distinguish read vs write operations
+- break:
+  - **UseCaseService methods require `@query` / `@mutation`**: Undecorated async classmethods are no longer automatically discovered by `BusinessMeta`. All existing UseCaseService subclasses must add `@query` or `@mutation` decorators
+  - **`__use_case_methods__` structure changed**: value type changed from `classmethod` descriptor to `dict` with keys `method`, `kind`, `description`
+
 ## 5.5
 
 ### 5.5.0 (2026-5-9)
