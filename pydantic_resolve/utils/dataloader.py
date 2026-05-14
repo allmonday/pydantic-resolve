@@ -1,11 +1,11 @@
 from collections import defaultdict
-from typing import Callable, DefaultDict, Iterator, Sequence, TypeVar
+from typing import Callable, DefaultDict, Sequence, TypeVar
 from aiodataloader import DataLoader
 
 T = TypeVar("T")
 V = TypeVar("V")
 
-def build_list(items: Sequence[T], keys: list[V], get_pk: Callable[[T], V]) -> Iterator[list[T]]:
+def build_list(items: Sequence[T], keys: list[V], get_pk: Callable[[T], V]) -> list[list[T]]:
     """
     helper function to build return list data required by aiodataloader
     """
@@ -13,11 +13,10 @@ def build_list(items: Sequence[T], keys: list[V], get_pk: Callable[[T], V]) -> I
     for item in items:
         _key = get_pk(item)
         dct[_key].append(item)
-    results = (dct.get(k, []) for k in keys)
-    return results
+    return [dct.get(k, []) for k in keys]
 
 
-def build_object(items: Sequence[T], keys: list[V], get_pk: Callable[[T], V]) -> Iterator[T | None]:
+def build_object(items: Sequence[T], keys: list[V], get_pk: Callable[[T], V]) -> list[T | None]:
     """
     helper function to build return object data required by aiodataloader
     """
@@ -25,8 +24,7 @@ def build_object(items: Sequence[T], keys: list[V], get_pk: Callable[[T], V]) ->
     for item in items:
         _key = get_pk(item)
         dct[_key] = item
-    results = (dct.get(k, None) for k in keys)
-    return results
+    return [dct.get(k, None) for k in keys]
 
 
 def copy_dataloader_kls(name, loader_kls):
