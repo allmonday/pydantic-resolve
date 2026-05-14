@@ -133,8 +133,107 @@ def test_auto_mapper_4():
     class AA:
         def __init__(self, a):
             self.a = a
-    
+
     p1 = (A, AA(a=1))
     with pytest.raises(AttributeError):
         pydantic_resolve.utils.conversion._get_mapping_rule(*p1)(*p1)  # type: ignore
+
+
+# ---- EmptyLoader tests ----
+
+@pytest.mark.asyncio
+async def test_strict_empty_loader_raises():
+    from pydantic_resolve.utils.dataloader import StrictEmptyLoader
+    loader = StrictEmptyLoader()
+    with pytest.raises(ValueError, match='EmptyLoader should load from pre loaded data'):
+        await loader.batch_load_fn([1, 2])
+
+
+@pytest.mark.asyncio
+async def test_list_empty_loader():
+    from pydantic_resolve.utils.dataloader import ListEmptyLoader
+    loader = ListEmptyLoader()
+    result = await loader.batch_load_fn([1, 2, 3])
+    assert result == [[], [], []]
+
+
+@pytest.mark.asyncio
+async def test_single_empty_loader():
+    from pydantic_resolve.utils.dataloader import SingleEmptyLoader
+    loader = SingleEmptyLoader()
+    result = await loader.batch_load_fn([1, 2, 3])
+    assert result == [None, None, None]
+
+
+def test_generate_strict_empty_loader_creates_independent_class():
+    from pydantic_resolve.utils.dataloader import generate_strict_empty_loader
+    LoaderA = generate_strict_empty_loader('LoaderA')
+    LoaderB = generate_strict_empty_loader('LoaderB')
+    assert LoaderA.__name__ == 'LoaderA'
+    assert LoaderB.__name__ == 'LoaderB'
+    assert LoaderA is not LoaderB
+
+
+def test_generate_list_empty_loader_creates_independent_class():
+    from pydantic_resolve.utils.dataloader import generate_list_empty_loader
+    LoaderA = generate_list_empty_loader('LoaderA')
+    LoaderB = generate_list_empty_loader('LoaderB')
+    assert LoaderA.__name__ == 'LoaderA'
+    assert LoaderB.__name__ == 'LoaderB'
+    assert LoaderA is not LoaderB
+
+
+def test_generate_single_empty_loader_creates_independent_class():
+    from pydantic_resolve.utils.dataloader import generate_single_empty_loader
+    LoaderA = generate_single_empty_loader('LoaderA')
+    LoaderB = generate_single_empty_loader('LoaderB')
+    assert LoaderA.__name__ == 'LoaderA'
+    assert LoaderB.__name__ == 'LoaderB'
+    assert LoaderA is not LoaderB
+
+
+@pytest.mark.asyncio
+async def test_generated_loaders_have_independent_state():
+    """Verify that generated loaders don't share mutable class state."""
+    from pydantic_resolve.utils.dataloader import generate_list_empty_loader
+    LoaderA = generate_list_empty_loader('LoaderA')
+    LoaderB = generate_list_empty_loader('LoaderB')
+    # Mutate one class attribute
+    LoaderA.custom_attr = 'modified'
+    assert not hasattr(LoaderB, 'custom_attr')
+
+
+def test_copy_dataloader_kls_creates_independent_class():
+    from aiodataloader import DataLoader
+    from pydantic_resolve.utils.dataloader import copy_dataloader_kls
+
+    class MyLoader(DataLoader):
+        batch_size = 10
+        async def batch_load_fn(self, keys):
+            return keys
+
+    CopiedA = copy_dataloader_kls('CopiedA', MyLoader)
+    CopiedB = copy_dataloader_kls('CopiedB', MyLoader)
+
+    assert CopiedA.__name__ == 'CopiedA'
+    assert CopiedB.__name__ == 'CopiedB'
+    assert CopiedA is not CopiedB
+    assert CopiedA.batch_size == 10
+    assert CopiedB.batch_size == 10
+
+
+def test_copy_dataloader_kls_state_isolation():
+    from aiodataloader import DataLoader
+    from pydantic_resolve.utils.dataloader import copy_dataloader_kls
+
+    class MyLoader(DataLoader):
+        batch_size = 10
+        async def batch_load_fn(self, keys):
+            return keys
+
+    CopiedA = copy_dataloader_kls('CopiedA', MyLoader)
+    CopiedB = copy_dataloader_kls('CopiedB', MyLoader)
+
+    CopiedA.batch_size = 99
+    assert CopiedB.batch_size == 10
 
