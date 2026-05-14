@@ -34,7 +34,11 @@ def copy_dataloader_kls(name, loader_kls):
     SeniorMemberLoader = copy_dataloader('SeniorMemberLoader', ul.UserByLevelLoader)
     JuniorMemberLoader = copy_dataloader('JuniorMemberLoader', ul.UserByLevelLoader)
     """
-    return type(name, loader_kls.__bases__, dict(loader_kls.__dict__))
+    class NewLoader(loader_kls):
+        pass
+    NewLoader.__name__ = name
+    NewLoader.__qualname__ = name
+    return NewLoader
 
 
 class StrictEmptyLoader(DataLoader):
@@ -45,26 +49,36 @@ class StrictEmptyLoader(DataLoader):
 
 class ListEmptyLoader(DataLoader):
     async def batch_load_fn(self, keys):
-        dct = {}
-        return [dct.get(k, []) for k in keys]
+        return [[] for _ in keys]
 
 
 class SingleEmptyLoader(DataLoader):
     async def batch_load_fn(self, keys):
-        dct = {}
-        return [dct.get(k, None) for k in keys]
+        return [None for _ in keys]
 
 
 def generate_strict_empty_loader(name):
     """generated Loader will raise ValueError if not found"""
-    return type(name, StrictEmptyLoader.__bases__, dict(StrictEmptyLoader.__dict__))  #noqa
+    class NewLoader(StrictEmptyLoader):
+        pass
+    NewLoader.__name__ = name
+    NewLoader.__qualname__ = name
+    return NewLoader
 
 
 def generate_list_empty_loader(name):
     """generated Loader will return [] if not found"""
-    return type(name, ListEmptyLoader.__bases__, dict(ListEmptyLoader.__dict__))  #noqa
+    class NewLoader(ListEmptyLoader):
+        pass
+    NewLoader.__name__ = name
+    NewLoader.__qualname__ = name
+    return NewLoader
 
 
 def generate_single_empty_loader(name):
     """generated Loader will return None if not found"""
-    return type(name, SingleEmptyLoader.__bases__, dict(SingleEmptyLoader.__dict__))  #noqa
+    class NewLoader(SingleEmptyLoader):
+        pass
+    NewLoader.__name__ = name
+    NewLoader.__qualname__ = name
+    return NewLoader
