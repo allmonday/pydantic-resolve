@@ -91,6 +91,55 @@ def _apply_load_only(
     return stmt
 
 
+def _create_lookup_loader(
+    *,
+    source_orm_kls: type,
+    rel_name: str,
+    target_orm_kls: type,
+    target_dto_kls: type,
+    target_col_name: str,
+    session_factory: Callable,
+    filters: list[Any] | None = None,
+    suffix: str,
+) -> type[DataLoader]:
+    """Shared implementation for M2O and R-O2O lookup loaders."""
+    class _Loader(DataLoader):
+        async def batch_load_fn(self, keys):
+            from sqlalchemy import select
+
+            effective_fields = _get_effective_query_fields(
+                self,
+                self.target_dto_kls,
+                extra_fields=[self.target_col_name],
+            )
+
+            async with self.session_factory() as session:
+                stmt = select(self.target_orm_kls)
+                stmt = _apply_load_only(stmt, self.target_orm_kls, effective_fields)
+                stmt = stmt.where(
+                    getattr(self.target_orm_kls, self.target_col_name).in_(keys)
+                )
+                stmt = _apply_filters(stmt, self.filters)
+                rows = (await session.scalars(stmt)).all()
+
+            lookup = {getattr(row, self.target_col_name): row for row in rows}
+            return [
+                lookup[k] if k in lookup else None
+                for k in keys
+            ]
+
+    _Loader.target_orm_kls = target_orm_kls
+    _Loader.target_dto_kls = target_dto_kls
+    _Loader.target_col_name = target_col_name
+    _Loader.session_factory = staticmethod(session_factory)
+    _Loader.filters = filters
+
+    return _finalize_loader_class(
+        _Loader,
+        _build_loader_identity(source_orm_kls, rel_name, suffix),
+    )
+
+
 def create_many_to_one_loader(
     *,
     source_orm_kls: type,
@@ -101,40 +150,15 @@ def create_many_to_one_loader(
     session_factory: Callable,
     filters: list[Any] | None = None,
 ) -> type[DataLoader]:
-    class _Loader(DataLoader):
-        async def batch_load_fn(self, keys):
-            from sqlalchemy import select
-
-            effective_fields = _get_effective_query_fields(
-                self,
-                self.target_dto_kls,
-                extra_fields=[self.target_remote_col_name],
-            )
-
-            async with self.session_factory() as session:
-                stmt = select(self.target_orm_kls)
-                stmt = _apply_load_only(stmt, self.target_orm_kls, effective_fields)
-                stmt = stmt.where(
-                    getattr(self.target_orm_kls, self.target_remote_col_name).in_(keys)
-                )
-                stmt = _apply_filters(stmt, self.filters)
-                rows = (await session.scalars(stmt)).all()
-
-            lookup = {getattr(row, self.target_remote_col_name): row for row in rows}
-            return [
-                lookup[k] if k in lookup else None
-                for k in keys
-            ]
-
-    _Loader.target_orm_kls = target_orm_kls
-    _Loader.target_dto_kls = target_dto_kls
-    _Loader.target_remote_col_name = target_remote_col_name
-    _Loader.session_factory = staticmethod(session_factory)
-    _Loader.filters = filters
-
-    return _finalize_loader_class(
-        _Loader,
-        _build_loader_identity(source_orm_kls, rel_name, "M2O"),
+    return _create_lookup_loader(
+        source_orm_kls=source_orm_kls,
+        rel_name=rel_name,
+        target_orm_kls=target_orm_kls,
+        target_dto_kls=target_dto_kls,
+        target_col_name=target_remote_col_name,
+        session_factory=session_factory,
+        filters=filters,
+        suffix="M2O",
     )
 
 
@@ -195,40 +219,15 @@ def create_reverse_one_to_one_loader(
     session_factory: Callable,
     filters: list[Any] | None = None,
 ) -> type[DataLoader]:
-    class _Loader(DataLoader):
-        async def batch_load_fn(self, keys):
-            from sqlalchemy import select
-
-            effective_fields = _get_effective_query_fields(
-                self,
-                self.target_dto_kls,
-                extra_fields=[self.target_fk_col_name],
-            )
-
-            async with self.session_factory() as session:
-                stmt = select(self.target_orm_kls)
-                stmt = _apply_load_only(stmt, self.target_orm_kls, effective_fields)
-                stmt = stmt.where(
-                    getattr(self.target_orm_kls, self.target_fk_col_name).in_(keys)
-                )
-                stmt = _apply_filters(stmt, self.filters)
-                rows = (await session.scalars(stmt)).all()
-
-            lookup = {getattr(row, self.target_fk_col_name): row for row in rows}
-            return [
-                lookup[k] if k in lookup else None
-                for k in keys
-            ]
-
-    _Loader.target_orm_kls = target_orm_kls
-    _Loader.target_dto_kls = target_dto_kls
-    _Loader.target_fk_col_name = target_fk_col_name
-    _Loader.session_factory = staticmethod(session_factory)
-    _Loader.filters = filters
-
-    return _finalize_loader_class(
-        _Loader,
-        _build_loader_identity(source_orm_kls, rel_name, "RO2O"),
+    return _create_lookup_loader(
+        source_orm_kls=source_orm_kls,
+        rel_name=rel_name,
+        target_orm_kls=target_orm_kls,
+        target_dto_kls=target_dto_kls,
+        target_col_name=target_fk_col_name,
+        session_factory=session_factory,
+        filters=filters,
+        suffix="RO2O",
     )
 
 
