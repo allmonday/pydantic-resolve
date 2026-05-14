@@ -362,99 +362,69 @@ def _loader_requires_context(loader_kls: type) -> bool:
     return '_context' in get_class_field_annotations(loader_kls)
 
 
-def _scan_resolve_method(method, field: str, request_types: list[type]) -> ResolveMethodType:
-    result: ResolveMethodType = {
-        'trim_field': field.replace(const.RESOLVE_PREFIX, ''),
-        'context': False,
-        'parent': False,
-        'ancestor_context': False,
-        'dataloaders': []  # collect func or class, do not create instance
-    }
-    signature = inspect.signature(method)
-
-    if signature.parameters.get('context'):
-        result['context'] = True
-
-    if signature.parameters.get('ancestor_context'):
-        result['ancestor_context'] = True
-
-    if signature.parameters.get('parent'):
-        result['parent'] = True
-
+def _scan_dataloader_params(signature, request_types: list[type]) -> list[DataLoaderType]:
+    """Extract DataLoader dependencies from a method signature."""
+    loaders = []
     for name, param in signature.parameters.items():
         if isinstance(param.default, Depends):
             loader_kls = param.default.dependency
             path = class_util.get_kls_full_name(loader_kls)
-
-            # Sort to ensure Union order (TaskA | TaskB vs TaskB | TaskA) produces the same key
             type_key = tuple(sorted(request_types, key=lambda t: class_util.get_kls_full_name(t))) if request_types else ()
-
-            info: DataLoaderType = {
+            loaders.append({
                 'param': name,
                 'kls': loader_kls,
                 'path': path,
                 'request_type': request_types,
                 'requires_context': _loader_requires_context(loader_kls),
                 'type_key': type_key,
-            }
-            result['dataloaders'].append(info)
+            })
+    return loaders
+
+
+def _scan_common_params(signature) -> dict:
+    """Scan common parameters (context, parent, ancestor_context) from a signature."""
+    return {
+        'context': signature.parameters.get('context') is not None,
+        'parent': signature.parameters.get('parent') is not None,
+        'ancestor_context': signature.parameters.get('ancestor_context') is not None,
+    }
+
+
+def _scan_resolve_method(method, field: str, request_types: list[type]) -> ResolveMethodType:
+    signature = inspect.signature(method)
+    common = _scan_common_params(signature)
 
     for name, param in signature.parameters.items():
         if isinstance(param.default, ICollector):
             raise AttributeError("Collector is not available in resolve_method")
 
-    return result
+    return {
+        'trim_field': field.replace(const.RESOLVE_PREFIX, ''),
+        **common,
+        'dataloaders': _scan_dataloader_params(signature, request_types),
+    }
 
 
 def _scan_post_method(method, field: str, request_types: list[type]) -> PostMethodType:
-    result: PostMethodType = {
-        'trim_field': field.replace(const.POST_PREFIX, ''),
-        'context': False,
-        'ancestor_context': False,
-        'parent': False,
-        'dataloaders': [],
-        'collectors': []
-    }
     signature = inspect.signature(method)
+    common = _scan_common_params(signature)
 
-    if signature.parameters.get('context'):
-        result['context'] = True
-
-    if signature.parameters.get('ancestor_context'):
-        result['ancestor_context'] = True
-
-    if signature.parameters.get('parent'):
-        result['parent'] = True
-
-
+    collectors = []
     for name, param in signature.parameters.items():
-        if isinstance(param.default, Depends):
-            loader_kls = param.default.dependency
-            path = class_util.get_kls_full_name(loader_kls)
-
-            type_key = tuple(sorted(request_types, key=lambda t: class_util.get_kls_full_name(t))) if request_types else ()
-
-            loader_info: DataLoaderType = {
-                'param': name,
-                'kls': loader_kls,
-                'path': path,
-                'request_type': request_types,
-                'requires_context': _loader_requires_context(loader_kls),
-                'type_key': type_key,
-            }
-            result['dataloaders'].append(loader_info)
-
         if isinstance(param.default, ICollector):
-            info: CollectorType = {
+            collectors.append({
                 'field': field,
                 'param': name,
                 'instance': param.default,
-                'alias': param.default.alias 
-            }
-            result['collectors'].append(info)
+                'alias': param.default.alias
+            })
 
-            
-    return result
+    return {
+        'trim_field': field.replace(const.POST_PREFIX, ''),
+        **common,
+        'dataloaders': _scan_dataloader_params(signature, request_types),
+        'collectors': collectors,
+    }
 
 
 def _scan_post_default_handler(method) -> PostDefaultHandlerType:
