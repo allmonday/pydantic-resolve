@@ -94,6 +94,52 @@ async def _evaluate_queryset(queryset: Any) -> list[Any]:
     return await sync_to_async(list, thread_sensitive=True)(queryset)
 
 
+def _create_lookup_loader(
+    *,
+    source_orm_kls: type,
+    rel_name: str,
+    target_orm_kls: type,
+    target_dto_kls: type,
+    target_field_name: str,
+    using: Any = None,
+    filters: list[Any] | None = None,
+    suffix: str,
+) -> type[DataLoader]:
+    """Shared implementation for M2O and R-O2O lookup loaders."""
+    identity = _build_loader_identity(source_orm_kls, rel_name, suffix)
+
+    class _Loader(DataLoader):
+        async def batch_load_fn(self, keys):
+            effective_fields = _get_effective_query_fields(
+                self,
+                self.target_dto_kls,
+                extra_fields=[self.target_field_name],
+            )
+            effective_fields = _sanitize_only_fields(self, self.target_orm_kls, effective_fields)
+
+            queryset = self.target_orm_kls.objects.filter(
+                **{f"{self.target_field_name}__in": list(set(keys))}
+            )
+            queryset = _maybe_use_database(queryset, self.using)
+            queryset = _apply_filters(queryset, self.filters)
+            queryset = _apply_only(queryset, effective_fields)
+            rows = await _evaluate_queryset(queryset)
+
+            lookup = {getattr(row, self.target_field_name): row for row in rows}
+            return [
+                lookup[key] if key in lookup else None
+                for key in keys
+            ]
+
+    _Loader.target_orm_kls = target_orm_kls
+    _Loader.target_dto_kls = target_dto_kls
+    _Loader.target_field_name = target_field_name
+    _Loader.using = staticmethod(using) if callable(using) else using
+    _Loader.filters = filters
+
+    return _finalize_loader_class(_Loader, identity)
+
+
 def create_many_to_one_loader(
     *,
     source_orm_kls: type,
@@ -104,38 +150,16 @@ def create_many_to_one_loader(
     using: Any = None,
     filters: list[Any] | None = None,
 ) -> type[DataLoader]:
-    identity = _build_loader_identity(source_orm_kls, rel_name, "M2O")
-
-    class _Loader(DataLoader):
-        async def batch_load_fn(self, keys):
-            effective_fields = _get_effective_query_fields(
-                self,
-                self.target_dto_kls,
-                extra_fields=[self.target_remote_field_name],
-            )
-            effective_fields = _sanitize_only_fields(self, self.target_orm_kls, effective_fields)
-
-            queryset = self.target_orm_kls.objects.filter(
-                **{f"{self.target_remote_field_name}__in": list(set(keys))}
-            )
-            queryset = _maybe_use_database(queryset, self.using)
-            queryset = _apply_filters(queryset, self.filters)
-            queryset = _apply_only(queryset, effective_fields)
-            rows = await _evaluate_queryset(queryset)
-
-            lookup = {getattr(row, self.target_remote_field_name): row for row in rows}
-            return [
-                lookup[key] if key in lookup else None
-                for key in keys
-            ]
-
-    _Loader.target_orm_kls = target_orm_kls
-    _Loader.target_dto_kls = target_dto_kls
-    _Loader.target_remote_field_name = target_remote_field_name
-    _Loader.using = staticmethod(using) if callable(using) else using
-    _Loader.filters = filters
-
-    return _finalize_loader_class(_Loader, identity)
+    return _create_lookup_loader(
+        source_orm_kls=source_orm_kls,
+        rel_name=rel_name,
+        target_orm_kls=target_orm_kls,
+        target_dto_kls=target_dto_kls,
+        target_field_name=target_remote_field_name,
+        using=using,
+        filters=filters,
+        suffix="M2O",
+    )
 
 
 def create_one_to_many_loader(
@@ -192,38 +216,16 @@ def create_reverse_one_to_one_loader(
     using: Any = None,
     filters: list[Any] | None = None,
 ) -> type[DataLoader]:
-    identity = _build_loader_identity(source_orm_kls, rel_name, "RO2O")
-
-    class _Loader(DataLoader):
-        async def batch_load_fn(self, keys):
-            effective_fields = _get_effective_query_fields(
-                self,
-                self.target_dto_kls,
-                extra_fields=[self.target_relation_field_name],
-            )
-            effective_fields = _sanitize_only_fields(self, self.target_orm_kls, effective_fields)
-
-            queryset = self.target_orm_kls.objects.filter(
-                **{f"{self.target_relation_field_name}__in": list(set(keys))}
-            )
-            queryset = _maybe_use_database(queryset, self.using)
-            queryset = _apply_filters(queryset, self.filters)
-            queryset = _apply_only(queryset, effective_fields)
-            rows = await _evaluate_queryset(queryset)
-
-            lookup = {getattr(row, self.target_relation_field_name): row for row in rows}
-            return [
-                lookup[key] if key in lookup else None
-                for key in keys
-            ]
-
-    _Loader.target_orm_kls = target_orm_kls
-    _Loader.target_dto_kls = target_dto_kls
-    _Loader.target_relation_field_name = target_relation_field_name
-    _Loader.using = staticmethod(using) if callable(using) else using
-    _Loader.filters = filters
-
-    return _finalize_loader_class(_Loader, identity)
+    return _create_lookup_loader(
+        source_orm_kls=source_orm_kls,
+        rel_name=rel_name,
+        target_orm_kls=target_orm_kls,
+        target_dto_kls=target_dto_kls,
+        target_field_name=target_relation_field_name,
+        using=using,
+        filters=filters,
+        suffix="RO2O",
+    )
 
 
 def create_many_to_many_loader(
