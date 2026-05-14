@@ -218,37 +218,31 @@ def validate_and_create_loader_instance(
     # used both as cache key in split mode and as type source for _query_meta generation.
     type_keys: dict[str, set[tuple[type, ...]]] = {}
 
-    # Phase 1: create instances
+    # Phase 1+2: create instances and collect type_keys in a single pass.
     # Iterate all DataLoaderType entries from scanned metadata (resolve_* and post_* methods).
     # - Non-split mode: key = (), so every path maps to exactly one instance.
     # - Split mode:     key = type_key (sorted tuple of request types), creating one instance per type set.
     #
     # Result (non-split):  cache = {'mod.TaskLoader': {(): <TaskLoader inst>}}
     # Result (split):      cache = {'mod.TaskLoader': {(TaskCard,): <inst1>, (TaskDetail,): <inst2>}}
+    # Result: type_keys = {'mod.TaskLoader': {(TaskCard,), (TaskDetail,)}}
     for loader in _get_all_loaders_from_meta(metadata):
         path = loader['path']
         key = () if not split_loader_by_type else loader['type_key']
 
+        # Phase 1: create instance (deduplicated by path+key)
         if path not in cache:
             cache[path] = {}
-        if key in cache[path]:
-            continue
+        if key not in cache[path]:
+            loader_kls = loader['kls']
+            if loader_instances.get(loader_kls):
+                cache[path][key] = loader_instances[loader_kls]
+            else:
+                cache[path][key] = _create_loader_instance(loader, loader_params, global_loader_param, context)
 
-        loader_kls = loader['kls']
-        if loader_instances.get(loader_kls):
-            cache[path][key] = loader_instances[loader_kls]
-        else:
-            cache[path][key] = _create_loader_instance(loader, loader_params, global_loader_param, context)
-
-    # Phase 2: collect type_keys for _query_meta generation.
-    # A set naturally deduplicates — Union alternatives with different order
-    # (e.g. TaskA|TaskB vs TaskB|TaskA) produce the same sorted type_key.
-    #
-    # Result: type_keys = {'mod.TaskLoader': {(TaskCard,), (TaskDetail,)}}
-    for loader in _get_all_loaders_from_meta(metadata):
-        if loader['request_type'] is None:
-            continue
-        type_keys.setdefault(loader['path'], set()).add(loader['type_key'])
+        # Phase 2: collect type_keys for _query_meta generation
+        if loader['request_type'] is not None:
+            type_keys.setdefault(path, set()).add(loader['type_key'])
 
     # Phase 3: assign _query_meta
     # For each instance, determine which type_keys are relevant:
