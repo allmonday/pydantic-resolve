@@ -6,6 +6,11 @@
 
 ## 5.6
 
+### 5.6.2 (2026-5-20)
+
+- fix:
+  - **UseCase MCP type coercion for `call_use_case`**: arguments received from MCP clients (JSON-native types like `int` passed where `str` is expected) are now coerced to the correct Python type using Pydantic `TypeAdapter` before being passed to the underlying method
+
 ### 5.6.1 (2026-5-20)
 
 - fix:
