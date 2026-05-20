@@ -14,6 +14,7 @@ from typing import Any, get_args, get_origin
 from pydantic import BaseModel
 
 from pydantic_resolve.use_case.business import USE_CASE_METHODS_ATTR, UseCaseService
+from pydantic_resolve.use_case.context import FromContext
 from pydantic_resolve.utils.types import _is_list, _is_optional, get_core_types, get_return_annotation
 
 _UNION_ORIGINS = (typing.Union, _UnionType)
@@ -314,6 +315,13 @@ def _type_to_param_schema(anno: Any) -> dict[str, Any]:
     return {}
 
 
+def _is_from_context_annotation(anno: Any) -> bool:
+    """Return True when a parameter annotation is marked as FromContext."""
+    if get_origin(anno) is typing.Annotated:
+        return any(isinstance(arg, FromContext) for arg in get_args(anno)[1:])
+    return False
+
+
 # ──────────────────────────────────────────────────
 # ServiceIntrospector
 # ──────────────────────────────────────────────────
@@ -462,9 +470,11 @@ class ServiceIntrospector:
         if isinstance(method, classmethod):
             func = method.__func__
 
-        # Use typing.get_type_hints to resolve string annotations
+        # Use typing.get_type_hints to resolve string annotations.
+        # Keep Annotated metadata so FromContext params can be shown as optional
+        # to MCP clients while still preserving the underlying type.
         try:
-            hints = typing.get_type_hints(func)
+            hints = typing.get_type_hints(func, include_extras=True)
         except Exception:
             hints = {}
 
@@ -545,7 +555,10 @@ class ServiceIntrospector:
             anno = hints.get(param_name, param.annotation)
             if isinstance(anno, str):
                 anno = _try_eval_simple_type(anno)
-            is_required = param.default is inspect.Parameter.empty
+            is_required = (
+                param.default is inspect.Parameter.empty
+                and not _is_from_context_annotation(anno)
+            )
             schema = _type_to_param_schema(anno)
             schema["required"] = is_required
             params[param_name] = schema

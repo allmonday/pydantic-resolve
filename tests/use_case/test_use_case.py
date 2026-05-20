@@ -710,6 +710,17 @@ class ContextAwareService(UseCaseService):
 class TestFromContext:
     """Tests for FromContext annotation support in UseCaseAppConfig."""
 
+    def test_from_context_params_described_as_optional(self):
+        """FromContext params are optional in generated MCP signatures."""
+        introspector = ServiceIntrospector([ContextAwareService])
+        info = introspector.describe_service("ContextAwareService")
+        assert info is not None
+
+        method = next(m for m in info["methods"] if m["name"] == "get_my_items")
+        assert "user_id: Int" in method["signature_sdl"]
+        assert "user_id: Int!" not in method["signature_sdl"]
+        assert method["parameters"]["user_id"]["required"] is False
+
     @pytest.mark.asyncio
     async def test_from_context_param_injected(self):
         """FromContext parameter receives value from context_extractor."""

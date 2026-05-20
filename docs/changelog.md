@@ -6,6 +6,11 @@
 
 ## 5.6
 
+### 5.6.1 (2026-5-20)
+
+- fix:
+  - **UseCase MCP FromContext parameters are described as optional**: parameters annotated with `Annotated[..., FromContext()]` now appear as optional in generated `describe_service` signatures and parameter metadata, so MCP clients do not need to provide values that are injected from context
+
 ### 5.6.0 (2026-5-9)
 
 This release introduces breaking changes to the UseCaseService API. Methods must now be decorated with `@query` or `@mutation` instead of using `@classmethod`.
