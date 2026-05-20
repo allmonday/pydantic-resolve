@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import uuid
+import datetime
+from decimal import Decimal
 from typing import Annotated
 
 import pytest
@@ -622,6 +625,81 @@ class ListParamService(UseCaseService):
 
 
 # ──────────────────────────────────────────────────
+# Test DTOs and Services for Type Coercion
+# ──────────────────────────────────────────────────
+
+
+class EventDTO(BaseModel):
+    id: uuid.UUID
+    name: str
+    occurred_at: datetime.datetime
+    event_date: datetime.date
+    event_time: datetime.time
+
+
+class TypeCoercionService(UseCaseService):
+    """Service with complex type parameters for testing type coercion."""
+
+    @query
+    async def get_by_uuid(cls, item_id: uuid.UUID) -> str:
+        """Get by UUID."""
+        return f"uuid:{item_id.version}:{str(item_id)}"
+
+    @query
+    async def get_by_datetime(cls, ts: datetime.datetime) -> str:
+        """Get by datetime."""
+        return f"dt:{ts.isoformat()}"
+
+    @query
+    async def get_by_date(cls, d: datetime.date) -> str:
+        """Get by date."""
+        return f"date:{d.isoformat()}"
+
+    @query
+    async def get_by_time(cls, t: datetime.time) -> str:
+        """Get by time."""
+        return f"time:{t.isoformat()}"
+
+    @query
+    async def get_by_decimal(cls, amount: Decimal) -> str:
+        """Get by decimal."""
+        return f"decimal:{str(amount)}"
+
+    @query
+    async def get_optional_uuid(cls, item_id: uuid.UUID | None = None) -> str:
+        """Optional UUID."""
+        return f"uuid:{str(item_id)}"
+
+    @query
+    async def get_optional_datetime(
+        cls, ts: datetime.datetime | None = None
+    ) -> str:
+        """Optional datetime."""
+        return f"dt:{ts.isoformat() if ts else 'none'}"
+
+    @query
+    async def get_by_uuid_list(cls, ids: list[uuid.UUID]) -> str:
+        """List of UUIDs."""
+        return f"ids:{','.join(str(i) for i in ids)}"
+
+    @query
+    async def create_event(cls, event: EventDTO) -> str:
+        """Create event from DTO."""
+        return f"event:{event.id}:{event.name}:{event.occurred_at.isoformat()}"
+
+    @query
+    async def get_with_mixed_types(
+        cls,
+        item_id: uuid.UUID,
+        ts: datetime.datetime,
+        name: str,
+        count: int,
+    ) -> str:
+        """Mixed types."""
+        return f"mixed:{str(item_id)}:{ts.isoformat()}:{name}:{count}"
+
+
+# ──────────────────────────────────────────────────
 # Tests: Fix 4 — get_type_hints fallback
 # ──────────────────────────────────────────────────
 
@@ -1095,3 +1173,256 @@ class TestEnableMutation:
 
         create_user = next(m for m in info["methods"] if m["name"] == "create_user")
         assert create_user["kind"] == "mutation"
+
+
+# ──────────────────────────────────────────────────
+# Tests: Type Coercion (Pydantic TypeAdapter)
+# ──────────────────────────────────────────────────
+
+
+@pytest.fixture
+def type_coercion_server():
+    return create_use_case_mcp_server(
+        apps=[
+            UseCaseAppConfig(
+                name="test",
+                services=[TypeCoercionService],
+            ),
+        ],
+    )
+
+
+class TestTypeCoercion:
+    """Tests for Pydantic TypeAdapter-based parameter type coercion."""
+
+    @pytest.mark.asyncio
+    async def test_uuid_param_coerced(self, type_coercion_server):
+        """UUID string is coerced to uuid.UUID."""
+        test_uuid = "550e8400-e29b-41d4-a716-446655440000"
+        result = await type_coercion_server.call_tool(
+            "call_use_case",
+            {
+                "app_name": "test",
+                "service_name": "TypeCoercionService",
+                "method_name": "get_by_uuid",
+                "params": json.dumps({"item_id": test_uuid}),
+            },
+        )
+        data = json.loads(result.content[0].text)
+        assert data["success"] is True
+        assert data["data"] == f"uuid:4:{test_uuid}"
+
+    @pytest.mark.asyncio
+    async def test_datetime_param_coerced(self, type_coercion_server):
+        """ISO datetime string is coerced to datetime.datetime."""
+        result = await type_coercion_server.call_tool(
+            "call_use_case",
+            {
+                "app_name": "test",
+                "service_name": "TypeCoercionService",
+                "method_name": "get_by_datetime",
+                "params": json.dumps({"ts": "2024-01-15T10:30:00"}),
+            },
+        )
+        data = json.loads(result.content[0].text)
+        assert data["success"] is True
+        assert data["data"] == "dt:2024-01-15T10:30:00"
+
+    @pytest.mark.asyncio
+    async def test_date_param_coerced(self, type_coercion_server):
+        """ISO date string is coerced to datetime.date."""
+        result = await type_coercion_server.call_tool(
+            "call_use_case",
+            {
+                "app_name": "test",
+                "service_name": "TypeCoercionService",
+                "method_name": "get_by_date",
+                "params": json.dumps({"d": "2024-01-15"}),
+            },
+        )
+        data = json.loads(result.content[0].text)
+        assert data["success"] is True
+        assert data["data"] == "date:2024-01-15"
+
+    @pytest.mark.asyncio
+    async def test_time_param_coerced(self, type_coercion_server):
+        """ISO time string is coerced to datetime.time."""
+        result = await type_coercion_server.call_tool(
+            "call_use_case",
+            {
+                "app_name": "test",
+                "service_name": "TypeCoercionService",
+                "method_name": "get_by_time",
+                "params": json.dumps({"t": "10:30:00"}),
+            },
+        )
+        data = json.loads(result.content[0].text)
+        assert data["success"] is True
+        assert data["data"] == "time:10:30:00"
+
+    @pytest.mark.asyncio
+    async def test_decimal_param_coerced(self, type_coercion_server):
+        """Decimal string is coerced to Decimal."""
+        result = await type_coercion_server.call_tool(
+            "call_use_case",
+            {
+                "app_name": "test",
+                "service_name": "TypeCoercionService",
+                "method_name": "get_by_decimal",
+                "params": json.dumps({"amount": "19.99"}),
+            },
+        )
+        data = json.loads(result.content[0].text)
+        assert data["success"] is True
+        assert data["data"] == "decimal:19.99"
+
+    @pytest.mark.asyncio
+    async def test_optional_uuid_with_value(self, type_coercion_server):
+        """UUID string is coerced in Optional[UUID] param."""
+        test_uuid = "550e8400-e29b-41d4-a716-446655440000"
+        result = await type_coercion_server.call_tool(
+            "call_use_case",
+            {
+                "app_name": "test",
+                "service_name": "TypeCoercionService",
+                "method_name": "get_optional_uuid",
+                "params": json.dumps({"item_id": test_uuid}),
+            },
+        )
+        data = json.loads(result.content[0].text)
+        assert data["success"] is True
+        assert data["data"] == f"uuid:{test_uuid}"
+
+    @pytest.mark.asyncio
+    async def test_optional_uuid_with_null(self, type_coercion_server):
+        """None value works for Optional[UUID] param."""
+        result = await type_coercion_server.call_tool(
+            "call_use_case",
+            {
+                "app_name": "test",
+                "service_name": "TypeCoercionService",
+                "method_name": "get_optional_uuid",
+                "params": json.dumps({"item_id": None}),
+            },
+        )
+        data = json.loads(result.content[0].text)
+        assert data["success"] is True
+        assert data["data"] == "uuid:None"
+
+    @pytest.mark.asyncio
+    async def test_optional_datetime_with_null(self, type_coercion_server):
+        """None value works for Optional[datetime] param."""
+        result = await type_coercion_server.call_tool(
+            "call_use_case",
+            {
+                "app_name": "test",
+                "service_name": "TypeCoercionService",
+                "method_name": "get_optional_datetime",
+                "params": json.dumps({"ts": None}),
+            },
+        )
+        data = json.loads(result.content[0].text)
+        assert data["success"] is True
+        assert data["data"] == "dt:none"
+
+    @pytest.mark.asyncio
+    async def test_uuid_list_coerced(self, type_coercion_server):
+        """List of UUID strings is coerced to list[uuid.UUID]."""
+        ids = [
+            "550e8400-e29b-41d4-a716-446655440000",
+            "6fa459ea-ee8a-3ca4-894e-db77e160355e",
+        ]
+        result = await type_coercion_server.call_tool(
+            "call_use_case",
+            {
+                "app_name": "test",
+                "service_name": "TypeCoercionService",
+                "method_name": "get_by_uuid_list",
+                "params": json.dumps({"ids": ids}),
+            },
+        )
+        data = json.loads(result.content[0].text)
+        assert data["success"] is True
+        assert data["data"] == f"ids:{','.join(ids)}"
+
+    @pytest.mark.asyncio
+    async def test_basemodel_param_coerced(self, type_coercion_server):
+        """Dict is coerced to BaseModel, including nested UUID/datetime fields."""
+        event_data = {
+            "id": "550e8400-e29b-41d4-a716-446655440000",
+            "name": "test_event",
+            "occurred_at": "2024-01-15T10:30:00",
+            "event_date": "2024-01-15",
+            "event_time": "10:30:00",
+        }
+        result = await type_coercion_server.call_tool(
+            "call_use_case",
+            {
+                "app_name": "test",
+                "service_name": "TypeCoercionService",
+                "method_name": "create_event",
+                "params": json.dumps({"event": event_data}),
+            },
+        )
+        data = json.loads(result.content[0].text)
+        assert data["success"] is True
+        assert "550e8400-e29b-41d4-a716-446655440000" in data["data"]
+        assert "test_event" in data["data"]
+
+    @pytest.mark.asyncio
+    async def test_mixed_types_coerced(self, type_coercion_server):
+        """Mixed types: UUID and datetime coerced, str and int pass through."""
+        test_uuid = "550e8400-e29b-41d4-a716-446655440000"
+        result = await type_coercion_server.call_tool(
+            "call_use_case",
+            {
+                "app_name": "test",
+                "service_name": "TypeCoercionService",
+                "method_name": "get_with_mixed_types",
+                "params": json.dumps(
+                    {
+                        "item_id": test_uuid,
+                        "ts": "2024-01-15T10:30:00",
+                        "name": "hello",
+                        "count": 42,
+                    }
+                ),
+            },
+        )
+        data = json.loads(result.content[0].text)
+        assert data["success"] is True
+        assert data["data"] == f"mixed:{test_uuid}:2024-01-15T10:30:00:hello:42"
+
+    @pytest.mark.asyncio
+    async def test_existing_simple_params_still_work(self, mcp_server):
+        """Regression: simple int param still works after adding coercion."""
+        result = await mcp_server.call_tool(
+            "call_use_case",
+            {
+                "app_name": "project",
+                "service_name": "UserService",
+                "method_name": "get_user",
+                "params": json.dumps({"user_id": 1}),
+            },
+        )
+        data = json.loads(result.content[0].text)
+        assert data["success"] is True
+        assert data["data"]["name"] == "Alice"
+
+    @pytest.mark.asyncio
+    async def test_basemodel_register_works(self, mcp_server):
+        """BaseModel parameter (CreateUserDTO) is coerced from dict."""
+        result = await mcp_server.call_tool(
+            "call_use_case",
+            {
+                "app_name": "project",
+                "service_name": "UserService",
+                "method_name": "register",
+                "params": json.dumps(
+                    {"data": {"name": "Charlie", "email": "c@test.com"}}
+                ),
+            },
+        )
+        data = json.loads(result.content[0].text)
+        assert data["success"] is True
+        assert data["data"]["name"] == "Charlie"

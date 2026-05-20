@@ -15,7 +15,7 @@ import json
 from typing import TYPE_CHECKING, Annotated, Any, get_args, get_origin, get_type_hints
 
 from fastmcp.server.context import Context
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
 
 from pydantic_resolve.graphql.mcp.types.errors import (
     MCPErrors,
@@ -322,6 +322,10 @@ def create_use_case_mcp_server(
         try:
             method = getattr(service_cls, method_name)
 
+            # Coerce JSON-parsed kwargs to match method parameter types
+            func = method.__func__ if isinstance(method, classmethod) else method
+            kwargs = _coerce_kwargs(func, kwargs)
+
             # Extract context and merge FromContext params into kwargs
             context = await _extract_context(app, ctx)
             from_context_params = _get_from_context_params(method)
@@ -391,6 +395,38 @@ def create_use_case_mcp_server(
         return from_context_params
 
     return mcp
+
+
+def _coerce_value(value: Any, annotation: Any) -> Any:
+    """Use Pydantic TypeAdapter to coerce a JSON-native value to the target type."""
+    if value is None:
+        return value
+    try:
+        adapter = TypeAdapter(annotation)
+        return adapter.validate_python(value)
+    except Exception:
+        return value
+
+
+def _coerce_kwargs(func: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Coerce JSON-parsed kwargs to match the function's parameter type hints."""
+    try:
+        hints = get_type_hints(func, include_extras=True)
+    except Exception:
+        return kwargs
+
+    sig = inspect.signature(func)
+    coerced = dict(kwargs)
+
+    for name, param in sig.parameters.items():
+        if name == "cls" or name not in coerced:
+            continue
+        anno = hints.get(name, param.annotation)
+        if anno is inspect.Parameter.empty or anno is None:
+            continue
+        coerced[name] = _coerce_value(coerced[name], anno)
+
+    return coerced
 
 
 def _serialize_result(result: Any) -> Any:
