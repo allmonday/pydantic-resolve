@@ -167,8 +167,10 @@ The MCP server registers these tools automatically:
 |------|-------|-------------|
 | `list_apps` | 0 | Discover available applications |
 | `list_services` | 1 | List services in an app |
-| `describe_service` | 2 | Get method signatures, parameter schemas, and DTO type definitions |
+| `describe_service` | 2 | Get method signatures, parameter schemas, DTO type definitions, and selection hints |
 | `call_use_case` | 3 | Execute a specific method |
+
+The `describe_service` response now includes `selection_supported` and `selection_example` on each method, plus a top-level `selection_usage` block. Agents can use these fields to decide whether `call_use_case(selection=...)` is appropriate and how to format the projection.
 
 ### call_use_case
 
@@ -178,6 +180,7 @@ call_use_case(
     service_name: str,
     method_name: str,
     params: str = "{}",
+    selection: str | None = None,
 )
 ```
 
@@ -187,5 +190,20 @@ call_use_case(
 | `service_name` | `str` | Service name (from `list_services`) |
 | `method_name` | `str` | Method name (from `describe_service`) |
 | `params` | `str` | JSON string with method parameters (default: `"{}"`) |
+| `selection` | `str \| None` | Optional rootless GraphQL-like field projection for Pydantic return values |
 
 The `params` string is parsed as JSON and passed as keyword arguments to the method. Parameters annotated with `FromContext` are injected from the context_extractor result, not from `params`.
+
+Use `selection` to reduce large Pydantic DTO responses before they are returned to the MCP client:
+
+```python
+call_use_case(
+    app_name="project",
+    service_name="TaskService",
+    method_name="get_task",
+    params='{"task_id": 1}',
+    selection="{ id title owner { name } }",
+)
+```
+
+The selection is applied after the use case method executes and before the existing response serialization layer. It only supports methods whose return annotation is a Pydantic model, `list[PydanticModel]`, or optional variants. Prefer the `types`, `selection_supported`, `selection_example`, and `selection_usage` values returned by `describe_service` when choosing fields and formatting the projection. Fields must exist on the return DTO, nested Pydantic DTO fields require sub-selections, scalar/dict/`Any` fields cannot have sub-selections, and GraphQL arguments are not supported.

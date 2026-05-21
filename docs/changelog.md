@@ -4,6 +4,18 @@
 - **Minor (x.Y.0)**: New features, backward compatible
 - **Patch (x.y.Z)**: Bug fixes and minor improvements
 
+## 5.7
+
+### 5.7.0 (2026-5-21)
+
+- feat:
+  - **UseCase MCP selection projection for `call_use_case`**: `call_use_case` now supports response field selection so clients can request focused subsets of nested result data instead of always receiving the full payload
+  - **Selection metadata in service introspection**: UseCase MCP introspection now exposes selection-aware response information, helping MCP clients discover which fields can be projected
+- docs:
+  - Update English and Chinese UseCase MCP docs with selection projection examples and guidance
+- test:
+  - Add coverage for selection projection behavior across UseCase MCP responses
+
 ## 5.6
 
 ### 5.6.3 (2026-5-21)
