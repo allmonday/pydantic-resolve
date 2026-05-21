@@ -102,9 +102,10 @@ Layer 3: call_use_case     → "执行某个方法"
 1. Agent 调用 `list_apps` → 发现 `["project"]`
 2. Agent 调用 `list_services(app_name="project")` → 发现 `["UserService", "TaskService"]`
 3. Agent 调用 `describe_service(app_name="project", service_name="TaskService")` → 看到方法签名、参数 schema 和 DTO 类型定义
-4. Agent 调用 `call_use_case(app_name="project", service_name="TaskService", method_name="get_task", params='{"task_id": 1}')` → 获得结果
+4. Agent 调用 `call_use_case(app_name="project", service_name="TaskService", method_name="get_task", params='{"task_id": 1}', selection="{ id title owner { name } }")` → 获得精简结果
 
-`describe_service` 会返回服务引用的所有 DTO 的 SDL 类型定义，agent 可以准确了解数据结构。
+`describe_service` 会返回服务引用的所有 DTO 的 SDL 类型定义，并为每个方法附带 `selection_supported` / `selection_example`，同时在顶层返回 `selection_usage`。agent 可以先用这些字段判断某个方法是否适合传 `selection`，以及该如何拼写投影。
+对于返回 Pydantic DTO 的方法，`call_use_case` 还可以接收无根字段的 GraphQL-like `selection` 字符串，只返回选中的字段。`selection` 只是响应投影：不会改变方法参数、数据加载、分页或业务执行。
 
 ## FromContext：注入请求上下文
 

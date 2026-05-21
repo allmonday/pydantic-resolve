@@ -167,8 +167,10 @@ MCP 服务自动注册以下工具：
 |------|------|------|
 | `list_apps` | 0 | 发现可用应用 |
 | `list_services` | 1 | 列出应用中的服务 |
-| `describe_service` | 2 | 获取方法签名、参数 schema 和 DTO 类型定义 |
+| `describe_service` | 2 | 获取方法签名、参数 schema、DTO 类型定义和 selection 提示 |
 | `call_use_case` | 3 | 执行指定方法 |
+
+`describe_service` 的返回结果会为每个方法附带 `selection_supported` 和 `selection_example`，并在顶层附带 `selection_usage`。AI agent 可以先看这些字段，再决定是否为 `call_use_case` 传入 `selection`，以及应该如何书写字段投影。
 
 ### call_use_case
 
@@ -178,6 +180,7 @@ call_use_case(
     service_name: str,
     method_name: str,
     params: str = "{}",
+    selection: str | None = None,
 )
 ```
 
@@ -187,5 +190,20 @@ call_use_case(
 | `service_name` | `str` | 服务名称（来自 `list_services`） |
 | `method_name` | `str` | 方法名称（来自 `describe_service`） |
 | `params` | `str` | 方法参数的 JSON 字符串（默认：`"{}"`） |
+| `selection` | `str \| None` | 可选的无根 GraphQL-like 字段投影，用于裁剪 Pydantic 返回值 |
 
 `params` 字符串会被解析为 JSON 并作为关键字参数传给方法。标注了 `FromContext` 的参数从 context_extractor 结果中注入，不从 `params` 获取。
+
+可使用 `selection` 在返回给 MCP 客户端前缩小大型 Pydantic DTO 响应：
+
+```python
+call_use_case(
+    app_name="project",
+    service_name="TaskService",
+    method_name="get_task",
+    params='{"task_id": 1}',
+    selection="{ id title owner { name } }",
+)
+```
+
+`selection` 在 use case 方法执行完成后、现有响应序列化层之前生效。它仅支持 return annotation 为 Pydantic model、`list[PydanticModel]` 或其 optional 变体的方法。请优先使用 `describe_service` 返回的 `types`、`selection_supported`、`selection_example` 和 `selection_usage` 来选择字段与拼接语法。字段必须存在于返回 DTO 上，嵌套 Pydantic DTO 字段必须提供子选择，scalar/dict/`Any` 字段不能有子选择，且不支持 GraphQL arguments。

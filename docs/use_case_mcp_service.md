@@ -102,9 +102,10 @@ Example flow:
 1. Agent calls `list_apps` → discovers `["project"]`
 2. Agent calls `list_services(app_name="project")` → discovers `["UserService", "TaskService"]`
 3. Agent calls `describe_service(app_name="project", service_name="TaskService")` → sees method signatures, parameter schemas, and DTO type definitions
-4. Agent calls `call_use_case(app_name="project", service_name="TaskService", method_name="get_task", params='{"task_id": 1}')` → gets the result
+4. Agent calls `call_use_case(app_name="project", service_name="TaskService", method_name="get_task", params='{"task_id": 1}', selection="{ id title owner { name } }")` → gets a compact result
 
-`describe_service` returns SDL-style type definitions for all DTOs referenced by the service, so the agent knows exactly what data structures to expect.
+`describe_service` returns SDL-style type definitions for all DTOs referenced by the service, and now also includes `selection_supported` / `selection_example` on each method plus a top-level `selection_usage` block. Agents can use these fields to decide whether a method is a good fit for `selection` and how to format the projection.
+For methods returning Pydantic DTOs, `call_use_case` can also accept a rootless GraphQL-like `selection` string to return only selected fields. The selection is a response projection only: it does not change method parameters, data loading, pagination, or business execution.
 
 ## FromContext: Inject Request Context
 
