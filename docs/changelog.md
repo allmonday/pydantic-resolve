@@ -6,6 +6,13 @@
 
 ## 5.6
 
+### 5.6.3 (2026-5-21)
+
+- fix:
+  - **UseCase MCP fallback type-hint resolution**: unresolved return forward references no longer break runtime parameter coercion or `FromContext` injection in `call_use_case`, so execution now stays consistent with `describe_service`
+- refactor:
+  - **Shared type-hint resolution helpers**: move use_case fallback annotation resolution into `utils/types.py` and reuse it across introspection, runtime coercion, and return annotation extraction
+
 ### 5.6.2 (2026-5-20)
 
 - fix:

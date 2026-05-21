@@ -6,7 +6,7 @@ import json
 import uuid
 import datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Optional, TYPE_CHECKING
 
 import pytest
 from pydantic import BaseModel
@@ -41,6 +41,10 @@ class TaskDTO(BaseModel):
 class CreateUserDTO(BaseModel):
     name: str
     email: str
+
+
+if TYPE_CHECKING:
+    from tests.use_case.missing_forward_ref import MissingDTO
 
 
 # ──────────────────────────────────────────────────
@@ -93,6 +97,31 @@ class TaskService(UseCaseService):
     async def get_task(cls, task_id: int, include_owner: bool = True) -> TaskDTO | None:
         """Get a task by ID."""
         return TaskDTO(id=task_id, title="Test Task")
+
+
+class FutureAnnotationService(UseCaseService):
+    """Service with future annotations and unresolved return type."""
+
+    @query
+    async def get_item(
+        cls,
+        game_id: uuid.UUID,
+        limit: Optional[int] = 20,
+    ) -> "MissingDTO":
+        """Return type is intentionally unavailable at runtime."""
+        return f"uuid:{game_id.version}:{limit}"
+
+
+class FutureContextService(UseCaseService):
+    """Service with FromContext param and unresolved return type."""
+
+    @query
+    async def get_my_item(
+        cls,
+        user_id: Annotated[int, FromContext()],
+    ) -> "MissingDTO":
+        """Return type is intentionally unavailable at runtime."""
+        return f"user:{user_id}"
 
 
 # ──────────────────────────────────────────────────
@@ -608,6 +637,84 @@ class TestParamRequiredFlag:
         get_task = next(m for m in info["methods"] if m["name"] == "get_task")
         assert get_task["parameters"]["task_id"]["required"] is True
         assert get_task["parameters"]["include_owner"]["required"] is False
+
+
+class TestFutureAnnotationsWithUnresolvedReturn:
+    """Parameters should resolve even when a return forward ref is unavailable."""
+
+    def test_param_types_survive_unresolved_return_forward_ref(self):
+        introspector = ServiceIntrospector([FutureAnnotationService])
+        info = introspector.describe_service("FutureAnnotationService")
+        assert info is not None
+
+        get_item = next(m for m in info["methods"] if m["name"] == "get_item")
+
+        assert get_item["signature"] == "get_item(game_id: UUID, limit: int) -> string"
+        assert get_item["signature_sdl"] == "get_item(game_id: UUID!, limit: Int): String"
+        assert get_item["parameters"]["game_id"] == {"type": "string", "format": "uuid", "required": True}
+        assert get_item["parameters"]["limit"] == {
+            "anyOf": [{"type": "integer"}, {"type": "null"}],
+            "required": False,
+        }
+
+
+class TestFutureAnnotationsRuntimeRegression:
+    """Runtime execution should match the introspected contract."""
+
+    @pytest.mark.asyncio
+    async def test_call_use_case_coerces_uuid_param_with_unresolved_return_ref(self):
+        server = create_use_case_mcp_server(
+            apps=[
+                UseCaseAppConfig(
+                    name="test",
+                    services=[FutureAnnotationService],
+                ),
+            ],
+        )
+        game_id = uuid.uuid4()
+
+        result = await server.call_tool(
+            "call_use_case",
+            {
+                "app_name": "test",
+                "service_name": "FutureAnnotationService",
+                "method_name": "get_item",
+                "params": json.dumps({"game_id": str(game_id)}),
+            },
+        )
+        data = json.loads(result.content[0].text)
+
+        assert data["success"] is True
+        assert data["data"] == f"uuid:{game_id.version}:20"
+
+    @pytest.mark.asyncio
+    async def test_call_use_case_injects_from_context_with_unresolved_return_ref(self):
+        def my_extractor(ctx) -> dict:
+            return {"user_id": 1}
+
+        server = create_use_case_mcp_server(
+            apps=[
+                UseCaseAppConfig(
+                    name="test",
+                    services=[FutureContextService],
+                    context_extractor=my_extractor,
+                ),
+            ],
+        )
+
+        result = await server.call_tool(
+            "call_use_case",
+            {
+                "app_name": "test",
+                "service_name": "FutureContextService",
+                "method_name": "get_my_item",
+                "params": "{}",
+            },
+        )
+        data = json.loads(result.content[0].text)
+
+        assert data["success"] is True
+        assert data["data"] == "user:1"
 
 
 # ──────────────────────────────────────────────────

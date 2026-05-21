@@ -1,4 +1,5 @@
-from typing import Type, Union, Annotated
+from typing import Any, Type, Union, Annotated
+from uuid import UUID
 try:  # Python 3.10+ provides PEP 604 unions using types.UnionType
     from types import UnionType as _UnionType
 except ImportError:  # pragma: no cover - prior to 3.10
@@ -111,6 +112,71 @@ def get_type(v):
     return v.annotation
 
 
+_BUILTIN_TYPES = {
+    "int": int,
+    "float": float,
+    "str": str,
+    "bool": bool,
+    "dict": dict,
+    "list": list,
+    "UUID": UUID,
+}
+
+
+def _try_eval_simple_type(anno_str: str) -> Any:
+    """Resolve safe builtin string annotations when possible."""
+    stripped = anno_str.strip().strip("'\"")
+    return _BUILTIN_TYPES.get(stripped, anno_str)
+
+
+def _resolve_single_annotation(anno: Any, globalns: dict[str, Any]) -> Any:
+    """Resolve one annotation without forcing all function hints to resolve."""
+    if anno is inspect.Parameter.empty or not isinstance(anno, str):
+        return anno
+
+    class _AnnotationBox:
+        pass
+
+    _AnnotationBox.__annotations__ = {"value": anno}
+    return typing.get_type_hints(
+        _AnnotationBox,
+        globalns=globalns,
+        localns={},
+        include_extras=True,
+    )["value"]
+
+
+def _resolve_function_type_hints(func: Any) -> dict[str, Any]:
+    """Resolve type hints, falling back to per-annotation resolution."""
+    try:
+        return typing.get_type_hints(func, include_extras=True)
+    except Exception:
+        pass
+
+    try:
+        sig = inspect.signature(func)
+    except (ValueError, TypeError):
+        return {}
+
+    hints: dict[str, Any] = {}
+    globalns = getattr(func, "__globals__", {})
+    for name, param in sig.parameters.items():
+        if param.annotation is inspect.Parameter.empty:
+            continue
+        try:
+            hints[name] = _resolve_single_annotation(param.annotation, globalns)
+        except Exception:
+            pass
+
+    if sig.return_annotation is not inspect.Signature.empty:
+        try:
+            hints["return"] = _resolve_single_annotation(sig.return_annotation, globalns)
+        except Exception:
+            pass
+
+    return hints
+
+
 def get_return_annotation(method) -> type | None:
     """Get the return type annotation of a method.
 
@@ -120,12 +186,7 @@ def get_return_annotation(method) -> type | None:
     """
     func = method.__func__ if isinstance(method, classmethod) else method
 
-    try:
-        hints = typing.get_type_hints(func)
-    except Exception:
-        hints = {}
-
-    ret = hints.get("return")
+    ret = _resolve_function_type_hints(func).get("return")
     if ret is not None:
         return ret
 
@@ -140,9 +201,7 @@ def get_return_annotation(method) -> type | None:
         return None
 
     if isinstance(anno, str):
-        _BUILTIN_TYPES = {"int": int, "float": float, "str": str, "bool": bool, "dict": dict, "list": list}
-        stripped = anno.strip().strip("'\"")
-        return _BUILTIN_TYPES.get(stripped, anno)
+        return _try_eval_simple_type(anno)
 
     return anno
 

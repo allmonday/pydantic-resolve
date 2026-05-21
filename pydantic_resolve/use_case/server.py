@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import inspect
 import json
-from typing import TYPE_CHECKING, Annotated, Any, get_args, get_origin, get_type_hints
+from typing import TYPE_CHECKING, Annotated, Any, get_args, get_origin
 
 from fastmcp.server.context import Context
 from pydantic import BaseModel, TypeAdapter
@@ -26,6 +26,7 @@ from pydantic_resolve.use_case.business import USE_CASE_METHODS_ATTR
 from pydantic_resolve.use_case.context import FromContext
 from pydantic_resolve.use_case.manager import UseCaseManager
 from pydantic_resolve.use_case.types import UseCaseAppConfig
+from pydantic_resolve.utils.types import _resolve_function_type_hints
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -323,16 +324,16 @@ def create_use_case_mcp_server(
             method = getattr(service_cls, method_name)
 
             # Coerce JSON-parsed kwargs to match method parameter types
-            func = method.__func__ if isinstance(method, classmethod) else method
+            func = getattr(method, "__func__", method)
             kwargs = _coerce_kwargs(func, kwargs)
 
             # Extract context and merge FromContext params into kwargs
             context = await _extract_context(app, ctx)
-            from_context_params = _get_from_context_params(method)
+            from_context_params = _get_from_context_params(func)
             if from_context_params:
                 if context is None:
                     context = {}
-                sig = inspect.signature(method)
+                sig = inspect.signature(func)
                 for param_name in from_context_params:
                     if param_name in context:
                         kwargs[param_name] = context[param_name]
@@ -380,12 +381,11 @@ def create_use_case_mcp_server(
     def _get_from_context_params(method: callable) -> set[str]:
         """Return parameter names annotated with FromContext."""
         from_context_params = set()
-        try:
-            hints = get_type_hints(method, include_extras=True)
-        except Exception:
-            hints = {}
+        hints = _resolve_function_type_hints(method)
         sig = inspect.signature(method)
         for name in sig.parameters:
+            if name == "cls":
+                continue
             annotation = hints.get(name)
             if annotation is not None and get_origin(annotation) is Annotated:
                 for arg in get_args(annotation):
@@ -410,10 +410,7 @@ def _coerce_value(value: Any, annotation: Any) -> Any:
 
 def _coerce_kwargs(func: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
     """Coerce JSON-parsed kwargs to match the function's parameter type hints."""
-    try:
-        hints = get_type_hints(func, include_extras=True)
-    except Exception:
-        return kwargs
+    hints = _resolve_function_type_hints(func)
 
     sig = inspect.signature(func)
     coerced = dict(kwargs)

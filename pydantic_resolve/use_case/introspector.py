@@ -10,12 +10,20 @@ import inspect
 import typing
 from types import UnionType as _UnionType
 from typing import Any, get_args, get_origin
+from uuid import UUID
 
 from pydantic import BaseModel
 
 from pydantic_resolve.use_case.business import USE_CASE_METHODS_ATTR, UseCaseService
 from pydantic_resolve.use_case.context import FromContext
-from pydantic_resolve.utils.types import _is_list, _is_optional, get_core_types, get_return_annotation
+from pydantic_resolve.utils.types import (
+    _is_list,
+    _is_optional,
+    _resolve_function_type_hints,
+    _try_eval_simple_type,
+    get_core_types,
+    get_return_annotation,
+)
 
 _UNION_ORIGINS = (typing.Union, _UnionType)
 
@@ -77,7 +85,7 @@ def _type_to_sdl_name(anno: Any) -> str:
         return anno.__name__
 
     # Handle basic Python types
-    _SCALAR_MAP = {int: "Int", float: "Float", str: "String", bool: "Boolean"}
+    _SCALAR_MAP = {int: "Int", float: "Float", str: "String", bool: "Boolean", UUID: "UUID"}
     if anno in _SCALAR_MAP:
         return _SCALAR_MAP[anno]
 
@@ -128,7 +136,7 @@ def _type_to_legacy_name(anno: Any) -> str:
     if isinstance(anno, type) and issubclass(anno, BaseModel):
         return anno.__name__
 
-    _SCALAR_MAP = {int: "int", float: "float", str: "string", bool: "bool"}
+    _SCALAR_MAP = {int: "int", float: "float", str: "string", bool: "bool", UUID: "UUID"}
     if anno in _SCALAR_MAP:
         return _SCALAR_MAP[anno]
 
@@ -233,29 +241,6 @@ def _collect_dto_types(
 # ──────────────────────────────────────────────────
 
 
-_BUILTIN_TYPES = {
-    "int": int,
-    "float": float,
-    "str": str,
-    "bool": bool,
-    "dict": dict,
-    "list": list,
-}
-
-
-def _try_eval_simple_type(anno_str: str) -> Any:
-    """Try to resolve a simple string annotation to a builtin type.
-
-    Handles cases where ``from __future__ import annotations`` turns
-    ``x: int`` into ``param.annotation == "int"``.  Only resolves safe,
-    well-known builtin names; anything else is returned as-is.
-    """
-    stripped = anno_str.strip().strip("'\"")
-    if stripped in _BUILTIN_TYPES:
-        return _BUILTIN_TYPES[stripped]
-    return anno_str
-
-
 def _type_to_param_schema(anno: Any) -> dict[str, Any]:
     """Convert a parameter type to a simple JSON Schema description."""
     if anno is inspect.Parameter.empty or anno is None:
@@ -272,6 +257,9 @@ def _type_to_param_schema(anno: Any) -> dict[str, Any]:
     }
     if anno in _BASIC_TYPE_MAP:
         return {"type": _BASIC_TYPE_MAP[anno]}
+
+    if anno is UUID:
+        return {"type": "string", "format": "uuid"}
 
     if anno is dict:
         return {"type": "object"}
@@ -473,10 +461,7 @@ class ServiceIntrospector:
         # Use typing.get_type_hints to resolve string annotations.
         # Keep Annotated metadata so FromContext params can be shown as optional
         # to MCP clients while still preserving the underlying type.
-        try:
-            hints = typing.get_type_hints(func, include_extras=True)
-        except Exception:
-            hints = {}
+        hints = _resolve_function_type_hints(func)
 
         description = inspect.getdoc(func)
 
@@ -495,7 +480,7 @@ class ServiceIntrospector:
             pass
 
         parameters = self._extract_parameters(func, hints)
-        return_anno = get_return_annotation(method)
+        return_anno = hints.get("return") or get_return_annotation(method)
 
         # Build SDL signature: method_name(param: Type, ...): ReturnType
         # Use raw annotations for SDL to preserve DTO names, list syntax, etc.
