@@ -1,14 +1,14 @@
 [project]
 name = "pydantic-resolve"
 version = "5.7.0"
-description = "pydantic-resolve turns pydantic from a static data container into a powerful composable component."
+description = "Entity-First Architecture framework for Python: define business entities, declare relationships, and let the framework assemble your data."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
     { name = "tangkikodo", email = "allmonday@126.com" },
 ]
-keywords = ["pydantic", "dataloader", "resolver"]
+keywords = ["pydantic", "clean-architecture", "entity-first", "dataloader", "resolver"]
 dependencies = [
     "aiodataloader >= 0.4.0,<0.5.0",
     "graphql-core >= 3.2,<4.0",

@@ -1,6 +1,6 @@
 # Pydantic Resolve
 
-> Declarative data assembly for Pydantic — eliminate N+1 queries with minimal code.
+> Entity-First Architecture for Python — define business entities, declare relationships, let the framework assemble your data.
 
 [![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
 [![PyPI Downloads](https://static.pepy.tech/badge/pydantic-resolve/month)](https://pepy.tech/projects/pydantic-resolve)
@@ -12,20 +12,89 @@
 
 ---
 
-**pydantic-resolve** helps you assemble nested response data with Pydantic models. The easiest way to learn it is in two stages: start with `resolve_*` and `post_*` for one endpoint, then move to ER Diagram + `AutoLoad` only when relationship wiring starts repeating across many models. The same ERD can also power GraphQL queries and MCP services.
+## The ORM-First Trap
+
+Most FastAPI projects follow the same pattern: define SQLAlchemy ORM models first, then create Pydantic schemas that mirror them. This "ORM-First" approach is so common that many developers have never questioned it. But as projects grow, it creates systemic problems:
+
+| # | Problem | Symptom |
+|---|---------|---------|
+| 1 | Schema passively follows ORM | Same fields defined twice; API contract tied to DB design |
+| 2 | Business concepts lost | Frontend sees `owner_id` instead of "task has an owner" |
+| 3 | Data assembly has no home | Join logic scatters across Repository / Service / Route |
+| 4 | Multi-source data is hard | Each new data source means new conversion code everywhere |
+| 5 | Schema reuse is hard | Copy-paste for UserSummary / UserDetail / UserAvatar |
+
+These are not individual tooling issues. They all stem from one root cause: **the absence of an independent business entity layer between the database and the API**.
+
+```python
+# The data assembly dilemma: where does this logic go?
+@router.get("/tasks")
+async def get_tasks():
+    tasks = await task_service.get_tasks()
+
+    # Collect IDs, batch query, build mapping, assemble result...
+    user_ids = list({t.owner_id for t in tasks})
+    users = await user_service.get_users_by_ids(user_ids)
+    user_map = {u.id: u for u in users}
+
+    result = []
+    for task in tasks:
+        task_dict = task.model_dump()
+        task_dict['owner'] = user_map.get(task.owner_id)
+        result.append(TaskResponse(**task_dict))
+    return result
+```
+
+Whether this code lives in Repository, Service, or Route, the problem is the same: data assembly logic has no proper place in traditional three-layer architecture.
+
+## Entity-First: Clean Architecture for Python
+
+**pydantic-resolve** provides the missing layer. It implements Entity-First Architecture, which maps naturally to Clean Architecture:
+
+```mermaid
+graph TD
+    subgraph API["Frameworks & Interfaces"]
+        F1["Response (API Contract)"]
+    end
+    subgraph APP["Application Business Rules"]
+        A1["Resolver (Use Case Orchestration)"]
+    end
+    subgraph DOMAIN["Enterprise Business Rules"]
+        E1["Entity + ER Diagram"]
+    end
+    subgraph DATA["Interface Adapters"]
+        D1["Loader (Data Access)"]
+    end
+    API --> APP --> DOMAIN --> DATA
+```
+
+| Clean Architecture Layer | pydantic-resolve Component |
+|--------------------------|---------------------------|
+| Enterprise Business Rules | Entity + ER Diagram |
+| Application Business Rules | Resolver + resolve/post |
+| Interface Adapters | Loader (data access) |
+| Frameworks & Interfaces | Response + FastAPI routes |
+
+For the full analysis with code examples and migration guidance, see [Entity-First Architecture](./docs/architecture_entity_first.md).
+
+---
+
+## How pydantic-resolve Implements This
+
+**pydantic-resolve** provides three moving parts: `resolve_*` loads related data, `post_*` computes derived fields, and ER Diagram + `AutoLoad` centralizes relationship definitions. The same ERD also powers GraphQL queries and MCP services.
 
 ```mermaid
 flowchart TB
-    business["**Business Model**<br/>- Entity Relationships<br/>- Aggregate Root Methods"]
-    manual["**Manual Assembly**<br/>resolve / post / expose /<br/>collector ..."]
-    graphql["**Auto Generation**<br/>GraphQL"]
-    api["**Scenario**<br/>API Integration"]
-    mcp["**Scenario**<br/>MCP Service"]
-    ops["**Scenario**<br/>Query / Debug / Test /<br/>Admin UI"]
+    entity["**Entity + ERD**<br/>Business model & relationships"]
+    resolve["**Resolver**<br/>resolve / post / expose / collector"]
+    graphql["**GraphQL Generator**"]
+    api["**REST API**"]
+    mcp["**MCP Service**"]
+    ops["**Query / Debug / Test / Admin**"]
 
-    business --> manual
-    business --> graphql
-    manual --> api
+    entity --> resolve
+    entity --> graphql
+    resolve --> api
     graphql --> mcp
     graphql --> ops
 ```
@@ -40,16 +109,16 @@ We will reuse one example from start to finish:
 
 The concepts appear in this order on purpose:
 
-1. `resolve_*`: fetch related data
-2. `post_*`: compute fields after nested data is ready
-3. `ExposeAs` / `SendTo`: pass data across layers when parent and child need to coordinate
-4. ER Diagram + `AutoLoad`: remove repeated relationship wiring once the model graph grows
+1. `resolve_*`: fetch related data — **Adapter layer**
+2. `post_*`: compute fields after nested data is ready — **Application layer**
+3. `ExposeAs` / `SendTo`: pass data across layers — **cross-cutting**
+4. ER Diagram + `AutoLoad`: centralize relationships — **Enterprise layer**
 
-If you only need to solve a few endpoint-level N+1 issues, stop after the Core API sections. ERD mode is useful, but it is not the entry point.
+If you just need to fix an N+1 problem on one endpoint, skip to [Quick Start](#quick-start).
 
 ## What pydantic-resolve Gives You
 
-| Need | What you write | What the framework does |
+| Architectural Need | What you write | What the framework does |
 |------|----------------|-------------------------|
 | Load related data | `resolve_*` + `Loader(...)` | Batch lookups and map results back |
 | Compute derived fields | `post_*` | Run after descendants are fully resolved |
@@ -66,6 +135,8 @@ pip install pydantic-resolve[mcp]  # with MCP support
 ```
 
 ### Step 1: Solve One N+1 Problem with `resolve_*`
+
+In architecture terms, `resolve_*` is your Adapter — it declares how to fetch data from outside the current node.
 
 Start with the smallest useful case: each task has an `owner_id`, and you want an `owner` object on the response model.
 
@@ -142,7 +213,9 @@ This is why `resolve_*` is the best place to start. You can get value from the l
 
 ### Step 3: Add Derived Fields with `post_*`
 
-`post_*` is the part that usually feels abstract at first. The simplest way to read it is this:
+`post_*` represents the Application Business Rules layer — it operates on data that is already assembled.
+
+The simplest way to read it is this:
 
 - Use `resolve_*` when the field needs external data.
 - Use `post_*` when the field can be computed after the current subtree is already assembled.
@@ -234,6 +307,8 @@ Use this only when the shape of the tree matters:
 ---
 
 ## When ER Diagram + AutoLoad Becomes Worth It
+
+ER Diagram + `AutoLoad` is where Entity-First Architecture fully crystallizes: relationships become the stable core, and every Response is just a different view of the same Entity graph.
 
 Up to this point, the Core API is enough. Stay there until relationship declarations start repeating across many response models.
 
@@ -424,7 +499,20 @@ app.mount('/voyager', create_voyager(app, er_diagram=diagram))
 
 ---
 
-## pydantic-resolve vs GraphQL
+## Comparisons
+
+### Entity-First (pydantic-resolve) vs ORM-First (traditional FastAPI)
+
+| Dimension | ORM-First | Entity-First |
+|-----------|-----------|-------------|
+| Type source of truth | ORM model | Entity (Pydantic) |
+| Relationship wiring | Repeated per endpoint | Centralized in ERD |
+| Data assembly | Manual in Service/Route | Automatic via Resolver |
+| N+1 prevention | Manual eager loading | Built-in DataLoader batching |
+| Multi-data source | Scattered conversion code | Unified Loader interface |
+| API contract stability | Tied to DB schema | Independent of DB |
+
+### pydantic-resolve vs GraphQL
 
 | Feature | GraphQL | pydantic-resolve |
 |---------|---------|------------------|
@@ -440,6 +528,7 @@ app.mount('/voyager', create_voyager(app, er_diagram=diagram))
 ## Resources
 
 - 📖 [Full Documentation](https://allmonday.github.io/pydantic-resolve/)
+- 🏛️ [Entity-First Architecture (full paper)](./docs/architecture_entity_first.md)
 - 🚀 [Example Project](https://github.com/allmonday/composition-oriented-development-pattern)
 - 🎮 [Live Demo](https://www.fastapi-voyager.top/voyager/)
 - 🎮 [Live Demo - GraphQL](https://www.fastapi-voyager.top/graphql)

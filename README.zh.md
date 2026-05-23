@@ -1,6 +1,6 @@
 # Pydantic Resolve
 
-> 基于 Pydantic 的声明式数据组装工具 —— 用最少的代码消除 N+1 查询。
+> Python 的 Entity-First 架构框架 —— 定义业务实体，声明关系，让框架组装数据。
 
 [![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
 [![PyPI Downloads](https://static.pepy.tech/badge/pydantic-resolve/month)](https://pepy.tech/projects/pydantic-resolve)
@@ -12,20 +12,89 @@
 
 ---
 
-**pydantic-resolve** 用来基于 Pydantic 组装嵌套响应数据。最容易上手的方式分两步：先用 `resolve_*` 和 `post_*` 解决单个接口的数据拼装问题；只有当关系定义在多个模型之间反复出现时，再进入 ER Diagram + `AutoLoad`。同一份 ERD 后续还能继续用于 GraphQL 查询和 MCP 服务。
+## ORM-First 的陷阱
+
+大多数 FastAPI 项目遵循相同的模式：先定义 SQLAlchemy ORM 模型，然后创建 Pydantic schema 来镜像它们。这种"ORM-First"的做法如此普遍，以至于很多开发者从未质疑过它。但随着项目规模增长，它会产生一系列系统性问题：
+
+| # | 问题 | 表现 |
+|---|------|------|
+| 1 | Schema 被动跟随 ORM | 同一字段定义两次；API 契约受制于数据库设计 |
+| 2 | 业务概念被丢失 | 前端看到 `owner_id` 而不是"任务有负责人" |
+| 3 | 数据组装无处安放 | join 逻辑散落在 Repository / Service / Route 中 |
+| 4 | 多数据源难以统一 | 每新增一个数据源就要写新的转换代码 |
+| 5 | Schema 复用困难 | UserSummary / UserDetail / UserAvatar 靠复制粘贴 |
+
+这些不是个别的工具问题。它们的共同根源是：**数据库和 API 之间缺少一个独立的业务实体层**。
+
+```python
+# 数据组装的困境：这段逻辑该放在哪里？
+@router.get("/tasks")
+async def get_tasks():
+    tasks = await task_service.get_tasks()
+
+    # 收集 ID、批量查询、构建映射、组装结果...
+    user_ids = list({t.owner_id for t in tasks})
+    users = await user_service.get_users_by_ids(user_ids)
+    user_map = {u.id: u for u in users}
+
+    result = []
+    for task in tasks:
+        task_dict = task.model_dump()
+        task_dict['owner'] = user_map.get(task.owner_id)
+        result.append(TaskResponse(**task_dict))
+    return result
+```
+
+无论这段代码放在 Repository、Service 还是 Route 里，问题都一样：传统的三层架构中，数据组装逻辑没有合适的位置。
+
+## Entity-First：Python 的整洁架构实现
+
+**pydantic-resolve** 提供了缺失的那一层。它实现了 Entity-First 架构，与整洁架构（Clean Architecture）天然对应：
+
+```mermaid
+graph TD
+    subgraph API["Frameworks & Interfaces"]
+        F1["Response（API 契约）"]
+    end
+    subgraph APP["Application Business Rules"]
+        A1["Resolver（用例编排）"]
+    end
+    subgraph DOMAIN["Enterprise Business Rules"]
+        E1["Entity + ER Diagram"]
+    end
+    subgraph DATA["Interface Adapters"]
+        D1["Loader（数据访问）"]
+    end
+    API --> APP --> DOMAIN --> DATA
+```
+
+| 整洁架构层次 | pydantic-resolve 对应组件 |
+|-------------|-------------------------|
+| Enterprise Business Rules | Entity + ER Diagram |
+| Application Business Rules | Resolver + resolve/post |
+| Interface Adapters | Loader（数据访问） |
+| Frameworks & Interfaces | Response + FastAPI 路由 |
+
+完整分析、代码示例和迁移指南请参阅 [Entity-First Architecture](./docs/architecture_entity_first.zh.md)。
+
+---
+
+## pydantic-resolve 如何实现
+
+**pydantic-resolve** 提供三个核心机制：`resolve_*` 加载关联数据、`post_*` 计算派生字段、ER Diagram + `AutoLoad` 集中管理关系定义。同一份 ERD 还能驱动 GraphQL 查询和 MCP 服务。
 
 ```mermaid
 flowchart TB
-    business["**业务模型**<br/>- 实体关系<br/>- 聚合根方法"]
-    manual["**手动组装**<br/>resolve / post / expose /<br/>collector ..."]
-    graphql["**自动生成**<br/>GraphQL"]
-    api["**场景**<br/>API 集成"]
-    mcp["**场景**<br/>MCP 服务"]
-    ops["**场景**<br/>查询 / 调试 / 测试 /<br/>管理后台"]
+    entity["**Entity + ERD**<br/>业务模型与关系"]
+    resolve["**Resolver**<br/>resolve / post / expose / collector"]
+    graphql["**GraphQL 生成器**"]
+    api["**REST API**"]
+    mcp["**MCP 服务**"]
+    ops["**查询 / 调试 / 测试 / 管理后台**"]
 
-    business --> manual
-    business --> graphql
-    manual --> api
+    entity --> resolve
+    entity --> graphql
+    resolve --> api
     graphql --> mcp
     graphql --> ops
 ```
@@ -40,16 +109,16 @@ flowchart TB
 
 概念的引入顺序是刻意安排的：
 
-1. `resolve_*`：加载关联数据
-2. `post_*`：在嵌套数据就绪后计算字段
-3. `ExposeAs` / `SendTo`：当父子节点需要跨层协作时传递数据
-4. ER Diagram + `AutoLoad`：当关系定义开始重复时，把关系收敛到一个地方
+1. `resolve_*`：加载关联数据 — **Adapter 层**
+2. `post_*`：在嵌套数据就绪后计算字段 — **Application 层**
+3. `ExposeAs` / `SendTo`：当父子节点需要跨层协作时传递数据 — **横切关注点**
+4. ER Diagram + `AutoLoad`：当关系定义开始重复时，把关系收敛到一个地方 — **Enterprise 层**
 
-如果你当前只是想解决几个接口上的 N+1 问题，读到 Core API 相关部分就够了。ERD 模式很有价值，但它不应该是入门第一站。
+如果你只是想快速修复一个接口的 N+1 问题，可以直接跳到[快速开始](#快速开始)。
 
 ## pydantic-resolve 能解决什么
 
-| 需求 | 你写什么 | 框架负责什么 |
+| 架构需求 | 你写什么 | 框架负责什么 |
 |------|----------|--------------|
 | 加载关联数据 | `resolve_*` + `Loader(...)` | 批量查询并把结果映射回对应节点 |
 | 计算派生字段 | `post_*` | 在后代节点全部解析完成后执行 |
@@ -66,6 +135,8 @@ pip install pydantic-resolve[mcp]  # 包含 MCP 支持
 ```
 
 ### Step 1：先用 `resolve_*` 解决一个 N+1 问题
+
+用架构术语来说，`resolve_*` 就是你的 Adapter —— 它声明如何从当前节点之外获取数据。
 
 先看最小可用场景：每个 task 上有 `owner_id`，接口响应里想拿到完整的 `owner` 对象。
 
@@ -106,7 +177,7 @@ tasks = await Resolver().resolve(tasks)
 - `user_loader` 会一次性收到所有被请求到的 `owner_id`。
 - `Resolver().resolve(...)` 负责遍历模型树并补全字段。
 
-一个很好用的心智模型是：**`resolve_*` 的含义就是“这个字段需要从当前节点之外拿数据”。**
+一个很好用的心智模型是：**`resolve_*` 的含义就是"这个字段需要从当前节点之外拿数据"。**
 
 ### Step 2：把同样的模式扩展到嵌套树
 
@@ -142,7 +213,9 @@ sprints = await Resolver().resolve(sprints)
 
 ### Step 3：用 `post_*` 处理派生字段
 
-`post_*` 往往是最容易让人困惑的部分。最简单的理解方式是：
+`post_*` 代表 Application Business Rules 层 —— 它操作的是已经组装完成的数据。
+
+最简单的理解方式是：
 
 - `resolve_*` 用来加载外部数据。
 - `post_*` 用来在当前子树已经组装完成之后，计算派生字段。
@@ -235,6 +308,8 @@ class TaskView(BaseModel):
 
 ## 什么时候值得引入 ER Diagram + AutoLoad
 
+ER Diagram + `AutoLoad` 是 Entity-First 架构完全成型的地方：关系成为稳定的内核，每个 Response 都只是同一张 Entity 图的不同视图。
+
 到这里为止，Core API 已经足够实用。只有当你发现关系定义开始在多个响应模型里反复出现时，才值得继续往 ERD 模式走。
 
 一个很常见的信号是，你开始不断写出类似这些方法：
@@ -244,7 +319,7 @@ class TaskView(BaseModel):
 - `SprintBoard.resolve_tasks`
 - `SprintReport.resolve_tasks`
 
-这时问题已经不再是“这个字段怎么加载”，而是“关系定义的唯一事实来源应该放在哪里”。
+这时问题已经不再是"这个字段怎么加载"，而是"关系定义的唯一事实来源应该放在哪里"。
 
 ### 成本与收益
 
@@ -424,7 +499,20 @@ app.mount('/voyager', create_voyager(app, er_diagram=diagram))
 
 ---
 
-## pydantic-resolve vs GraphQL
+## 对比
+
+### Entity-First（pydantic-resolve）vs ORM-First（传统 FastAPI）
+
+| 维度 | ORM-First | Entity-First |
+|------|-----------|-------------|
+| 类型定义来源 | ORM 模型 | Entity（Pydantic） |
+| 关系定义 | 每个接口重复编写 | 集中在 ERD 中 |
+| 数据组装 | Service / Route 中手动完成 | Resolver 自动完成 |
+| N+1 预防 | 手动配置 eager loading | 内置 DataLoader 批量加载 |
+| 多数据源 | 分散的转换代码 | 统一的 Loader 接口 |
+| API 契约稳定性 | 绑定数据库结构 | 独立于数据库 |
+
+### pydantic-resolve vs GraphQL
 
 | 特性 | GraphQL | pydantic-resolve |
 |------|---------|------------------|
@@ -440,6 +528,7 @@ app.mount('/voyager', create_voyager(app, er_diagram=diagram))
 ## 资源
 
 - 📖 [完整文档](https://allmonday.github.io/pydantic-resolve/)
+- 🏛️ [Entity-First Architecture（完整论文）](./docs/architecture_entity_first.zh.md)
 - 🚀 [示例项目](https://github.com/allmonday/composition-oriented-development-pattern)
 - 🎮 [在线演示](https://www.fastapi-voyager.top/voyager/)
 - 🎮 [在线演示 - GraphQL](https://www.fastapi-voyager.top/graphql)

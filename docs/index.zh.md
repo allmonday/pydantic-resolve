@@ -6,9 +6,9 @@ template: home.html
 
 [English](./index.md)
 
-**pydantic-resolve** 是一个基于 Pydantic 的声明式数据组装库。它通过将 DataLoader 模式与 Pydantic 模型结合，用最少的代码消除 N+1 查询。同时提供了丰富的数据调整能力：包括派生字段计算、跨层数据传递、字段子集筛选等，覆盖从数据加载到最终响应构造的完整链路。
+**pydantic-resolve** 是一个基于 Pydantic 的 Entity-First 架构框架。它实现了整洁架构（Clean Architecture）原则：提供独立的业务实体层、通过 Resolver 自动组装数据、通过 Loader 统一数据访问——消除 N+1 查询是其自然产物。
 
-核心思路：用 `resolve_*` 标记需要加载的字段，用 `post_*` 计算派生值，`Resolver` 负责遍历整棵树。当项目中关系定义开始重复时，可以把它们收敛到 ER Diagram + `AutoLoad`，同一份 ERD 还能继续驱动 GraphQL 和 MCP 生成。
+框架提供三个核心机制：`resolve_*` 加载关联数据、`post_*` 计算派生字段、ER Diagram + `AutoLoad` 集中管理关系定义。同一份 ERD 还能驱动 GraphQL 查询和 MCP 服务。
 
 ## pydantic-resolve 能解决什么
 
@@ -22,9 +22,9 @@ template: home.html
 ## 适用场景
 
 - **后端开发者**：在 FastAPI 等框架中构建嵌套响应数据
-- **团队**：想解决 N+1 查询问题，但不想切换到 GraphQL
+- **团队**：希望采用整洁架构，但不想引入大量样板代码
 - **项目**：同一批实体关系在多个接口中反复出现
-- **任何人**：希望 Pydantic 模型像独立组件一样组合
+- **任何人**：希望业务实体成为稳定的架构核心，独立于数据库结构
 
 ## 学习路径
 

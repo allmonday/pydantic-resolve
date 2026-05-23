@@ -6,9 +6,9 @@ template: home.html
 
 [中文版](./index.zh.md)
 
-**pydantic-resolve** is a declarative data assembly library for Pydantic. It eliminates N+1 queries with minimal code by combining the DataLoader pattern with Pydantic models. It also provides rich data transformation capabilities — including derived field computation, cross-layer data flow, and field subset filtering — covering the full pipeline from data loading to final response construction.
+**pydantic-resolve** is an Entity-First Architecture framework for Python. It implements Clean Architecture principles by providing an independent business entity layer, automatic data assembly via Resolver, and unified data access through Loaders — eliminating N+1 queries as a natural byproduct.
 
-The core idea: mark missing fields with `resolve_*`, compute derived values with `post_*`, and let the `Resolver` walk the tree. As your project grows, repeated relationship wiring can be consolidated into an ER Diagram with `AutoLoad`, which also powers GraphQL and MCP generation.
+The framework provides three moving parts: `resolve_*` loads related data, `post_*` computes derived fields, and ER Diagram + `AutoLoad` centralizes relationship definitions. The same ERD also powers GraphQL queries and MCP services.
 
 ## What pydantic-resolve Gives You
 
@@ -22,9 +22,9 @@ The core idea: mark missing fields with `resolve_*`, compute derived values with
 ## Who Is This For
 
 - **Backend developers** building nested response data in FastAPI or similar frameworks
-- **Teams** who want to solve N+1 queries without switching to GraphQL
+- **Teams** who want to adopt Clean Architecture without heavy boilerplate
 - **Projects** where the same entity relationships repeat across multiple endpoints
-- **Anyone** who wants Pydantic models to compose like self-contained components
+- **Anyone** who wants business entities to be the stable core, independent of database structure
 
 ## Learning Path
 
