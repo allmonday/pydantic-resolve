@@ -79,9 +79,17 @@ For the full analysis with code examples and migration guidance, see [Entity-Fir
 
 ---
 
-## How pydantic-resolve Implements This
+## How pydantic-resolve Works
 
-**pydantic-resolve** provides three moving parts: `resolve_*` loads related data, `post_*` computes derived fields, and ER Diagram + `AutoLoad` centralizes relationship definitions. The same ERD also powers GraphQL queries and MCP services.
+**pydantic-resolve** provides three mechanisms:
+
+| What you need | What you write | What the framework does |
+|------|----------------|-------------------------|
+| Load related data | `resolve_*` + `Loader(...)` | Batch lookups and map results back |
+| Compute derived fields | `post_*` | Run after descendants are fully resolved |
+| Reuse relationship declarations | ER Diagram + `AutoLoad` | Centralize relationship wiring for many models |
+
+The same ERD also powers GraphQL queries, MCP services, and admin tools:
 
 ```mermaid
 flowchart TB
@@ -99,31 +107,7 @@ flowchart TB
     graphql --> ops
 ```
 
-## Read This README in Order
-
-We will reuse one example from start to finish:
-
-- `Sprint` has many `Task`
-- `Task` has one `owner`
-- The API also wants derived fields such as `task_count` and `contributors`
-
-The concepts appear in this order on purpose:
-
-1. `resolve_*`: fetch related data — **Adapter layer**
-2. `post_*`: compute derived fields after nested data is ready — **Application layer**
-3. `ExposeAs` / `SendTo`: pass data across layers — **cross-cutting**
-4. ER Diagram + `AutoLoad`: centralize relationships — **Enterprise layer**
-
 If you just need to fix an N+1 problem on one endpoint, skip to [Quick Start](#quick-start).
-
-## What pydantic-resolve Gives You
-
-| Architectural Need | What you write | What the framework does |
-|------|----------------|-------------------------|
-| Load related data | `resolve_*` + `Loader(...)` | Batch lookups and map results back |
-| Compute derived fields | `post_*` | Run after descendants are fully resolved |
-| Share data across layers | `ExposeAs`, `SendTo`, `Collector` | Pass context down or aggregate data up |
-| Reuse relationship declarations | ER Diagram + `AutoLoad` | Centralize relationship wiring for many models |
 
 
 ## Quick Start
@@ -224,9 +208,7 @@ This is why `resolve_*` is the best place to start. You can get value from the l
 
 ### Step 3: Compute Derived Fields with `post_*`
 
-Now `tasks` and `owner` are loaded. But the API also needs `task_count` and `contributor_names` — fields that don't come from a database query. They're computed from data already on the model.
-
-That's what `post_*` is for: it runs **after** all nested `resolve_*` calls have finished.
+`task_count` and `contributor_names` don't come from a query — they're derived from data already on the model. `post_*` handles these: it runs **after** all nested `resolve_*` calls have finished.
 
 ```python
 class SprintView(BaseModel):
@@ -246,33 +228,20 @@ class SprintView(BaseModel):
         return sorted({task.owner.name for task in self.tasks if task.owner})
 ```
 
-Execution order for one sprint looks like this:
+Execution order:
 
 1. `resolve_tasks` loads the sprint's tasks.
 2. Each `TaskView.resolve_owner` loads its owner.
 3. `post_task_count` and `post_contributor_names` run after those nested fields are ready.
 
-That timing is the key idea. `post_*` is not another way to fetch nested data. It is the place to **finalize**, **summarize**, or **clean up** data that is already available.
-
-A short rule of thumb:
-
-| Question | `resolve_*` | `post_*` |
-|----------|-------------|----------|
+| | `resolve_*` | `post_*` |
+|---|---|---|
 | Needs external IO? | Yes | Usually no |
-| Runs before descendants are ready? | Yes | No |
-| Good for counts, sums, labels, formatting? | Sometimes | Yes |
-| Return value gets resolved again? | Yes | No |
+| Runs before descendants ready? | Yes | No |
+| Good for counts, sums, formatting? | Sometimes | Yes |
+| Return value resolved again? | Yes | No |
 
-`post_*` can also accept `context`, `parent`, `ancestor_context`, and `collector`, but you do not need those to understand the basic pattern.
-
-### Progress Check
-
-| What you needed | What you wrote | What the framework did |
-|-----------------|---------------|----------------------|
-| Load related data | `resolve_*` + `Loader(...)` | Batch lookups and map results back |
-| Compute derived fields | `post_*` | Run after descendants are fully resolved |
-
-These two patterns cover most API endpoints. The next section covers cross-layer data flow — you can skip it and jump to [ER Diagram](#when-er-diagram--autoload-becomes-worth-it) if you don't need it yet.
+These two patterns cover most API endpoints. The next section covers cross-layer data flow — skip to [ER Diagram](#when-er-diagram--autoload-becomes-worth-it) if you don't need it yet.
 
 ---
 
@@ -478,23 +447,7 @@ config_global_resolver(diagram)
 
 ## Integrations
 
-The same ERD that drives REST APIs also powers GraphQL queries, MCP services, and admin tools:
-
-```mermaid
-flowchart TB
-    entity["**Entity + ERD**<br/>Business model & relationships"]
-    resolve["**Resolver**<br/>resolve / post / expose / collector"]
-    graphql["**GraphQL Generator**"]
-    api["**REST API**"]
-    mcp["**MCP Service**"]
-    ops["**Query / Debug / Test / Admin**"]
-
-    entity --> resolve
-    entity --> graphql
-    resolve --> api
-    graphql --> mcp
-    graphql --> ops
-```
+The same ERD that drives REST APIs also powers GraphQL queries, MCP services, and admin tools.
 
 ### GraphQL
 
