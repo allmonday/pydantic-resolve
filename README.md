@@ -125,6 +125,7 @@ If you just need to fix an N+1 problem on one endpoint, skip to [Quick Start](#q
 | Share data across layers | `ExposeAs`, `SendTo`, `Collector` | Pass context down or aggregate data up |
 | Reuse relationship declarations | ER Diagram + `AutoLoad` | Centralize relationship wiring for many models |
 
+
 ## Quick Start
 
 ### Install
@@ -134,11 +135,21 @@ pip install pydantic-resolve
 pip install pydantic-resolve[mcp]  # with MCP support
 ```
 
-### Step 1: Solve One N+1 Problem with `resolve_*`
+### The Example
 
-In architecture terms, `resolve_*` is your Adapter — it declares how to fetch data from outside the current node.
+Throughout the Quick Start, we build one API:
 
-Start with the smallest useful case: each task has an `owner_id`, and you want an `owner` object on the response model.
+- `Sprint` has many `Task`
+- `Task` has one `owner` (a `User`)
+- The API also needs derived fields like `task_count` and `contributors`
+
+Each step adds one concept on top of the previous code.
+
+### Step 1: Load Related Data with `resolve_*`
+
+Every response model has some fields already filled (from the database, from user input) and some fields that need to be fetched separately. `resolve_*` is how you declare those missing fields.
+
+Start with the simplest case: each task has an `owner_id`, and you want an `owner` object on the response.
 
 ```python
 from typing import Optional
@@ -179,9 +190,9 @@ That is the core idea of the library:
 
 A useful mental model is: **`resolve_*` means "this field needs data from outside the current node."**
 
-### Step 2: Compose the Same Pattern for Nested Trees
+### Step 2: Compose Nested Trees
 
-Now add one more relationship: `Sprint -> tasks`. `TaskView` already knows how to load `owner`, so the resolver can keep walking the tree recursively.
+Real APIs rarely have just one relationship. When `Sprint` contains many `Task`s, and each `Task` already knows how to load its `owner`, the resolver walks the tree and batch-loads everything recursively.
 
 ```python
 from typing import List
@@ -211,16 +222,11 @@ sprints = await Resolver().resolve(sprints)
 
 This is why `resolve_*` is the best place to start. You can get value from the library before learning any advanced features.
 
-### Step 3: Add Derived Fields with `post_*`
+### Step 3: Compute Derived Fields with `post_*`
 
-`post_*` represents the Application Business Rules layer — it operates on data that is already assembled.
+Now `tasks` and `owner` are loaded. But the API also needs `task_count` and `contributor_names` — fields that don't come from a database query. They're computed from data already on the model.
 
-The simplest way to read it is this:
-
-- Use `resolve_*` when the field needs external data.
-- Use `post_*` when the field can be computed after the current subtree is already assembled.
-
-In the same sprint example, `task_count` and `contributor_names` are not fetched from another table. They are derived from already resolved `tasks` and `owner`.
+That's what `post_*` is for: it runs **after** all nested `resolve_*` calls have finished.
 
 ```python
 class SprintView(BaseModel):
@@ -259,9 +265,20 @@ A short rule of thumb:
 
 `post_*` can also accept `context`, `parent`, `ancestor_context`, and `collector`, but you do not need those to understand the basic pattern.
 
-### Step 4: Advanced Cross-Layer Flow
+### Progress Check
 
-Most users can skip this on the first read. Reach for these tools only when parent and child nodes need to coordinate without hard-coding references to each other.
+| What you needed | What you wrote | What the framework did |
+|-----------------|---------------|----------------------|
+| Load related data | `resolve_*` + `Loader(...)` | Batch lookups and map results back |
+| Compute derived fields | `post_*` | Run after descendants are fully resolved |
+
+These two patterns cover most API endpoints. The next section covers cross-layer data flow — you can skip it and jump to [ER Diagram](#when-er-diagram--autoload-becomes-worth-it) if you don't need it yet.
+
+---
+
+## Advanced: Cross-Layer Data Flow
+
+Reach for these tools when parent and child nodes need to coordinate without hard-coding references to each other.
 
 - `ExposeAs`: send ancestor data downward
 - `SendTo` + `Collector`: send child data upward
@@ -460,6 +477,24 @@ config_global_resolver(diagram)
 [→ Full ERD-Driven Guide](https://allmonday.github.io/pydantic-resolve/erd_driven/)
 
 ## Integrations
+
+The same ERD that drives REST APIs also powers GraphQL queries, MCP services, and admin tools:
+
+```mermaid
+flowchart TB
+    entity["**Entity + ERD**<br/>Business model & relationships"]
+    resolve["**Resolver**<br/>resolve / post / expose / collector"]
+    graphql["**GraphQL Generator**"]
+    api["**REST API**"]
+    mcp["**MCP Service**"]
+    ops["**Query / Debug / Test / Admin**"]
+
+    entity --> resolve
+    entity --> graphql
+    resolve --> api
+    graphql --> mcp
+    graphql --> ops
+```
 
 ### GraphQL
 
