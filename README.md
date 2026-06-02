@@ -76,13 +76,13 @@ The same ERD also powers GraphQL queries, MCP services, and admin tools:
 
 ```mermaid
 flowchart TB
-    entity["**Entity + ERD**<br/>Business model & relationships"]
-    resolve["**Resolver**<br/>resolve / post / expose / collector"]
-    graphql["**GraphQL Generator**"]
-    usecase["**UseCase Service**<br/>call_use_case / selection"]
-    api["**REST API**"]
-    mcp1["**MCP Service**<br/>UseCase-driven"]
-    mcp2["**MCP Service**<br/>Schema-driven"]
+    entity["Entity + ERD<br/>Business model & relationships"]
+    resolve["Resolver<br/>resolve / post / expose / collector"]
+    graphql["GraphQL Generator"]
+    usecase["UseCase Service<br/>call_use_case / selection"]
+    api["REST API"]
+    mcp1["MCP Service<br/>UseCase-driven"]
+    mcp2["MCP Service<br/>Schema-driven"]
 
     entity --> resolve
     entity --> graphql
