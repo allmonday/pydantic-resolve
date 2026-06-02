@@ -51,23 +51,6 @@ Whether this code lives in Repository, Service, or Route, the problem is the sam
 
 **pydantic-resolve** provides the missing layer. It implements Entity-First Architecture, which maps naturally to Clean Architecture:
 
-```mermaid
-graph TD
-    subgraph API["Frameworks & Interfaces"]
-        F1["Response (API Contract)"]
-    end
-    subgraph APP["Application Business Rules"]
-        A1["Resolver (Use Case Orchestration)"]
-    end
-    subgraph DOMAIN["Enterprise Business Rules"]
-        E1["Entity + ER Diagram"]
-    end
-    subgraph DATA["Interface Adapters"]
-        D1["Loader (Data Access)"]
-    end
-    API --> APP --> DOMAIN --> DATA
-```
-
 | Clean Architecture Layer | pydantic-resolve Component |
 |--------------------------|---------------------------|
 | Enterprise Business Rules | Entity + ER Diagram |
@@ -96,15 +79,17 @@ flowchart TB
     entity["**Entity + ERD**<br/>Business model & relationships"]
     resolve["**Resolver**<br/>resolve / post / expose / collector"]
     graphql["**GraphQL Generator**"]
+    usecase["**UseCase Service**<br/>call_use_case / selection"]
     api["**REST API**"]
-    mcp["**MCP Service**"]
-    ops["**Query / Debug / Test / Admin**"]
+    mcp1["**MCP Service**<br/>UseCase-driven"]
+    mcp2["**MCP Service**<br/>Schema-driven"]
 
     entity --> resolve
     entity --> graphql
-    resolve --> api
-    graphql --> mcp
-    graphql --> ops
+    resolve --> usecase
+    usecase --> api
+    usecase --> mcp1
+    graphql --> mcp2
 ```
 
 If you just need to fix an N+1 problem on one endpoint, skip to [Quick Start](#quick-start).
