@@ -79,6 +79,53 @@ For the full analysis with code examples and migration guidance, see [Entity-Fir
 
 ---
 
+## How pydantic-resolve Implements This
+
+**pydantic-resolve** provides three moving parts: `resolve_*` loads related data, `post_*` computes derived fields, and ER Diagram + `AutoLoad` centralizes relationship definitions. The same ERD also powers GraphQL queries and MCP services.
+
+```mermaid
+flowchart TB
+    entity["**Entity + ERD**<br/>Business model & relationships"]
+    resolve["**Resolver**<br/>resolve / post / expose / collector"]
+    graphql["**GraphQL Generator**"]
+    api["**REST API**"]
+    mcp["**MCP Service**"]
+    ops["**Query / Debug / Test / Admin**"]
+
+    entity --> resolve
+    entity --> graphql
+    resolve --> api
+    graphql --> mcp
+    graphql --> ops
+```
+
+## Read This README in Order
+
+We will reuse one example from start to finish:
+
+- `Sprint` has many `Task`
+- `Task` has one `owner`
+- The API also wants derived fields such as `task_count` and `contributors`
+
+The concepts appear in this order on purpose:
+
+1. `resolve_*`: fetch related data — **Adapter layer**
+2. `post_*`: compute derived fields after nested data is ready — **Application layer**
+3. `ExposeAs` / `SendTo`: pass data across layers — **cross-cutting**
+4. ER Diagram + `AutoLoad`: centralize relationships — **Enterprise layer**
+
+If you just need to fix an N+1 problem on one endpoint, skip to [Quick Start](#quick-start).
+
+## What pydantic-resolve Gives You
+
+| Architectural Need | What you write | What the framework does |
+|------|----------------|-------------------------|
+| Load related data | `resolve_*` + `Loader(...)` | Batch lookups and map results back |
+| Compute derived fields | `post_*` | Run after descendants are fully resolved |
+| Share data across layers | `ExposeAs`, `SendTo`, `Collector` | Pass context down or aggregate data up |
+| Reuse relationship declarations | ER Diagram + `AutoLoad` | Centralize relationship wiring for many models |
+
+
 ## Quick Start
 
 ### Install

@@ -18,7 +18,7 @@ The core argument of this article is simple: Pydantic schemas shouldn't be shado
 
 **Domain models are the core of architecture**. Business entities (Entity) should express pure domain concepts, such as "user", "task", "project", rather than database tables. These entities define the structure of business objects and their relationships, independent of any technical implementation. When we talk about business, we're saying "which user does this task belong to", "which tasks are included in this project", not "the tasks table has a user_id foreign key". The existence of domain models allows us to think and design systems in business language, rather than being bound by technical implementation details.
 
-**Specific use cases drive API design**. Each API endpoint serves a specific business scenario, such as "the user list page needs the user's id and name", "the task detail page needs complete task information and detailed information about the person in charge". These use cases determine what data the API should return, not what fields the database has. Pydantic schemas should be defined based on specific use cases, selecting needed fields from domain models, adding use-case-specific computed fields and validation logic. This is the true meaning of "response models".
+**Specific use cases drive API design**. Each API endpoint serves a specific business scenario, such as "the user list page needs the user's id and name", "the task detail page needs complete task information and detailed information about the person in charge". These use cases determine what data the API should return, not what fields the database has. Pydantic schemas should be defined based on specific use cases, selecting needed fields from domain models, adding use-case-specific derived fields and validation logic. This is the true meaning of "response models".
 
 **The data layer is just an implementation detail**. Whether data is stored in databases like PostgreSQL, MySQL, MongoDB, or read from caches like Redis, Memcached, or obtained from external services through gRPC, REST API, none of these should affect the definition of domain models and API contracts. The data layer is responsible for efficiently and reliably fetching data, but it's just a replaceable implementation detail. Database structures may change, external services may migrate, caching strategies may adjust, but as long as the data layer can provide the data needed by domain models, these changes shouldn't propagate to business logic and API contracts.
 
@@ -212,7 +212,7 @@ graph TD
 
     subgraph API["API Contract (Use Case Composition)"]
         A1["Select fields from Entity"]
-        A2["Define API-specific computed fields"]
+        A2["Define API-specific derived fields"]
         A3["Declare how to use associated data"]
         A4["Example: TaskResponse, UserSummary"]
     end
@@ -748,7 +748,7 @@ class TaskResponse(DefineSubset):
 **A**: No, Entity and ORM are fundamentally different:
 - Entity is business concept, ORM is DB mapping
 - Entity can express relationships that DB cannot express (cross-data sources)
-- Entity can contain computed fields, ORM typically doesn't
+- Entity can contain derived fields, ORM typically doesn't
 - Entity is stable core, ORM is replaceable implementation
 
 ### Q2: Won't this increase code volume?
