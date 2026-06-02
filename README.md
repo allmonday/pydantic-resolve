@@ -110,7 +110,7 @@ We will reuse one example from start to finish:
 The concepts appear in this order on purpose:
 
 1. `resolve_*`: fetch related data — **Adapter layer**
-2. `post_*`: compute fields after nested data is ready — **Application layer**
+2. `post_*`: compute derived fields after nested data is ready — **Application layer**
 3. `ExposeAs` / `SendTo`: pass data across layers — **cross-cutting**
 4. ER Diagram + `AutoLoad`: centralize relationships — **Enterprise layer**
 

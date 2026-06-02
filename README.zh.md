@@ -110,7 +110,7 @@ flowchart TB
 概念的引入顺序是刻意安排的：
 
 1. `resolve_*`：加载关联数据 — **Adapter 层**
-2. `post_*`：在嵌套数据就绪后计算字段 — **Application 层**
+2. `post_*`：在嵌套数据就绪后计算派生字段 — **Application 层**
 3. `ExposeAs` / `SendTo`：当父子节点需要跨层协作时传递数据 — **横切关注点**
 4. ER Diagram + `AutoLoad`：当关系定义开始重复时，把关系收敛到一个地方 — **Enterprise 层**
 

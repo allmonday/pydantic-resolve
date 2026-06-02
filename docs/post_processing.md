@@ -2,7 +2,7 @@
 
 [中文版](./post_processing.zh.md)
 
-`resolve_*` loads missing data. `post_*` runs after the current subtree is fully assembled — it transforms, aggregates, or formats data that is already in place.
+`resolve_*` loads missing data. `post_*` computes derived fields — values derived from the fully assembled subtree, such as counts, summaries, and formatted strings.
 
 ## Extend the Same Sprint Example
 
@@ -107,7 +107,7 @@ The exact implementation can be async under the hood, but the mental model is si
 1. Load descendants first (all `resolve_*` methods).
 2. Run `post_*` only after descendant data is ready.
 
-That timing is why `post_*` is ideal for summary fields, formatting, and business-specific derived values.
+That timing is why `post_*` is ideal for derived fields — counts, summaries, formatted strings, and other values computed from the resolved subtree.
 
 ## Rule of Thumb
 
