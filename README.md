@@ -9,6 +9,7 @@
 
 [中文版](./README.zh.md)
 
+**Requirements:** Python 3.10+, Pydantic v2
 
 ---
 
@@ -94,6 +95,36 @@ flowchart TB
 
 If you just need to fix an N+1 problem on one endpoint, skip to [Quick Start](#quick-start).
 
+### Before and After
+
+```python
+# Before: manual N+1 assembly in your route
+@router.get("/tasks")
+async def get_tasks():
+    tasks = await task_service.get_tasks()
+    user_ids = list({t.owner_id for t in tasks})
+    users = await user_service.get_users_by_ids(user_ids)
+    user_map = {u.id: u for u in users}
+    return [
+        TaskResponse(**{**t.model_dump(), 'owner': user_map.get(t.owner_id)})
+        for t in tasks
+    ]
+
+# After: declare what's missing, let the framework assemble
+class TaskView(BaseModel):
+    id: int
+    title: str
+    owner_id: int
+    owner: Optional[UserView] = None
+
+    def resolve_owner(self, loader=Loader(user_loader)):
+        return loader.load(self.owner_id)
+
+@router.get("/tasks")
+async def get_tasks():
+    tasks = [TaskView.model_validate(t) for t in await task_repo.get_tasks()]
+    return await Resolver().resolve(tasks)
+```
 
 ## Quick Start
 
@@ -228,11 +259,9 @@ Execution order:
 
 These two patterns cover most API endpoints. The next section covers cross-layer data flow — skip to [ER Diagram](#when-er-diagram--autoload-becomes-worth-it) if you don't need it yet.
 
----
+### Step 4: Coordinate Parent and Child with ExposeAs / SendTo / Collector
 
-## Advanced: Cross-Layer Data Flow
-
-Reach for these tools when parent and child nodes need to coordinate without hard-coding references to each other.
+When parent and child nodes need to share data without hard-coding references to each other:
 
 - `ExposeAs`: send ancestor data downward
 - `SendTo` + `Collector`: send child data upward
@@ -270,12 +299,7 @@ class TaskView(BaseModel):
         return f"{ancestor_context['sprint_name']} / {self.title}"
 ```
 
-Use this only when the shape of the tree matters:
-
-- A child needs ancestor context, such as a sprint name or permissions.
-- A parent needs to aggregate values from many descendants, such as all contributors or tags.
-
----
+Use this when the shape of the tree matters — for example, a child needs ancestor context (sprint name, permissions), or a parent needs to aggregate values from many descendants (all contributors, all tags).
 
 ## When ER Diagram + AutoLoad Becomes Worth It
 
@@ -443,6 +467,7 @@ from pydantic_resolve.graphql import GraphQLHandler
 
 handler = GraphQLHandler(diagram)
 result = await handler.execute("{ users { id name posts { title } } }")
+# result.data == {"users": [{"id": 1, "name": "Alice", "posts": [{"title": "Hello"}]}, ...]}
 ```
 
 [→ GraphQL Documentation](./demo/graphql/README.md)
@@ -456,6 +481,7 @@ from pydantic_resolve import AppConfig, create_mcp_server
 
 mcp = create_mcp_server(apps=[AppConfig(name="blog", er_diagram=diagram)])
 mcp.run()
+# Agents can then query: "list all posts by user Alice" → translated to GraphQL against your ERD
 ```
 
 [→ MCP Documentation](https://allmonday.github.io/pydantic-resolve/api/)
@@ -471,6 +497,13 @@ app.mount('/voyager', create_voyager(app, er_diagram=diagram))
 ```
 
 ---
+
+## Known Limitations
+
+- **Loader returns `None`**: `resolve_*` fields stay at their default value. No error is raised.
+- **Circular dependencies**: The resolver detects cycles and raises `ResolverError` at resolve time.
+- **Large datasets**: Each loader collects all keys in one batch query. For very large key sets (10k+), consider pagination before resolving.
+- **Async only**: `Resolver().resolve()` is async; there is no synchronous API.
 
 ## Comparisons
 
@@ -491,21 +524,23 @@ app.mount('/voyager', create_voyager(app, er_diagram=diagram))
 |---------|---------|------------------|
 | **N+1 Prevention** | Manual DataLoader setup | Built-in automatic batching |
 | **Type Safety** | Separate schema files | Native Pydantic types |
-| **Learning Curve** | Steep (Schema, Resolvers, Loaders) | Gentle (just Pydantic) |
+| **Learning Curve** | Steep (Schema, Resolvers, Loaders) | Moderate (Loader/batch pattern required) |
 | **Debugging** | Complex introspection | Standard Python debugging |
 | **Integration** | Requires dedicated server | Works with any framework |
 | **Query Flexibility** | Any client can query anything | Explicit API contracts |
+
+> **Note:** pydantic-resolve borrows the DataLoader batch pattern from GraphQL ecosystems. The main difference is that you keep your existing REST framework and get automatic batching without adopting a full GraphQL server. If your project already uses strawberry or ariadne and is happy with it, pydantic-resolve may be redundant.
 
 ---
 
 ## Resources
 
-- 📖 [Full Documentation](https://allmonday.github.io/pydantic-resolve/)
-- 🏛️ [Entity-First Architecture (full paper)](./docs/architecture_entity_first.md)
-- 🚀 [Example Project](https://github.com/allmonday/composition-oriented-development-pattern)
-- 🎮 [Live Demo](https://www.fastapi-voyager.top/voyager/)
-- 🎮 [Live Demo - GraphQL](https://www.fastapi-voyager.top/graphql)
-- 📚 [API Reference](https://allmonday.github.io/pydantic-resolve/api/)
+- [Full Documentation](https://allmonday.github.io/pydantic-resolve/)
+- [Entity-First Architecture (full paper)](./docs/architecture_entity_first.md)
+- [Example Project](https://github.com/allmonday/composition-oriented-development-pattern)
+- [Live Demo](https://www.fastapi-voyager.top/voyager/)
+- [Live Demo - GraphQL](https://www.fastapi-voyager.top/graphql)
+- [API Reference](https://allmonday.github.io/pydantic-resolve/api/)
 
 ---
 
