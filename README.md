@@ -109,7 +109,9 @@ async def get_tasks():
         TaskResponse(**{**t.model_dump(), 'owner': user_map.get(t.owner_id)})
         for t in tasks
     ]
+```
 
+```python
 # After: declare what's missing, let the framework assemble
 class TaskView(BaseModel):
     id: int
