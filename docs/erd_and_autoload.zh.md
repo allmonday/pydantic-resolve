@@ -2,77 +2,43 @@
 
 [English](./erd_and_autoload.md)
 
-> **整洁架构层次**：企业业务规则
->
-> ER Diagram + AutoLoad 是企业业务规则层完全成型的地方。实体定义及其关系成为稳定的内核，独立于数据库和 API。
+手写 `resolve_*` 是正确的入口点。但当相同的关系开始在多个响应模型中重复时，问题就变了：你不再问"如何加载这个字段？"而是在问"这种关系的唯一事实来源应该放在哪里？"
 
-手动的 `resolve_*` 方法是正确的入口点。但是一旦相同的关系开始在多个响应模型中重复，问题就改变了。
-
-你不再问"我如何加载这个字段？"你在问"这种关系的单一事实来源应该在哪里？"
-
-这就是 ERD 模式变得值得前期成本的点。
+ERD 模式将关系声明集中到实体类中。`AutoLoad` 让你完全不需要写 `resolve_*`。
 
 ## 重复信号
 
-如果你的代码库开始累积这样的模式，关系可能准备好移动到 ERD 中：
+如果你的代码库开始出现这样的模式，关系就准备好进入 ERD 了：
 
 - `TaskCard.resolve_owner`
 - `TaskDetail.resolve_owner`
 - `SprintBoard.resolve_tasks`
 - `SprintReport.resolve_tasks`
 
-loader 逻辑可能仍然正确，但关系知识现在重复了。
+loader 逻辑仍然正确，但关系知识已经重复了。
 
 ## 成本 vs 收益
 
-| 问题 | 手动核心 API | ERD + `AutoLoad` |
+| 问题 | 手写 Core API | ERD + `AutoLoad` |
 |---|---|---|
 | 第一个接口 | 更快 | 更慢 |
-| 前期设置 | 低 | 中 |
-| 在许多模型中复用相同关系 | 重复 | 集中 |
-| 后续修改关系 | 更新许多 `resolve_*` 方法 | 更新一个声明 |
-| GraphQL 和 MCP 复用 | 单独工作 | 自然扩展 |
+| 前期配置 | 低 | 中 |
+| 同一关系在多个模型中复用 | 重复 | 集中管理 |
+| 后续修改关系 | 更新多个 `resolve_*` | 改一处声明 |
+| GraphQL 和 MCP 复用 | 单独处理 | 自然延伸 |
 
-## ERD 模式中的相同场景
+## 目标
+
+同样的 `Sprint -> Task -> User` 场景。输出与 Core API 版本完全相同 —— 区别在于 `resolve_owner` 和 `resolve_tasks` 从视图模型中消失了。
+
+## Step 1：定义带关系的实体
+
+关系声明从视图模型移到实体类中：
 
 ```python
-from typing import Annotated, Optional
-
-from pydantic import BaseModel
-from pydantic_resolve import (
-    Loader,
-    Resolver,
-    Relationship,
-    base_entity,
-    build_list,
-    build_object,
-    config_global_resolver,
-)
+from pydantic_resolve import Relationship, base_entity, config_global_resolver
 
 
-# --- 伪数据库 ---
-USERS = {
-    7: {"id": 7, "name": "Ada"},
-    8: {"id": 8, "name": "Bob"},
-}
-
-TASKS = [
-    {"id": 10, "title": "Design docs", "sprint_id": 1, "owner_id": 7},
-    {"id": 11, "title": "Refine examples", "sprint_id": 1, "owner_id": 8},
-]
-
-
-async def user_loader(user_ids: list[int]):
-    users = [USERS.get(uid) for uid in user_ids]
-    return build_object(users, user_ids, lambda u: u.id)
-
-
-async def task_loader(sprint_ids: list[int]):
-    tasks = [t for t in TASKS if t["sprint_id"] in sprint_ids]
-    return build_list(tasks, sprint_ids, lambda t: t["sprint_id"])
-
-
-# --- 实体定义 ---
 BaseEntity = base_entity()
 
 
@@ -96,54 +62,95 @@ class SprintEntity(BaseModel, BaseEntity):
     ]
     id: int
     name: str
+```
 
+## Step 2：创建 AutoLoad 并配置解析器
 
+```python
 diagram = BaseEntity.get_diagram()
 AutoLoad = diagram.create_auto_load()
 config_global_resolver(diagram)
+```
 
+这三行把 ERD 接入解析器。`AutoLoad` 将图表特定的元数据嵌入到注解中。
 
-# --- 响应模型（不需要 resolve_* 方法）---
+## Step 3：用 AutoLoad 注解替换 resolve_*
+
+视图模型继承自实体。关系字段用 `AutoLoad()` 替代 `resolve_*`：
+
+```python
 class TaskView(TaskEntity):
-    owner: Annotated[Optional[UserEntity], AutoLoad()] = None
+    owner: Annotated[Optional[UserEntity], AutoLoad()] = None  # (1)
 
 
 class SprintView(SprintEntity):
     tasks: Annotated[list[TaskView], AutoLoad()] = []
     task_count: int = 0
 
-    def post_task_count(self):
+    def post_task_count(self):  # (2)
         return len(self.tasks)
+```
 
+1.  `AutoLoad()` 从图表中查找 `name='owner'` 的 `Relationship`，并在分析时生成等效的 `resolve_owner`。
+2.  `post_*` 保持不变 —— ERD 消除的是关系连线，不是业务特定的后处理。
 
-# --- 解析 ---
-raw_sprints = [{"id": 1, "name": "Sprint 24"}]
+## Step 4：运行解析器
+
+```python
+raw_sprints = [
+    {"id": 1, "name": "Sprint 24"},
+    {"id": 2, "name": "Sprint 25"},
+]
 sprints = [SprintView.model_validate(s) for s in raw_sprints]
 sprints = await Resolver().resolve(sprints)
 
-print(sprints[0].model_dump())
-# {'id': 1, 'name': 'Sprint 24',
-#  'tasks': [
-#      {'id': 10, 'title': 'Design docs', 'owner_id': 7,
-#       'owner': {'id': 7, 'name': 'Ada'}},
-#      {'id': 11, 'title': 'Refine examples', 'owner_id': 8,
-#       'owner': {'id': 8, 'name': 'Bob'}},
-#  ],
-#  'task_count': 2}
+for s in sprints:
+    print(s.model_dump())
+```
+
+输出：
+
+```python
+{'id': 1, 'name': 'Sprint 24',
+ 'tasks': [
+     {'id': 10, 'title': 'Design docs', 'owner_id': 7, 'owner': {'id': 7, 'name': 'Ada'}},
+     {'id': 11, 'title': 'Refine examples', 'owner_id': 8, 'owner': {'id': 8, 'name': 'Bob'}},
+ ],
+ 'task_count': 2}
+{'id': 2, 'name': 'Sprint 25',
+ 'tasks': [
+     {'id': 12, 'title': 'Bug fixes', 'owner_id': 7, 'owner': {'id': 7, 'name': 'Ada'}},
+ ],
+ 'task_count': 1}
 ```
 
 ## 变化了什么
 
-- `resolve_owner` 从视图模型中消失了。
-- `resolve_tasks` 从视图模型中消失了。
-- 关系声明移动到 `__relationships__` 中。
-- `post_task_count` 保持在它应该的地方。
+与 Core API 版本相比：
 
-最后一点很重要：ERD 消除了重复的关系连接，但它不替代业务特定的后处理。
+- `resolve_owner` 消失了。
+- `resolve_tasks` 消失了。
+- 关系声明集中在一个地方（`__relationships__`）。
+- `post_task_count` 保持不变。
+
+## AutoLoad 如何工作
+
+`AutoLoad` 不是魔法。解析器扫描类时：
+
+1. 在字段上找到 `AutoLoad()` 注解。
+2. 按名称从图表中查找对应的 `Relationship`。
+3. 生成等效的 `resolve_*` 方法，用 FK 值调用 loader。
+
+如果字段名与关系名不匹配，使用 `origin` 参数：
+
+```python
+class SprintView(SprintEntity):
+    items: Annotated[list[TaskView], AutoLoad(origin='tasks')] = []
+```
 
 ## 声明 ERD 的两种方式
 
-### 风格 1：实体类上的内联 `__relationships__`
+### 内联 `__relationships__` 在实体类上
 
 ```python
 BaseEntity = base_entity()
@@ -159,9 +166,9 @@ class TaskEntity(BaseModel, BaseEntity):
 diagram = BaseEntity.get_diagram()
 ```
 
-当实体类已由当前应用层拥有，并且你乐于直接将关系元数据附加到它时，这种风格效果很好。
+适合关系元数据自然属于实体类型的场景。
 
-### 风格 2：外部 `ErDiagram(...)` 声明
+### 外部 `ErDiagram(...)` 声明
 
 ```python
 from pydantic_resolve import Entity, ErDiagram
@@ -192,102 +199,40 @@ diagram = ErDiagram(
 )
 ```
 
-### 何时外部声明更合适
+适合不想修改实体类，或同一类在多个模块中共享的场景。
 
-外部 `ErDiagram(...)` 声明通常是更好的选择，当：
+!!! warning "一个项目只用一个 Diagram"
 
-- 你不想修改实体类本身
-- 同样的实体类在多个模块或服务之间共享
-- 你想要一个集中的地方来检查所有关系定义
-- 源类来自另一个包或兼容层
+    使用外部 `ErDiagram(...)` 时，所有实体类会注册到共享的内部 registry。多个 `ErDiagram` 实例注册同一实体会导致不可预测的结果。
 
-简而言之：
+    如需合并不同来源的关系，使用 `add_relationship()`：
 
-- 当关系元数据自然属于实体类型时，使用 `__relationships__`
-- 当关系元数据应该与类型定义分离时，使用外部 `ErDiagram(...)`
-
-## 外部 ErDiagram：一个项目只用一个 Diagram
-
-使用外部 `ErDiagram(...)` 声明时，所有实体类会注册到一个共享的内部 registry 中。如果多个 `ErDiagram` 实例注册了同一个实体类但关系不同，行为将不可预测：
-
-- **同名关系、不同 FK** — 在类定义时抛出 `ValueError`（检测到歧义）。
-- **不同名关系** — 来自所有 diagram 的关系被静默合并。`DefineSubset` 看到的是所有已注册关系的并集，而不是某个特定 diagram 的关系。
-
-`base_entity()` 不存在此问题，因为它通过 MRO 定位唯一的 diagram。
-
-**建议：一个项目只创建一个 `ErDiagram` 实例。** 如果需要合并来自不同来源的关系，使用 `add_relationship()` 将它们合并到同一个 diagram：
-
-```python
-diagram = ErDiagram(entities=[...])
-diagram = diagram.add_relationship(more_entities)
-```
-
-## AutoLoad 如何工作
-
-`AutoLoad` 并不是魔法。它是一个注释，解析器识别并在分析时将其转换为 `resolve_*` 方法。
-
-```python
-AutoLoad = diagram.create_auto_load()
-
-class TaskView(TaskEntity):
-    owner: Annotated[Optional[UserEntity], AutoLoad()] = None
-```
-
-当解析器扫描这个类时，它：
-
-1. 在 `owner` 字段上找到 `AutoLoad()` 注释。
-2. 从图中查找具有 `name='owner'` 的 `Relationship`。
-3. 生成一个等效的 `resolve_owner` 方法，该方法使用 FK 值调用 loader。
-
-`AutoLoad(origin='tasks')` 参数允许你在字段名称不匹配时指定不同的关系名称：
-
-```python
-class SprintView(SprintEntity):
-    items: Annotated[list[TaskView], AutoLoad(origin='tasks')] = []
-```
-
-## diagram 和 AutoLoad 必须匹配
-
-这个设置不仅仅是仪式：
-
-```python
-diagram = BaseEntity.get_diagram()
-AutoLoad = diagram.create_auto_load()
-config_global_resolver(diagram)
-```
-
-`create_auto_load()` 将图特定的关系元数据嵌入到注释中，因此解析器必须配置相同的 `diagram`。
-
-如果你使用自定义解析器而不是全局解析器：
-
-```python
-from pydantic_resolve import config_resolver
-
-MyResolver = config_resolver('MyResolver', er_diagram=diagram)
-result = await MyResolver().resolve(data)
-```
+    ```python
+    diagram = ErDiagram(entities=[...])
+    diagram = diagram.add_relationship(more_entities)
+    ```
 
 ## 关系类型
 
-### 一对一（build_object）
+### 一对一
 
 ```python
 Relationship(
-    fk='owner_id',           # 此实体上的 FK 字段
-    name='owner',            # 唯一关系名称
-    target=UserEntity,       # 单个目标实体
-    loader=user_loader       # 每个键返回一个项
+    fk='owner_id',
+    name='owner',
+    target=UserEntity,
+    loader=user_loader
 )
 ```
 
-### 一对多（build_list）
+### 一对多
 
 ```python
 Relationship(
-    fk='id',                 # 此实体上的 PK 字段
-    name='tasks',            # 唯一关系名称
-    target=list[TaskEntity], # 列表目标
-    loader=task_loader       # 每个键返回一个项列表
+    fk='id',
+    name='tasks',
+    target=list[TaskEntity],
+    loader=task_loader
 )
 ```
 
@@ -299,7 +244,7 @@ Relationship(
     name='owner',
     target=UserEntity,
     loader=user_loader,
-    fk_none_default=None              # 当 FK 为 None 时返回 None
+    fk_none_default=None
 )
 
 # 或使用工厂：
@@ -312,7 +257,7 @@ Relationship(
 )
 ```
 
-### 来自相同 FK 的多个关系
+### 同一 FK 的多个关系
 
 ```python
 class TaskEntity(BaseModel, BaseEntity):
@@ -324,52 +269,58 @@ class TaskEntity(BaseModel, BaseEntity):
     owner_id: int
 ```
 
-### 使用 fk_fn 的自定义 FK 转换
-
-当 FK 值需要在传递给 loader 之前转换时：
+### 使用 fk_fn 自定义 FK 转换
 
 ```python
 Relationship(
-    fk='tag_ids',             # 逗号分隔的字符串 "1,2,3"
+    fk='tag_ids',             # 逗号分隔字符串 "1,2,3"
     name='tags',
     target=list[TagEntity],
     loader=tag_loader,
-    load_many=True,           # 使用 load_many 而不是 load
+    load_many=True,
     load_many_fn=lambda ids: ids.split(',') if ids else []
 )
 ```
 
-## 从手动 resolve_* 迁移到 ERD
+## 从手写 resolve_* 迁移到 ERD
 
 迁移路径是增量式的：
 
-1. 定义镜像你现有响应模型的实体。
+1. 定义镜像现有响应模型的实体。
 2. 添加 `__relationships__` 或外部 `ErDiagram` 声明。
 3. 创建 `AutoLoad` 和 `config_global_resolver`。
-4. 用 `AutoLoad()` 注释替换 `resolve_*` 方法。
+4. 用 `AutoLoad()` 注解替换 `resolve_*` 方法。
 5. 保持 `post_*` 方法不变。
 
-你可以在同一项目中混合手动和 ERD 驱动的解析：
+你可以在同一项目中混合手写和 ERD 驱动的解析：
 
 ```python
 class TaskView(TaskEntity):
     owner: Annotated[Optional[UserEntity], AutoLoad()] = None  # ERD 驱动
-    comments: list[CommentView] = []                            # 仍然手动
+    comments: list[CommentView] = []
 
-    def resolve_comments(self, loader=Loader(comment_loader)):  # 手动
+    def resolve_comments(self, loader=Loader(comment_loader)):  # 手写
         return loader.load(self.id)
 ```
 
-## 处理循环导入
+## 自定义解析器
 
-当实体通过 `target` 相互引用时，你可能会遇到循环导入问题。
+如果你不想使用全局解析器：
+
+```python
+from pydantic_resolve import config_resolver
+
+MyResolver = config_resolver('MyResolver', er_diagram=diagram)
+result = await MyResolver().resolve(data)
+```
+
+## 处理循环导入
 
 ### 同模块字符串引用
 
 ```python
 class TaskEntity(BaseModel, BaseEntity):
     __relationships__ = [
-        # 字符串 'UserEntity' 在同一模块内解析
         Relationship(fk='owner_id', name='owner', target='UserEntity', loader=user_loader)
     ]
 ```
@@ -377,34 +328,34 @@ class TaskEntity(BaseModel, BaseEntity):
 ### 跨模块引用
 
 ```python
-# 在 app/models/task.py
 class TaskEntity(BaseModel, BaseEntity):
     __relationships__ = [
         Relationship(
             fk='owner_id',
-            target='app.models.user:UserEntity',  # module.path:ClassName
+            target='app.models.user:UserEntity',
             name='owner',
             loader=user_loader
         )
     ]
 ```
 
-`_resolve_ref` 函数支持：
+支持的格式：
 
-- 简单类名：`'UserEntity'`（在当前模块中查找）
+- 简单类名：`'UserEntity'`
 - 模块路径语法：`'app.models.user:UserEntity'`
 - 列表泛型：`list['UserEntity']` 或 `list['app.models.user:UserEntity']`
 
-## 何时还不使用 ERD
+## 何时还不适合使用 ERD
 
-在以下情况下继续使用手动核心 API：
+在以下场景继续使用手写 Core API：
 
-- 你只有几个响应模型
-- 关系结构仍在快速移动
-- 重复成本还不是真实的
+- 你只有少数几个响应模型
+- 关系结构仍在快速变化
+- 重复成本还不是真实问题
 
-ERD 很有价值，但它是扩展步骤，而不是成年礼。
+ERD 是扩展步骤，不是必经之路。
 
 ## 下一步
 
-继续阅读 [DataLoader 深入探讨](./dataloader_deep_dive.md) 以了解批处理在底层的工作原理，或跳转到 [ERD 与 DefineSubset](./erd_define_subset.md) 以了解如何从响应中隐藏内部 FK 字段。
+- [ERD 与 DefineSubset](./erd_define_subset.zh.md) —— 从响应中隐藏内部 FK 字段。
+- [DataLoader 深入](./dataloader_deep_dive.zh.md) —— 了解批处理在底层的工作原理。

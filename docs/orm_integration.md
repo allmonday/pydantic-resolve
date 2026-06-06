@@ -2,7 +2,7 @@
 
 [中文版](./orm_integration.zh.md)
 
-When your ORM already knows the relationships between tables, you can avoid duplicating relationship declarations. `build_relationship()` inspects ORM metadata and auto-generates `Relationship` definitions and DataLoader functions.
+When your ORM already knows the relationships between tables, `build_relationship()` inspects ORM metadata and auto-generates `Relationship` definitions and DataLoader functions — no hand-written loaders needed.
 
 ## Supported ORMs
 
@@ -20,26 +20,39 @@ pip install pydantic-resolve[django]       # Django
 pip install pydantic-resolve[tortoise]     # Tortoise ORM
 ```
 
-## How It Works
+## Goal
 
-The integration follows three steps:
+You have ORM models with relationships already defined:
 
-1. Define Pydantic DTOs that mirror your ORM models.
-2. Map DTOs to ORM models via `Mapping`.
-3. Call `build_relationship()` to generate `Entity` objects with loaders.
-
-```mermaid
-flowchart LR
-    DTO["Pydantic DTOs"] --> Mapping
-    ORM["ORM Models"] --> Mapping
-    Mapping --> build_relationship
-    build_relationship --> Entities["list[Entity]<br/>with auto-generated loaders"]
-    Entities --> ErDiagram
+```python
+class PostORM(Base):
+    __tablename__ = "posts"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String)
+    author_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    author: Mapped["UserORM"] = relationship(back_populates="posts")
+    comments: Mapped[list["CommentORM"]] = relationship(back_populates="post")
 ```
 
-## SQLAlchemy Example
+You want the API response to resolve `author` and `comments` without writing loaders:
 
-### 1. Define ORM Models
+```json
+[
+    {
+        "id": 1,
+        "title": "Hello World",
+        "author_id": 1,
+        "author": {"id": 1, "name": "Alice"},
+        "comments": [
+            {"id": 10, "content": "Great post!", "post_id": 1}
+        ]
+    }
+]
+```
+
+No hand-written `resolve_author` or `resolve_comments`. The ORM metadata drives everything.
+
+## Step 1: Define ORM Models
 
 ```python
 from sqlalchemy import ForeignKey, Integer, String
@@ -74,18 +87,16 @@ class CommentORM(Base):
     post: Mapped["PostORM"] = relationship(back_populates="comments")
 ```
 
-### 2. Define Pydantic DTOs
+## Step 2: Define Pydantic DTOs
 
 DTOs must enable `from_attributes`:
-
-**Why:** Generated loaders query the database through the ORM and return ORM instances. Pydantic's `model_validate` needs `from_attributes=True` to convert those instances into DTOs. Additionally, the `_query_meta` optimization uses DTO field names to generate `load_only` clauses — only the columns the DTO actually declares are fetched from the database. Without `from_attributes`, the conversion step would fail even though the query is already optimized.
 
 ```python
 from pydantic import BaseModel, ConfigDict
 
 
 class UserDTO(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True)  # (1)
 
     id: int
     name: str
@@ -107,7 +118,9 @@ class CommentDTO(BaseModel):
     post_id: int
 ```
 
-### 3. Build Relationships
+1.  Required because generated loaders return ORM instances. `model_validate` needs `from_attributes` to convert them. The `_query_meta` optimization also uses DTO field names to generate `load_only` clauses.
+
+## Step 3: Build Relationships
 
 ```python
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -118,7 +131,7 @@ from pydantic_resolve.integration.sqlalchemy import build_relationship
 engine = create_async_engine("sqlite+aiosqlite:///blog.db")
 session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
-entities = build_relationship(
+entities = build_relationship(  # (1)
     mappings=[
         Mapping(entity=UserDTO, orm=UserORM),
         Mapping(entity=PostDTO, orm=PostORM),
@@ -127,12 +140,24 @@ entities = build_relationship(
     session_factory=session_factory,
 )
 
-diagram = ErDiagram(entities=entities)
+diagram = ErDiagram(entities=entities)  # (2)
 AutoLoad = diagram.create_auto_load()
 config_global_resolver(diagram)
 ```
 
-### 4. Use in Response Models
+1.  `build_relationship` inspects ORM `relationship()` declarations and generates `Entity` objects with loaders.
+2.  Feed the generated entities into an `ErDiagram` and configure the resolver — same as hand-written ERD.
+
+```mermaid
+flowchart LR
+    DTO["Pydantic DTOs"] --> Mapping
+    ORM["ORM Models"] --> Mapping
+    Mapping --> build_relationship
+    build_relationship --> Entities["list[Entity]<br/>with auto-generated loaders"]
+    Entities --> ErDiagram
+```
+
+## Step 4: Use in Response Models
 
 ```python
 from typing import Annotated, Optional
@@ -150,6 +175,8 @@ class PostView(PostDTO):
 class UserView(UserDTO):
     posts: Annotated[list[PostView], AutoLoad()] = []
 ```
+
+No `resolve_author`, no `resolve_comments`. `AutoLoad` picks up the auto-generated relationships.
 
 ## Mapping Configuration
 
@@ -229,9 +256,9 @@ entities = build_relationship(
 
 ## Generated Loader Behavior
 
-The auto-generated loaders:
+Auto-generated loaders:
 
-- Use `load_only` (SQLAlchemy) / `only` (Django) to select only the columns needed by the DTO
+- Use `load_only` (SQLAlchemy) / `only` (Django) to select only DTO-declared columns
 - Apply per-mapping or default filters
 - Convert ORM rows to DTO via `model_validate`
 - Handle both sync and async sessions
@@ -295,7 +322,7 @@ Entities with a new `kls` are appended.
 
 ## When to Use ORM Integration
 
-ORM integration is a good fit when:
+Use when:
 
 - Your ORM metadata is stable and already defines all relationships
 - You have many entities and want to avoid hand-writing loaders

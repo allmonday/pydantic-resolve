@@ -2,17 +2,11 @@
 
 [中文版](./quick_start.zh.md)
 
-> **Clean Architecture Layer**: Interface Adapters (Loader) + Application Business Rules (Resolver)
->
-> This page covers the smallest useful interaction between the Loader adapter and the Resolver orchestrator.
+This page solves one problem: your task data has `owner_id`, but your API should return the full `owner` object — without N+1 queries.
 
-This page solves one endpoint-level problem with the smallest useful amount of code: each task has an `owner_id`, but the response model should expose a full `owner` object.
+## Goal
 
-If you only need to fix a few N+1 issues in a handful of endpoints, this page and [Core API](./core_api.md) may already be enough.
-
-## The Problem
-
-Imagine a task list API that starts from data like this:
+You have this:
 
 ```python
 raw_tasks = [
@@ -21,20 +15,24 @@ raw_tasks = [
 ]
 ```
 
-The response contract you actually want is not just `owner_id`. You want:
+You want this:
 
 ```json
-{
-    "id": 10,
-    "title": "Design docs",
-    "owner": {
-        "id": 7,
-        "name": "Ada"
+[
+    {
+        "id": 10,
+        "title": "Design docs",
+        "owner": {"id": 7, "name": "Ada"}
+    },
+    {
+        "id": 11,
+        "title": "Refine examples",
+        "owner": {"id": 8, "name": "Bob"}
     }
-}
+]
 ```
 
-The naive implementation is usually a loop that fetches one owner per task. That is exactly the kind of N+1 problem pydantic-resolve is built to remove.
+The naive approach fetches one owner per task in a loop — that is the N+1 problem. pydantic-resolve solves it with three pieces: a **response model**, a **loader function**, and a **resolver**.
 
 ## Install
 
@@ -42,40 +40,16 @@ The naive implementation is usually a loop that fetches one owner per task. That
 pip install pydantic-resolve
 ```
 
-If you later want MCP support as well:
+## Step 1: Declare the Missing Field
 
-```bash
-pip install pydantic-resolve[mcp]
-```
-
-## The Smallest Useful Example
-
-This example is self-contained and runnable. It uses a simple dict-based fake database so you can see the entire flow without setting up a real database.
+Start with a Pydantic model. The `owner` field is `None` because the raw data does not include it. You declare how to fill it with `resolve_owner`:
 
 ```python
-import asyncio
 from typing import Optional
-
 from pydantic import BaseModel
 from pydantic_resolve import Loader, Resolver, build_object
 
 
-# --- Fake database ---
-USERS = {
-    7: {"id": 7, "name": "Ada"},
-    8: {"id": 8, "name": "Bob"},
-    9: {"id": 9, "name": "Cara"},
-}
-
-
-# --- Loader function ---
-async def user_loader(user_ids: list[int]):
-    """Receives a batch of user_ids, returns results aligned with those keys."""
-    users = [USERS.get(uid) for uid in user_ids]
-    return build_object(users, user_ids, lambda user: user.id)
-
-
-# --- Response models ---
 class UserView(BaseModel):
     id: int
     name: str
@@ -85,13 +59,46 @@ class TaskView(BaseModel):
     id: int
     title: str
     owner_id: int
-    owner: Optional[UserView] = None
+    owner: Optional[UserView] = None  # (1)
 
-    def resolve_owner(self, loader=Loader(user_loader)):
+    def resolve_owner(self, loader=Loader(user_loader)):  # (2)
         return loader.load(self.owner_id)
+```
+
+1.  `owner` starts as `None` — the resolver will fill it.
+2.  `resolve_<field_name>` declares how to load the field. `loader.load(self.owner_id)` registers a key to be batched — it does **not** call `user_loader` immediately.
+
+!!! tip "Mental model"
+
+    **`resolve_*` means: this field needs data from outside the current node.**
+
+    The rest of the library builds on this idea:
+    `post_*` runs after the subtree is ready, `AutoLoad` removes the need to write `resolve_*` at all.
+
+## Step 2: Write a Loader Function
+
+The loader receives a **batch** of keys and returns results in the same order:
+
+```python
+USERS = {
+    7: {"id": 7, "name": "Ada"},
+    8: {"id": 8, "name": "Bob"},
+    9: {"id": 9, "name": "Cara"},
+}
 
 
-# --- Resolve ---
+async def user_loader(user_ids: list[int]):
+    users = [USERS.get(uid) for uid in user_ids]
+    return build_object(users, user_ids, lambda user: user.id)
+```
+
+`build_object` aligns results with keys — it returns one element per key, or `None` if no match.
+
+## Step 3: Run the Resolver
+
+Wire it together:
+
+```python
 raw_tasks = [
     {"id": 10, "title": "Design docs", "owner_id": 7},
     {"id": 11, "title": "Refine examples", "owner_id": 8},
@@ -111,64 +118,9 @@ Output:
 {'id': 11, 'title': 'Refine examples', 'owner_id': 8, 'owner': {'id': 8, 'name': 'Bob'}}
 ```
 
-## What Each Piece Does
+## How the Batch Works
 
-### `owner` starts as `None`
-
-```python
-owner: Optional[UserView] = None
-```
-
-The root task data does not include full owner objects, so the field starts empty. The resolver will fill it.
-
-### `resolve_owner` describes how to fetch the missing field
-
-```python
-def resolve_owner(self, loader=Loader(user_loader)):
-    return loader.load(self.owner_id)
-```
-
-The method name follows the pattern `resolve_<field_name>`. The `Loader(user_loader)` argument declares a batched dependency — it does **not** call `user_loader` immediately.
-
-### `user_loader` receives all keys at once
-
-```python
-async def user_loader(user_ids: list[int]):
-    users = [USERS.get(uid) for uid in user_ids]
-    return build_object(users, user_ids, lambda user: user.id)
-```
-
-The loader function receives a **list** of keys, not a single key. It must return results aligned with the incoming key order.
-
-### `Resolver().resolve(tasks)` walks the model tree
-
-The resolver scans all model instances for `resolve_*` methods, collects the requested keys, calls each loader once per batch, and maps results back to the correct fields.
-
-## Why `build_object` Matters
-
-`user_loader` must return a result for **each** key in `user_ids`, in the same order. `build_object` handles this alignment:
-
-```python
-from pydantic_resolve import build_object
-
-# build_object(items, keys, get_key_fn) -> list[item | None]
-#
-# Returns one element per key:
-# - the matching item if found
-# - None if no item matches that key
-```
-
-For one-to-many relationships (one sprint has many tasks), use `build_list` instead — it returns a list of lists.
-
-## Why This Avoids N+1
-
-Suppose the task list contains 100 tasks. The resolver does **not** call `user_loader` 100 times. Instead:
-
-1. It collects all requested `owner_id` values across all tasks.
-2. It calls `user_loader` once with the full batch: `[7, 8, 7, 9, 8, ...]`.
-3. It maps each loaded user back to the right `TaskView.owner`.
-
-That is the core value of the library in its smallest form.
+With 100 tasks, the resolver does **not** call `user_loader` 100 times:
 
 ```mermaid
 sequenceDiagram
@@ -183,43 +135,46 @@ sequenceDiagram
     R->>T: assign owner to each task
 ```
 
-## Mental Model
+1.  Collect all `owner_id` values across tasks.
+2.  Call `user_loader` **once** with deduplicated keys.
+3.  Map each user back to the matching task.
 
-The most useful first mental model is this:
+## With FastAPI
 
-> **`resolve_*` means: this field needs data from outside the current node.**
-
-Everything else in the library builds on that idea:
-
-- `post_*` runs **after** the subtree is ready
-- `ExposeAs` / `SendTo` pass data across layers
-- `AutoLoad` removes the need to write `resolve_*` at all
-
-## resolve_* Can Be Sync or Async
-
-Both forms work:
+Drop the same models into a route:
 
 ```python
-# Sync — return a value directly
+from fastapi import FastAPI
+
+app = FastAPI()
+
+
+@app.get("/tasks", response_model=list[TaskView])
+async def get_tasks():
+    tasks = [TaskView.model_validate(t) for t in await db.get_tasks()]
+    return await Resolver().resolve(tasks)
+```
+
+The route does not import SQLAlchemy, does not write join logic, and does not think about loading strategies. It only declares business semantics.
+
+## Sync or Async
+
+`resolve_*` supports both forms:
+
+```python
+# Sync — return a loader call directly
 def resolve_owner(self, loader=Loader(user_loader)):
     return loader.load(self.owner_id)
 
-# Async — await the loader, then transform the result
+# Async — transform the result before assignment
 async def resolve_owner(self, loader=Loader(user_loader)):
     user = await loader.load(self.owner_id)
     return user
 ```
 
-Use async when you need to post-process the loaded data before assignment.
-
-## When to Stop Here
-
-Staying at this level is completely reasonable when:
-
-- you only need to fix a few related-data fields
-- your response models are still changing quickly
-- you do not have repeated relationship wiring across many models yet
+Use async when you need to post-process the loaded data.
 
 ## Next
 
-Continue to [Core API](./core_api.md) to extend the same pattern from one field to a nested tree: `Sprint -> Task -> User`.
+- [Core API](./core_api.md) — extend the same pattern to nested trees: `Sprint -> Task -> User`.
+- [Post Processing](./post_processing.md) — compute derived fields after all data is loaded.

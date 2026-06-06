@@ -4,8 +4,6 @@
 
 Once an ERD is in place, GraphQL becomes a reuse layer. The same relationship graph that powers `AutoLoad` can also generate a full GraphQL schema and execute queries.
 
-## Overview
-
 ```mermaid
 flowchart LR
     ERD["ERD<br/>(entities + relationships)"] --> AutoLoad
@@ -14,23 +12,55 @@ flowchart LR
     Handler --> Client["Client Queries"]
 ```
 
-## Setup
+## Goal
 
-### 1. Define Entities with Queries
+You have an ERD with entities and relationships. You want to query them with GraphQL — no extra schema definitions, no extra resolvers:
+
+```graphql
+{
+    sprintEntityGetAll {
+        id
+        name
+        tasks {
+            id
+            title
+            owner { id name }
+        }
+    }
+}
+```
+
+Result:
+
+```json
+{
+    "sprintEntityGetAll": [
+        {
+            "id": 1, "name": "Sprint 24",
+            "tasks": [
+                {"id": 10, "title": "Design docs", "owner": {"id": 7, "name": "Ada"}},
+                {"id": 11, "title": "Refine examples", "owner": {"id": 8, "name": "Bob"}}
+            ]
+        },
+        {
+            "id": 2, "name": "Sprint 25",
+            "tasks": [
+                {"id": 12, "title": "Write tests", "owner": {"id": 7, "name": "Ada"}}
+            ]
+        }
+    ]
+}
+```
+
+The ERD drives both the schema generation and the data resolution.
+
+## Step 1: Define Entities with Queries
 
 Use the `@query` decorator to add root entry points. The GraphQL operation name is auto-generated as `entityPrefix + MethodCamel` (e.g., `SprintEntity.get_all` → `sprintEntityGetAll`):
 
 ```python
-from typing import Annotated, Optional
-
 from pydantic import BaseModel
-from pydantic_resolve import (
-    Relationship,
-    base_entity,
-    build_list,
-    build_object,
-    query,
-)
+from pydantic_resolve import Relationship, base_entity, build_list, build_object, query
 
 
 USERS = {
@@ -84,7 +114,7 @@ class SprintEntity(BaseModel, BaseEntity):
     id: int
     name: str
 
-    @query
+    @query  # (1)
     async def get_all(cls, limit: int = 20) -> list['SprintEntity']:
         return [SprintEntity(**s) for s in SPRINTS[:limit]]
 
@@ -92,14 +122,16 @@ class SprintEntity(BaseModel, BaseEntity):
 diagram = BaseEntity.get_diagram()
 ```
 
-### 2. Execute Queries
+1.  `@query` marks this method as a GraphQL root query. The operation name becomes `sprintEntityGetAll`.
+
+## Step 2: Execute Queries
 
 ```python
 from pydantic_resolve.graphql import GraphQLHandler
 
-handler = GraphQLHandler(diagram)
+handler = GraphQLHandler(diagram)  # (1)
 
-result = await handler.execute("""
+result = await handler.execute("""  # (2)
 {
     sprintEntityGetAll {
         id
@@ -128,7 +160,10 @@ print(result)
 # ]}, 'errors': None}
 ```
 
-## Adding Mutations
+1.  `GraphQLHandler` generates a GraphQL schema from the ERD and wires up resolvers.
+2.  `handler.execute()` parses the query, resolves via the same `Resolver` + DataLoader batching.
+
+## Mutations
 
 Use the `@mutation` decorator for write operations:
 
@@ -160,7 +195,7 @@ mutation {
 
 ## External Configuration with QueryConfig / MutationConfig
 
-`@query` and `@mutation` decorators bind root fields directly to entity classes. If you prefer to keep query/mutation logic separate from entity definitions — or your query functions live in a different module — use `QueryConfig` and `MutationConfig` instead.
+`@query` and `@mutation` bind root fields directly to entity classes. If you prefer to keep query/mutation logic separate — or your functions live in a different module — use `QueryConfig` and `MutationConfig`.
 
 ### QueryConfig
 
@@ -175,8 +210,6 @@ QueryConfig(
 ```
 
 The final GraphQL operation name is always `entityPrefix + MethodCamel` (e.g., `SprintEntity` + `get_all` → `sprintEntityGetAll`). The `name` parameter overrides the method-name part only: `name='sprints'` → `sprintEntitySprints`.
-
-The `method` receives `cls` as its first argument (like a classmethod), followed by any GraphQL arguments:
 
 ```python
 async def get_all_sprints(cls, limit: int = 20) -> list[SprintEntity]:
@@ -206,7 +239,7 @@ async def create_sprint(cls, name: str) -> SprintEntity:
 
 ### Wiring into ErDiagram
 
-Attach `QueryConfig` and `MutationConfig` to an `Entity` inside `ErDiagram`:
+Attach configs to an `Entity` inside `ErDiagram`:
 
 ```python
 from pydantic_resolve import Entity, ErDiagram
@@ -245,7 +278,6 @@ handler = GraphQLHandler(
     enable_from_attribute_in_type_adapter=False,  # optional
 )
 
-# Execute a query string directly
 result = await handler.execute(query_string)
 ```
 
@@ -282,7 +314,7 @@ async def graphql_endpoint(request: Request):
 
 `GET /graphql` serves an interactive GraphiQL IDE with schema explorer and query history. `POST /graphql` handles query execution.
 
-The default endpoint is `/graphql`. To use a different path, pass it to `get_graphiql_html`:
+To use a different path:
 
 ```python
 handler.get_graphiql_html(endpoint="/api/graphql", title="My API")
@@ -290,7 +322,7 @@ handler.get_graphiql_html(endpoint="/api/graphql", title="My API")
 
 ## Request Context
 
-When the GraphQL handler runs inside a web framework (FastAPI, Django, etc.), you often need to pass request-scoped data — such as the current user's ID from a JWT — into query methods. `handler.execute()` accepts a `context` dict for this purpose.
+Pass request-scoped data (e.g., user ID from JWT) into query methods via `handler.execute(query, context=...)`.
 
 ### Passing context from FastAPI
 
@@ -300,7 +332,6 @@ async def graphql_endpoint(request: Request):
     body = await request.json()
     query = body.get("query", "")
 
-    # Extract user info from JWT (simplified example)
     user_id = decode_jwt(request.headers.get("Authorization", ""))
     context = {"user_id": user_id}
 
@@ -310,11 +341,10 @@ async def graphql_endpoint(request: Request):
 
 ### Receiving context in query methods
 
-Add a `context` parameter to any `@query` or `@mutation` method (or `QueryConfig`/`MutationConfig` function). The parameter is **hidden from the GraphQL schema** — clients never see it.
+Add a `context` parameter to any `@query` or `@mutation` method. The parameter is **hidden from the GraphQL schema** — clients never see it.
 
 ```python
 async def get_my_tasks(limit: int = 10, context: dict = None) -> list[TaskEntity]:
-    """Get tasks assigned to the current user."""
     user_id = context['user_id']
     return await fetch_tasks_by_owner(user_id, limit)
 
@@ -336,7 +366,7 @@ Clients query this as a normal field — no `context` argument in the query:
 
 ### Context in DataLoaders
 
-The same `context` dict is also forwarded to the internal `Resolver(context=...)`, which injects it into class-based DataLoaders that declare a `_context` attribute. This allows loaders to filter or scope their queries by request-level data such as `user_id`:
+The same `context` dict is forwarded to the internal `Resolver(context=...)`, which injects it into class-based DataLoaders that declare a `_context` attribute:
 
 ```python
 from aiodataloader import DataLoader
@@ -517,10 +547,10 @@ The `pagination` field supports partial selection:
 
 ## How It Works
 
-1. `GraphQLHandler` generates a GraphQL schema from the ERD entities and relationships.
-2. Each `Relationship` becomes a GraphQL field with automatic resolution.
-3. Root queries come from `@query` decorators or `QueryConfig`.
-4. The handler uses the same `Resolver` and DataLoader batching internally.
+1.  `GraphQLHandler` generates a GraphQL schema from the ERD entities and relationships.
+2.  Each `Relationship` becomes a GraphQL field with automatic resolution.
+3.  Root queries come from `@query` decorators or `QueryConfig`.
+4.  The handler uses the same `Resolver` and DataLoader batching internally.
 
 ```mermaid
 flowchart TB

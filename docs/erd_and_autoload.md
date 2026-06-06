@@ -2,26 +2,20 @@
 
 [中文版](./erd_and_autoload.zh.md)
 
-> **Clean Architecture Layer**: Enterprise Business Rules
->
-> ER Diagram + AutoLoad is where the Enterprise Business Rules layer fully materializes. Entity definitions and their relationships become the stable core, independent of both the database and the API.
+Manual `resolve_*` methods are the right entry point. But once the same relationships start repeating across multiple response models, the question changes: you are no longer asking "how do I load this field?" but "where should the source of truth for this relationship live?"
 
-Manual `resolve_*` methods are the right entry point. But once the same relationships start repeating across multiple response models, the problem changes.
-
-You are no longer asking "how do I load this field?" You are asking "where should the source of truth for this relationship live?"
-
-That is the point where ERD mode becomes worth the upfront cost.
+ERD mode centralizes relationship declarations into entity classes. `AutoLoad` removes the need to write `resolve_*` at all.
 
 ## The Duplication Signal
 
-If your codebase starts to accumulate patterns like these, the relationships are probably ready to move into ERD:
+If your codebase starts to accumulate patterns like these, relationships are ready to move into ERD:
 
 - `TaskCard.resolve_owner`
 - `TaskDetail.resolve_owner`
 - `SprintBoard.resolve_tasks`
 - `SprintReport.resolve_tasks`
 
-The loader logic may still be correct, but the relationship knowledge is now duplicated.
+The loader logic is still correct, but the relationship knowledge is now duplicated.
 
 ## Cost vs Benefit
 
@@ -33,46 +27,18 @@ The loader logic may still be correct, but the relationship knowledge is now dup
 | Changing a relation later | Update many `resolve_*` methods | Update one declaration |
 | GraphQL and MCP reuse | Separate work | Natural extension |
 
-## The Same Scenario in ERD Mode
+## Goal
+
+Same `Sprint -> Task -> User` scenario. The output is identical to the Core API version — the difference is that `resolve_owner` and `resolve_tasks` disappear from the view models.
+
+## Step 1: Define Entities with Relationships
+
+Relationship declarations move from view models into entity classes:
 
 ```python
-from typing import Annotated, Optional
-
-from pydantic import BaseModel
-from pydantic_resolve import (
-    Loader,
-    Resolver,
-    Relationship,
-    base_entity,
-    build_list,
-    build_object,
-    config_global_resolver,
-)
+from pydantic_resolve import Relationship, base_entity, config_global_resolver
 
 
-# --- Fake database ---
-USERS = {
-    7: {"id": 7, "name": "Ada"},
-    8: {"id": 8, "name": "Bob"},
-}
-
-TASKS = [
-    {"id": 10, "title": "Design docs", "sprint_id": 1, "owner_id": 7},
-    {"id": 11, "title": "Refine examples", "sprint_id": 1, "owner_id": 8},
-]
-
-
-async def user_loader(user_ids: list[int]):
-    users = [USERS.get(uid) for uid in user_ids]
-    return build_object(users, user_ids, lambda u: u.id)
-
-
-async def task_loader(sprint_ids: list[int]):
-    tasks = [t for t in TASKS if t["sprint_id"] in sprint_ids]
-    return build_list(tasks, sprint_ids, lambda t: t["sprint_id"])
-
-
-# --- Entity definitions ---
 BaseEntity = base_entity()
 
 
@@ -96,54 +62,95 @@ class SprintEntity(BaseModel, BaseEntity):
     ]
     id: int
     name: str
+```
 
+## Step 2: Create AutoLoad and Configure the Resolver
 
+```python
 diagram = BaseEntity.get_diagram()
 AutoLoad = diagram.create_auto_load()
 config_global_resolver(diagram)
+```
 
+These three lines wire the ERD into the resolver. `AutoLoad` embeds diagram-specific metadata into the annotation.
 
-# --- Response models (no resolve_* methods needed) ---
+## Step 3: Replace resolve_* with AutoLoad Annotations
+
+View models inherit from entities. Relationship fields use `AutoLoad()` instead of `resolve_*`:
+
+```python
 class TaskView(TaskEntity):
-    owner: Annotated[Optional[UserEntity], AutoLoad()] = None
+    owner: Annotated[Optional[UserEntity], AutoLoad()] = None  # (1)
 
 
 class SprintView(SprintEntity):
     tasks: Annotated[list[TaskView], AutoLoad()] = []
     task_count: int = 0
 
-    def post_task_count(self):
+    def post_task_count(self):  # (2)
         return len(self.tasks)
+```
 
+1.  `AutoLoad()` looks up the `Relationship` with `name='owner'` from the diagram and generates an equivalent `resolve_owner` at analysis time.
+2.  `post_*` stays exactly the same — ERD removes relationship wiring, not business-specific post-processing.
 
-# --- Resolve ---
-raw_sprints = [{"id": 1, "name": "Sprint 24"}]
+## Step 4: Run the Resolver
+
+```python
+raw_sprints = [
+    {"id": 1, "name": "Sprint 24"},
+    {"id": 2, "name": "Sprint 25"},
+]
 sprints = [SprintView.model_validate(s) for s in raw_sprints]
 sprints = await Resolver().resolve(sprints)
 
-print(sprints[0].model_dump())
-# {'id': 1, 'name': 'Sprint 24',
-#  'tasks': [
-#      {'id': 10, 'title': 'Design docs', 'owner_id': 7,
-#       'owner': {'id': 7, 'name': 'Ada'}},
-#      {'id': 11, 'title': 'Refine examples', 'owner_id': 8,
-#       'owner': {'id': 8, 'name': 'Bob'}},
-#  ],
-#  'task_count': 2}
+for s in sprints:
+    print(s.model_dump())
+```
+
+Output:
+
+```python
+{'id': 1, 'name': 'Sprint 24',
+ 'tasks': [
+     {'id': 10, 'title': 'Design docs', 'owner_id': 7, 'owner': {'id': 7, 'name': 'Ada'}},
+     {'id': 11, 'title': 'Refine examples', 'owner_id': 8, 'owner': {'id': 8, 'name': 'Bob'}},
+ ],
+ 'task_count': 2}
+{'id': 2, 'name': 'Sprint 25',
+ 'tasks': [
+     {'id': 12, 'title': 'Bug fixes', 'owner_id': 7, 'owner': {'id': 7, 'name': 'Ada'}},
+ ],
+ 'task_count': 1}
 ```
 
 ## What Changed
 
-- `resolve_owner` disappeared from the view model.
-- `resolve_tasks` disappeared from the view model.
-- Relationship declarations moved into `__relationships__`.
-- `post_task_count` stayed exactly where it belongs.
+Compared with the Core API version:
 
-That last point matters: ERD removes repeated relationship wiring, but it does not replace business-specific post-processing.
+- `resolve_owner` disappeared.
+- `resolve_tasks` disappeared.
+- Relationship declarations live in one place (`__relationships__`).
+- `post_task_count` is unchanged.
+
+## How AutoLoad Works
+
+`AutoLoad` is not magic. When the resolver scans a class:
+
+1. It finds the `AutoLoad()` annotation on a field.
+2. It looks up the `Relationship` by name from the diagram.
+3. It generates an equivalent `resolve_*` method that calls the loader with the FK value.
+
+If the field name does not match the relationship name, use the `origin` parameter:
+
+```python
+class SprintView(SprintEntity):
+    items: Annotated[list[TaskView], AutoLoad(origin='tasks')] = []
+```
 
 ## Two Ways to Declare the ERD
 
-### Style 1: Inline `__relationships__` on Entity Classes
+### Inline `__relationships__` on Entity Classes
 
 ```python
 BaseEntity = base_entity()
@@ -159,9 +166,9 @@ class TaskEntity(BaseModel, BaseEntity):
 diagram = BaseEntity.get_diagram()
 ```
 
-This style works well when the entity class is already owned by the current application layer and you are comfortable attaching relationship metadata directly to it.
+Best when relationship metadata belongs naturally on the entity type.
 
-### Style 2: External `ErDiagram(...)` Declaration
+### External `ErDiagram(...)` Declaration
 
 ```python
 from pydantic_resolve import Entity, ErDiagram
@@ -192,102 +199,40 @@ diagram = ErDiagram(
 )
 ```
 
-### When External Declaration Is a Better Fit
+Best when you don't want to modify entity classes, or when the same classes are shared across modules.
 
-External `ErDiagram(...)` declaration is often the better choice when:
+!!! warning "One diagram per project"
 
-- you do not want to modify the entity classes themselves
-- the same entity classes are shared across multiple modules or services
-- you want one centralized place to inspect all relationship definitions
-- the source classes come from another package or a compatibility layer
+    With external `ErDiagram(...)`, all entities register into a shared internal registry. Multiple `ErDiagram` instances with overlapping entities produce unpredictable results.
 
-In short:
+    If you need to merge relationships from different sources, use `add_relationship()`:
 
-- use `__relationships__` when relationship metadata belongs naturally on the entity type
-- use external `ErDiagram(...)` when relationship metadata should stay separate from the type definition
-
-## External ErDiagram: One Diagram Per Project
-
-When using external `ErDiagram(...)` declarations, all entity classes are registered in a shared internal registry. If multiple `ErDiagram` instances register the same entity class with different relationships, the results are unpredictable:
-
-- **Same relationship name, different FK** — a `ValueError` is raised at class-definition time (ambiguity detected).
-- **Different relationship names** — relationships from all diagrams are silently merged. `DefineSubset` sees the union of all registered relationships, not the ones from a specific diagram.
-
-This is not an issue with `base_entity()`, which uses MRO to locate the single authoritative diagram.
-
-**Recommendation:** create only one `ErDiagram` instance per project. If you need to combine relationships from different sources, use `add_relationship()` to merge them into a single diagram:
-
-```python
-diagram = ErDiagram(entities=[...])
-diagram = diagram.add_relationship(more_entities)
-```
-
-## How AutoLoad Works
-
-`AutoLoad` is not magic. It is an annotation that the resolver recognizes and converts into a `resolve_*` method at analysis time.
-
-```python
-AutoLoad = diagram.create_auto_load()
-
-class TaskView(TaskEntity):
-    owner: Annotated[Optional[UserEntity], AutoLoad()] = None
-```
-
-When the resolver scans this class, it:
-
-1. Finds the `AutoLoad()` annotation on the `owner` field.
-2. Looks up the `Relationship` with `name='owner'` from the diagram.
-3. Generates an equivalent `resolve_owner` method that calls the loader with the FK value.
-
-The `AutoLoad(origin='tasks')` parameter lets you specify a different relationship name when the field name does not match:
-
-```python
-class SprintView(SprintEntity):
-    items: Annotated[list[TaskView], AutoLoad(origin='tasks')] = []
-```
-
-## The diagram and AutoLoad Must Match
-
-This setup is not just ceremony:
-
-```python
-diagram = BaseEntity.get_diagram()
-AutoLoad = diagram.create_auto_load()
-config_global_resolver(diagram)
-```
-
-`create_auto_load()` embeds diagram-specific relationship metadata into the annotation, so the resolver must be configured with the same `diagram`.
-
-If you use a custom resolver instead of the global one:
-
-```python
-from pydantic_resolve import config_resolver
-
-MyResolver = config_resolver('MyResolver', er_diagram=diagram)
-result = await MyResolver().resolve(data)
-```
+    ```python
+    diagram = ErDiagram(entities=[...])
+    diagram = diagram.add_relationship(more_entities)
+    ```
 
 ## Relationship Types
 
-### One-to-One (build_object)
+### One-to-One
 
 ```python
 Relationship(
-    fk='owner_id',           # the FK field on this entity
-    name='owner',            # unique relationship name
-    target=UserEntity,       # single target entity
-    loader=user_loader       # returns one item per key
+    fk='owner_id',
+    name='owner',
+    target=UserEntity,
+    loader=user_loader
 )
 ```
 
-### One-to-Many (build_list)
+### One-to-Many
 
 ```python
 Relationship(
-    fk='id',                 # the PK field on this entity
-    name='tasks',            # unique relationship name
-    target=list[TaskEntity], # list target
-    loader=task_loader       # returns a list of items per key
+    fk='id',
+    name='tasks',
+    target=list[TaskEntity],
+    loader=task_loader
 )
 ```
 
@@ -299,7 +244,7 @@ Relationship(
     name='owner',
     target=UserEntity,
     loader=user_loader,
-    fk_none_default=None              # return None when FK is None
+    fk_none_default=None
 )
 
 # Or use a factory:
@@ -326,15 +271,13 @@ class TaskEntity(BaseModel, BaseEntity):
 
 ### Custom FK Transformation with fk_fn
 
-When the FK value needs transformation before being passed to the loader:
-
 ```python
 Relationship(
     fk='tag_ids',             # comma-separated string "1,2,3"
     name='tags',
     target=list[TagEntity],
     loader=tag_loader,
-    load_many=True,           # use load_many instead of load
+    load_many=True,
     load_many_fn=lambda ids: ids.split(',') if ids else []
 )
 ```
@@ -354,22 +297,30 @@ You can mix manual and ERD-driven resolution in the same project:
 ```python
 class TaskView(TaskEntity):
     owner: Annotated[Optional[UserEntity], AutoLoad()] = None  # ERD-driven
-    comments: list[CommentView] = []                            # still manual
+    comments: list[CommentView] = []
 
     def resolve_comments(self, loader=Loader(comment_loader)):  # manual
         return loader.load(self.id)
 ```
 
-## Handling Circular Imports
+## Custom Resolver
 
-When entities reference each other through `target`, you may encounter circular import issues.
+If you prefer not to use the global resolver:
+
+```python
+from pydantic_resolve import config_resolver
+
+MyResolver = config_resolver('MyResolver', er_diagram=diagram)
+result = await MyResolver().resolve(data)
+```
+
+## Handling Circular Imports
 
 ### Same-Module String References
 
 ```python
 class TaskEntity(BaseModel, BaseEntity):
     __relationships__ = [
-        # String 'UserEntity' resolved within same module
         Relationship(fk='owner_id', name='owner', target='UserEntity', loader=user_loader)
     ]
 ```
@@ -377,21 +328,20 @@ class TaskEntity(BaseModel, BaseEntity):
 ### Cross-Module References
 
 ```python
-# In app/models/task.py
 class TaskEntity(BaseModel, BaseEntity):
     __relationships__ = [
         Relationship(
             fk='owner_id',
-            target='app.models.user:UserEntity',  # module.path:ClassName
+            target='app.models.user:UserEntity',
             name='owner',
             loader=user_loader
         )
     ]
 ```
 
-The `_resolve_ref` function supports:
+Supported formats:
 
-- Simple class names: `'UserEntity'` (looked up in the current module)
+- Simple class names: `'UserEntity'`
 - Module path syntax: `'app.models.user:UserEntity'`
 - List generics: `list['UserEntity']` or `list['app.models.user:UserEntity']`
 
@@ -403,8 +353,9 @@ Stay with manual Core API when:
 - the relationship structure is still moving quickly
 - the duplication cost is not real yet
 
-ERD is valuable, but it is a scaling step, not a rite of passage.
+ERD is a scaling step, not a rite of passage.
 
 ## Next
 
-Continue to [DataLoader Deep Dive](./dataloader_deep_dive.md) to understand how batching works under the hood, or jump to [ERD with DefineSubset](./erd_define_subset.md) to learn how to hide internal FK fields from responses.
+- [ERD with DefineSubset](./erd_define_subset.md) — hide internal FK fields from responses.
+- [DataLoader Deep Dive](./dataloader_deep_dive.md) — understand how batching works under the hood.

@@ -84,6 +84,7 @@ nav:
     - "REST vs GraphQL and the Missing Layer: ER Diagram": ./blog_rest_graphql_and_er_diagram.md
 
 markdown_extensions:
+  - admonition
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.superfences:

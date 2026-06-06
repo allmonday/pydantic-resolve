@@ -4,8 +4,6 @@
 
 一旦 ERD 就位，GraphQL 就成为一个复用层。驱动 `AutoLoad` 的同一个关系图也可以生成完整的 GraphQL schema 并执行查询。
 
-## 概述
-
 ```mermaid
 flowchart LR
     ERD["ERD<br/>(实体 + 关系)"] --> AutoLoad
@@ -14,23 +12,55 @@ flowchart LR
     Handler --> Client["客户端查询"]
 ```
 
-## 设置
+## 目标
 
-### 1. 定义带有查询的实体
+你有一个包含实体和关系的 ERD。你想用 GraphQL 查询它们 —— 不需要额外的 schema 定义，不需要额外的 resolver：
+
+```graphql
+{
+    sprintEntityGetAll {
+        id
+        name
+        tasks {
+            id
+            title
+            owner { id name }
+        }
+    }
+}
+```
+
+结果：
+
+```json
+{
+    "sprintEntityGetAll": [
+        {
+            "id": 1, "name": "Sprint 24",
+            "tasks": [
+                {"id": 10, "title": "Design docs", "owner": {"id": 7, "name": "Ada"}},
+                {"id": 11, "title": "Refine examples", "owner": {"id": 8, "name": "Bob"}}
+            ]
+        },
+        {
+            "id": 2, "name": "Sprint 25",
+            "tasks": [
+                {"id": 12, "title": "Write tests", "owner": {"id": 7, "name": "Ada"}}
+            ]
+        }
+    ]
+}
+```
+
+ERD 驱动 schema 生成和数据解析。
+
+## Step 1：定义带有查询的实体
 
 使用 `@query` 装饰器添加根入口点。GraphQL 操作名自动生成为 `entityPrefix + MethodCamel`（例如 `SprintEntity.get_all` → `sprintEntityGetAll`）：
 
 ```python
-from typing import Annotated, Optional
-
 from pydantic import BaseModel
-from pydantic_resolve import (
-    Relationship,
-    base_entity,
-    build_list,
-    build_object,
-    query,
-)
+from pydantic_resolve import Relationship, base_entity, build_list, build_object, query
 
 
 USERS = {
@@ -84,7 +114,7 @@ class SprintEntity(BaseModel, BaseEntity):
     id: int
     name: str
 
-    @query
+    @query  # (1)
     async def get_all(cls, limit: int = 20) -> list['SprintEntity']:
         return [SprintEntity(**s) for s in SPRINTS[:limit]]
 
@@ -92,14 +122,16 @@ class SprintEntity(BaseModel, BaseEntity):
 diagram = BaseEntity.get_diagram()
 ```
 
-### 2. 执行查询
+1.  `@query` 将此方法标记为 GraphQL 根查询。操作名变为 `sprintEntityGetAll`。
+
+## Step 2：执行查询
 
 ```python
 from pydantic_resolve.graphql import GraphQLHandler
 
-handler = GraphQLHandler(diagram)
+handler = GraphQLHandler(diagram)  # (1)
 
-result = await handler.execute("""
+result = await handler.execute("""  # (2)
 {
     sprintEntityGetAll {
         id
@@ -128,7 +160,10 @@ print(result)
 # ]}, 'errors': None}
 ```
 
-## 添加变更
+1.  `GraphQLHandler` 从 ERD 生成 GraphQL schema 并连接 resolver。
+2.  `handler.execute()` 解析查询，通过相同的 `Resolver` + DataLoader 批处理来解析。
+
+## 变更
 
 使用 `@mutation` 装饰器进行写操作：
 
@@ -160,7 +195,7 @@ mutation {
 
 ## 使用 QueryConfig / MutationConfig 的外部配置
 
-`@query` 和 `@mutation` 装饰器将根字段直接绑定到实体类内部。如果你希望将查询/变更逻辑与实体定义分离——或者查询函数位于不同模块——可以使用 `QueryConfig` 和 `MutationConfig`。
+`@query` 和 `@mutation` 将根字段直接绑定到实体类。如果你希望将查询/变更逻辑与实体定义分离——或者函数位于不同模块——可以使用 `QueryConfig` 和 `MutationConfig`。
 
 ### QueryConfig
 
@@ -175,8 +210,6 @@ QueryConfig(
 ```
 
 最终的 GraphQL 操作名始终为 `entityPrefix + MethodCamel`（例如 `SprintEntity` + `get_all` → `sprintEntityGetAll`）。`name` 参数仅覆盖方法名部分：`name='sprints'` → `sprintEntitySprints`。
-
-`method` 的第一个参数接收 `cls`（类似 classmethod），后面是任意 GraphQL 参数：
 
 ```python
 async def get_all_sprints(cls, limit: int = 20) -> list[SprintEntity]:
@@ -206,7 +239,7 @@ async def create_sprint(cls, name: str) -> SprintEntity:
 
 ### 接入 ErDiagram
 
-将 `QueryConfig` 和 `MutationConfig` 附加到 `ErDiagram` 中的 `Entity` 上：
+将配置附加到 `ErDiagram` 中的 `Entity` 上：
 
 ```python
 from pydantic_resolve import Entity, ErDiagram
@@ -245,7 +278,6 @@ handler = GraphQLHandler(
     enable_from_attribute_in_type_adapter=False,  # 可选
 )
 
-# 直接执行查询字符串
 result = await handler.execute(query_string)
 ```
 
@@ -282,7 +314,7 @@ async def graphql_endpoint(request: Request):
 
 `GET /graphql` 提供带有 Schema 浏览器和查询历史的交互式 GraphiQL IDE。`POST /graphql` 处理查询执行。
 
-默认端点为 `/graphql`。如需使用其他路径，传入 `get_graphiql_html`：
+使用其他路径：
 
 ```python
 handler.get_graphiql_html(endpoint="/api/graphql", title="My API")
@@ -290,7 +322,7 @@ handler.get_graphiql_html(endpoint="/api/graphql", title="My API")
 
 ## 请求上下文
 
-当 GraphQL handler 运行在 Web 框架（FastAPI、Django 等）中时，通常需要将请求级数据（如从 JWT 解析的当前用户 ID）传入查询方法。`handler.execute()` 接受一个 `context` dict 用于此目的。
+通过 `handler.execute(query, context=...)` 将请求范围的数据（如从 JWT 解析的用户 ID）传入查询方法。
 
 ### 从 FastAPI 传入上下文
 
@@ -300,7 +332,6 @@ async def graphql_endpoint(request: Request):
     body = await request.json()
     query = body.get("query", "")
 
-    # 从 JWT 中提取用户信息（简化示例）
     user_id = decode_jwt(request.headers.get("Authorization", ""))
     context = {"user_id": user_id}
 
@@ -310,11 +341,10 @@ async def graphql_endpoint(request: Request):
 
 ### 在查询方法中接收上下文
 
-在任意 `@query` 或 `@mutation` 方法（或 `QueryConfig`/`MutationConfig` 函数）中添加 `context` 参数即可接收。该参数**对 GraphQL schema 不可见** — 客户端无法看到它。
+在任意 `@query` 或 `@mutation` 方法中添加 `context` 参数即可接收。该参数**对 GraphQL schema 不可见** —— 客户端无法看到它。
 
 ```python
 async def get_my_tasks(limit: int = 10, context: dict = None) -> list[TaskEntity]:
-    """获取当前用户的任务。"""
     user_id = context['user_id']
     return await fetch_tasks_by_owner(user_id, limit)
 
@@ -336,7 +366,7 @@ Entity(
 
 ### DataLoader 中的上下文
 
-同一个 `context` dict 也会传入内部的 `Resolver(context=...)`，由 Resolver 自动注入到声明了 `_context` 属性的类式 DataLoader 中。这样 loader 可以按请求级数据（如 `user_id`）过滤或限定查询范围：
+同一个 `context` dict 会传入内部的 `Resolver(context=...)`，由 Resolver 自动注入到声明了 `_context` 属性的类式 DataLoader 中：
 
 ```python
 from aiodataloader import DataLoader
@@ -517,10 +547,10 @@ type Pagination {
 
 ## 工作原理
 
-1. `GraphQLHandler` 从 ERD 实体和关系生成 GraphQL schema。
-2. 每个 `Relationship` 成为带有自动解析的 GraphQL 字段。
-3. 根查询来自 `@query` 装饰器或 `QueryConfig`。
-4. 处理程序内部使用相同的 `Resolver` 和 DataLoader 批处理。
+1.  `GraphQLHandler` 从 ERD 实体和关系生成 GraphQL schema。
+2.  每个 `Relationship` 成为带有自动解析的 GraphQL 字段。
+3.  根查询来自 `@query` 装饰器或 `QueryConfig`。
+4.  处理程序内部使用相同的 `Resolver` 和 DataLoader 批处理。
 
 ```mermaid
 flowchart TB

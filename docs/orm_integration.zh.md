@@ -2,7 +2,7 @@
 
 [English](./orm_integration.md)
 
-当你的 ORM 已经知道表之间的关系时，你可以避免重复声明关系。`build_relationship()` 检查 ORM 元数据并自动生成 `Relationship` 定义和 DataLoader 函数。
+当你的 ORM 已经知道表之间的关系时，`build_relationship()` 检查 ORM 元数据并自动生成 `Relationship` 定义和 DataLoader 函数 —— 无需手写 loader。
 
 ## 支持的 ORM
 
@@ -20,26 +20,39 @@ pip install pydantic-resolve[django]       # Django
 pip install pydantic-resolve[tortoise]     # Tortoise ORM
 ```
 
-## 工作原理
+## 目标
 
-集成遵循三个步骤：
+你已经定义了带关系的 ORM 模型：
 
-1. 定义镜像 ORM 模型的 Pydantic DTO。
-2. 通过 `Mapping` 将 DTO 映射到 ORM 模型。
-3. 调用 `build_relationship()` 生成带有 loader 的 `Entity` 对象。
-
-```mermaid
-flowchart LR
-    DTO["Pydantic DTOs"] --> Mapping
-    ORM["ORM Models"] --> Mapping
-    Mapping --> build_relationship
-    build_relationship --> Entities["list[Entity]<br/>带有自动生成的 loaders"]
-    Entities --> ErDiagram
+```python
+class PostORM(Base):
+    __tablename__ = "posts"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String)
+    author_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    author: Mapped["UserORM"] = relationship(back_populates="posts")
+    comments: Mapped[list["CommentORM"]] = relationship(back_populates="post")
 ```
 
-## SQLAlchemy 示例
+你希望 API 响应自动解析 `author` 和 `comments`，不需要写 loader：
 
-### 1. 定义 ORM 模型
+```json
+[
+    {
+        "id": 1,
+        "title": "Hello World",
+        "author_id": 1,
+        "author": {"id": 1, "name": "Alice"},
+        "comments": [
+            {"id": 10, "content": "Great post!", "post_id": 1}
+        ]
+    }
+]
+```
+
+不需要手写 `resolve_author` 或 `resolve_comments`。ORM 元数据驱动一切。
+
+## Step 1：定义 ORM 模型
 
 ```python
 from sqlalchemy import ForeignKey, Integer, String
@@ -74,18 +87,16 @@ class CommentORM(Base):
     post: Mapped["PostORM"] = relationship(back_populates="comments")
 ```
 
-### 2. 定义 Pydantic DTO
+## Step 2：定义 Pydantic DTO
 
 DTO 必须启用 `from_attributes`：
-
-**原因：** 生成的 loader 通过 ORM 查询数据库并返回 ORM 实例，`model_validate` 需要 `from_attributes=True` 才能将这些实例转换为 DTO。此外，`_query_meta` 优化会根据 DTO 声明的字段名生成 `load_only` 子句——只查询 DTO 实际声明的列。如果未启用 `from_attributes`，即使查询已优化，转换步骤也会失败。
 
 ```python
 from pydantic import BaseModel, ConfigDict
 
 
 class UserDTO(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True)  # (1)
 
     id: int
     name: str
@@ -107,7 +118,9 @@ class CommentDTO(BaseModel):
     post_id: int
 ```
 
-### 3. 构建关系
+1.  必须启用。生成的 loader 返回 ORM 实例，`model_validate` 需要 `from_attributes` 才能转换。`_query_meta` 优化也会根据 DTO 字段名生成 `load_only` 子句。
+
+## Step 3：构建关系
 
 ```python
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -118,7 +131,7 @@ from pydantic_resolve.integration.sqlalchemy import build_relationship
 engine = create_async_engine("sqlite+aiosqlite:///blog.db")
 session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
-entities = build_relationship(
+entities = build_relationship(  # (1)
     mappings=[
         Mapping(entity=UserDTO, orm=UserORM),
         Mapping(entity=PostDTO, orm=PostORM),
@@ -127,12 +140,24 @@ entities = build_relationship(
     session_factory=session_factory,
 )
 
-diagram = ErDiagram(entities=entities)
+diagram = ErDiagram(entities=entities)  # (2)
 AutoLoad = diagram.create_auto_load()
 config_global_resolver(diagram)
 ```
 
-### 4. 在响应模型中使用
+1.  `build_relationship` 检查 ORM 的 `relationship()` 声明，生成带有 loader 的 `Entity` 对象。
+2.  将生成的实体传入 `ErDiagram` 并配置解析器 —— 与手写 ERD 相同。
+
+```mermaid
+flowchart LR
+    DTO["Pydantic DTOs"] --> Mapping
+    ORM["ORM Models"] --> Mapping
+    Mapping --> build_relationship
+    build_relationship --> Entities["list[Entity]<br/>带有自动生成的 loaders"]
+    Entities --> ErDiagram
+```
+
+## Step 4：在响应模型中使用
 
 ```python
 from typing import Annotated, Optional
@@ -150,6 +175,8 @@ class PostView(PostDTO):
 class UserView(UserDTO):
     posts: Annotated[list[PostView], AutoLoad()] = []
 ```
+
+不需要 `resolve_author`，不需要 `resolve_comments`。`AutoLoad` 直接使用自动生成的关系。
 
 ## Mapping 配置
 
@@ -231,7 +258,7 @@ entities = build_relationship(
 
 自动生成的 loader：
 
-- 使用 `load_only`（SQLAlchemy）/ `only`（Django）仅选择 DTO 需要的列
+- 使用 `load_only`（SQLAlchemy）/ `only`（Django）仅选择 DTO 声明的列
 - 应用针对映射的或默认的过滤器
 - 通过 `model_validate` 将 ORM 行转换为 DTO
 - 处理同步和异步会话
@@ -291,17 +318,17 @@ config_global_resolver(merged_diagram)
 - **SQLAlchemy**：不支持复合外键（抛出 `NotImplementedError`）
 - **SQLAlchemy**：不支持没有显式 `secondary` 表的 `MANYTOMANY`
 - 未映射的 ORM 目标会被跳过并发出警告
-- 生成的 loader 不支持自定义转换逻辑 — 对于复杂情况使用手写的 loader
+- 生成的 loader 不支持自定义转换逻辑 — 复杂场景使用手写的 loader
 
 ## 何时使用 ORM 集成
 
-ORM 集成适用于：
+适用于：
 
 - 你的 ORM 元数据稳定且已定义所有关系
 - 你有许多实体并希望避免手写 loader
 - 你想要关系的单一事实来源（ORM）
 
-在以下情况下继续使用手写的 loader：
+继续使用手写的 loader 当：
 
 - 你需要自定义转换或过滤逻辑
 - 数据来自多个来源（不仅仅是一个数据库）

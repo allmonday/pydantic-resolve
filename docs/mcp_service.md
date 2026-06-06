@@ -10,24 +10,37 @@ MCP (Model Context Protocol) support lets AI agents discover and interact with y
 pip install pydantic-resolve[mcp]
 ```
 
-## Quick Start
+## Goal
+
+You have an ERD with entities and relationships. You want to expose it as an MCP service so AI agents can discover and query your data — without writing any GraphQL schema or resolvers:
+
+```
+Agent: "List all blog posts by Alice"
+  → MCP server translates to GraphQL query
+  → ERD resolves relationships
+  → Agent receives the result
+```
+
+## Step 1: Create the MCP Server
 
 ```python
 from pydantic_resolve import AppConfig, create_mcp_server
 
-# diagram is your configured ErDiagram
 mcp = create_mcp_server(
-    apps=[AppConfig(name="agile", er_diagram=diagram)]
+    apps=[
+        AppConfig(name="blog", er_diagram=diagram),  # (1)
+    ]
 )
 
-mcp.run()
+mcp.run()  # (2)
 ```
 
-That is the minimum setup. The MCP server exposes your ERD as a GraphQL endpoint that AI agents can discover and query.
+1.  `AppConfig` binds your ERD to a named endpoint. `name` identifies the app for AI agents.
+2.  Default transport is `stdio` (for Claude Desktop). Use `transport="streamable-http"` for web-based agents.
 
-## Multi-App Support
+## Step 2: Serve Multiple Apps
 
-You can serve multiple ERDs from one MCP server:
+One MCP server can expose multiple ERDs:
 
 ```python
 mcp = create_mcp_server(
@@ -46,23 +59,28 @@ mcp = create_mcp_server(
     name="My API",
 )
 
-mcp.run()
+mcp.run(transport="streamable-http", port=8080)
 ```
 
-## AppConfig Parameters
+## Progressive Disclosure
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `name` | `str` | Yes | Application name, identifies the GraphQL endpoint |
-| `er_diagram` | `ErDiagram` | Yes | ErDiagram instance with entity definitions |
-| `description` | `str \| None` | No | Application description for AI agents |
-| `query_description` | `str \| None` | No | Description for the Query type |
-| `mutation_description` | `str \| None` | No | Description for the Mutation type |
-| `enable_from_attribute_in_type_adapter` | `bool` | No | Enable Pydantic from_attributes mode (default: False) |
+The MCP server exposes information in layers, so AI agents can explore incrementally:
+
+```
+Layer 0: list_apps          → "What applications are available?"
+Layer 1: list_queries       → "What queries does this app support?"
+Layer 2: get_query_schema   → "What fields and arguments does this query have?"
+Layer 3: graphql_query      → "Execute this GraphQL query"
+```
+
+Example flow:
+
+1. Agent calls `list_apps` → discovers `["blog", "shop"]`
+2. Agent calls `list_queries` for `blog` → discovers `["users", "posts", "createPost"]`
+3. Agent calls `get_query_schema` for `users` → sees available fields and arguments
+4. Agent calls `graphql_query` → executes `{ users { id name posts { title } } }`
 
 ## Transport Modes
-
-The `mcp.run()` method supports multiple transport modes:
 
 ```python
 # HTTP transport (recommended for web-based agents)
@@ -81,84 +99,19 @@ mcp.run(transport="stdio")
 | `host` | Host address to bind | `"127.0.0.1"` |
 | `port` | Port number | `8000` |
 
-## Progressive Disclosure Layers
+## AppConfig Parameters
 
-The MCP server implements progressive disclosure for AI agents. Instead of dumping the full schema at once, it exposes information in layers:
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | `str` | Yes | Application name, identifies the GraphQL endpoint |
+| `er_diagram` | `ErDiagram` | Yes | ErDiagram instance with entity definitions |
+| `description` | `str \| None` | No | Application description for AI agents |
+| `query_description` | `str \| None` | No | Description for the Query type |
+| `mutation_description` | `str \| None` | No | Description for the Mutation type |
+| `enable_from_attribute_in_type_adapter` | `bool` | No | Enable Pydantic from_attributes mode (default: False) |
 
-```
-Layer 0: list_apps          → "What applications are available?"
-Layer 1: list_queries       → "What queries does this app support?"
-Layer 2: get_query_schema   → "What fields and arguments does this query have?"
-Layer 3: graphql_query      → "Execute this GraphQL query"
-```
-
-This allows AI agents to incrementally explore the API without being overwhelmed:
-
-1. Agent calls `list_apps` → discovers `["blog", "shop"]`
-2. Agent calls `list_queries` for `blog` → discovers `["users", "posts", "createPost"]`
-3. Agent calls `get_query_schema` for `users` → sees available fields and arguments
-4. Agent calls `graphql_query` → executes `{ users { id name posts { title } } }`
-
-## Complete Example
-
-```python
-from pydantic import BaseModel
-from pydantic_resolve import (
-    AppConfig,
-    Relationship,
-    base_entity,
-    build_list,
-    build_object,
-    create_mcp_server,
-)
-
-
-# --- Entities ---
-BaseEntity = base_entity()
-
-
-class UserEntity(BaseModel, BaseEntity):
-    id: int
-    name: str
-
-
-class PostEntity(BaseModel, BaseEntity):
-    __relationships__ = [
-        Relationship(fk='author_id', target=UserEntity, name='author', loader=user_loader)
-    ]
-    id: int
-    title: str
-    author_id: int
-
-
-class BlogEntity(BaseModel, BaseEntity):
-    __relationships__ = [
-        Relationship(fk='id', target=list[PostEntity], name='posts', loader=post_loader)
-    ]
-    id: int
-    name: str
-
-
-# --- Configure ---
-diagram = BaseEntity.get_diagram()
-
-
-# --- MCP Server ---
-mcp = create_mcp_server(
-    apps=[
-        AppConfig(
-            name="blog",
-            er_diagram=diagram,
-            description="Blog system with users and posts",
-        ),
-    ],
-    name="Blog API",
-)
-
-mcp.run(transport="streamable-http", port=8080)
-```
-
-`create_mcp_server()` builds isolated GraphQL handlers internally, so this setup does not require `config_global_resolver(diagram)` unless you also plan to call `Resolver()` directly elsewhere.
+!!! note
+    `create_mcp_server()` builds isolated GraphQL handlers internally, so this setup does not require `config_global_resolver(diagram)` unless you also plan to call `Resolver()` directly elsewhere.
 
 ## Next
 

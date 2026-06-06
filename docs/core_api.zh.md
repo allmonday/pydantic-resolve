@@ -2,73 +2,49 @@
 
 [English](./core_api.md)
 
-> **整洁架构层次**：应用业务规则
->
-> Resolver 是应用业务规则层。它编排数据如何从接口适配器（Loader）流入响应树。
+快速开始从当前节点之外加载了一个字段。本页将同样的模式扩展到嵌套响应树。
 
-快速入门展示了从当前节点外部加载的一个字段。本页将相同的想法扩展到嵌套的响应树。
+还没有 ERD，还没有 `AutoLoad`。只有 `resolve_*` 方法、批处理 loader 和递归遍历。
 
-目标仍然是手动组合。还没有 ERD。还没有 `AutoLoad`。只有普通的 `resolve_*` 方法、批处理 loader 和递归遍历。
+## 目标
 
-## 从一个字段到一棵树
-
-现在我们想要一个这样的 sprint 响应：
+你想要一个 sprint 响应，其中：
 
 - `Sprint` 有多个 `tasks`
 - 每个 `Task` 有一个 `owner`
 
-这给了我们一个嵌套树：`Sprint -> Task -> User`。
+```json
+{
+    "id": 1,
+    "name": "Sprint 24",
+    "tasks": [
+        {
+            "id": 10,
+            "title": "Design docs",
+            "owner_id": 7,
+            "owner": {"id": 7, "name": "Ada"}
+        },
+        {
+            "id": 11,
+            "title": "Refine examples",
+            "owner_id": 8,
+            "owner": {"id": 8, "name": "Bob"}
+        }
+    ]
+}
+```
 
-## 完整示例
+## Step 1：添加一对多 Loader
 
-这个示例是自包含且可运行的：
+`TaskView` 和 `user_loader` 与快速开始中相同。新增的是 `SprintView` 及其 `resolve_tasks`，以及一个使用 `build_list`（而非 `build_object`）的 loader：
 
 ```python
-import asyncio
-from typing import Optional
-
-from pydantic import BaseModel
-from pydantic_resolve import Loader, Resolver, build_list, build_object
+from pydantic_resolve import build_list
 
 
-# --- 伪数据库 ---
-USERS = {
-    7: {"id": 7, "name": "Ada"},
-    8: {"id": 8, "name": "Bob"},
-}
-
-TASKS = [
-    {"id": 10, "title": "Design docs", "sprint_id": 1, "owner_id": 7},
-    {"id": 11, "title": "Refine examples", "sprint_id": 1, "owner_id": 8},
-    {"id": 12, "title": "Write tests", "sprint_id": 2, "owner_id": 7},
-]
-
-
-# --- Loaders ---
-async def user_loader(user_ids: list[int]):
-    users = [USERS.get(uid) for uid in user_ids]
-    return build_object(users, user_ids, lambda u: u.id)
-
-
-async def task_loader(sprint_ids: list[int]):
+async def task_loader(sprint_ids: list[int]):  # (1)
     tasks = [t for t in TASKS if t["sprint_id"] in sprint_ids]
     return build_list(tasks, sprint_ids, lambda t: t["sprint_id"])
-
-
-# --- 响应模型 ---
-class UserView(BaseModel):
-    id: int
-    name: str
-
-
-class TaskView(BaseModel):
-    id: int
-    title: str
-    owner_id: int
-    owner: Optional[UserView] = None
-
-    def resolve_owner(self, loader=Loader(user_loader)):
-        return loader.load(self.owner_id)
 
 
 class SprintView(BaseModel):
@@ -76,11 +52,18 @@ class SprintView(BaseModel):
     name: str
     tasks: list[TaskView] = []
 
-    def resolve_tasks(self, loader=Loader(task_loader)):
+    def resolve_tasks(self, loader=Loader(task_loader)):  # (2)
         return loader.load(self.id)
+```
 
+1.  `task_loader` 接收一批 sprint ID，并返回**每个 sprint** 的 task 列表。
+2.  `resolve_tasks` 遵循与 `resolve_owner` 相同的模式 —— 唯一的区别是 loader 返回列表而非单个对象。
 
-# --- 解析 ---
+## Step 2：运行解析器
+
+将它们组合起来 —— 同样的 `Resolver().resolve()` 调用处理整棵树：
+
+```python
 raw_sprints = [
     {"id": 1, "name": "Sprint 24"},
     {"id": 2, "name": "Sprint 25"},
@@ -113,38 +96,9 @@ for s in sprints:
 
 **结果：** 每个 loader 一次查询，无论你加载多少个 sprint 或 task。
 
-## build_list vs build_object
-
-`build_object` 和 `build_list` 服务于不同的关系类型：
-
-| 函数 | 使用时机 | 返回 |
-|----------|----------|---------|
-| `build_object(items, keys, get_key)` | 一对一 | `list[item \| None]` —— 每个键一个元素 |
-| `build_list(items, keys, get_key)` | 一对多 | `list[list[item]]` —— 每个键一个项列表 |
-
-### build_object 示例（每个 id 一个 user）
-
-```python
-async def user_loader(user_ids: list[int]):
-    users = [USERS.get(uid) for uid in user_ids]
-    return build_object(users, user_ids, lambda u: u.id)
-# 结果：[User7, User8, None, User9, ...]
-#         ^ 与 user_ids 顺序对齐
-```
-
-### build_list 示例（每个 sprint 多个 task）
-
-```python
-async def task_loader(sprint_ids: list[int]):
-    tasks = [t for t in TASKS if t["sprint_id"] in sprint_ids]
-    return build_list(tasks, sprint_ids, lambda t: t["sprint_id"])
-# 结果：[[Task10, Task11], [Task12], []]
-#          ^ sprint 1        ^ sprint 2  ^ sprint 3
-```
-
 ## 解析器如何遍历树
 
-你不需要编写任何手动遍历代码。没有嵌套循环。没有说"加载 tasks，然后为每个 task 加载 owner"的编排层。解析器为你处理该序列：
+你不需要编写任何遍历代码。解析器自动遍历整棵树：
 
 ```mermaid
 sequenceDiagram
@@ -167,31 +121,52 @@ sequenceDiagram
     R->>T: 为每个 task 分配 owner
 ```
 
-递归遍历就是为什么核心 API 比特定于接口的胶水代码扩展性更好。添加新的嵌套关系意味着添加一个 `resolve_*` 方法和一个 loader —— 遍历逻辑保持不变。
+1.  在树的每一层，扫描所有 `resolve_*` 方法并收集请求的 key。
+2.  用去重后的完整批量 **一次性**调用每个 loader。
+3.  分配结果，然后**递归**进入子节点。
 
-## 解析器构造器选项
+添加新的嵌套关系只需添加一个 `resolve_*` 方法和一个 loader —— 遍历逻辑不变。
 
-`Resolver` 类接受几个配置参数：
+## build_list vs build_object
+
+| 函数 | 使用时机 | 返回 |
+|----------|----------|---------|
+| `build_object(items, keys, get_key)` | 一对一 | `list[item \| None]` —— 每个 key 一个元素 |
+| `build_list(items, keys, get_key)` | 一对多 | `list[list[item]]` —— 每个 key 一个列表 |
+
+```python
+# 一对一：每个 id 一个 user
+async def user_loader(user_ids: list[int]):
+    users = [USERS.get(uid) for uid in user_ids]
+    return build_object(users, user_ids, lambda u: u.id)
+# 结果：[User7, User8, None, User9, ...]
+
+# 一对多：每个 sprint 多个 task
+async def task_loader(sprint_ids: list[int]):
+    tasks = [t for t in TASKS if t["sprint_id"] in sprint_ids]
+    return build_list(tasks, sprint_ids, lambda t: t["sprint_id"])
+# 结果：[[Task10, Task11], [Task12], []]
+```
+
+## Resolver 配置
 
 ### context
 
 传递一个全局上下文字典，可在所有 `resolve_*` 和 `post_*` 方法中访问：
 
 ```python
-class TaskView(BaseModel):
-    owner: Optional[UserView] = None
-
-    def resolve_owner(self, loader=Loader(user_loader), context=None):
-        # context 是传递给 Resolver 的字典
-        tenant = context.get('tenant_id')
-        return loader.load(self.owner_id)
-
 tasks = await Resolver(context={'tenant_id': 1}).resolve(tasks)
+```
+
+```python
+def resolve_owner(self, loader=Loader(user_loader), context=None):
+    tenant = context.get('tenant_id')
+    return loader.load(self.owner_id)
 ```
 
 ### loader_params
 
-为 DataLoader 类提供参数：
+为特定的 DataLoader 类提供参数：
 
 ```python
 class OfficeLoader(DataLoader):
@@ -208,18 +183,19 @@ companies = await Resolver(
 
 ### global_loader_param
 
-一次为所有 loader 设置参数。如果在 `loader_params` 和 `global_loader_param` 中都设置了相同的参数，则会引发错误：
+一次为所有 loader 设置参数。与 `loader_params` 重叠会抛出错误：
 
 ```python
+# 这会抛出错误 —— 'status' 在两处都设置了
 companies = await Resolver(
     global_loader_param={'status': 'open'},
-    loader_params={OfficeLoader: {'status': 'closed'}}  # 错误：重叠
+    loader_params={OfficeLoader: {'status': 'closed'}}
 ).resolve(companies)
 ```
 
 ### loader_instances
 
-预创建并用已知数据填充 DataLoader：
+预创建 DataLoader 并用已知数据填充：
 
 ```python
 loader = UserLoader()
@@ -236,56 +212,28 @@ tasks = await Resolver(
 
 ```python
 tasks = await Resolver(debug=True).resolve(tasks)
-# 输出：
 # TaskView       : avg: 0.4ms, max: 0.5ms, min: 0.4ms
 # SprintView     : avg: 1.1ms, max: 1.1ms, min: 1.1ms
 ```
 
 或全局启用：`export PYDANTIC_RESOLVE_DEBUG=true`
 
-
-## 异步 vs 同步 resolve_*
-
-两种形式都可以：
-
-```python
-# 同步 —— 直接返回 loader.load(key)
-def resolve_owner(self, loader=Loader(user_loader)):
-    return loader.load(self.owner_id)
-
-# 异步 —— 等待结果，然后转换
-async def resolve_owner(self, loader=Loader(user_loader)):
-    user = await loader.load(self.owner_id)
-    if user and user.name:
-        return user
-    return None
-```
-
-当你需要等待 loader 并对结果进行后处理时，使用异步。
-
 ## 一个方法中的多个 Loader
 
-你可以在单个 `resolve_*` 方法中声明多个 loader 依赖：
-
 ```python
-class SprintView(BaseModel):
-    id: int
-    tasks: list[TaskView] = []
-    metadata: Optional[SprintMeta] = None
-
-    async def resolve_tasks(
-        self,
-        task_loader=Loader(task_loader_fn),
-        meta_loader=Loader(meta_loader_fn)
-    ):
-        tasks = await task_loader.load(self.id)
-        self.metadata = await meta_loader.load(self.id)
-        return tasks
+async def resolve_tasks(
+    self,
+    task_loader=Loader(task_loader_fn),
+    meta_loader=Loader(meta_loader_fn)
+):
+    tasks = await task_loader.load(self.id)
+    self.metadata = await meta_loader.load(self.id)
+    return tasks
 ```
 
 ## 常见模式
 
-### 模式：加载和转换
+加载并过滤：
 
 ```python
 async def resolve_active_tasks(self, loader=Loader(task_loader)):
@@ -293,7 +241,7 @@ async def resolve_active_tasks(self, loader=Loader(task_loader)):
     return [t for t in tasks if t.status == 'active']
 ```
 
-### 模式：条件加载
+条件加载：
 
 ```python
 def resolve_thumbnail(self, loader=Loader(image_loader)):
@@ -302,27 +250,25 @@ def resolve_thumbnail(self, loader=Loader(image_loader)):
     return None
 ```
 
-### 模式：静态值（不需要 loader）
+无 loader 的派生值：
 
 ```python
 def resolve_display_name(self):
     return f"{self.first_name} {self.last_name}"
 ```
 
-当 `resolve_*` 方法不声明 loader 时，它只是返回计算值。这适用于可以从现有数据导出而无需外部 IO 的字段。
+当 `resolve_*` 不声明 loader 时，它直接返回计算值 —— 无需外部 IO。
 
-## 何时手动 resolve_* 仍然是正确的工具
+## 何时停留在 Core API
 
-手动核心 API 通常足够，当：
+手写 `resolve_*` 在以下场景是正确的选择：
 
-- 你只有几个响应模型
-- 关系连接还没有重复
-- 你希望每个接口保持最大显式性
-- 响应的形状仍在快速变化
-
-在这个阶段，显式性是一个特性，而不是限制。
-
+- 你只有少数几个响应模型
+- 关系连线还没有重复出现
+- 你希望每个接口保持最大程度的显式性
+- 响应结构仍在快速变化
 
 ## 下一步
 
-继续阅读 [后处理](./post_processing.zh.md)，了解字段应该在子树已经组装之后何时计算。
+- [后处理](./post_processing.zh.md) —— 在所有数据加载完成后计算派生字段。
+- [跨层数据流](./cross_layer_data_flow.zh.md) —— 在父子节点之间共享数据。

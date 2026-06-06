@@ -4,14 +4,25 @@
 
 pydantic-resolve works naturally with FastAPI since both use Pydantic models. This page covers common integration patterns.
 
-## Basic Pattern
+## Goal
 
-Use `Resolver().resolve()` inside your route handler:
+You want a FastAPI endpoint that returns resolved data — with relationships loaded and derived fields computed — in a single request:
+
+```json
+[
+    {"id": 10, "title": "Design docs", "owner_id": 7, "owner": {"id": 7, "name": "Ada"}},
+    {"id": 11, "title": "Refine examples", "owner_id": 8, "owner": {"id": 8, "name": "Bob"}}
+]
+```
+
+No N+1 queries. No manual join logic in the route handler.
+
+## Step 1: Resolve Inside the Route Handler
 
 ```python
 from fastapi import FastAPI
 from pydantic import BaseModel
-from pydantic_resolve import Loader, Resolver, build_object
+from pydantic_resolve import Loader, Resolver
 
 app = FastAPI()
 
@@ -27,7 +38,7 @@ class TaskView(BaseModel):
     owner_id: int
     owner: Optional[UserView] = None
 
-    def resolve_owner(self, loader=Loader(user_loader)):
+    def resolve_owner(self, loader=Loader(user_loader)):  # (1)
         return loader.load(self.owner_id)
 
 
@@ -35,14 +46,15 @@ class TaskView(BaseModel):
 async def get_tasks():
     tasks = await fetch_tasks_from_db()
     task_views = [TaskView.model_validate(t) for t in tasks]
-    return await Resolver().resolve(task_views)
+    return await Resolver().resolve(task_views)  # (2)
 ```
 
-The `response_model` parameter in FastAPI handles serialization. The resolver handles data assembly.
+1.  `resolve_owner` declares the missing field — same as in Quick Start.
+2.  `Resolver().resolve()` traverses the tree and batch-loads all relationships. `response_model` handles serialization.
 
-## Passing Request Context
+## Step 2: Pass Request Context
 
-Use `Resolver(context=...)` to pass request-scoped data:
+Use `Resolver(context=...)` to pass request-scoped data into `post_*` methods:
 
 ```python
 from fastapi import Request
@@ -66,11 +78,13 @@ class TaskView(BaseModel):
     def resolve_owner(self, loader=Loader(user_loader)):
         return loader.load(self.owner_id)
 
-    def post_can_edit(self, context):
+    def post_can_edit(self, context):  # (1)
         return 'write' in context.get('permissions', [])
 ```
 
-## Loader Parameters from Dependencies
+1.  `context` is the dict passed to `Resolver()`. Use it for permissions, locale, or any request-scoped data.
+
+## Step 3: Use FastAPI Dependencies with Loader Params
 
 Combine FastAPI dependency injection with loader parameters:
 
@@ -86,9 +100,11 @@ async def get_status_filter(status: str = Query('active')) -> str:
 async def get_companies(status: str = Depends(get_status_filter)):
     companies = await fetch_companies()
     return await Resolver(
-        loader_params={OfficeLoader: {'status': status}}
+        loader_params={OfficeLoader: {'status': status}}  # (1)
     ).resolve(companies)
 ```
+
+1.  `loader_params` passes the filter to the loader's batch function. Each loader receives only the params declared for it.
 
 ## Sharing Resolver Configuration
 
@@ -137,28 +153,6 @@ async def get_tasks():
         raise HTTPException(status_code=500, detail=str(e))
 ```
 
-## Performance Considerations
-
-1. **One `Resolver()` per request.** The resolver creates fresh DataLoader instances each time, so batches are scoped correctly.
-
-2. **Avoid resolving inside loops.** Resolve the full list once, not one item at a time:
-
-    ```python
-    # BAD: N resolver calls
-    results = []
-    for task in tasks:
-        result = await Resolver().resolve(TaskView.model_validate(task))
-        results.append(result)
-
-    # GOOD: one resolver call
-    task_views = [TaskView.model_validate(t) for t in tasks]
-    results = await Resolver().resolve(task_views)
-    ```
-
-3. **Use `response_model` for serialization.** Let FastAPI handle the JSON conversion — don't call `model_dump()` manually.
-
-4. **Debug mode.** Enable `Resolver(debug=True)` during development to see timing per node.
-
 ## OpenAPI Schema Generation
 
 FastAPI automatically generates OpenAPI schemas from your Pydantic models. Fields that start as `None` with `Optional` types appear correctly:
@@ -174,7 +168,7 @@ class TaskView(BaseModel):
         return loader.load(self.owner_id)
 ```
 
-The `owner` field shows up in the schema as `{"owner": {"oneOf": [{"type": "null"}, {"$ref": "UserView"}]}}`.
+The `owner` field shows up as `{"oneOf": [{"type": "null"}, {"$ref": "UserView"}]}`.
 
 If you want to exclude resolved fields from the input schema while keeping them in the output, use separate request/response models:
 
@@ -202,6 +196,28 @@ async def create_task(data: TaskCreate):
     task_view = TaskResponse.model_validate(task)
     return await Resolver().resolve(task_view)
 ```
+
+## Performance
+
+1.  **One `Resolver()` per request.** The resolver creates fresh DataLoader instances each time, so batches are scoped correctly.
+
+2.  **Resolve the full list at once.** Don't resolve inside loops:
+
+    ```python
+    # BAD: N resolver calls
+    results = []
+    for task in tasks:
+        result = await Resolver().resolve(TaskView.model_validate(task))
+        results.append(result)
+
+    # GOOD: one resolver call
+    task_views = [TaskView.model_validate(t) for t in tasks]
+    results = await Resolver().resolve(task_views)
+    ```
+
+3.  **Use `response_model` for serialization.** Let FastAPI handle the JSON conversion — don't call `model_dump()` manually.
+
+4.  **Debug mode.** Enable `Resolver(debug=True)` during development to see timing per node.
 
 ## Next
 

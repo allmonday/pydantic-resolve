@@ -2,102 +2,103 @@
 
 [中文版](./post_processing.zh.md)
 
-> **Clean Architecture Layer**: Application Business Rules
->
-> `post_*` methods are the second half of the Application Business Rules layer. They run after data assembly is complete, computing derived values that the Enterprise layer should not need to know about.
+`resolve_*` loads missing data. `post_*` computes derived fields — values that depend on the fully assembled subtree, such as counts, summaries, and formatted strings.
 
-`resolve_*` loads missing data. `post_*` computes derived fields — values derived from the fully assembled subtree, such as counts, summaries, and formatted strings.
+## Goal
 
-## Extend the Same Sprint Example
+Building on the `Sprint -> Task -> User` tree from Core API, you now want each sprint to include:
 
-Now that `Sprint -> Task -> User` can already be resolved, we can derive two fields from the finished subtree:
+- `task_count` — the number of tasks in that sprint
+- `contributor_names` — deduplicated, sorted names of all owners
 
-- `task_count`
-- `contributor_names`
+```json
+[
+    {
+        "id": 1,
+        "name": "Sprint 24",
+        "tasks": [
+            {"id": 10, "title": "Design docs", "owner": {"id": 7, "name": "Ada"}},
+            {"id": 11, "title": "Refine examples", "owner": {"id": 8, "name": "Bob"}},
+            {"id": 12, "title": "Write tests", "owner": {"id": 7, "name": "Ada"}}
+        ],
+        "task_count": 3,
+        "contributor_names": ["Ada", "Bob"]
+    },
+    {
+        "id": 2,
+        "name": "Sprint 25",
+        "tasks": [
+            {"id": 13, "title": "Bug fixes", "owner": {"id": 7, "name": "Ada"}}
+        ],
+        "task_count": 1,
+        "contributor_names": ["Ada"]
+    }
+]
+```
+
+These fields don't come from a loader — they're derived from data already on each sprint. The resolver computes them for every sprint in the list.
+
+## Step 1: Add post_* Methods
+
+Add `post_task_count` and `post_contributor_names` to the same `SprintView`:
 
 ```python
-import asyncio
-from typing import Optional
-
-from pydantic import BaseModel
-from pydantic_resolve import Loader, Resolver, build_list, build_object
-
-
-# --- Fake database ---
-USERS = {
-    7: {"id": 7, "name": "Ada"},
-    8: {"id": 8, "name": "Bob"},
-    9: {"id": 9, "name": "Cara"},
-}
-
-TASKS = [
-    {"id": 10, "title": "Design docs", "sprint_id": 1, "owner_id": 7},
-    {"id": 11, "title": "Refine examples", "sprint_id": 1, "owner_id": 8},
-    {"id": 12, "title": "Write tests", "sprint_id": 1, "owner_id": 7},
-]
-
-
-async def user_loader(user_ids: list[int]):
-    users = [USERS.get(uid) for uid in user_ids]
-    return build_object(users, user_ids, lambda u: u.id)
-
-
-async def task_loader(sprint_ids: list[int]):
-    tasks = [t for t in TASKS if t["sprint_id"] in sprint_ids]
-    return build_list(tasks, sprint_ids, lambda t: t["sprint_id"])
-
-
-class UserView(BaseModel):
-    id: int
-    name: str
-
-
-class TaskView(BaseModel):
-    id: int
-    title: str
-    owner_id: int
-    owner: Optional[UserView] = None
-
-    def resolve_owner(self, loader=Loader(user_loader)):
-        return loader.load(self.owner_id)
-
-
 class SprintView(BaseModel):
     id: int
     name: str
     tasks: list[TaskView] = []
-    task_count: int = 0
+    task_count: int = 0  # (1)
     contributor_names: list[str] = []
 
     def resolve_tasks(self, loader=Loader(task_loader)):
         return loader.load(self.id)
 
-    def post_task_count(self):
+    def post_task_count(self):  # (2)
         return len(self.tasks)
 
     def post_contributor_names(self):
         return sorted({task.owner.name for task in self.tasks if task.owner})
+```
 
+1.  Derived fields start with a default value, just like `resolve_*` fields start as `None`.
+2.  Method name follows `post_<field_name>`. The return value is assigned to the matching field.
 
-# --- Resolve ---
-raw_sprints = [{"id": 1, "name": "Sprint 24"}]
+## Step 2: Run the Resolver
+
+The same `Resolver().resolve()` call handles everything:
+
+```python
+raw_sprints = [
+    {"id": 1, "name": "Sprint 24"},
+    {"id": 2, "name": "Sprint 25"},
+]
 sprints = [SprintView.model_validate(s) for s in raw_sprints]
 sprints = await Resolver().resolve(sprints)
 
-print(sprints[0].model_dump())
-# {'id': 1, 'name': 'Sprint 24',
-#  'tasks': [
-#      {'id': 10, 'title': 'Design docs', 'owner_id': 7, 'owner': {'id': 7, 'name': 'Ada'}},
-#      {'id': 11, 'title': 'Refine examples', 'owner_id': 8, 'owner': {'id': 8, 'name': 'Bob'}},
-#      {'id': 12, 'title': 'Write tests', 'owner_id': 7, 'owner': {'id': 7, 'name': 'Ada'}},
-#  ],
-#  'task_count': 3,
-#  'contributor_names': ['Ada', 'Bob']}
+for s in sprints:
+    print(s.model_dump())
+```
+
+Output:
+
+```python
+{'id': 1, 'name': 'Sprint 24',
+ 'tasks': [
+     {'id': 10, 'title': 'Design docs', 'owner_id': 7, 'owner': {'id': 7, 'name': 'Ada'}},
+     {'id': 11, 'title': 'Refine examples', 'owner_id': 8, 'owner': {'id': 8, 'name': 'Bob'}},
+     {'id': 12, 'title': 'Write tests', 'owner_id': 7, 'owner': {'id': 7, 'name': 'Ada'}},
+ ],
+ 'task_count': 3,
+ 'contributor_names': ['Ada', 'Bob']}
+{'id': 2, 'name': 'Sprint 25',
+ 'tasks': [
+     {'id': 13, 'title': 'Bug fixes', 'owner_id': 7, 'owner': {'id': 7, 'name': 'Ada'}},
+ ],
+ 'task_count': 1,
+ 'contributor_names': ['Ada']}
 ```
 
 ## Execution Order
-
-For one sprint, the lifecycle looks like this:
 
 ```mermaid
 flowchart LR
@@ -106,67 +107,37 @@ flowchart LR
     c --> d["post_contributor_names"]
 ```
 
-The exact implementation can be async under the hood, but the mental model is simple:
+1.  All `resolve_*` methods run first — loading descendants recursively.
+2.  `post_*` runs only after descendant data is ready.
 
-1. Load descendants first (all `resolve_*` methods).
-2. Run `post_*` only after descendant data is ready.
+This timing is why `post_*` is ideal for derived fields — counts, summaries, and other values computed from the resolved subtree.
 
-That timing is why `post_*` is ideal for derived fields — counts, summaries, formatted strings, and other values computed from the resolved subtree.
+## resolve_* vs post_*
 
-## Rule of Thumb
-
-| Question | `resolve_*` | `post_*` |
+| | `resolve_*` | `post_*` |
 |---|---|---|
 | Needs external IO? | Yes | Usually no |
-| Runs before descendants are ready? | Yes | No |
-| Good for counts, labels, formatting? | Sometimes | Yes |
-| Return value is resolved again? | Yes | No |
+| Runs before descendants ready? | Yes | No |
+| Good for counts, sums, formatting? | Sometimes | Yes |
+| Return value resolved again? | Yes | No |
 
-## What `post_*` Is Good At
+## Common Patterns
 
-Typical uses include:
-
-- **Counts and totals**: `task_count`, `total_price`, `unread_count`
-- **Sorted display fields**: `contributor_names`, `sorted_tags`
-- **Deduplicated labels**: `unique_categories`
-- **String formatting**: `full_title`, `display_name`
-- **Business summaries** that should not require another query
-
-### Example: Formatting
+Formatting:
 
 ```python
 class TaskView(BaseModel):
-    id: int
-    title: str
     priority: int
     priority_label: str = ""
 
     def post_priority_label(self):
-        labels = {1: "Low", 2: "Medium", 3: "High"}
-        return labels.get(self.priority, "Unknown")
+        return {1: "Low", 2: "Medium", 3: "High"}.get(self.priority, "Unknown")
 ```
 
-### Example: Enrichment from Nested Data
-
-```python
-class SprintView(BaseModel):
-    id: int
-    name: str
-    tasks: list[TaskView] = []
-    has_overdue: bool = False
-
-    def resolve_tasks(self, loader=Loader(task_loader)):
-        return loader.load(self.id)
-
-    def post_has_overdue(self):
-        return any(t.due_date < date.today() for t in self.tasks)
-```
-
-### Example: Aggregation
+Aggregation:
 
 ```python
 class OrderView(BaseModel):
-    id: int
     items: list[OrderItem] = []
     total: float = 0.0
 
@@ -177,50 +148,37 @@ class OrderView(BaseModel):
         return sum(item.price * item.quantity for item in self.items)
 ```
 
-## What `post_*` Is Not For
-
-Prefer keeping data loading in `resolve_*` and data transformation in `post_*`. That separation keeps the code readable:
-
-- `resolve_*` answers: **where does the missing data come from?**
-- `post_*` answers: **what do we do with the data after it is ready?**
+Enrichment from nested data:
 
 ```python
-# GOOD: load in resolve_*, transform in post_*
-def resolve_owner(self, loader=Loader(user_loader)):
-    return loader.load(self.owner_id)
+class SprintView(BaseModel):
+    tasks: list[TaskView] = []
+    has_overdue: bool = False
 
-def post_owner_display(self):
-    return f"{self.owner.name} ({self.owner.email})"
+    def resolve_tasks(self, loader=Loader(task_loader)):
+        return loader.load(self.id)
+
+    def post_has_overdue(self):
+        return any(t.due_date < date.today() for t in self.tasks)
 ```
 
-If a field's primary purpose is to load external data, `resolve_*` is the right place — even though `post_*` technically supports `loader` (see below).
-
 ## post_* Parameters
-
-`post_*` methods can accept additional parameters beyond the basic form:
 
 ### context
 
 Access the global context dict passed to `Resolver`:
 
 ```python
-class SprintView(BaseModel):
-    tasks: list[TaskView] = []
-    visible_task_count: int = 0
-
-    def resolve_tasks(self, loader=Loader(task_loader)):
-        return loader.load(self.id)
-
-    def post_visible_task_count(self, context):
-        user_role = context.get('role', 'viewer')
-        if user_role == 'admin':
-            return len(self.tasks)
-        return len([t for t in self.tasks if t.visible])
+def post_visible_task_count(self, context):
+    user_role = context.get('role', 'viewer')
+    if user_role == 'admin':
+        return len(self.tasks)
+    return len([t for t in self.tasks if t.visible])
 ```
 
 ### parent
 
-Access the direct parent node. Useful for tree structures:
+Access the direct parent node — useful for tree structures:
 
 ```python
 class TreeNode(BaseModel):
@@ -236,90 +194,60 @@ class TreeNode(BaseModel):
 
 ### ancestor_context
 
-Access data exposed by ancestors via `ExposeAs` (covered in [Cross-Layer Data Flow](./cross_layer_data_flow.md)):
+Access data exposed by ancestors via `ExposeAs` (see [Cross-Layer Data Flow](./cross_layer_data_flow.md)):
 
 ```python
-class TaskView(BaseModel):
-    title: str
-    full_title: str = ""
-
-    def post_full_title(self, ancestor_context):
-        sprint_name = ancestor_context.get('sprint_name', '')
-        return f"{sprint_name} / {self.title}"
+def post_full_title(self, ancestor_context):
+    sprint_name = ancestor_context.get('sprint_name', '')
+    return f"{sprint_name} / {self.title}"
 ```
 
 ### collector
 
-Collect data from descendant nodes via `SendTo` (covered in [Cross-Layer Data Flow](./cross_layer_data_flow.md)):
+Collect data from descendant nodes via `SendTo` (see [Cross-Layer Data Flow](./cross_layer_data_flow.md)):
 
 ```python
-class SprintView(BaseModel):
-    tasks: list[TaskView] = []
-    contributors: list[UserView] = []
-
-    def resolve_tasks(self, loader=Loader(task_loader)):
-        return loader.load(self.id)
-
-    def post_contributors(self, collector=Collector('contributors')):
-        return collector.values()
+def post_contributors(self, collector=Collector('contributors')):
+    return collector.values()
 ```
 
 ### loader
 
-`post_*` also accepts `Loader` — the same parameter used in `resolve_*`. This is a valid escape hatch, but avoid it unless you have a clear reason.
-
-Two things to keep in mind:
-
-1. Data loaded in `post_*` is **not resolved recursively**. If the loaded result contains `resolve_*` or `post_*` methods, they will not run.
-2. The loaded data arrives late — other `post_*` methods on the same object cannot depend on it.
-
-Typical legitimate use: loading supplemental data where the load key itself comes from a resolved field.
+`post_*` can also use `Loader` — the same parameter as `resolve_*`. This is an escape hatch for loading supplemental data where the load key itself comes from a resolved field:
 
 ```python
-class TaskView(BaseModel):
-    id: int
-    title: str
-    owner_id: int
-    owner: Optional[UserView] = None
-    department_name: str = ""
+def resolve_owner(self, loader=Loader(user_loader)):
+    return loader.load(self.owner_id)
 
-    def resolve_owner(self, loader=Loader(user_loader)):
-        return loader.load(self.owner_id)
-
-    def post_department_name(self, loader=Loader(department_loader)):
-        # owner.department_id is only available after resolve_owner
-        if self.owner:
-            return loader.load(self.owner.department_id)
+def post_department_name(self, loader=Loader(department_loader)):
+    # owner.department_id is only available after resolve_owner
+    if self.owner:
+        return loader.load(self.owner.department_id)
 ```
+
+Two caveats:
+
+1.  Data loaded in `post_*` is **not resolved recursively** — nested `resolve_*` / `post_*` will not run.
+2.  Other `post_*` methods on the same object cannot depend on it.
 
 ## post_default_handler
 
-A special post method that runs after all other `post_*` methods. It does not do automatic assignment — you must set fields manually:
+A special method that runs after all other `post_*` methods. It does not auto-assign — you set fields manually:
 
 ```python
-class SprintView(BaseModel):
-    tasks: list[TaskView] = []
-    task_count: int = 0
-    summary: str = ""
+def post_task_count(self):
+    return len(self.tasks)
 
-    def post_task_count(self):
-        return len(self.tasks)
-
-    def post_default_handler(self):
-        # runs after post_task_count
-        self.summary = f"{self.task_count} tasks in this sprint"
+def post_default_handler(self):
+    # runs after post_task_count
+    self.summary = f"{self.task_count} tasks in this sprint"
 ```
-
-## A Useful Boundary
-
-`post_*` can accept advanced parameters such as `context`, `parent`, `ancestor_context`, and `collector`. But those features are easier to understand after the basic timing model is already clear.
 
 ## When to Stop Here
 
-The `resolve_*` + `post_*` combination covers the majority of data assembly needs. Most endpoints never need more than this.
-
-Move on to [Cross-Layer Data Flow](./cross_layer_data_flow.md) only when you encounter parent-child coordination that manual traversal cannot handle cleanly.
+`resolve_*` + `post_*` covers the majority of data assembly needs. Most endpoints never need more than this.
 
 ## Next
 
-Continue to [Cross-Layer Data Flow](./cross_layer_data_flow.md) to see how ancestors and descendants can coordinate without explicit traversal code.
+- [Cross-Layer Data Flow](./cross_layer_data_flow.md) — share data between parent and child nodes without explicit traversal code.
+- [ERD and AutoLoad](./erd_and_autoload.md) — centralize relationship declarations when they start repeating across models.

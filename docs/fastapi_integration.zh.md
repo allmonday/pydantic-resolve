@@ -4,14 +4,25 @@
 
 pydantic-resolve 与 FastAPI 自然协作，因为两者都使用 Pydantic 模型。本页面介绍常见的集成模式。
 
-## 基本模式
+## 目标
 
-在路由处理程序中使用 `Resolver().resolve()`：
+你希望 FastAPI 端点返回已解析的数据 —— 关系已加载、派生字段已计算 —— 在单个请求中完成：
+
+```json
+[
+    {"id": 10, "title": "Design docs", "owner_id": 7, "owner": {"id": 7, "name": "Ada"}},
+    {"id": 11, "title": "Refine examples", "owner_id": 8, "owner": {"id": 8, "name": "Bob"}}
+]
+```
+
+没有 N+1 查询。路由处理器中不需要手动 join 逻辑。
+
+## Step 1：在路由处理器中解析
 
 ```python
 from fastapi import FastAPI
 from pydantic import BaseModel
-from pydantic_resolve import Loader, Resolver, build_object
+from pydantic_resolve import Loader, Resolver
 
 app = FastAPI()
 
@@ -27,7 +38,7 @@ class TaskView(BaseModel):
     owner_id: int
     owner: Optional[UserView] = None
 
-    def resolve_owner(self, loader=Loader(user_loader)):
+    def resolve_owner(self, loader=Loader(user_loader)):  # (1)
         return loader.load(self.owner_id)
 
 
@@ -35,14 +46,15 @@ class TaskView(BaseModel):
 async def get_tasks():
     tasks = await fetch_tasks_from_db()
     task_views = [TaskView.model_validate(t) for t in tasks]
-    return await Resolver().resolve(task_views)
+    return await Resolver().resolve(task_views)  # (2)
 ```
 
-FastAPI 中的 `response_model` 参数处理序列化。resolver 处理数据组装。
+1.  `resolve_owner` 声明缺失字段 —— 与快速开始中相同。
+2.  `Resolver().resolve()` 遍历模型树并批量加载所有关系。`response_model` 负责序列化。
 
-## 传递请求上下文
+## Step 2：传递请求上下文
 
-使用 `Resolver(context=...)` 传递请求范围的数据：
+使用 `Resolver(context=...)` 将请求范围的数据传入 `post_*` 方法：
 
 ```python
 from fastapi import Request
@@ -66,13 +78,13 @@ class TaskView(BaseModel):
     def resolve_owner(self, loader=Loader(user_loader)):
         return loader.load(self.owner_id)
 
-    def post_can_edit(self, context):
+    def post_can_edit(self, context):  # (1)
         return 'write' in context.get('permissions', [])
 ```
 
-## 来自依赖的 Loader 参数
+1.  `context` 是传入 `Resolver()` 的字典。用于权限、区域设置或任何请求范围的数据。
 
-结合 FastAPI 依赖注入与 loader 参数：
+## Step 3：结合 FastAPI 依赖注入与 Loader 参数
 
 ```python
 from fastapi import Depends, Query
@@ -86,9 +98,11 @@ async def get_status_filter(status: str = Query('active')) -> str:
 async def get_companies(status: str = Depends(get_status_filter)):
     companies = await fetch_companies()
     return await Resolver(
-        loader_params={OfficeLoader: {'status': status}}
+        loader_params={OfficeLoader: {'status': status}}  # (1)
     ).resolve(companies)
 ```
+
+1.  `loader_params` 将过滤器传给 loader 的批量函数。每个 loader 只接收为它声明的参数。
 
 ## 共享 Resolver 配置
 
@@ -137,31 +151,9 @@ async def get_tasks():
         raise HTTPException(status_code=500, detail=str(e))
 ```
 
-## 性能考虑
-
-1. **每个请求一个 `Resolver()`。** resolver 每次都创建新的 DataLoader 实例，因此批次范围正确。
-
-2. **避免在循环内解析。** 一次性解析整个列表，而不是逐项解析：
-
-    ```python
-    # 错误：N 个 resolver 调用
-    results = []
-    for task in tasks:
-        result = await Resolver().resolve(TaskView.model_validate(task))
-        results.append(result)
-
-    # 正确：一个 resolver 调用
-    task_views = [TaskView.model_validate(t) for t in tasks]
-    results = await Resolver().resolve(task_views)
-    ```
-
-3. **使用 `response_model` 进行序列化。** 让 FastAPI 处理 JSON 转换 — 不要手动调用 `model_dump()`。
-
-4. **调试模式。** 在开发期间启用 `Resolver(debug=True)` 以查看每个节点的计时。
-
 ## OpenAPI Schema 生成
 
-FastAPI 自动从你的 Pydantic 模型生成 OpenAPI schema。以 `None` 和 `Optional` 类型开头的字段会正确显示：
+FastAPI 自动从 Pydantic 模型生成 OpenAPI schema。以 `None` 和 `Optional` 类型开头的字段会正确显示：
 
 ```python
 class TaskView(BaseModel):
@@ -174,19 +166,19 @@ class TaskView(BaseModel):
         return loader.load(self.owner_id)
 ```
 
-`owner` 字段在 schema 中显示为 `{"owner": {"oneOf": [{"type": "null"}, {"$ref": "UserView"}]}}`。
+`owner` 字段在 schema 中显示为 `{"oneOf": [{"type": "null"}, {"$ref": "UserView"}]}`。
 
-如果你想从输入 schema 中排除已解析的字段，同时将它们保留在输出中，请使用单独的请求/响应模型：
+如果你希望从输入 schema 中排除已解析的字段，同时保留在输出中，请使用单独的请求/响应模型：
 
 ```python
 class TaskCreate(BaseModel):
-    """输入模型 — 没有已解析的字段"""
+    """输入模型 — 不包含已解析字段"""
     title: str
     owner_id: int
 
 
 class TaskResponse(BaseModel):
-    """输出模型 — 包含已解析的字段"""
+    """输出模型 — 包含已解析字段"""
     id: int
     title: str
     owner_id: int
@@ -202,6 +194,28 @@ async def create_task(data: TaskCreate):
     task_view = TaskResponse.model_validate(task)
     return await Resolver().resolve(task_view)
 ```
+
+## 性能
+
+1.  **每个请求一个 `Resolver()`。** resolver 每次都创建新的 DataLoader 实例，因此批次范围正确。
+
+2.  **一次性解析整个列表。** 不要在循环内逐项解析：
+
+    ```python
+    # 错误：N 个 resolver 调用
+    results = []
+    for task in tasks:
+        result = await Resolver().resolve(TaskView.model_validate(task))
+        results.append(result)
+
+    # 正确：一个 resolver 调用
+    task_views = [TaskView.model_validate(t) for t in tasks]
+    results = await Resolver().resolve(task_views)
+    ```
+
+3.  **使用 `response_model` 进行序列化。** 让 FastAPI 处理 JSON 转换 — 不要手动调用 `model_dump()`。
+
+4.  **调试模式。** 在开发期间启用 `Resolver(debug=True)` 以查看每个节点的计时。
 
 ## 下一步
 

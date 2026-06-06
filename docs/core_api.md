@@ -2,73 +2,49 @@
 
 [中文版](./core_api.zh.md)
 
-> **Clean Architecture Layer**: Application Business Rules
->
-> The Resolver is the Application Business Rules layer. It orchestrates how data flows from Interface Adapters (Loaders) into the response tree.
+The quick start loaded one field from outside the current node. This page extends the same idea into a nested response tree.
 
-The quick start showed one field loaded from outside the current node. This page extends the same idea into a nested response tree.
+No ERD yet. No `AutoLoad` yet. Just `resolve_*` methods, batched loaders, and recursive traversal.
 
-The goal is still manual composition. No ERD yet. No `AutoLoad` yet. Just plain `resolve_*` methods, batched loaders, and recursive traversal.
+## Goal
 
-## From One Field to One Tree
-
-We now want a sprint response that looks like this:
+You want a sprint response where:
 
 - `Sprint` has many `tasks`
 - each `Task` has one `owner`
 
-That gives us a nested tree: `Sprint -> Task -> User`.
+```json
+{
+    "id": 1,
+    "name": "Sprint 24",
+    "tasks": [
+        {
+            "id": 10,
+            "title": "Design docs",
+            "owner_id": 7,
+            "owner": {"id": 7, "name": "Ada"}
+        },
+        {
+            "id": 11,
+            "title": "Refine examples",
+            "owner_id": 8,
+            "owner": {"id": 8, "name": "Bob"}
+        }
+    ]
+}
+```
 
-## Full Example
+## Step 1: Add the One-to-Many Loader
 
-This example is self-contained and runnable:
+The `TaskView` and `user_loader` are the same as the quick start. The new piece is `SprintView` with `resolve_tasks`, and a loader that uses `build_list` instead of `build_object`:
 
 ```python
-import asyncio
-from typing import Optional
-
-from pydantic import BaseModel
-from pydantic_resolve import Loader, Resolver, build_list, build_object
+from pydantic_resolve import build_list
 
 
-# --- Fake database ---
-USERS = {
-    7: {"id": 7, "name": "Ada"},
-    8: {"id": 8, "name": "Bob"},
-}
-
-TASKS = [
-    {"id": 10, "title": "Design docs", "sprint_id": 1, "owner_id": 7},
-    {"id": 11, "title": "Refine examples", "sprint_id": 1, "owner_id": 8},
-    {"id": 12, "title": "Write tests", "sprint_id": 2, "owner_id": 7},
-]
-
-
-# --- Loaders ---
-async def user_loader(user_ids: list[int]):
-    users = [USERS.get(uid) for uid in user_ids]
-    return build_object(users, user_ids, lambda u: u.id)
-
-
-async def task_loader(sprint_ids: list[int]):
+async def task_loader(sprint_ids: list[int]):  # (1)
     tasks = [t for t in TASKS if t["sprint_id"] in sprint_ids]
     return build_list(tasks, sprint_ids, lambda t: t["sprint_id"])
-
-
-# --- Response models ---
-class UserView(BaseModel):
-    id: int
-    name: str
-
-
-class TaskView(BaseModel):
-    id: int
-    title: str
-    owner_id: int
-    owner: Optional[UserView] = None
-
-    def resolve_owner(self, loader=Loader(user_loader)):
-        return loader.load(self.owner_id)
 
 
 class SprintView(BaseModel):
@@ -76,11 +52,18 @@ class SprintView(BaseModel):
     name: str
     tasks: list[TaskView] = []
 
-    def resolve_tasks(self, loader=Loader(task_loader)):
+    def resolve_tasks(self, loader=Loader(task_loader)):  # (2)
         return loader.load(self.id)
+```
 
+1.  `task_loader` receives a batch of sprint IDs and returns a list of tasks **per sprint**.
+2.  `resolve_tasks` follows the same pattern as `resolve_owner` — the only difference is the loader returns a list instead of a single object.
 
-# --- Resolve ---
+## Step 2: Run the Resolver
+
+Wire it together — the same `Resolver().resolve()` call handles the full tree:
+
+```python
 raw_sprints = [
     {"id": 1, "name": "Sprint 24"},
     {"id": 2, "name": "Sprint 25"},
@@ -113,38 +96,9 @@ Output:
 
 **Result:** one query per loader, regardless of how many sprints or tasks you load.
 
-## build_list vs build_object
-
-`build_object` and `build_list` serve different relationship types:
-
-| Function | Use when | Returns |
-|----------|----------|---------|
-| `build_object(items, keys, get_key)` | One-to-one | `list[item \| None]` — one element per key |
-| `build_list(items, keys, get_key)` | One-to-many | `list[list[item]]` — a list of items per key |
-
-### build_object example (one user per id)
-
-```python
-async def user_loader(user_ids: list[int]):
-    users = [USERS.get(uid) for uid in user_ids]
-    return build_object(users, user_ids, lambda u: u.id)
-# Result: [User7, User8, None, User9, ...]
-#         ^ aligned with user_ids order
-```
-
-### build_list example (many tasks per sprint)
-
-```python
-async def task_loader(sprint_ids: list[int]):
-    tasks = [t for t in TASKS if t["sprint_id"] in sprint_ids]
-    return build_list(tasks, sprint_ids, lambda t: t["sprint_id"])
-# Result: [[Task10, Task11], [Task12], []]
-#          ^ sprint 1        ^ sprint 2  ^ sprint 3
-```
-
 ## How the Resolver Traverses the Tree
 
-You do not write any manual traversal code. No nested loops. No orchestration layer that says "load tasks, then for every task load owner". The resolver handles that sequence for you:
+You do not write any traversal code. The resolver walks the tree automatically:
 
 ```mermaid
 sequenceDiagram
@@ -167,31 +121,52 @@ sequenceDiagram
     R->>T: assign owner to each task
 ```
 
-The recursive walk is why the Core API scales better than endpoint-specific glue code. Adding a new nested relationship means adding one `resolve_*` method and one loader — the traversal logic stays the same.
+1.  At each tree level, scan all `resolve_*` methods and collect requested keys.
+2.  Call each loader **once** with the full batch of deduplicated keys.
+3.  Assign results, then **recurse** into child nodes.
 
-## Resolver Constructor Options
+Adding a new nested relationship means adding one `resolve_*` method and one loader — the traversal logic stays the same.
 
-The `Resolver` class accepts several configuration parameters:
+## build_list vs build_object
+
+| Function | Use when | Returns |
+|----------|----------|---------|
+| `build_object(items, keys, get_key)` | One-to-one | `list[item \| None]` — one element per key |
+| `build_list(items, keys, get_key)` | One-to-many | `list[list[item]]` — a list of items per key |
+
+```python
+# One-to-one: one user per id
+async def user_loader(user_ids: list[int]):
+    users = [USERS.get(uid) for uid in user_ids]
+    return build_object(users, user_ids, lambda u: u.id)
+# Result: [User7, User8, None, User9, ...]
+
+# One-to-many: many tasks per sprint
+async def task_loader(sprint_ids: list[int]):
+    tasks = [t for t in TASKS if t["sprint_id"] in sprint_ids]
+    return build_list(tasks, sprint_ids, lambda t: t["sprint_id"])
+# Result: [[Task10, Task11], [Task12], []]
+```
+
+## Resolver Options
 
 ### context
 
 Pass a global context dict accessible in all `resolve_*` and `post_*` methods:
 
 ```python
-class TaskView(BaseModel):
-    owner: Optional[UserView] = None
-
-    def resolve_owner(self, loader=Loader(user_loader), context=None):
-        # context is the dict passed to Resolver
-        tenant = context.get('tenant_id')
-        return loader.load(self.owner_id)
-
 tasks = await Resolver(context={'tenant_id': 1}).resolve(tasks)
+```
+
+```python
+def resolve_owner(self, loader=Loader(user_loader), context=None):
+    tenant = context.get('tenant_id')
+    return loader.load(self.owner_id)
 ```
 
 ### loader_params
 
-Provide parameters to DataLoader classes:
+Provide parameters to specific DataLoader classes:
 
 ```python
 class OfficeLoader(DataLoader):
@@ -208,12 +183,13 @@ companies = await Resolver(
 
 ### global_loader_param
 
-Set parameters for all loaders at once. If the same parameter is set in both `loader_params` and `global_loader_param`, an error is raised:
+Set parameters for all loaders at once. Overlapping with `loader_params` raises an error:
 
 ```python
+# This raises an error — 'status' is set in both places
 companies = await Resolver(
     global_loader_param={'status': 'open'},
-    loader_params={OfficeLoader: {'status': 'closed'}}  # ERROR: overlaps
+    loader_params={OfficeLoader: {'status': 'closed'}}
 ).resolve(companies)
 ```
 
@@ -236,57 +212,28 @@ Print per-node timing information:
 
 ```python
 tasks = await Resolver(debug=True).resolve(tasks)
-# Output:
 # TaskView       : avg: 0.4ms, max: 0.5ms, min: 0.4ms
 # SprintView     : avg: 1.1ms, max: 1.1ms, min: 1.1ms
 ```
 
 Or enable globally: `export PYDANTIC_RESOLVE_DEBUG=true`
 
-
-## Async vs Sync resolve_*
-
-Both forms work:
-
-```python
-# Sync — return loader.load(key) directly
-def resolve_owner(self, loader=Loader(user_loader)):
-    return loader.load(self.owner_id)
-
-# Async — await the result, then transform
-async def resolve_owner(self, loader=Loader(user_loader)):
-    user = await loader.load(self.owner_id)
-    if user and user.name:
-        return user
-    return None
-```
-
-Use async when you need to await the loader and post-process the result.
-
 ## Multiple Loaders in One Method
 
-You can declare more than one loader dependency in a single `resolve_*` method:
-
 ```python
-class SprintView(BaseModel):
-    id: int
-    tasks: list[TaskView] = []
-    metadata: Optional[SprintMeta] = None
-
-    async def resolve_tasks(
-        self,
-        task_loader=Loader(task_loader_fn),
-        meta_loader=Loader(meta_loader_fn)
-    ):
-        tasks = await task_loader.load(self.id)
-        self.metadata = await meta_loader.load(self.id)
-        return tasks
+async def resolve_tasks(
+    self,
+    task_loader=Loader(task_loader_fn),
+    meta_loader=Loader(meta_loader_fn)
+):
+    tasks = await task_loader.load(self.id)
+    self.metadata = await meta_loader.load(self.id)
+    return tasks
 ```
-
 
 ## Common Patterns
 
-### Pattern: Load and Transform
+Load and filter:
 
 ```python
 async def resolve_active_tasks(self, loader=Loader(task_loader)):
@@ -294,7 +241,7 @@ async def resolve_active_tasks(self, loader=Loader(task_loader)):
     return [t for t in tasks if t.status == 'active']
 ```
 
-### Pattern: Conditional Loading
+Conditional loading:
 
 ```python
 def resolve_thumbnail(self, loader=Loader(image_loader)):
@@ -303,27 +250,25 @@ def resolve_thumbnail(self, loader=Loader(image_loader)):
     return None
 ```
 
-### Pattern: Static Value (no loader needed)
+Derived value without a loader:
 
 ```python
 def resolve_display_name(self):
     return f"{self.first_name} {self.last_name}"
 ```
 
-When a `resolve_*` method does not declare a loader, it simply returns the computed value. This works for fields that can be derived from existing data without external IO.
+When `resolve_*` does not declare a loader, it returns a computed value directly — no external IO needed.
 
-## When Manual resolve_* Is Still the Right Tool
+## When to Stay with Core API
 
-Manual Core API is often enough when:
+Manual `resolve_*` is the right tool when:
 
 - you only have a few response models
 - relationship wiring is not repeating yet
 - you want each endpoint to stay maximally explicit
-- the shape of the response is still changing quickly
-
-At this stage, explicitness is a feature, not a limitation.
-
+- the response shape is still changing quickly
 
 ## Next
 
-Continue to [Post Processing](./post_processing.md) to see when a field should be computed after the subtree is already assembled.
+- [Post Processing](./post_processing.md) — compute derived fields after all data is loaded.
+- [Cross-Layer Data Flow](./cross_layer_data_flow.md) — share data between parent and child nodes.
