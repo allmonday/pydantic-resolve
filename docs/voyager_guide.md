@@ -1,24 +1,45 @@
-# Voyager Visualization Guide
+# Voyager Visualization
 
 [中文版](./voyager_guide.zh.md)
 
-## What Is fastapi-voyager
+This page solves one problem: your FastAPI app has dozens of endpoints and Pydantic schemas, and you need a visual map to understand how they connect — without reading source files one by one.
 
-[fastapi-voyager](https://github.com/allmonday/fastapi-voyager) is an interactive visualization tool for FastAPI applications. It renders your API endpoints, Pydantic schemas, and entity relationships as a navigable graph — making it easier to understand dependencies, spot issues, and serve as living documentation.
+## Goal
 
-When used together with pydantic-resolve's ER Diagram, fastapi-voyager can also display entity-level relationship diagrams, giving a clear view of your domain model.
+You have this:
 
-## Installation
+```python
+app = FastAPI()
+
+@app.get("/tasks", response_model=list[TaskView])
+async def get_tasks(): ...
+
+@app.get("/sprints/{sprint_id}", response_model=SprintView)
+async def get_sprint(sprint_id: int): ...
+```
+
+You want this — an interactive graph where you can click any endpoint or schema and immediately see its dependencies:
+
+```
+┌─────────────┐     ┌──────────┐     ┌──────────┐
+│ GET /tasks  │────▶│ TaskView │────▶│ UserView │
+└─────────────┘     └──────────┘     └──────────┘
+┌──────────────────┐     ┌────────────┐
+│ GET /sprints/:id │────▶│ SprintView │
+└──────────────────┘     └────────────┘
+```
+
+[fastapi-voyager](https://github.com/allmonday/fastapi-voyager) renders your endpoints, schemas, and entity relationships as a navigable graph. When used with pydantic-resolve's ER Diagram, it also displays entity-level relationship diagrams.
+
+## Install
 
 ```bash
 pip install fastapi-voyager
-# or
-uv add fastapi-voyager
 ```
 
-## Basic Setup
+## Step 1: Mount Voyager
 
-Mount the Voyager page into your FastAPI application:
+Add one line to your FastAPI app:
 
 ```python
 from fastapi import FastAPI
@@ -26,21 +47,19 @@ from fastapi_voyager import create_voyager
 
 app = FastAPI()
 
-app.mount('/voyager', create_voyager(app))
+app.mount('/voyager', create_voyager(app))  # (1)
 ```
 
-Open `/voyager` in your browser to see the interactive graph of all your endpoints and their dependencies.
+1.  Open `/voyager` in your browser to see the interactive graph of all endpoints and their dependencies.
 
-## Displaying ER Diagrams
+## Step 2: Add ER Diagram
 
-When you have an `ErDiagram` defined with pydantic-resolve, pass it to `create_voyager` to visualize entity relationships alongside your API structure:
+When you have an `ErDiagram` from pydantic-resolve, pass it to visualize entity relationships alongside your API structure:
 
 ```python
-from fastapi import FastAPI
-from fastapi_voyager import create_voyager
 from pydantic_resolve import ErDiagram, Entity, Relationship
 
-diagram = ErDiagram(
+diagram = ErDiagram(  # (1)
     entities=[
         Entity(
             kls=SprintEntity,
@@ -57,49 +76,43 @@ diagram = ErDiagram(
     ],
 )
 
-app = FastAPI()
-app.mount('/voyager', create_voyager(app, er_diagram=diagram))
+app.mount('/voyager', create_voyager(app, er_diagram=diagram))  # (2)
 ```
 
-This produces a combined view where you can see both the API endpoint layer and the underlying entity relationships.
+1.  Define the same `ErDiagram` you use for `AutoLoad` and GraphQL.
+2.  Voyager renders a combined view: API endpoints and their underlying entity relationships. Open `/voyager` and switch to the ER Diagram tab to explore.
 
-## Configuration Options
+## Step 3: Configure Options
 
-`create_voyager` accepts several optional parameters:
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `app` | `FastAPI` | Your FastAPI application instance |
-| `er_diagram` | `ErDiagram \| None` | pydantic-resolve ER Diagram for entity visualization |
-| `module_color` | `dict` | Map module paths to highlight colors (e.g. `{'src.services': 'tomato'}`) |
-| `module_prefix` | `str \| None` | Filter to only show routes under this module prefix |
-| `swagger_url` | `str \| None` | Link to your Swagger docs (e.g. `"/docs"`) |
-| `initial_page_policy` | `str` | Which page to show first: `'first'` or `'all'` |
-| `online_repo_url` | `str \| None` | Base URL for linking nodes to source code in your repository |
-| `enable_pydantic_resolve_meta` | `bool` | Show pydantic-resolve metadata (resolve/post annotations) |
-
-Full example:
+`create_voyager` accepts optional parameters to customize the visualization:
 
 ```python
 app.mount(
     '/voyager',
     create_voyager(
         app,
-        module_color={'src.services': 'tomato'},
-        module_prefix='src.services',
-        swagger_url="/docs",
-        initial_page_policy='first',
-        online_repo_url='https://github.com/example/my-project/blob/main',
-        enable_pydantic_resolve_meta=True,
+        module_color={'src.services': 'tomato'},      # (1)
+        module_prefix='src.services',                   # (2)
+        swagger_url="/docs",                            # (3)
+        initial_page_policy='first',                    # (4)
+        online_repo_url='https://github.com/example/my-project/blob/main',  # (5)
+        enable_pydantic_resolve_meta=True,              # (6)
     ),
 )
 ```
+
+1.  `module_color` — map module paths to highlight colors.
+2.  `module_prefix` — filter to only show routes under this prefix.
+3.  `swagger_url` — link to your Swagger docs.
+4.  `initial_page_policy` — which page to show first: `'first'` or `'all'`.
+5.  `online_repo_url` — base URL for linking nodes to source code in your repository.
+6.  `enable_pydantic_resolve_meta` — show `resolve_*` and `post_*` annotations on each schema.
 
 ## Interactive Features
 
 ### Highlight Dependencies
 
-Click any node to highlight its upstream and downstream dependencies. This lets you quickly see which models an endpoint uses, or which endpoints depend on a specific model.
+Click any node to highlight its upstream and downstream dependencies. See which models an endpoint uses, or which endpoints depend on a specific model.
 
 ### View Source Code
 
@@ -109,13 +122,13 @@ Double-click a node or route to view its source code. If `online_repo_url` is co
 
 Search schemas by name and display their upstream and downstream relationships. Shift+click on a node to search for it immediately.
 
-### pydantic-resolve Meta
+!!! tip "pydantic-resolve Meta"
 
-When `enable_pydantic_resolve_meta=True`, toggle the "pydantic resolve meta" view to see `resolve_*` and `post_*` annotations on each schema — useful for understanding the data assembly logic at a glance.
+    When `enable_pydantic_resolve_meta=True`, toggle the "pydantic resolve meta" view to see `resolve_*` and `post_*` annotations on each schema — useful for understanding the data assembly logic at a glance.
 
 ## Command Line Usage
 
-fastapi-voyager also provides a CLI for generating visualizations without running a server:
+Generate visualizations without running a server:
 
 ```bash
 # Open in browser
@@ -145,5 +158,5 @@ voyager -m path.to.your.app.module --server --app api
 
 ## Live Demo
 
-- [Online Demo](https://www.fastapi-voyager.top/voyager/) — Interactive Voyager visualization
-- [GraphQL Demo](https://www.fastapi-voyager.top/graphql) — GraphQL endpoint powered by pydantic-resolve
+- [Online Demo](https://www.fastapi-voyager.top/voyager/) — Interactive Voyager visualization.
+- [GraphQL Demo](https://www.fastapi-voyager.top/graphql) — GraphQL endpoint powered by pydantic-resolve.

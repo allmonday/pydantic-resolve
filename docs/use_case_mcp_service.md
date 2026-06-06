@@ -2,18 +2,39 @@
 
 [中文版](./use_case_mcp_service.zh.md)
 
-UseCase MCP lets you expose business service methods directly to AI agents, without going through GraphQL. The same `UseCaseService` classes serve both FastAPI HTTP routes and MCP tool calls — business logic lives in one place.
+This page solves one problem: you have business service methods powering FastAPI routes, and you want to expose the same logic to AI agents — without duplicating code.
 
-## When to Use This vs GraphQL MCP
+## Goal
 
-| | GraphQL MCP | UseCase MCP |
-|---|---|---|
-| Input | ER Diagram | `UseCaseService` classes |
-| Query | GraphQL syntax | Method signatures |
-| Best for | Flexible ad-hoc queries | Fixed business operations |
-| Setup | `create_mcp_server` + ERD | `create_use_case_mcp_server` + services |
+You have this:
 
-If you already have `UseCaseService` classes powering your FastAPI endpoints, UseCase MCP is the natural choice — zero duplication.
+```python
+class TaskService(UseCaseService):
+    @query
+    async def list_tasks(cls) -> list[TaskSummary]:
+        ...
+
+    @query
+    async def get_task(cls, task_id: int) -> TaskSummary | None:
+        ...
+```
+
+You want AI agents to discover and call these methods through a standard MCP protocol:
+
+```
+Agent → "What services are available?"
+      → list_apps() → ["project"]
+
+Agent → "What can TaskService do?"
+      → describe_service("project", "TaskService")
+      → [list_tasks(), get_task(task_id)]
+
+Agent → "Show me task 1"
+      → call_use_case("project", "TaskService", "get_task", {"task_id": 1})
+      → {id: 1, title: "Design docs", owner_name: "Ada"}
+```
+
+The same `TaskService` classmethods power both FastAPI routes and MCP tool calls. Business logic lives in one place.
 
 ## Install
 
@@ -21,9 +42,9 @@ If you already have `UseCaseService` classes powering your FastAPI endpoints, Us
 pip install pydantic-resolve[mcp]
 ```
 
-## Quick Start
+## Step 1: Define Services
 
-### 1. Define services
+Create service classes with `@query` and `@mutation` decorators. Docstrings become descriptions visible to AI agents:
 
 ```python
 from pydantic import BaseModel
@@ -42,10 +63,10 @@ class TaskSummary(BaseModel):
     owner_name: str
 
 
-class UserService(UseCaseService):
+class UserService(UseCaseService):  # (1)
     """User management service."""
 
-    @query
+    @query  # (2)
     async def list_users(cls) -> list[UserSummary]:
         """Get all users."""
         ...
@@ -65,66 +86,89 @@ class TaskService(UseCaseService):
         ...
 ```
 
-`UseCaseService` uses a metaclass to automatically discover methods decorated with `@query` or `@mutation`. Docstrings become descriptions visible to AI agents.
+1.  `UseCaseService` uses a metaclass to discover methods decorated with `@query` or `@mutation`.
+2.  The docstring becomes the tool description that AI agents see.
 
-### 2. Create MCP server
+## Step 2: Create MCP Server
 
 ```python
 from pydantic_resolve.use_case import UseCaseAppConfig, create_use_case_mcp_server
 
-mcp = create_use_case_mcp_server(
+mcp = create_use_case_mcp_server(  # (1)
     apps=[
         UseCaseAppConfig(
-            name="project",
-            services=[UserService, TaskService],
+            name="project",  # (2)
+            services=[UserService, TaskService],  # (3)
             description="Project management with users and tasks",
         ),
     ],
     name="Project UseCase API",
 )
 
-mcp.run(transport="streamable-http", port=8080)
+mcp.run(transport="streamable-http", port=8080)  # (4)
 ```
 
-## Progressive Disclosure
+1.  `create_use_case_mcp_server` scans services and generates MCP tools.
+2.  `name` is the app identifier agents use to target a specific group of services.
+3.  Pass service classes directly — no need to instantiate them.
+4.  Starts an HTTP server that MCP clients connect to.
+
+## How the Discovery Works
 
 The MCP server exposes four tools that guide AI agents step by step:
 
+```mermaid
+sequenceDiagram
+    participant A as AI Agent
+    participant M as MCP Server
+    participant S as TaskService
+
+    A->>M: list_apps()
+    M-->>A: ["project"]
+
+    A->>M: list_services("project")
+    M-->>A: ["UserService", "TaskService"]
+
+    A->>M: describe_service("project", "TaskService")
+    M-->>A: methods, schemas, selection hints
+
+    A->>M: call_use_case("project", "TaskService", "get_task", {"task_id": 1})
+    M->>S: TaskService.get_task(task_id=1)
+    S-->>M: TaskSummary(...)
+    M-->>A: {id: 1, title: "Design docs", ...}
 ```
-Layer 0: list_apps         → "What applications are available?"
-Layer 1: list_services     → "What services does this app have?"
-Layer 2: describe_service  → "What methods and types does this service expose?"
-Layer 3: call_use_case     → "Execute a specific method"
-```
 
-Example flow:
+1.  `list_apps` — discover available applications.
+2.  `list_services` — list services within an app.
+3.  `describe_service` — show method signatures, parameter schemas, and DTO type definitions.
+4.  `call_use_case` — execute a method and return the result.
 
-1. Agent calls `list_apps` → discovers `["project"]`
-2. Agent calls `list_services(app_name="project")` → discovers `["UserService", "TaskService"]`
-3. Agent calls `describe_service(app_name="project", service_name="TaskService")` → sees method signatures, parameter schemas, and DTO type definitions
-4. Agent calls `call_use_case(app_name="project", service_name="TaskService", method_name="get_task", params='{"task_id": 1}', selection="{ id title owner { name } }")` → gets a compact result
+!!! tip "Selection support"
 
-`describe_service` returns SDL-style type definitions for all DTOs referenced by the service, and now also includes `selection_supported` / `selection_example` on each method plus a top-level `selection_usage` block. Agents can use these fields to decide whether a method is a good fit for `selection` and how to format the projection.
-For methods returning Pydantic DTOs, `call_use_case` can also accept a rootless GraphQL-like `selection` string to return only selected fields. The selection is a response projection only: it does not change method parameters, data loading, pagination, or business execution.
+    For methods returning Pydantic DTOs, `call_use_case` accepts an optional `selection` parameter — a rootless GraphQL-like projection string. It filters the response fields without changing method parameters, data loading, or business execution.
+
+    `describe_service` includes `selection_supported` and `selection_example` on each method so agents know when and how to use it.
 
 ## FromContext: Inject Request Context
 
-When a method needs user identity or other request-scoped data, use `FromContext` to mark parameters that should be injected from the MCP context rather than from the tool's `params` JSON:
+When a method needs user identity or other request-scoped data, mark parameters with `FromContext`:
 
 ```python
 from typing import Annotated
-from pydantic_resolve import query
-from pydantic_resolve.use_case import UseCaseService, FromContext
+from pydantic_resolve.use_case import FromContext
+
 
 class TaskService(UseCaseService):
     @query
     async def get_my_tasks(
         cls,
-        user_id: Annotated[int, FromContext()],
+        user_id: Annotated[int, FromContext()],  # (1)
     ) -> list[TaskSummary]:
         """Get tasks owned by the authenticated user."""
         ...
 ```
+
+1.  `FromContext()` tells the MCP server to inject this parameter from the request context, not from the agent's `params` JSON.
 
 Then configure a `context_extractor` on the app:
 
@@ -132,60 +176,66 @@ Then configure a `context_extractor` on the app:
 from fastmcp.server.context import Context
 from fastmcp.server.dependencies import get_http_headers
 
+
 def extract_user_context(ctx: Context) -> dict:
-    headers = get_http_headers(include={"authorization"})
+    headers = get_http_headers(include={"authorization"})  # (1)
     auth = headers.get("authorization", "")
     if auth.startswith("Bearer "):
         token = auth[7:]
-        return {"user_id": int(token)}  # In production, decode JWT here
+        return {"user_id": int(token)}
     return {}
+
 
 mcp = create_use_case_mcp_server(
     apps=[
         UseCaseAppConfig(
             name="project",
             services=[TaskService],
-            context_extractor=extract_user_context,
+            context_extractor=extract_user_context,  # (2)
         ),
     ],
 )
 ```
 
+1.  `get_http_headers()` excludes `authorization` by default. Pass `include={"authorization"}` to receive it.
+2.  The extractor runs on every request. Its return dict is merged into method kwargs.
+
 Data flow:
 
-```
-HTTP Request (Authorization: Bearer <token>)
-  → FastMCP Context
-    → context_extractor(ctx) → {"user_id": 1}
-      → call_use_case merges context into kwargs
-        → TaskService.get_my_tasks(user_id=1)
+```mermaid
+flowchart LR
+    A["HTTP Request<br/>Bearer token"] --> B["FastMCP Context"]
+    B --> C["context_extractor"]
+    C --> D["call_use_case"]
+    D --> E["TaskService.get_my_tasks<br/>user_id=1"]
 ```
 
 The method signature stays identical for FastAPI usage — just pass `user_id` directly:
 
 ```python
-# FastAPI route
+from fastapi import Depends
+
 @app.get("/my-tasks")
 async def my_tasks(user_id: int = Depends(get_current_user_id)):
     return await TaskService.get_my_tasks(user_id=user_id)
 ```
 
-**Important:** `get_http_headers()` excludes `authorization` by default. You must pass `include={"authorization"}` to receive it.
-
 ## Share Services with FastAPI
 
-The primary value of `UseCaseService` is that business logic lives in one place. The same classmethods power both HTTP API and MCP:
+The same classmethods power both HTTP API and MCP:
 
 ```python
 from pydantic_resolve.utils.types import get_return_annotation
+
 
 @app.get("/api/tasks", tags=[TaskService.get_tag_name()])
 async def get_tasks():
     return await TaskService.list_tasks()
 
+
 @app.get(
     "/api/tasks/{task_id}",
-    response_model=get_return_annotation(TaskService.get_task),
+    response_model=get_return_annotation(TaskService.get_task),  # (1)
     tags=[TaskService.get_tag_name()],
 )
 async def get_task(task_id: int):
@@ -195,43 +245,38 @@ async def get_task(task_id: int):
     return result
 ```
 
-`get_return_annotation` extracts the return type from the classmethod, so you can use it as FastAPI's `response_model` without repeating the type.
+1.  `get_return_annotation` extracts the return type from the classmethod, so you can use it as FastAPI's `response_model` without repeating the type.
 
 ## Control Mutation Visibility
 
-By default, all methods (both `@query` and `@mutation`) are visible to AI agents. To hide mutation methods from a specific app, set `enable_mutation=False`:
+To hide mutation methods from AI agents, set `enable_mutation=False`:
 
 ```python
 from pydantic_resolve import query, mutation
 
+
 class TaskService(UseCaseService):
     @query
     async def list_tasks(cls) -> list[TaskSummary]:
-        """Get all tasks."""
         ...
 
     @mutation
     async def create_task(cls, title: str) -> TaskSummary:
-        """Create a new task."""
         ...
+
 
 mcp = create_use_case_mcp_server(
     apps=[
         UseCaseAppConfig(
             name="readonly-project",
             services=[TaskService],
-            enable_mutation=False,  # hide mutation methods
+            enable_mutation=False,  # (1)
         ),
     ],
 )
 ```
 
-When `enable_mutation=False`:
-- `list_services` excludes mutation methods from the count
-- `describe_service` omits mutation methods from the response
-- `call_use_case` returns an error if a mutation method is called
-
-This is useful for providing read-only access to AI agents while keeping write operations restricted.
+1.  When `enable_mutation=False`: `list_services` excludes mutation methods from the count, `describe_service` omits them, and `call_use_case` returns an error if one is called.
 
 ## Multi-App Support
 
@@ -249,7 +294,18 @@ mcp = create_use_case_mcp_server(
 
 Each app has its own services and optional `context_extractor`.
 
+## GraphQL MCP vs UseCase MCP
+
+| | GraphQL MCP | UseCase MCP |
+|---|---|---|
+| Input | ER Diagram | `UseCaseService` classes |
+| Query | GraphQL syntax | Method signatures |
+| Best for | Flexible ad-hoc queries | Fixed business operations |
+| Setup | `create_mcp_server` + ERD | `create_use_case_mcp_server` + services |
+
+If you already have `UseCaseService` classes powering your FastAPI endpoints, UseCase MCP is the natural choice — zero duplication.
+
 ## Next
 
-- [UseCase MCP API](./api_use_case_mcp.md) for detailed API signatures
-- [MCP Service](./mcp_service.md) for the GraphQL-based MCP approach
+- [UseCase MCP API](./api_use_case_mcp.md) — detailed API signatures.
+- [MCP Service](./mcp_service.md) — the GraphQL-based MCP approach.
