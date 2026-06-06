@@ -2,6 +2,10 @@
 
 [中文版](./core_api.zh.md)
 
+> **Clean Architecture Layer**: Application Business Rules
+>
+> The Resolver is the Application Business Rules layer. It orchestrates how data flows from Interface Adapters (Loaders) into the response tree.
+
 The quick start showed one field loaded from outside the current node. This page extends the same idea into a nested response tree.
 
 The goal is still manual composition. No ERD yet. No `AutoLoad` yet. Just plain `resolve_*` methods, batched loaders, and recursive traversal.

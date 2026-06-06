@@ -2,6 +2,10 @@
 
 [中文版](./cross_layer_data_flow.zh.md)
 
+> **Clean Architecture Layer**: Cross-cutting concern (spans Application Business Rules + Enterprise Business Rules)
+>
+> ExposeAs, SendTo, and Collector are mechanisms for passing data across layers without violating the dependency direction rule: dependencies still point inward.
+
 Most users do not need these features on day one. But when parent and child nodes need to coordinate across multiple layers, `ExposeAs`, `SendTo`, and `Collector` let you keep that logic declarative instead of writing manual traversal code.
 
 We will stay on the same `Sprint -> Task -> User` scenario.

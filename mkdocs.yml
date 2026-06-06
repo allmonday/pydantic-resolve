@@ -1,5 +1,5 @@
 site_name: Pydantic-resolve
-site_description: "Entity-First Architecture for Python — define business entities, declare relationships, let the framework assemble your data."
+site_description: "Clean Architecture for Python — define business entities, declare relationships, let the framework assemble your data."
 site_url: https://allmonday.github.io/pydantic-resolve
 site_author: tangkikodo
 theme:
@@ -79,7 +79,7 @@ nav:
     - Migration Guide: ./migration.md
     - Changelog: ./changelog.md
   - Articles:
-    - "Entity-First Architecture": ./architecture_entity_first.md
+    - "Clean Architecture for Python": ./architecture_entity_first.md
     - "Reframing Data Assembly: pydantic-resolve vs SQLAlchemy ORM": ./blog_pydantic_resolve_vs_orm.md
     - "REST vs GraphQL and the Missing Layer: ER Diagram": ./blog_rest_graphql_and_er_diagram.md
 
@@ -101,11 +101,11 @@ plugins:
           default: true
           name: English
           build: true
-          link: "/pydantic-resolve/"
+          link: "/"
         - locale: zh
           name: 中文
           build: true
-          link: "/pydantic-resolve/zh/"
+          link: "/zh/"
           nav_translations:
             Guide: "指南"
             Advanced: "进阶"
@@ -136,7 +136,7 @@ plugins:
             UseCase MCP API: "UseCase MCP API"
             Change log: "变更记录"
             Migration Guide: "迁移指南"
-            "Entity-First Architecture": "Entity-First 架构"
+            "Clean Architecture for Python": "Python 的整洁架构实现"
             "Reframing Data Assembly: pydantic-resolve vs SQLAlchemy ORM": "重塑数据构建的开发体验：pydantic-resolve vs SQLAlchemy ORM 查询对比"
             "REST vs GraphQL and the Missing Layer: ER Diagram": "REST 与 GraphQL 之争，漏掉了关键的一层"
 

@@ -51,7 +51,7 @@
 
   /* ========== Base Layout ========== */
   .pr-page {
-    background: var(--pr-bg);
+    background: var(--pr-surface);
     color: var(--pr-text);
     overflow-x: hidden;
   }
@@ -221,6 +221,7 @@
   /* ========== Features Section ========== */
   .pr-features {
     padding: 80px 24px;
+    background: var(--pr-surface);
   }
 
   .pr-section-header {
@@ -301,6 +302,7 @@
   /* ========== Clean Architecture Section ========== */
   .pr-clean-arch {
     padding: 80px 24px;
+    background: var(--pr-surface);
   }
 
   .pr-clean-arch__grid {
@@ -344,7 +346,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    background: var(--pr-bg);
+    background: var(--pr-surface);
     border: 1px solid var(--pr-border);
     border-radius: 10px;
     padding: 12px 18px;
@@ -400,18 +402,24 @@
   .pr-code-panel {
     border-radius: 14px;
     overflow: hidden;
-    border: 1px solid var(--pr-border);
+    border: none;
     display: flex;
     flex-direction: column;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06);
+    transition: box-shadow 0.25s;
   }
 
-  .pr-code-panel--bad { border-top: 3px solid var(--pr-danger); }
-  .pr-code-panel--good { border-top: 3px solid var(--pr-success); }
+  .pr-code-panel:hover {
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08);
+  }
+
+  .pr-code-panel--bad { }
+  .pr-code-panel--good { }
 
   .pr-code-panel__header {
     padding: 14px 20px;
     background: var(--pr-surface);
-    border-bottom: 1px solid var(--pr-border);
+    border-bottom: none;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -491,7 +499,7 @@
     align-items: center;
     gap: 8px;
     padding: 10px 20px;
-    background: var(--pr-bg);
+    background: var(--pr-surface);
     border: 1px solid var(--pr-border);
     border-radius: 10px;
     font-size: 0.92rem;
@@ -616,12 +624,12 @@
         {{ t("Open Source", "开源项目") }} &middot; Pydantic v2 &middot; Python 3.10+
       </div>
       <h1 class="pr-hero__title">
-        {{ t("Declarative Data Assembly", "声明式数据组装") }}
+        {{ t("Clean Architecture for Python", "Python 的整洁架构框架") }}
       </h1>
       <p class="pr-hero__subtitle">
         {{ t(
-          "A BFF toolkit for Python. Compose complex nested APIs declaratively — zero N+1, zero boilerplate.",
-          "Python 的 BFF 工具。声明式组装复杂嵌套 API，零 N+1 查询，零样板代码。"
+          "Define business entities, declare relationships, let the framework assemble your data.",
+          "定义业务实体，声明关系，让框架组装数据。"
         )}}
       </p>
       <div class="pr-hero__actions">
@@ -642,10 +650,41 @@
     </div>
   </section>
 
+  <!-- ==================== Clean Architecture ==================== -->
+  <section class="pr-clean-arch">
+    <div class="pr-section-header">
+      <h2>{{ t("Provides the Missing Layer", "提供了缺失的那一层") }}</h2>
+      <p>{{ t("Components map 1:1 to Clean Architecture — dependency direction always points inward.", "组件与整洁架构一一对应，依赖方向始终指向内层。") }}</p>
+    </div>
+    <div class="pr-clean-arch__grid">
+      <div class="pr-feature-card">
+        <div class="pr-feature-icon pr-feature-icon--indigo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+        </div>
+        <h3>{{ t("Enterprise: Entity + ER Diagram", "企业业务规则：实体 + ER 图") }}</h3>
+        <p>{{ t("Define business entities and relationships independent of any framework or database — the stable core everything else derives from.", "定义独立于框架和数据库的业务实体与关系——所有其他层都从中派生的稳定内核。") }}</p>
+      </div>
+      <div class="pr-feature-card">
+        <div class="pr-feature-icon pr-feature-icon--green">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h3>{{ t("Application: Resolver + resolve/post", "应用业务规则：解析器 + resolve/post") }}</h3>
+        <p>{{ t("Automate data assembly orchestration — resolve loads missing data with batching, post computes derived fields after the tree is ready.", "自动化数据组装编排——resolve 批量加载缺失数据，post 在树就绪后计算派生字段。") }}</p>
+      </div>
+      <div class="pr-feature-card">
+        <div class="pr-feature-icon pr-feature-icon--cyan">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        </div>
+        <h3>{{ t("Adapters: Loader (data access)", "接口适配器：Loader（数据访问）") }}</h3>
+        <p>{{ t("Abstract data sources behind a unified interface. Swap SQLAlchemy for Django or Tortoise ORM — Entity and Response stay untouched.", "用统一接口抽象数据源。从 SQLAlchemy 切换到 Django 或 Tortoise ORM，实体和响应层无需改动。") }}</p>
+      </div>
+    </div>
+  </section>
+
   <!-- ==================== Code Comparison ==================== -->
   <section class="pr-comparison">
     <div class="pr-section-header">
-      <h2>{{ t("Solve N+1 in a few lines of code", "几行代码解决 N+1 问题") }}</h2>
+      <h2>{{ t("N+1 solved automatically", "自动解决 N+1 问题") }}</h2>
       <p>{{ t("Replace manual loops with declarative data loading.", "用声明式数据加载替代手动循环查询。") }}</p>
     </div>
     <div class="pr-comparison__panels">
@@ -677,6 +716,138 @@
         <span class="pr-kw">return</span> <span class="pr-var">loader</span>.<span class="pr-fn">load</span>(<span class="pr-var">self</span>.<span class="pr-var">owner_id</span>)
 <span class="pr-cm"> <em># 1 query!</em></span></code></pre>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== ER Diagram → Assembly ==================== -->
+  <section class="pr-comparison" style="padding-bottom: 0;">
+    <div class="pr-section-header">
+      <h2>{{ t("From ER Model to Use Case", "从 ER 模型到 Use Case") }}</h2>
+    </div>
+  </section>
+
+  <section class="pr-comparison" style="padding-top: 0;">
+    <div style="max-width: 975px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px;">
+
+      <!-- Step 1: ER Diagram -->
+      <div class="pr-code-panel">
+        <div class="pr-code-panel__header">
+          <div class="pr-step__number" style="font-size: 0.75rem; width: 24px; height: 24px;">1</div>
+          <span class="pr-code-panel__title">{{ t("Define ER Diagram — Enterprise Business Rules", "定义 ER 图 — 企业业务规则") }}</span>
+        </div>
+        <div class="pr-code-panel__body">
+<pre><code><span class="pr-kw">class</span> <span class="pr-cls">UserEntity</span>(<span class="pr-cls">BaseModel</span>, <span class="pr-cls">BaseEntity</span>):
+    <span class="pr-var">id</span>: <span class="pr-cls">int</span>
+    <span class="pr-var">name</span>: <span class="pr-cls">str</span>
+
+<span class="pr-kw">class</span> <span class="pr-cls">TaskEntity</span>(<span class="pr-cls">BaseModel</span>, <span class="pr-cls">BaseEntity</span>):
+    <span class="pr-var">__relationships__</span> = [
+        <span class="pr-fn">Relationship</span>(<span class="pr-var">fk</span>=<span class="pr-st">'owner_id'</span>, <span class="pr-var">target</span>=<span class="pr-cls">UserEntity</span>, <span class="pr-var">loader</span>=<span class="pr-var">user_loader</span>),
+    ]
+    <span class="pr-var">id</span>: <span class="pr-cls">int</span>; <span class="pr-var">name</span>: <span class="pr-cls">str</span>; <span class="pr-var">owner_id</span>: <span class="pr-cls">int</span>
+
+<span class="pr-kw">class</span> <span class="pr-cls">StoryEntity</span>(<span class="pr-cls">BaseModel</span>, <span class="pr-cls">BaseEntity</span>):
+    <span class="pr-var">__relationships__</span> = [
+        <span class="pr-fn">Relationship</span>(<span class="pr-var">fk</span>=<span class="pr-st">'id'</span>, <span class="pr-var">target</span>=<span class="pr-cls">list</span>[<span class="pr-cls">TaskEntity</span>], <span class="pr-var">loader</span>=<span class="pr-var">task_loader</span>),
+    ]
+    <span class="pr-var">id</span>: <span class="pr-cls">int</span>; <span class="pr-var">name</span>: <span class="pr-cls">str</span></code></pre>
+        </div>
+      </div>
+
+      <!-- Step 2: DefineSubset -->
+      <div class="pr-code-panel">
+        <div class="pr-code-panel__header">
+          <div class="pr-step__number" style="font-size: 0.75rem; width: 24px; height: 24px;">2</div>
+          <span class="pr-code-panel__title">{{ t("Pick fields &amp; hide FK — Use Case Composition", "挑选字段 &amp; 隐藏 FK — 用例的组合") }}</span>
+        </div>
+        <div class="pr-code-panel__body">
+<pre><code><span class="pr-kw">class</span> <span class="pr-cls">TaskSummary</span>(<span class="pr-cls">DefineSubset</span>):
+    <span class="pr-var">__subset__</span> = (<span class="pr-cls">TaskEntity</span>, (<span class="pr-st">'id'</span>, <span class="pr-st">'name'</span>))
+    <span class="pr-var">owner</span>: <span class="pr-cls">Optional</span>[<span class="pr-cls">UserEntity</span>] = <span class="pr-kw">None</span>  <span class="pr-cm"># implicit match, no AutoLoad</span>
+
+<span class="pr-kw">class</span> <span class="pr-cls">StoryView</span>(<span class="pr-cls">DefineSubset</span>):
+    <span class="pr-var">__subset__</span> = (<span class="pr-cls">StoryEntity</span>, (<span class="pr-st">'id'</span>, <span class="pr-st">'name'</span>))
+    <span class="pr-var">tasks</span>: <span class="pr-cls">list</span>[<span class="pr-cls">TaskSummary</span>] = []      <span class="pr-cm"># implicit match</span></code></pre>
+        </div>
+      </div>
+
+      <!-- Step 3: Resolver -->
+      <div class="pr-code-panel">
+        <div class="pr-code-panel__header">
+          <div class="pr-step__number" style="font-size: 0.75rem; width: 24px; height: 24px;">3</div>
+          <span class="pr-code-panel__title">{{ t("Query root data &amp; resolve — Application Business Rules", "查询根数据 &amp; 解析 — 应用业务规则") }}</span>
+        </div>
+        <div class="pr-code-panel__body">
+<pre><code><span class="pr-kw">@router</span>.<span class="pr-fn">get</span>(<span class="pr-st">"/stories"</span>)
+<span class="pr-kw">async def</span> <span class="pr-fn">get_stories</span>():
+    <span class="pr-var">stories</span> = [<span class="pr-fn">StoryView</span>.<span class="pr-fn">model_validate</span>(<span class="pr-var">s</span>)
+               <span class="pr-kw">for</span> <span class="pr-var">s</span> <span class="pr-kw">in await</span> <span class="pr-fn">get_stories_from_db</span>()]
+    <span class="pr-kw">return await</span> <span class="pr-fn">Resolver</span>().<span class="pr-fn">resolve</span>(<span class="pr-var">stories</span>)</code></pre>
+        </div>
+      </div>
+
+      <!-- Step 4: Result JSON -->
+      <div class="pr-code-panel">
+        <div class="pr-code-panel__header">
+          <div class="pr-step__number" style="font-size: 0.75rem; width: 24px; height: 24px;">4</div>
+          <span class="pr-code-panel__title">{{ t("Result — fully assembled response", "结果 — 完整组装的响应") }}</span>
+        </div>
+        <div class="pr-code-panel__body">
+<pre><code>[
+  {
+    <span class="pr-st">"id"</span>: 1,
+    <span class="pr-st">"name"</span>: <span class="pr-st">"Sprint 1"</span>,
+    <span class="pr-st">"tasks"</span>: [
+      {
+        <span class="pr-st">"id"</span>: 101,
+        <span class="pr-st">"name"</span>: <span class="pr-st">"Implement login"</span>,
+        <span class="pr-st">"owner"</span>: { <span class="pr-st">"id"</span>: 1, <span class="pr-st">"name"</span>: <span class="pr-st">"Alice"</span> }
+      }
+    ]
+  }
+]</code></pre>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==================== Architecture / Steps ==================== -->
+  <section class="pr-architecture">
+    <div class="pr-section-header">
+      <h2>{{ t("Progressive learning path", "循序渐进的学习路径") }}</h2>
+      <p>{{ t("Start simple, scale as needed. Each concept builds on the last.", "从简单开始，按需扩展。每个概念都建立在前一个之上。") }}</p>
+    </div>
+    <div class="pr-steps">
+      <div class="pr-step">
+        <span class="pr-step__number">1</span>
+        <span class="pr-step__label">{{ t("resolve_*", "resolve_*") }}</span>
+      </div>
+      <span class="pr-arrow">&rarr;</span>
+      <div class="pr-step">
+        <span class="pr-step__number">2</span>
+        <span class="pr-step__label">{{ t("Nested Structure", "嵌套结构") }}</span>
+      </div>
+      <span class="pr-arrow">&rarr;</span>
+      <div class="pr-step">
+        <span class="pr-step__number">3</span>
+        <span class="pr-step__label">{{ t("post_*", "post_*") }}</span>
+      </div>
+      <span class="pr-arrow">&rarr;</span>
+      <div class="pr-step">
+        <span class="pr-step__number">4</span>
+        <span class="pr-step__label">{{ t("Cross-Layer", "跨层数据流") }}</span>
+      </div>
+      <span class="pr-arrow">&rarr;</span>
+      <div class="pr-step">
+        <span class="pr-step__number">5</span>
+        <span class="pr-step__label">{{ t("ERD + AutoLoad", "ERD + AutoLoad") }}</span>
+      </div>
+      <span class="pr-arrow">&rarr;</span>
+      <div class="pr-step">
+        <span class="pr-step__number">6</span>
+        <span class="pr-step__label">{{ t("GraphQL / MCP / FastAPI", "GraphQL / MCP / FastAPI") }}</span>
       </div>
     </div>
   </section>
@@ -739,76 +910,6 @@
     </div>
   </section>
 
-  <!-- ==================== Architecture / Steps ==================== -->
-  <section class="pr-architecture">
-    <div class="pr-section-header">
-      <h2>{{ t("Progressive learning path", "循序渐进的学习路径") }}</h2>
-      <p>{{ t("Start simple, scale as needed. Each concept builds on the last.", "从简单开始，按需扩展。每个概念都建立在前一个之上。") }}</p>
-    </div>
-    <div class="pr-steps">
-      <div class="pr-step">
-        <span class="pr-step__number">1</span>
-        <span class="pr-step__label">{{ t("resolve_*", "resolve_*") }}</span>
-      </div>
-      <span class="pr-arrow">&rarr;</span>
-      <div class="pr-step">
-        <span class="pr-step__number">2</span>
-        <span class="pr-step__label">{{ t("Nested Tree", "嵌套树") }}</span>
-      </div>
-      <span class="pr-arrow">&rarr;</span>
-      <div class="pr-step">
-        <span class="pr-step__number">3</span>
-        <span class="pr-step__label">{{ t("post_*", "post_*") }}</span>
-      </div>
-      <span class="pr-arrow">&rarr;</span>
-      <div class="pr-step">
-        <span class="pr-step__number">4</span>
-        <span class="pr-step__label">{{ t("Cross-Layer", "跨层数据流") }}</span>
-      </div>
-      <span class="pr-arrow">&rarr;</span>
-      <div class="pr-step">
-        <span class="pr-step__number">5</span>
-        <span class="pr-step__label">{{ t("ERD + AutoLoad", "ERD + AutoLoad") }}</span>
-      </div>
-      <span class="pr-arrow">&rarr;</span>
-      <div class="pr-step">
-        <span class="pr-step__number">6</span>
-        <span class="pr-step__label">{{ t("GraphQL / MCP", "GraphQL / MCP") }}</span>
-      </div>
-    </div>
-  </section>
-
-  <!-- ==================== Clean Architecture ==================== -->
-  <section class="pr-clean-arch">
-    <div class="pr-section-header">
-      <h2>{{ t("Aligns with Clean Architecture", "贴合整洁架构") }}</h2>
-      <p>{{ t("ER Diagram doubles as entity and use-case layer, cleanly isolating your database.", "ER 图同时充当实体层和用例层，干净地隔离数据库实现。") }}</p>
-    </div>
-    <div class="pr-clean-arch__grid">
-      <div class="pr-feature-card">
-        <div class="pr-feature-icon pr-feature-icon--indigo">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-        </div>
-        <h3>{{ t("Entity + Use Case", "实体层 + 用例层") }}</h3>
-        <p>{{ t("ER Diagram defines entities and their relationships — it naturally serves as both the domain model and the use-case boundary.", "ER Diagram 定义实体及其关系，天然充当领域模型和用例边界。") }}</p>
-      </div>
-      <div class="pr-feature-card">
-        <div class="pr-feature-icon pr-feature-icon--green">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        </div>
-        <h3>{{ t("DB Agnostic", "数据库无关") }}</h3>
-        <p>{{ t("Loaders abstract away the data source. Swap SQLAlchemy for Django or Tortoise ORM — your models stay untouched.", "Loader 抽象了数据源。从 SQLAlchemy 切换到 Django 或 Tortoise ORM，模型层无需改动。") }}</p>
-      </div>
-      <div class="pr-feature-card">
-        <div class="pr-feature-icon pr-feature-icon--cyan">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-        </div>
-        <h3>{{ t("Multi-Presentation", "多呈现层") }}</h3>
-        <p>{{ t("One ERD drives REST API responses, GraphQL queries, and MCP services — without duplication.", "一份 ERD 同时驱动 REST API 响应、GraphQL 查询和 MCP 服务，零重复。") }}</p>
-      </div>
-    </div>
-  </section>
-
   <!-- ==================== Integrations ==================== -->
   <section class="pr-integrations">
     <div class="pr-section-header">
@@ -840,8 +941,8 @@
   <!-- ==================== CTA ==================== -->
   <section class="pr-cta">
     <div class="pr-container">
-      <h2>{{ t("Ready to eliminate N+1 queries?", "准备好消灭 N+1 查询了吗？") }}</h2>
-      <p>{{ t("Start with a single resolve method. Scale to ER Diagram when you're ready.", "从一个 resolve 方法开始，准备好了再扩展到 ER 图。") }}</p>
+      <h2>{{ t("Ready to build with Clean Architecture?", "准备好用整洁架构来构建了吗？") }}</h2>
+      <p>{{ t("Define entities, declare relationships, let the framework assemble. Start from resolve_*, scale to ER Diagram when ready.", "定义实体，声明关系，让框架组装。从 resolve_* 开始，准备好了再扩展到 ER 图。") }}</p>
       <div class="pr-cta__actions">
         <a href="{{ 'quick_start' | url }}" class="pr-btn pr-btn--primary">
           {{ t("Read the Guide", "阅读指南") }} &rarr;

@@ -2,6 +2,10 @@
 
 [中文版](./erd_and_autoload.zh.md)
 
+> **Clean Architecture Layer**: Enterprise Business Rules
+>
+> ER Diagram + AutoLoad is where the Enterprise Business Rules layer fully materializes. Entity definitions and their relationships become the stable core, independent of both the database and the API.
+
 Manual `resolve_*` methods are the right entry point. But once the same relationships start repeating across multiple response models, the problem changes.
 
 You are no longer asking "how do I load this field?" You are asking "where should the source of truth for this relationship live?"

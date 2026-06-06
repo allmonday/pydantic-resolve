@@ -2,6 +2,10 @@
 
 [中文版](./quick_start.zh.md)
 
+> **Clean Architecture Layer**: Interface Adapters (Loader) + Application Business Rules (Resolver)
+>
+> This page covers the smallest useful interaction between the Loader adapter and the Resolver orchestrator.
+
 This page solves one endpoint-level problem with the smallest useful amount of code: each task has an `owner_id`, but the response model should expose a full `owner` object.
 
 If you only need to fix a few N+1 issues in a handful of endpoints, this page and [Core API](./core_api.md) may already be enough.

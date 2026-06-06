@@ -1,10 +1,10 @@
 # Pydantic Resolve
 
-> Entity-First Architecture for Python — define business entities, declare relationships, let the framework assemble your data.
+> Clean Architecture for Python — define business entities, declare relationships, let the framework assemble your data.
 
 [![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
 [![PyPI Downloads](https://static.pepy.tech/badge/pydantic-resolve/month)](https://pepy.tech/projects/pydantic-resolve)
-![Python Versions](https://img.shields.io/pypi/pyversions/pydantic-resolve)
+![Python Versions](https://img.shields.io/pypi/v/pydantic-resolve)
 [![CI](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml/badge.svg)](https://github.com/allmonday/pydantic_resolve/actions/workflows/ci.yml)
 
 [中文版](./README.zh.md)
@@ -13,19 +13,19 @@
 
 ---
 
-## The ORM-First Trap
+## The Missing Layer
 
 Most FastAPI projects follow the same pattern: define SQLAlchemy ORM models first, then create Pydantic schemas that mirror them. This "ORM-First" approach is so common that many developers have never questioned it. But as projects grow, it creates systemic problems:
 
-| # | Problem | Symptom |
-|---|---------|---------|
-| 1 | Schema passively follows ORM | Same fields defined twice; API contract tied to DB design |
-| 2 | Business concepts lost | Frontend sees `owner_id` instead of "task has an owner" |
-| 3 | Data assembly has no home | Join logic scatters across Repository / Service / Route |
-| 4 | Multi-source data is hard | Each new data source means new conversion code everywhere |
-| 5 | Schema reuse is hard | Copy-paste for UserSummary / UserDetail / UserAvatar |
+| # | Problem | Clean Architecture Violation |
+|---|---------|------------------------------|
+| 1 | Schema passively follows ORM — same fields defined twice | API contract (Frameworks) is tied to DB design (Adapters) |
+| 2 | Business concepts lost — frontend sees `owner_id` instead of "task has an owner" | Enterprise Business Rules are permeated by DB structure |
+| 3 | Data assembly has no home — join logic scattered across Repository / Service / Route | Application Business Rules layer is missing |
+| 4 | Multi-source data is hard — each new source means conversion code everywhere | No unified Interface Adapter abstraction |
+| 5 | Schema reuse is hard — copy-paste for UserSummary / UserDetail / UserAvatar | No Enterprise entity to derive Frameworks responses from |
 
-These are not individual tooling issues. They all stem from one root cause: **the absence of an independent business entity layer between the database and the API**.
+These are not individual tooling issues. They all trace back to one architectural violation: **the system has no Enterprise Business Rules layer independent of the database**. In Clean Architecture terms, the Frameworks layer (ORM) has colonized the Enterprise layer.
 
 ```python
 # The data assembly dilemma: where does this logic go?
@@ -46,44 +46,63 @@ async def get_tasks():
     return result
 ```
 
-Whether this code lives in Repository, Service, or Route, the problem is the same: data assembly logic has no proper place in traditional three-layer architecture.
+Whether this code lives in Repository, Service, or Route, the problem is the same: data assembly logic has no proper place in the traditional three-layer architecture.
 
-## Entity-First: Clean Architecture for Python
+## Clean Architecture Layer Map
 
-**pydantic-resolve** provides the missing layer. It implements Entity-First Architecture, which maps naturally to Clean Architecture:
+**pydantic-resolve** provides the missing layer. Its components map 1:1 to Clean Architecture:
 
 | Clean Architecture Layer | pydantic-resolve Component |
 |--------------------------|---------------------------|
 | Enterprise Business Rules | Entity + ER Diagram |
 | Application Business Rules | Resolver + resolve/post |
 | Interface Adapters | Loader (data access) |
-| Frameworks & Interfaces | Response + FastAPI routes |
+| Frameworks & Interfaces | FastAPI routes + GraphQL + MCP |
 
-For the full analysis with code examples and migration guidance, see [Entity-First Architecture](./docs/architecture_entity_first.md).
+```mermaid
+flowchart LR
+    subgraph FW["Frameworks & Interfaces"]
+        R["Response<br/>FastAPI routes"]
+    end
+    subgraph APP["Application Business Rules"]
+        RV["Resolver<br/>resolve / post"]
+    end
+    subgraph ENT["Enterprise Business Rules"]
+        E["Entity + ER Diagram"]
+    end
+    subgraph ADP["Interface Adapters"]
+        L["Loader"]
+    end
+    FW --> APP --> ENT --> ADP
+```
+
+The dependency direction always points inward: Entity doesn't know about Loader. Loader doesn't know about FastAPI. FastAPI doesn't know about the database.
+
+For the full architectural analysis, see [Clean Architecture for Python](./docs/architecture_entity_first.md).
 
 ---
 
 ## How pydantic-resolve Works
 
-**pydantic-resolve** provides three mechanisms:
+**pydantic-resolve** provides three mechanisms — one per Clean Architecture layer:
 
-| What you need | What you write | What the framework does |
-|------|----------------|-------------------------|
-| Load related data | `resolve_*` + `Loader(...)` | Batch lookups and map results back |
-| Compute derived fields | `post_*` | Run after descendants are fully resolved |
-| Reuse relationship declarations | ER Diagram + `AutoLoad` | Centralize relationship wiring for many models |
+| What you need | What you write | Clean Architecture Layer | What the framework does |
+|------|----------------|--------------------------|-------------------------|
+| Load related data | `resolve_*` + `Loader(...)` | Interface Adapters | Batch lookups and map results back |
+| Compute derived fields | `post_*` | Application Business Rules | Run after descendants are fully resolved |
+| Reuse relationship declarations | ER Diagram + `AutoLoad` | Enterprise Business Rules | Centralize relationship wiring for many models |
 
 The same ERD also powers GraphQL queries, MCP services, and admin tools:
 
 ```mermaid
 flowchart TB
-    entity["Entity + ERD<br/>Business model & relationships"]
-    resolve["Resolver<br/>resolve / post / expose / collector"]
+    entity["Entity + ERD<br/>Enterprise Business Rules"]
+    resolve["Resolver<br/>Application Business Rules"]
     graphql["GraphQL Generator"]
-    usecase["UseCase Service<br/>call_use_case / selection"]
+    usecase["UseCase Service"]
     api["REST API"]
-    mcp1["MCP Service<br/>UseCase-driven"]
-    mcp2["MCP Service<br/>Schema-driven"]
+    mcp1["MCP Service"]
+    mcp2["MCP Service"]
 
     entity --> resolve
     entity --> graphql
@@ -93,12 +112,10 @@ flowchart TB
     graphql --> mcp2
 ```
 
-If you just need to fix an N+1 problem on one endpoint, skip to [Quick Start](#quick-start).
-
 ### Before and After
 
 ```python
-# Before: manual N+1 assembly in your route
+# Before: manual N+1 assembly in your route (Frameworks layer knows about DB)
 @router.get("/tasks")
 async def get_tasks():
     tasks = await task_service.get_tasks()
@@ -112,21 +129,27 @@ async def get_tasks():
 ```
 
 ```python
-# After: declare what's missing, let the framework assemble
+# After: declare what's missing, let the framework assemble (layers stay clean)
 class TaskView(BaseModel):
     id: int
     title: str
     owner_id: int
     owner: Optional[UserView] = None
 
-    def resolve_owner(self, loader=Loader(user_loader)):
+    def resolve_owner(self, loader=Loader(user_loader)):  # Interface Adapter
         return loader.load(self.owner_id)
 
 @router.get("/tasks")
 async def get_tasks():
     tasks = [TaskView.model_validate(t) for t in await task_repo.get_tasks()]
-    return await Resolver().resolve(tasks)
+    return await Resolver().resolve(tasks)  # Application Business Rules
 ```
+
+Advantages of the new approach:
+
+- **Separation of concerns**: Data loading logic moves from routes into models; routes only handle orchestration
+- **Declarative assembly**: `resolve_*` declares "what data is needed", the framework handles "how to batch-fetch it"
+- **Readability and maintainability**: Field definitions and their data sources live in the same class, clear at a glance
 
 ## Quick Start
 
@@ -145,13 +168,33 @@ Throughout the Quick Start, we build one API:
 - `Task` has one `owner` (a `User`)
 - The API also needs derived fields like `task_count` and `contributors`
 
+Expected response structure:
+
+```json
+{
+  "id": 1,
+  "name": "Sprint 1",
+  "tasks": [
+    {
+      "id": 101,
+      "title": "Implement login",
+      "owner_id": 1,
+      "owner": {
+        "id": 1,
+        "name": "Alice"
+      }
+    }
+  ],
+  "task_count": 1,
+  "contributor_names": ["Alice"]
+}
+```
+
 Each step adds one concept on top of the previous code.
 
-### Step 1: Load Related Data with `resolve_*`
+### Step 1: Load Related Data with `resolve_*` — *Interface Adapters*
 
-Every response model has some fields already filled (from the database, from user input) and some fields that need to be fetched separately. `resolve_*` is how you declare those missing fields.
-
-Start with the simplest case: each task has an `owner_id`, and you want an `owner` object on the response.
+Every response model has some fields already filled (from the database, from user input) and some fields that need to be fetched separately. `resolve_*` is how you declare those missing fields — it is your Interface Adapter.
 
 ```python
 from typing import Optional
@@ -192,7 +235,7 @@ That is the core idea of the library:
 
 A useful mental model is: **`resolve_*` means "this field needs data from outside the current node."**
 
-### Step 2: Compose Nested Trees
+### Step 2: Compose Nested Trees — *Application Business Rules*
 
 Real APIs rarely have just one relationship. When `Sprint` contains many `Task`s, and each `Task` already knows how to load its `owner`, the resolver walks the tree and batch-loads everything recursively.
 
@@ -224,7 +267,7 @@ sprints = await Resolver().resolve(sprints)
 
 This is why `resolve_*` is the best place to start. You can get value from the library before learning any advanced features.
 
-### Step 3: Compute Derived Fields with `post_*`
+### Step 3: Compute Derived Fields with `post_*` — *Application Business Rules*
 
 `task_count` and `contributor_names` don't come from a query — they're derived from data already on the model. `post_*` handles these: it runs **after** all nested `resolve_*` calls have finished.
 
@@ -259,9 +302,9 @@ Execution order:
 | Good for counts, sums, formatting? | Sometimes | Yes |
 | Return value resolved again? | Yes | No |
 
-These two patterns cover most API endpoints. The next section covers cross-layer data flow — skip to [ER Diagram](#when-er-diagram--autoload-becomes-worth-it) if you don't need it yet.
+These two patterns cover most API endpoints. The next section covers cross-layer data flow — skip to [ER Diagram](#enterprise-business-rules-er-diagram--autoload) if you don't need it yet.
 
-### Step 4: Coordinate Parent and Child with ExposeAs / SendTo / Collector
+### Step 4: Coordinate Parent and Child — *Cross-cutting Concern*
 
 When parent and child nodes need to share data without hard-coding references to each other:
 
@@ -303,9 +346,9 @@ class TaskView(BaseModel):
 
 Use this when the shape of the tree matters — for example, a child needs ancestor context (sprint name, permissions), or a parent needs to aggregate values from many descendants (all contributors, all tags).
 
-## When ER Diagram + AutoLoad Becomes Worth It
+## Enterprise Business Rules: ER Diagram + AutoLoad
 
-ER Diagram + `AutoLoad` is where Entity-First Architecture fully crystallizes: relationships become the stable core, and every Response is just a different view of the same Entity graph.
+ER Diagram + `AutoLoad` is where Clean Architecture's Enterprise Business Rules layer fully materializes: relationships become the stable core, and every Response is just a different view of the same Entity graph.
 
 Up to this point, the Core API is enough. Stay there until relationship declarations start repeating across many response models.
 
@@ -334,7 +377,7 @@ ERD mode asks for more discipline up front:
 - Declare relationships explicitly.
 - Create `AutoLoad` from the same `diagram` used by the resolver.
 
-That setup cost is real. The payoff is that relationship knowledge moves into one place.
+That setup cost is real. The payoff is that relationship knowledge converges into one place — this is precisely the responsibility of Clean Architecture's Enterprise Business Rules layer (Entity Layer): defining core business knowledge independent of external frameworks, so that the database, API, GraphQL, and MCP are all just different projections of it.
 
 ### The Same Example in ERD Mode
 
@@ -409,7 +452,7 @@ class TaskSummary(DefineSubset):
 
 ### If Your ORM Already Knows the Relationships
 
-Once ERD mode makes sense conceptually, you can let the ORM describe the relationships for you and import them into the application-layer ERD.
+Once ERD mode makes sense conceptually, you can let the ORM describe the relationships for you and import them into the Enterprise layer:
 
 ```python
 from pydantic_resolve import ErDiagram
@@ -433,13 +476,19 @@ config_global_resolver(diagram)
 
 `build_relationship` supports **SQLAlchemy**, **Django**, and **Tortoise ORM**. This is a good later optimization when your ORM metadata is already stable and you want to avoid duplicating relationship declarations.
 
-### A Practical Adoption Path
+## Adoption Path
 
-1. Start with hand-written `resolve_*` and `post_*` on one endpoint.
-2. Move repeated relations into ERD when multiple models need the same wiring.
-3. Let `build_relationship()` read ORM metadata when the ORM is already the source of truth.
+### 1. Interface Adapters First
 
-### When to Use Declarative Mode
+Start with `resolve_*` and `post_*` on one endpoint. You gain immediate N+1 protection without changing your architecture.
+
+### 2. Enterprise Business Rules When Ready
+
+When relationships start repeating across models, move them into ERD. This is the step where you establish your Enterprise layer.
+
+### 3. Let the Framework Absorb ORM Metadata
+
+When your ORM is stable, use `build_relationship()` to import existing relationship knowledge from the database layer.
 
 **ERD mode is a good fit when:**
 
@@ -456,9 +505,9 @@ config_global_resolver(diagram)
 
 [→ Full ERD-Driven Guide](https://allmonday.github.io/pydantic-resolve/erd_driven/)
 
-## Integrations
+## Frameworks & Interfaces: Integrations
 
-The same ERD that drives REST APIs also powers GraphQL queries, MCP services, and admin tools.
+ERD not only drives REST APIs, but also powers GraphQL queries, MCP services, and admin tools.
 
 ### GraphQL
 
@@ -500,13 +549,6 @@ app.mount('/voyager', create_voyager(app, er_diagram=diagram))
 
 ---
 
-## Known Limitations
-
-- **Loader returns `None`**: `resolve_*` fields stay at their default value. No error is raised.
-- **Circular dependencies**: The resolver detects cycles and raises `ResolverError` at resolve time.
-- **Large datasets**: Each loader collects all keys in one batch query. For very large key sets (10k+), consider pagination before resolving.
-- **Async only**: `Resolver().resolve()` is async; there is no synchronous API.
-
 ## Comparisons
 
 ### Entity-First (pydantic-resolve) vs ORM-First (traditional FastAPI)
@@ -538,7 +580,7 @@ app.mount('/voyager', create_voyager(app, er_diagram=diagram))
 ## Resources
 
 - [Full Documentation](https://allmonday.github.io/pydantic-resolve/)
-- [Entity-First Architecture (full paper)](./docs/architecture_entity_first.md)
+- [Clean Architecture for Python (full paper)](./docs/architecture_entity_first.md)
 - [Example Project](https://github.com/allmonday/composition-oriented-development-pattern)
 - [Live Demo](https://www.fastapi-voyager.top/voyager/)
 - [Live Demo - GraphQL](https://www.fastapi-voyager.top/graphql)

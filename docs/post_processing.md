@@ -2,6 +2,10 @@
 
 [中文版](./post_processing.zh.md)
 
+> **Clean Architecture Layer**: Application Business Rules
+>
+> `post_*` methods are the second half of the Application Business Rules layer. They run after data assembly is complete, computing derived values that the Enterprise layer should not need to know about.
+
 `resolve_*` loads missing data. `post_*` computes derived fields — values derived from the fully assembled subtree, such as counts, summaries, and formatted strings.
 
 ## Extend the Same Sprint Example

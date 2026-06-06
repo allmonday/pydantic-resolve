@@ -2,6 +2,10 @@
 
 [English](./quick_start.md)
 
+> **整洁架构层次**：接口适配器（Loader）+ 应用业务规则（Resolver）
+>
+> 本页涵盖了 Loader 适配器和 Resolver 编排器之间最小可用的交互。
+
 本页用最少的有效代码解决一个接口级别的问题：每个 task 有一个 `owner_id`，但响应模型应该暴露完整的 `owner` 对象。
 
 如果你只需要在少数几个接口中修复一些 N+1 问题，那么本页和 [核心 API](./core_api.zh.md) 可能已经足够了。

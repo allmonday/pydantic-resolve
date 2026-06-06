@@ -2,6 +2,10 @@
 
 [English](./cross_layer_data_flow.md)
 
+> **整洁架构层次**：横切关注点（跨应用业务规则 + 企业业务规则）
+>
+> ExposeAs、SendTo 和 Collector 是跨层传递数据的机制，它们不违反依赖方向规则：依赖仍然指向内部。
+
 大多数用户在第一天不需要这些功能。但是当父节点和子节点需要跨多层协调时，`ExposeAs`、`SendTo` 和 `Collector` 让你保持该逻辑声明性，而不是编写手动遍历代码。
 
 我们将继续使用相同的 `Sprint -> Task -> User` 场景。
