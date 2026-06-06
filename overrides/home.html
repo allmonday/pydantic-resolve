@@ -12,37 +12,31 @@
 <style>
   /* ========== CSS Variables ========== */
   :root {
-    --pr-primary: #1a56db;
-    --pr-primary-dark: #1e3a8a;
-    --pr-accent: #06b6d4;
-    --pr-accent-light: #67e8f9;
+    --pr-primary: #334155;
+    --pr-primary-dark: #1e293b;
+    --pr-accent: #3b82f6;
+    --pr-accent-light: #93c5fd;
     --pr-success: #10b981;
     --pr-danger: #ef4444;
-    --pr-bg: #f8fafc;
     --pr-surface: #ffffff;
     --pr-text: #1e293b;
     --pr-text-secondary: #64748b;
-    --pr-gradient-start: #1a56db;
-    --pr-gradient-end: #06b6d4;
-    --pr-code-bg: #f1f5f9;
+    --pr-code-bg: #f8fafc;
     --pr-border: #e2e8f0;
-    --pr-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
-    --pr-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
+    --pr-shadow: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05);
+    --pr-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.04);
   }
 
   [data-md-color-scheme="slate"] {
-    --pr-primary: #6d9eeb;
-    --pr-primary-dark: #93bbf5;
-    --pr-accent: #22d3ee;
-    --pr-accent-light: #a5f3fc;
+    --pr-primary: #94a3b8;
+    --pr-primary-dark: #cbd5e1;
+    --pr-accent: #60a5fa;
+    --pr-accent-light: #93c5fd;
     --pr-success: #34d399;
     --pr-danger: #f87171;
-    --pr-bg: #0f172a;
     --pr-surface: #1e293b;
     --pr-text: #e2e8f0;
     --pr-text-secondary: #94a3b8;
-    --pr-gradient-start: #1e3a8a;
-    --pr-gradient-end: #0e7490;
     --pr-code-bg: #0f172a;
     --pr-border: #334155;
     --pr-shadow: 0 4px 6px -1px rgba(0,0,0,0.3), 0 2px 4px -2px rgba(0,0,0,0.3);
@@ -67,7 +61,7 @@
     position: relative;
     padding: 100px 24px 80px;
     text-align: center;
-    background: linear-gradient(135deg, var(--pr-gradient-start), var(--pr-gradient-end));
+    background: var(--pr-primary-dark);
     overflow: hidden;
   }
 
@@ -78,14 +72,7 @@
     left: -50%;
     width: 200%;
     height: 200%;
-    background: radial-gradient(circle at 30% 50%, rgba(255,255,255,0.08) 0%, transparent 50%),
-                radial-gradient(circle at 70% 80%, rgba(255,255,255,0.05) 0%, transparent 40%);
-    animation: pr-hero-glow 8s ease-in-out infinite alternate;
-  }
-
-  @keyframes pr-hero-glow {
-    0% { transform: translate(0, 0); }
-    100% { transform: translate(-2%, 2%); }
+    background: radial-gradient(circle at 30% 50%, rgba(59,130,246,0.08) 0%, transparent 50%);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -163,6 +150,10 @@
   .pr-btn--primary {
     background: #ffffff;
     color: var(--pr-primary-dark);
+  }
+
+  .pr-btn--primary:hover {
+    color: var(--pr-accent);
   }
 
   .pr-btn--secondary {
@@ -278,9 +269,9 @@
     font-size: 24px;
   }
 
-  .pr-feature-icon--blue { background: rgba(26,86,219,0.1); color: var(--pr-primary); }
-  .pr-feature-icon--cyan { background: rgba(6,182,212,0.1); color: var(--pr-accent); }
-  .pr-feature-icon--green { background: rgba(16,185,129,0.1); color: var(--pr-success); }
+  .pr-feature-icon--blue { background: rgba(59,130,246,0.1); color: #3b82f6; }
+  .pr-feature-icon--cyan { background: rgba(14,165,233,0.1); color: #0ea5e9; }
+  .pr-feature-icon--green { background: rgba(16,185,129,0.1); color: #10b981; }
   .pr-feature-icon--indigo { background: rgba(99,102,241,0.1); color: #6366f1; }
   .pr-feature-icon--purple { background: rgba(139,92,246,0.1); color: #8b5cf6; }
   .pr-feature-icon--rose { background: rgba(244,63,94,0.1); color: #f43f5e; }
@@ -362,7 +353,7 @@
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--pr-gradient-start), var(--pr-gradient-end));
+    background: var(--pr-primary-dark);
     color: #fff;
     font-size: 0.8rem;
     font-weight: 700;
@@ -522,7 +513,7 @@
   .pr-cta {
     padding: 80px 24px;
     text-align: center;
-    background: linear-gradient(135deg, var(--pr-gradient-start), var(--pr-gradient-end));
+    background: var(--pr-primary-dark);
   }
 
   .pr-cta h2 {
@@ -745,13 +736,16 @@
     <span class="pr-var">__relationships__</span> = [
         <span class="pr-fn">Relationship</span>(<span class="pr-var">fk</span>=<span class="pr-st">'owner_id'</span>, <span class="pr-var">target</span>=<span class="pr-cls">UserEntity</span>, <span class="pr-var">loader</span>=<span class="pr-var">user_loader</span>),
     ]
-    <span class="pr-var">id</span>: <span class="pr-cls">int</span>; <span class="pr-var">name</span>: <span class="pr-cls">str</span>; <span class="pr-var">owner_id</span>: <span class="pr-cls">int</span>
+    <span class="pr-var">id</span>: <span class="pr-cls">int</span>
+    <span class="pr-var">name</span>: <span class="pr-cls">str</span>
+    <span class="pr-var">owner_id</span>: <span class="pr-cls">int</span>
 
 <span class="pr-kw">class</span> <span class="pr-cls">StoryEntity</span>(<span class="pr-cls">BaseModel</span>, <span class="pr-cls">BaseEntity</span>):
     <span class="pr-var">__relationships__</span> = [
         <span class="pr-fn">Relationship</span>(<span class="pr-var">fk</span>=<span class="pr-st">'id'</span>, <span class="pr-var">target</span>=<span class="pr-cls">list</span>[<span class="pr-cls">TaskEntity</span>], <span class="pr-var">loader</span>=<span class="pr-var">task_loader</span>),
     ]
-    <span class="pr-var">id</span>: <span class="pr-cls">int</span>; <span class="pr-var">name</span>: <span class="pr-cls">str</span></code></pre>
+    <span class="pr-var">id</span>: <span class="pr-cls">int</span>
+    <span class="pr-var">name</span>: <span class="pr-cls">str</span></code></pre>
         </div>
       </div>
 
@@ -935,6 +929,36 @@
       <a href="{{ 'mcp_service' | url }}" class="pr-integration-badge">
         <span class="pr-integration-icon">&#129302;</span> MCP
       </a>
+    </div>
+  </section>
+
+  <!-- ==================== Production Ready ==================== -->
+  <section class="pr-features">
+    <div class="pr-section-header">
+      <h2>{{ t("Thoroughly Tested, Production Ready", "测试详尽，生产可用") }}</h2>
+    </div>
+    <div class="pr-clean-arch__grid">
+      <div class="pr-feature-card">
+        <div class="pr-feature-icon pr-feature-icon--blue">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        </div>
+        <h3>{{ t("849+ Test Cases", "849+ 测试用例") }}</h3>
+        <p>{{ t("Every feature is covered — from core resolution to ER Diagram, cross-layer data flow, and edge cases.", "每个功能都有覆盖——从核心解析到 ER 图、跨层数据流和边界情况。") }}</p>
+      </div>
+      <div class="pr-feature-card">
+        <div class="pr-feature-icon pr-feature-icon--green">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h3>{{ t("Stable API Contract", "稳定的 API 契约") }}</h3>
+        <p>{{ t("Entity-First architecture keeps your API independent of database changes. No more cascade refactoring.", "Entity-First 架构让 API 独立于数据库变更，不再级联重构。") }}</p>
+      </div>
+      <div class="pr-feature-card">
+        <div class="pr-feature-icon pr-feature-icon--indigo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        </div>
+        <h3>{{ t("CI / CD Verified", "CI/CD 验证") }}</h3>
+        <p>{{ t("Every commit passes automated CI. Python 3.10–3.13 compatible with continuous integration.", "每次提交通过自动化 CI，兼容 Python 3.10–3.13。") }}</p>
+      </div>
     </div>
   </section>
 
