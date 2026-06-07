@@ -545,9 +545,10 @@ class TestUseCaseMcpServer:
         call_use_case_tool = next(t for t in tools if t.name == "call_use_case")
 
         assert "rootless GraphQL-like selection string" in call_use_case_tool.description
+        assert "Use fields from describe_service.types" in call_use_case_tool.description
+        assert "{ id title owner { name } }" in call_use_case_tool.description
         selection_schema = call_use_case_tool.parameters["properties"]["selection"]
-        assert "Use fields from describe_service.types" in selection_schema["description"]
-        assert "{ id title owner { name } }" in selection_schema["description"]
+        assert selection_schema["default"] is None
 
     @pytest.mark.asyncio
     async def test_describe_service_not_found(self, mcp_server):

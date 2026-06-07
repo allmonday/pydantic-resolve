@@ -1,0 +1,35 @@
+================================================================================
+  pydantic-resolve Resolver Benchmark (DFS)
+  Database: SQLite (file: bench_temp.db)
+================================================================================
+
+  -- Small (5 users, 3 sprints, 15 tasks) --
+
+  Scenario                                                       Avg        P50        P95
+  ──────────────────────────────────────────────────────────────────────────────
+  Q1: 1-level (task→owner)                                    1.15ms     1.12ms     1.26ms
+  Q2: 2-level (sprint→tasks→owner)                            2.12ms     1.65ms     2.13ms
+  Q3: 3-level linear (user→posts→comments)                    2.18ms     2.13ms     2.28ms
+  Q4: wide parallel (user→posts+comments)                     2.89ms     2.82ms     3.08ms
+
+  -- Medium (20 users, 10 sprints, 200 tasks) --
+
+  Verifying correctness...
+  Correctness verification (DFS): PASSED
+
+  Scenario                                                       Avg        P50        P95
+  ──────────────────────────────────────────────────────────────────────────────
+  Q1: 1-level (task→owner)                                    6.94ms     4.90ms    24.60ms
+  Q2: 2-level (sprint→tasks→owner)                            8.19ms     5.61ms    26.49ms
+  Q3: 3-level linear (user→posts→comments)                    7.39ms     5.30ms    25.11ms
+  Q4: wide parallel (user→posts+comments)                    10.60ms     7.70ms    27.62ms
+
+  -- Large (50 users, 20 sprints, 1000 tasks) --
+
+  Scenario                                                       Avg        P50        P95
+  ──────────────────────────────────────────────────────────────────────────────
+  Q1: 1-level (task→owner)                                   35.37ms    22.49ms    47.16ms
+  Q2: 2-level (sprint→tasks→owner)                           37.20ms    24.24ms    48.48ms
+  Q3: 3-level linear (user→posts→comments)                   17.85ms    11.83ms    34.36ms
+  Q4: wide parallel (user→posts+comments)                    26.02ms    17.82ms    40.22ms
+

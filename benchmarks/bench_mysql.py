@@ -23,6 +23,8 @@ from statistics import mean, quantiles
 from typing import Optional
 
 USE_MYSQL = "--mysql" in sys.argv
+USE_SQLITE_FILE = "--sqlite-file" in sys.argv
+USE_BFS = "--bfs" in sys.argv
 
 from sqlalchemy import ForeignKey, String, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -132,13 +134,19 @@ _engine = None
 _session_factory = None
 
 SQLITE_URL = "sqlite+aiosqlite:///:memory:"
+SQLITE_FILE_URL = "sqlite+aiosqlite:///bench_temp.db"
 MYSQL_URL = "mysql+asyncmy://root:root@localhost:3306/pydantic_resolve_bench"
 
 
 def _ensure_engine():
     global _engine, _session_factory
     if _engine is None:
-        url = MYSQL_URL if USE_MYSQL else SQLITE_URL
+        if USE_MYSQL:
+            url = MYSQL_URL
+        elif USE_SQLITE_FILE:
+            url = SQLITE_FILE_URL
+        else:
+            url = SQLITE_URL
         _engine = create_async_engine(url, echo=False, pool_recycle=3600)
         _session_factory = async_sessionmaker(
             _engine, class_=AsyncSession, expire_on_commit=False
@@ -374,7 +382,7 @@ async def bench_q1(session_factory, views, loaders):
         tasks = result.scalars().all()
 
     items = [views["TaskToOwner"](id=t.id, title=t.title, owner_id=t.owner_id) for t in tasks]
-    return await Resolver().resolve(items)
+    return await Resolver(mode="bfs" if USE_BFS else "dfs").resolve(items)
 
 
 async def bench_q2(session_factory, views, loaders):
@@ -384,7 +392,7 @@ async def bench_q2(session_factory, views, loaders):
         sprints = result.scalars().all()
 
     items = [views["SprintToTasks"](id=s.id, name=s.name) for s in sprints]
-    return await Resolver().resolve(items)
+    return await Resolver(mode="bfs" if USE_BFS else "dfs").resolve(items)
 
 
 async def bench_q3(session_factory, views, loaders):
@@ -394,7 +402,7 @@ async def bench_q3(session_factory, views, loaders):
         users = result.scalars().all()
 
     items = [views["UserDeep"](id=u.id, name=u.name) for u in users]
-    return await Resolver().resolve(items)
+    return await Resolver(mode="bfs" if USE_BFS else "dfs").resolve(items)
 
 
 async def bench_q4(session_factory, views, loaders):
@@ -404,7 +412,7 @@ async def bench_q4(session_factory, views, loaders):
         users = result.scalars().all()
 
     items = [views["UserWide"](id=u.id, name=u.name) for u in users]
-    return await Resolver().resolve(items)
+    return await Resolver(mode="bfs" if USE_BFS else "dfs").resolve(items)
 
 
 # ──────────────────────────────────────────────────────────
@@ -446,13 +454,19 @@ async def verify_correctness(session_factory, views, loaders):
     for u in result:
         assert hasattr(u, "posts"), f"User {u.id} missing posts"
         assert hasattr(u, "comments"), f"User {u.id} missing comments"
-    print("  Correctness verification: PASSED\n")
+    print(f"  Correctness verification ({'BFS' if USE_BFS else 'DFS'}): PASSED\n")
 
 
 async def main():
-    db_label = "MySQL 8.0 (localhost)" if USE_MYSQL else "SQLite in-memory"
+    if USE_MYSQL:
+        db_label = "MySQL 8.0 (localhost)"
+    elif USE_SQLITE_FILE:
+        db_label = "SQLite (file: bench_temp.db)"
+    else:
+        db_label = "SQLite in-memory"
+    mode_label = "BFS" if USE_BFS else "DFS"
     print("=" * 80)
-    print("  pydantic-resolve Resolver Benchmark")
+    print(f"  pydantic-resolve Resolver Benchmark ({mode_label})")
     print(f"  Database: {db_label}")
     print("=" * 80)
     print()

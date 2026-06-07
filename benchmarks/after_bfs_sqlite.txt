@@ -1,0 +1,35 @@
+================================================================================
+  pydantic-resolve Resolver Benchmark (BFS)
+  Database: SQLite in-memory
+================================================================================
+
+  -- Small (5 users, 3 sprints, 15 tasks) --
+
+  Scenario                                                       Avg        P50        P95
+  ──────────────────────────────────────────────────────────────────────────────
+  Q1: 1-level (task→owner)                                     966us      935us     1.07ms
+  Q2: 2-level (sprint→tasks→owner)                            1.44ms     1.40ms     1.56ms
+  Q3: 3-level linear (user→posts→comments)                    1.81ms     1.72ms     1.95ms
+  Q4: wide parallel (user→posts+comments)                     2.36ms     2.30ms     2.55ms
+
+  -- Medium (20 users, 10 sprints, 200 tasks) --
+
+  Verifying correctness...
+  Correctness verification (BFS): PASSED
+
+  Scenario                                                       Avg        P50        P95
+  ──────────────────────────────────────────────────────────────────────────────
+  Q1: 1-level (task→owner)                                    4.35ms     3.48ms    12.64ms
+  Q2: 2-level (sprint→tasks→owner)                            5.07ms     4.22ms    12.96ms
+  Q3: 3-level linear (user→posts→comments)                    4.19ms     3.77ms     4.22ms
+  Q4: wide parallel (user→posts+comments)                     6.19ms     5.29ms    14.35ms
+
+  -- Large (50 users, 20 sprints, 1000 tasks) --
+
+  Scenario                                                       Avg        P50        P95
+  ──────────────────────────────────────────────────────────────────────────────
+  Q1: 1-level (task→owner)                                   20.72ms    14.75ms    37.20ms
+  Q2: 2-level (sprint→tasks→owner)                           22.18ms    15.94ms    37.43ms
+  Q3: 3-level linear (user→posts→comments)                   10.59ms     7.61ms    28.22ms
+  Q4: wide parallel (user→posts+comments)                    15.49ms    11.33ms    32.44ms
+
