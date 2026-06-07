@@ -14,3 +14,4 @@ cov
 CLAUDE.md
 .claude
 site
+*.db

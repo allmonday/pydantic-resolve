@@ -5,9 +5,6 @@ from pydantic_resolve.use_case import UseCaseService
 from src.entities import MyResolver
 from src.service.sprint.dtos import SprintSummary
 from src.service.sprint.methods import (
-    create_sprint as _create_sprint,
-)
-from src.service.sprint.methods import (
     get_sprint as _get_sprint,
 )
 from src.service.sprint.methods import (

@@ -595,3 +595,7 @@ MIT License
 ## Author
 
 tangkikodo (allmonday@126.com)
+
+## Acknowledgments
+
+- [Faster Breadth-First GraphQL Execution](https://shopify.engineering/faster-breadth-first-graphql-execution) — Shopify Engineering, inspiration for the BFS execution mode

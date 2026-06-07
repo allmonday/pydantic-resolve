@@ -30,6 +30,9 @@ class _BfsNode:
     kls_path: str
     parent: object
     ancestor_context: dict
+    # For collectors: reference to ancestor collectors this node should add to.
+    # Populated during Phase B-1 (top-down prepare).
+    ancestor_collectors: dict = None  # {alias: {sign: Collector}}
 
 
 def _get_metadata_from_cache(resolver_class_id: int, root_class: type):
@@ -322,6 +325,23 @@ class Resolver:
                             val = getattr(node, field)
                         instance.add(val)
 
+    def _bfs_add_values_into_collectors(self, bn: _BfsNode):
+        """BFS version: add values into ancestor collectors via explicit reference (no contextvar)."""
+        if bn.ancestor_collectors is None:
+            return
+        for field, alias in analysis.get_collector_candidates(bn.kls, self.metadata):
+            alias_list = alias if isinstance(alias, (tuple, list)) else (alias,)
+
+            for alias in alias_list:
+                collectors = bn.ancestor_collectors.get(alias)
+                if collectors:
+                    for _, instance in collectors.items():
+                        if isinstance(field, tuple):
+                            val = [getattr(bn.node, f) for f in field]
+                        else:
+                            val = getattr(bn.node, field)
+                        instance.add(val)
+
     async def _execute_resolve_method_field(
             self,
             node: object,
@@ -489,7 +509,10 @@ class Resolver:
         expose_dict: dict | None = getattr(bn.node, const.EXPOSE_TO_DESCENDANT, None)
         if expose_dict:
             for fld, alias in expose_dict.items():
-                child_ctx[alias] = getattr(bn.node, fld)
+                try:
+                    child_ctx[alias] = getattr(bn.node, fld)
+                except AttributeError:
+                    raise AttributeError(f'{fld} does not exist')
         return child_ctx
 
     def _collect_bfs_children(self, val: object, parent: object, ancestor_context: dict) -> list[_BfsNode]:
@@ -589,6 +612,30 @@ class Resolver:
 
         return method(**params)
 
+    def _bfs_execute_post_default_handler(self, bn: _BfsNode, method: Callable):
+        """Execute post_default_handler with explicit context (no contextvars)."""
+        params = {}
+        post_default_param = analysis.get_post_default_handler_params(bn.kls, self.metadata)
+
+        if post_default_param is None:
+            return
+
+        if post_default_param['context']:
+            params['context'] = self.context
+        if post_default_param['ancestor_context']:
+            params['ancestor_context'] = MappingProxyType(bn.ancestor_context)
+        if post_default_param['parent']:
+            params['parent'] = bn.parent
+
+        alias_map = self.object_level_collect_alias_map_store.get(id(bn.node), {})
+        if alias_map:
+            for collector in post_default_param['collectors']:
+                alias, param = collector['alias'], collector['param']
+                signature = (bn.kls_path, const.POST_DEFAULT_HANDLER, param)
+                params[param] = alias_map[alias][signature]
+
+        return method(**params)
+
     async def _bfs_traverse(self, root):
         """BFS level-by-level resolution. Two phases: resolve (top-down), post (bottom-up).
 
@@ -656,23 +703,64 @@ class Resolver:
                 break
             levels.append(next_level)
 
-        # Phase B: post bottom-up, level by level
+        # Phase B-1: prepare collectors top-down (root→leaf)
+        # For each node, clone its collectors and store in object_level_collect_alias_map_store.
+        # Also build ancestor_collectors for each node so children know which
+        # collector instances to add values to.
+        # Build a node→BfsNode index for O(1) parent lookup.
+        node_to_bn: dict[int, _BfsNode] = {}
+        for depth in range(len(levels)):
+            for bn in levels[depth]:
+                node_to_bn[id(bn.node)] = bn
+
+                alias_map = analysis.generate_alias_map_with_cloned_collector(bn.kls, self.metadata)
+                if alias_map:
+                    self.object_level_collect_alias_map_store[id(bn.node)] = alias_map
+
+                # Build ancestor_collectors snapshot: merge parent's collectors with this node's
+                # (this node's collectors shadow parent's for same alias)
+                ac = {}
+                if bn.parent is not None:
+                    parent_bn = node_to_bn.get(id(bn.parent))
+                    if parent_bn and parent_bn.ancestor_collectors:
+                        ac = {k: dict(v) for k, v in parent_bn.ancestor_collectors.items()}
+
+                if alias_map:
+                    for alias_name, sign_kv in alias_map.items():
+                        if alias_name not in ac:
+                            ac[alias_name] = {}
+                        ac[alias_name].update(sign_kv)
+
+                bn.ancestor_collectors = ac
+
+        # Phase B-2: execute post methods + add values into collectors, bottom-up
+        # Within each level: post methods must run first (they may modify fields
+        # that are then collected), then add_into_collectors sends the values up.
         for depth in range(len(levels) - 1, -1, -1):
             post_tasks = []
+            add_nodes = []
             for bn in levels[depth]:
-                # Prepare collectors for this node
-                self._prepare_collectors(bn.node, bn.kls)
+                add_nodes.append(bn)
 
+                # Execute post methods
                 for post_field, post_trim_field, method in analysis.get_post_methods(
                     bn.node, bn.kls, self.metadata
                 ):
                     post_tasks.append(
                         self._bfs_execute_post_field(bn, post_field, post_trim_field, method))
 
-                # Add values into collectors (SendTo)
-                self._add_values_into_collectors(bn.node, bn.kls)
+                # post_default_handler
+                default_post_method = getattr(bn.node, const.POST_DEFAULT_HANDLER, None)
+                if default_post_method:
+                    val = self._bfs_execute_post_default_handler(bn, default_post_method)
+                    while iscoroutine(val) or asyncio.isfuture(val):
+                        val = await val
 
             await asyncio.gather(*post_tasks)
+
+            # After all post methods complete for this level, add values into collectors
+            for bn in add_nodes:
+                self._bfs_add_values_into_collectors(bn)
 
         return root
 
