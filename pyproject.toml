@@ -82,3 +82,8 @@ filterwarnings = [
     "ignore::ResourceWarning",
 ]
 asyncio_mode = "auto"
+
+[dependency-groups]
+dev = [
+    "asyncmy>=0.2.11",
+]

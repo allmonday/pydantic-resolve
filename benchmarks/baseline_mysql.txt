@@ -1,0 +1,35 @@
+================================================================================
+  pydantic-resolve Resolver Benchmark
+  Database: MySQL 8.0 (localhost)
+================================================================================
+
+  -- Small (5 users, 3 sprints, 15 tasks) --
+
+  Scenario                                                       Avg        P50        P95
+  ──────────────────────────────────────────────────────────────────────────────
+  Q1: 1-level (task→owner)                                    1.69ms     1.62ms     1.87ms
+  Q2: 2-level (sprint→tasks→owner)                            3.21ms     3.18ms     3.42ms
+  Q3: 3-level linear (user→posts→comments)                    4.31ms     4.15ms     4.48ms
+  Q4: wide parallel (user→posts+comments)                     5.38ms     4.87ms     6.01ms
+
+  -- Medium (20 users, 10 sprints, 200 tasks) --
+
+  Verifying correctness...
+  Correctness verification: PASSED
+
+  Scenario                                                       Avg        P50        P95
+  ──────────────────────────────────────────────────────────────────────────────
+  Q1: 1-level (task→owner)                                    8.57ms     6.44ms    27.39ms
+  Q2: 2-level (sprint→tasks→owner)                           10.56ms     7.97ms    29.21ms
+  Q3: 3-level linear (user→posts→comments)                   11.17ms     8.82ms    29.58ms
+  Q4: wide parallel (user→posts+comments)                    13.92ms    10.61ms    32.71ms
+
+  -- Large (50 users, 20 sprints, 1000 tasks) --
+
+  Scenario                                                       Avg        P50        P95
+  ──────────────────────────────────────────────────────────────────────────────
+  Q1: 1-level (task→owner)                                   39.69ms    26.23ms    52.15ms
+  Q2: 2-level (sprint→tasks→owner)                           42.42ms    28.84ms    54.25ms
+  Q3: 3-level linear (user→posts→comments)                   23.04ms    16.44ms    39.52ms
+  Q4: wide parallel (user→posts+comments)                    30.40ms    21.41ms    45.08ms
+
