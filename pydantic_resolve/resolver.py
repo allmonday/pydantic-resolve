@@ -207,11 +207,12 @@ class Resolver:
             ))
         return children
 
-    async def _do_resolve(self, job: tuple, node_to_bn: dict[int, _Node]) -> list[_Node]:
-        """Execute a single resolve job. Set value on node, return child nodes for next level."""
+    async def _do_resolve(self, job: tuple, node_to_bn: dict[int, _Node]) -> tuple[_Node, object]:
+        """Execute a single resolve job. Set value on node, return (bn, val) for deferred child collection."""
         bn, field_name, trim_field, method = job
 
         tid = None
+        path = []
         if self.debug:
             path = self._build_ancestor_path(bn, node_to_bn)
             tid = self.performance.get_timer(path).start()
@@ -237,10 +238,7 @@ class Resolver:
                 hook(bn.node, trim_field, val)
 
             setattr(bn.node, trim_field, val)
-
-            # Build child ancestor context
-            child_ctx = self._child_ancestor_context(bn)
-            return self._collect_children(val, bn.node, child_ctx)
+            return bn, val
         finally:
             if self.debug and tid is not None:
                 self.performance.get_timer(path).end(tid)
@@ -363,9 +361,9 @@ class Resolver:
         while True:
             current = levels[-1]
 
-            # Collect resolve jobs and object_field children
+            # Collect resolve jobs and record object_fields per node
             resolve_jobs: list[tuple[_Node, str, str, Callable]] = []
-            object_children: list[_Node] = []
+            bn_object_fields: list[tuple[_Node, list]] = []
 
             for bn in current:
                 resolve_fields, object_fields = analysis.get_resolve_fields_and_object_fields_from_object(
@@ -374,16 +372,19 @@ class Resolver:
                 for field_name, trim_field, method in resolve_fields:
                     resolve_jobs.append((bn, field_name, trim_field, method))
 
-                child_ctx = self._child_ancestor_context(bn)
-
-                for _field_name, attr_object in object_fields:
-                    if attr_object is None:
-                        continue
-                    object_children.extend(
-                        self._collect_children(attr_object, bn.node, child_ctx))
+                if object_fields:
+                    bn_object_fields.append((bn, object_fields))
 
             if not resolve_jobs:
-                # No more resolves at this level, check object children
+                # No resolves: process object_fields with current (unchanged) context
+                object_children = []
+                for bn, object_fields in bn_object_fields:
+                    child_ctx = self._child_ancestor_context(bn)
+                    for _field_name, attr_object in object_fields:
+                        if attr_object is None:
+                            continue
+                        object_children.extend(
+                            self._collect_children(attr_object, bn.node, child_ctx))
                 if object_children:
                     levels.append(object_children)
                     for bn in object_children:
@@ -396,10 +397,23 @@ class Resolver:
                 *[self._do_resolve(job, node_to_bn) for job in resolve_jobs]
             )
 
-            # Merge resolved children with object children
-            next_level = list(object_children)
-            for child_list in results:
-                next_level.extend(child_list)
+            # After ALL resolves complete: collect children with resolved ancestor context.
+            # This ensures expose fields set by resolve_ methods are visible to all children.
+            next_level = []
+
+            # Children from resolved values
+            for bn, val in results:
+                child_ctx = self._child_ancestor_context(bn)
+                next_level.extend(self._collect_children(val, bn.node, child_ctx))
+
+            # Children from object_fields
+            for bn, object_fields in bn_object_fields:
+                child_ctx = self._child_ancestor_context(bn)
+                for _field_name, attr_object in object_fields:
+                    if attr_object is None:
+                        continue
+                    next_level.extend(
+                        self._collect_children(attr_object, bn.node, child_ctx))
 
             if not next_level:
                 break
