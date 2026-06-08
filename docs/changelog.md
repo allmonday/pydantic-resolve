@@ -11,7 +11,34 @@
 - feat:
   - **BFS execution mode for Resolver**: replace recursive DFS traversal with level-by-level BFS. All `resolve_*` methods at the same level run concurrently via `asyncio.gather`, maximizing DataLoader batch sizes. Two-phase design: Phase A resolves top-down, Phase B executes `post_*` bottom-up
 - perf:
-  - **DataLoader batch efficiency**: same-level resolves now share a single gather call, significantly increasing DataLoader batch coalescing. Benchmarked P50 improvement: MySQL -22% to -43%, SQLite -14% to -35%
+  - **DataLoader batch efficiency**: same-level resolves now share a single gather call, significantly increasing DataLoader batch coalescing. SQLite P50 comparison (DFS → BFS):
+
+    Medium (20 users, 10 sprints, 200 tasks)
+
+    | Scenario           | DFS (ms) | BFS (ms) | Delta  |
+    |--------------------|----------|----------|--------|
+    | Q1: 1-level        | 5.57     | 3.71     | -33.4% |
+    | Q2: 2-level        | 6.28     | 4.42     | -29.6% |
+    | Q3: 3-level linear | 5.90     | 4.08     | -30.8% |
+    | Q4: wide parallel  | 8.32     | 5.96     | -28.4% |
+
+    Large (50 users, 20 sprints, 1000 tasks)
+
+    | Scenario           | DFS (ms) | BFS (ms) | Delta  |
+    |--------------------|----------|----------|--------|
+    | Q1: 1-level        | 25.15    | 15.53    | -38.3% |
+    | Q2: 2-level        | 26.57    | 16.88    | -36.5% |
+    | Q3: 3-level linear | 13.04    | 8.37     | -35.8% |
+    | Q4: wide parallel  | 19.35    | 12.92    | -33.2% |
+
+    XLarge (200 users, 50 sprints, 2500 tasks)
+
+    | Scenario           | DFS (ms) | BFS (ms) | Delta  |
+    |--------------------|----------|----------|--------|
+    | Q1: 1-level        | 95.62    | 63.25    | -33.9% |
+    | Q2: 2-level        | 97.75    | 66.94    | -31.5% |
+    | Q3: 3-level linear | 77.77    | 31.11    | -60.0% |
+    | Q4: wide parallel  | 107.49   | 73.18    | -31.9% |
 - fix:
   - **`post_default_handler` ordering**: now runs after all named `post_*` methods complete at the same level, ensuring consistent data visibility
   - **`expose_to_descendant` timing**: child ancestor context is now built after all resolves at a level finish, so `resolve_` methods that set expose fields are visible to children
