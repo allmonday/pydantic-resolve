@@ -39,6 +39,7 @@
     | Q2: 2-level        | 97.75    | 66.94    | -31.5% |
     | Q3: 3-level linear | 77.77    | 31.11    | -60.0% |
     | Q4: wide parallel  | 107.49   | 73.18    | -31.9% |
+
 - fix:
   - **`post_default_handler` ordering**: now runs after all named `post_*` methods complete at the same level, ensuring consistent data visibility
   - **`expose_to_descendant` timing**: child ancestor context is now built after all resolves at a level finish, so `resolve_` methods that set expose fields are visible to children
