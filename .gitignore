@@ -16,3 +16,4 @@ CLAUDE.md
 site
 *.db
 issues
+benchmarks/results/

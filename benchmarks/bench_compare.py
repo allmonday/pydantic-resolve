@@ -4,10 +4,15 @@ Usage:
     uv run python benchmarks/bench_compare.py
     uv run python benchmarks/bench_compare.py --mysql
     uv run python benchmarks/bench_compare.py --mysql-latency
+    uv run python benchmarks/bench_compare.py --ci --json benchmarks/results/benchmark_history.json
 """
 
+import argparse
 import asyncio
-import sys
+import datetime
+import json
+import os
+import subprocess
 import time
 from statistics import quantiles
 from typing import Optional
@@ -19,9 +24,18 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from pydantic import BaseModel
 from pydantic_resolve import Loader, Resolver, build_list, build_object
 
-USE_MYSQL = "--mysql" in sys.argv
-USE_MYSQL_LATENCY = "--mysql-latency" in sys.argv
 LATENCY = 0.002  # 2ms simulated round-trip per query
+MAX_HISTORY = 30
+
+
+def parse_args():
+    p = argparse.ArgumentParser(description="pydantic-resolve benchmark runner")
+    p.add_argument("--mysql", action="store_true")
+    p.add_argument("--mysql-latency", action="store_true")
+    p.add_argument("--ci", action="store_true", help="Reduced iterations for CI")
+    p.add_argument("--json", type=str, default=None, metavar="PATH",
+                    help="Append results to this JSON history file")
+    return p.parse_args()
 
 # ──────────────────────────────────────────────────────────
 # ORM Models
@@ -80,10 +94,10 @@ MYSQL_URL = "mysql+asyncmy://root:root@localhost:3306/pydantic_resolve_bench"
 _engine = None
 _session_factory = None
 
-def _ensure_engine():
+def _ensure_engine(use_mysql=False, use_mysql_latency=False):
     global _engine, _session_factory
     if _engine is None:
-        if USE_MYSQL or USE_MYSQL_LATENCY:
+        if use_mysql or use_mysql_latency:
             url = MYSQL_URL
         else:
             url = SQLITE_FILE_URL
@@ -150,9 +164,9 @@ async def seed_data(n_users, n_sprints, n_tasks_per_sprint):
 def _orm_to_dict(obj):
     return {c.key: getattr(obj, c.key) for c in obj.__table__.columns}
 
-def _make_loaders(session_factory):
+def _make_loaders(session_factory, use_mysql_latency=False):
     async def user_loader(user_ids):
-        if USE_MYSQL_LATENCY:
+        if use_mysql_latency:
             await asyncio.sleep(LATENCY)
         async with session_factory() as session:
             result = await session.execute(select(User).where(User.id.in_(user_ids)))
@@ -160,7 +174,7 @@ def _make_loaders(session_factory):
             return build_object(users, user_ids, lambda u: u["id"])
 
     async def posts_by_author_loader(author_ids):
-        if USE_MYSQL_LATENCY:
+        if use_mysql_latency:
             await asyncio.sleep(LATENCY)
         async with session_factory() as session:
             result = await session.execute(select(Post).where(Post.author_id.in_(author_ids)).order_by(Post.id))
@@ -168,7 +182,7 @@ def _make_loaders(session_factory):
             return build_list(posts, author_ids, lambda p: p["author_id"])
 
     async def comments_by_post_loader(post_ids):
-        if USE_MYSQL_LATENCY:
+        if use_mysql_latency:
             await asyncio.sleep(LATENCY)
         async with session_factory() as session:
             result = await session.execute(select(Comment).where(Comment.post_id.in_(post_ids)).order_by(Comment.id))
@@ -176,7 +190,7 @@ def _make_loaders(session_factory):
             return build_list(comments, post_ids, lambda c: c["post_id"])
 
     async def comments_by_author_loader(author_ids):
-        if USE_MYSQL_LATENCY:
+        if use_mysql_latency:
             await asyncio.sleep(LATENCY)
         async with session_factory() as session:
             result = await session.execute(select(Comment).where(Comment.author_id.in_(author_ids)).order_by(Comment.id))
@@ -184,7 +198,7 @@ def _make_loaders(session_factory):
             return build_list(comments, author_ids, lambda c: c["author_id"])
 
     async def tasks_by_sprint_loader(sprint_ids):
-        if USE_MYSQL_LATENCY:
+        if use_mysql_latency:
             await asyncio.sleep(LATENCY)
         async with session_factory() as session:
             result = await session.execute(select(Task).where(Task.sprint_id.in_(sprint_ids)).order_by(Task.id))
@@ -298,6 +312,8 @@ async def bench_q4(sf, views):
 
 N_WARMUP = 5
 N_RUNS = 50
+CI_WARMUP = 2
+CI_RUNS = 20
 
 async def run_bench(fn, n_runs):
     times = []
@@ -312,12 +328,62 @@ def fmt_ms(seconds):
         return f"{seconds * 1_000_000:.0f}us"
     return f"{seconds * 1000:.2f}ms"
 
+
+def _get_commit():
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL
+        ).decode().strip()
+    except Exception:
+        return "unknown"
+
+
+def _get_tag():
+    try:
+        tag = subprocess.check_output(
+            ["git", "describe", "--tags", "--exact-match"], stderr=subprocess.DEVNULL
+        ).decode().strip()
+        return tag
+    except Exception:
+        return None
+
+
+def _save_results(path, results):
+    tag = _get_tag()
+    entry = {
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "version": tag or _get_commit(),
+        "results": results,
+    }
+
+    if os.path.exists(path):
+        with open(path) as f:
+            history = json.load(f)
+    else:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        history = {"version": 1, "entries": []}
+
+    history["entries"].append(entry)
+    history["entries"] = history["entries"][-MAX_HISTORY:]
+
+    with open(path, "w") as f:
+        json.dump(history, f, indent=2)
+
+    print(f"  Results saved to {path} (entry {len(history['entries'])}/{MAX_HISTORY})")
+
+
 async def main():
     global _engine, _session_factory
 
-    if USE_MYSQL_LATENCY:
+    args = parse_args()
+    use_mysql = args.mysql or args.mysql_latency
+    use_mysql_latency = args.mysql_latency
+    n_warmup = CI_WARMUP if args.ci else N_WARMUP
+    n_runs = CI_RUNS if args.ci else N_RUNS
+
+    if use_mysql_latency:
         db_label = f"MySQL 8.0 (localhost, +{LATENCY*1000:.0f}ms simulated latency)"
-    elif USE_MYSQL:
+    elif use_mysql:
         db_label = "MySQL 8.0 (localhost)"
     else:
         db_label = "SQLite (file: bench_temp.db)"
@@ -328,17 +394,19 @@ async def main():
     print("=" * 100)
 
     scenarios = [
-        ("Q1: 1-level (task→owner)", bench_q1),
-        ("Q2: 2-level (sprint→tasks→owner)", bench_q2),
-        ("Q3: 3-level linear (user→posts→comments)", bench_q3),
-        ("Q4: wide parallel (user→posts+comments)", bench_q4),
+        ("Q1", "Q1: 1-level (task→owner)", bench_q1),
+        ("Q2", "Q2: 2-level (sprint→tasks→owner)", bench_q2),
+        ("Q3", "Q3: 3-level linear (user→posts→comments)", bench_q3),
+        ("Q4", "Q4: wide parallel (user→posts+comments)", bench_q4),
     ]
 
     scales = [
-        ("Medium", 20, 10, 20),     # 200 tasks, ~80 posts, ~200 comments
-        ("Large", 50, 20, 50),      # 1000 tasks, ~200 posts, ~500 comments
-        ("XLarge", 200, 50, 50),    # 2500 tasks, ~800 posts, ~2000 comments
+        ("Medium", 20, 10, 20),
+        ("Large", 50, 20, 50),
+        ("XLarge", 200, 50, 50),
     ]
+
+    collected = {}
 
     for scale_name, n_users, n_sprints, n_tasks in scales:
         total_tasks = n_sprints * n_tasks
@@ -347,10 +415,10 @@ async def main():
 
         _engine = None
         _session_factory = None
-        _, sf = _ensure_engine()
+        _, sf = _ensure_engine(use_mysql, use_mysql_latency)
         await setup_db()
         await seed_data(n_users, n_sprints, n_tasks)
-        loaders = _make_loaders(sf)
+        loaders = _make_loaders(sf, use_mysql_latency)
         views = _make_view_models(loaders)
 
         if scale_name == "Medium":
@@ -361,15 +429,14 @@ async def main():
             except Exception as e:
                 print(f"  Correctness verification: FAILED ({e})\n")
 
-        # Header
         print(f"  {'Scenario':<45s} │ {'P50':>9s} {'P95':>9s} │ {'Total':>9s}")
         print(f"  {'─' * 45}─┼─{'─' * 9}─{'─' * 9}─┼─{'─' * 9}")
 
-        for label, bench_fn in scenarios:
+        for qkey, label, bench_fn in scenarios:
             async def run_fn(_fn=bench_fn, _sf=sf, _views=views):
                 await _fn(_sf, _views)
-            await run_bench(run_fn, N_WARMUP)
-            times = await run_bench(run_fn, N_RUNS)
+            await run_bench(run_fn, n_warmup)
+            times = await run_bench(run_fn, n_runs)
 
             p50 = quantiles(times, n=4)[0]
             p95 = quantiles(times, n=20)[18]
@@ -379,7 +446,17 @@ async def main():
                 f"  {label:<45s} │ {fmt_ms(p50):>9s} {fmt_ms(p95):>9s} │ {fmt_ms(total):>9s}"
             )
 
+            collected[f"{scale_name}_{qkey}"] = {
+                "p50_ms": round(p50 * 1000, 3),
+                "p95_ms": round(p95 * 1000, 3),
+                "total_ms": round(total * 1000, 3),
+                "n_runs": n_runs,
+            }
+
     print()
+
+    if args.json:
+        _save_results(args.json, collected)
 
 
 if __name__ == "__main__":

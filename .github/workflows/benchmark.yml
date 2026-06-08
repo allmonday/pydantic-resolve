@@ -1,0 +1,67 @@
+name: Benchmark
+
+on:
+  push:
+    tags:
+      - 'vbench*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Fetch benchmark history from gh-pages
+        run: |
+          mkdir -p benchmarks/results
+          git fetch origin gh-pages
+          git show origin/gh-pages:benchmark/benchmark_history.json > benchmarks/results/benchmark_history.json 2>/dev/null || echo '{"version":1,"entries":[]}' > benchmarks/results/benchmark_history.json
+
+      - name: Run benchmarks
+        run: uv run python benchmarks/bench_compare.py --ci --json benchmarks/results/benchmark_history.json
+
+      - name: Check for regressions
+        id: regression
+        continue-on-error: true
+        run: uv run python benchmarks/report.py --threshold 20
+
+      - name: Generate HTML report
+        if: always()
+        run: uv run python benchmarks/report.py --output benchmarks/results/benchmark_report.html
+
+      - name: Copy results to temp
+        if: always()
+        run: |
+          cp benchmarks/results/benchmark_history.json /tmp/benchmark_history.json
+          cp benchmarks/results/benchmark_report.html /tmp/benchmark_report.html
+
+      - name: Deploy to gh-pages
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin gh-pages
+          git checkout gh-pages
+          mkdir -p benchmark
+          cp /tmp/benchmark_history.json benchmark/benchmark_history.json
+          cp /tmp/benchmark_report.html benchmark/index.html
+          git add benchmark/benchmark_history.json benchmark/index.html
+          git diff --cached --quiet || git commit -m "bench: update benchmark results"
+          git push origin gh-pages
