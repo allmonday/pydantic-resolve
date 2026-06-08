@@ -34,6 +34,14 @@ class _Node:
     ancestor_collectors: dict = None  # {alias: {sign: Collector}}
 
 
+@dataclass
+class _ResolveJob:
+    bn: _Node
+    field_name: str
+    trim_field: str
+    method: Callable
+
+
 def _get_metadata_from_cache(resolver_class_id: int, root_class: type):
     """Get metadata from two-level cache."""
     resolver_cache = METADATA_CACHE.get(resolver_class_id)
@@ -207,9 +215,9 @@ class Resolver:
             ))
         return children
 
-    async def _do_resolve(self, job: tuple, node_to_bn: dict[int, _Node]) -> tuple[_Node, object]:
+    async def _do_resolve(self, job: _ResolveJob, node_to_bn: dict[int, _Node]) -> tuple[_Node, object]:
         """Execute a single resolve job. Set value on node, return (bn, val) for deferred child collection."""
-        bn, field_name, trim_field, method = job
+        bn, field_name, trim_field, method = job.bn, job.field_name, job.trim_field, job.method
 
         tid = None
         path = []
@@ -370,7 +378,7 @@ class Resolver:
                     bn.node, bn.kls, self.metadata)
 
                 for field_name, trim_field, method in resolve_fields:
-                    resolve_jobs.append((bn, field_name, trim_field, method))
+                    resolve_jobs.append(_ResolveJob(bn, field_name, trim_field, method))
 
                 if object_fields:
                     bn_object_fields.append((bn, object_fields))
