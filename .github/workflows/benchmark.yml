@@ -5,8 +5,7 @@ on:
     branches: [master]
     paths:
       - 'pydantic_resolve/**'
-      - 'benchmarks/**'
-      - '!benchmarks/results/**'
+      - 'benchmarks/bench_compare.py'
   workflow_dispatch:
 
 permissions:
@@ -31,6 +30,14 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
 
+      - name: Fetch benchmark history from gh-pages
+        run: |
+          git fetch origin gh-pages
+          git checkout origin/gh-pages -- benchmark/benchmark_history.json 2>/dev/null || echo "No existing history"
+          git checkout master
+          mkdir -p benchmarks/results
+          cp benchmark/benchmark_history.json benchmarks/results/benchmark_history.json 2>/dev/null || echo "Starting fresh"
+
       - name: Run benchmarks
         run: uv run python benchmarks/bench_compare.py --ci --json benchmarks/results/benchmark_history.json
 
@@ -43,23 +50,17 @@ jobs:
         if: always()
         run: uv run python benchmarks/report.py --output benchmarks/results/benchmark_report.html
 
-      - name: Commit results
+      - name: Deploy to gh-pages
         if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add benchmarks/results/benchmark_history.json benchmarks/results/benchmark_report.html
-          git diff --cached --quiet || git commit -m "bench: update benchmark results [skip ci]"
-          git push
-
-      - name: Deploy to gh-pages
-        if: always()
-        run: |
           git fetch origin gh-pages
           git checkout gh-pages
           mkdir -p benchmark
+          cp benchmarks/results/benchmark_history.json benchmark/benchmark_history.json
           cp benchmarks/results/benchmark_report.html benchmark/index.html
-          git add benchmark/index.html
-          git diff --cached --quiet || git commit -m "bench: deploy benchmark report"
+          git add benchmark/benchmark_history.json benchmark/index.html
+          git diff --cached --quiet || git commit -m "bench: update benchmark results"
           git push origin gh-pages
           git checkout master
