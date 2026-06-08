@@ -338,20 +338,21 @@ def _get_commit():
         return "unknown"
 
 
-def _get_branch():
+def _get_tag():
     try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"], stderr=subprocess.DEVNULL
+        tag = subprocess.check_output(
+            ["git", "describe", "--tags", "--exact-match"], stderr=subprocess.DEVNULL
         ).decode().strip()
+        return tag
     except Exception:
-        return "unknown"
+        return None
 
 
 def _save_results(path, results):
+    tag = _get_tag()
     entry = {
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "commit": _get_commit(),
-        "branch": _get_branch(),
+        "version": tag or _get_commit(),
         "results": results,
     }
 

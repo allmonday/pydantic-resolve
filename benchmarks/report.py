@@ -58,7 +58,7 @@ def check_regression(history, threshold):
     current = entries[-1]
     regressions = []
 
-    print(f"\nComparing {current['commit']} vs baseline {baseline['commit']}:")
+    print(f"\nComparing {current['version']} vs baseline {baseline['version']}:")
     print(f"  {'Metric':<20s} │ {'Baseline':>10s} → {'Current':>10s} │ {'Change':>8s} │ Status")
     print(f"  {'─' * 20}─┼─{'─' * 10}─{'─' * 10}─┼─{'─' * 8}─┼─{'─' * 10}")
 
@@ -113,10 +113,10 @@ def generate_html_report(history, output_path):
                 cells += "<td>-</td><td>-</td>"
         rows_html += f"<tr>{cells}</tr>\n"
 
-    commit_headers = ""
+    version_headers = ""
     for entry in entries:
         ts = entry["timestamp"][:10]
-        commit_headers += f'<th colspan="2">{entry["commit"]} ({ts})</th>\n'
+        version_headers += f'<th colspan="2">{entry["version"]} ({ts})</th>\n'
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -140,7 +140,7 @@ def generate_html_report(history, output_path):
 <p>P50 and P95 latency in milliseconds. Lower is better.</p>
 <table>
 <thead>
-<tr><th>Scenario</th>{commit_headers}</tr>
+<tr><th>Scenario</th>{version_headers}</tr>
 <tr><th></th>{"".join('<th>P50</th><th>P95</th>' for _ in entries)}</tr>
 </thead>
 <tbody>
