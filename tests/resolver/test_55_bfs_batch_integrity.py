@@ -1,8 +1,7 @@
-"""Verify BFS produces fewer and larger DataLoader batches than DFS.
+"""Verify BFS batch integrity — all same-level loads land in a single batch.
 
 This test instruments the batch_load_fn call count and batch sizes
-to prove that DFS can split batches across recursive _traverse calls,
-while BFS guarantees all same-level loads land in a single batch.
+to prove that BFS guarantees optimal batching at each tree level.
 """
 
 from typing import Optional
@@ -97,91 +96,34 @@ def make_views(user_loader, posts_loader, comments_loader):
 # Tests
 # ──────────────────────────────────────────────────────────
 
-async def _run_comparison(n_users: int, mode: str, tracker: BatchTracker):
+async def _run(n_users: int, tracker: BatchTracker):
     user_loader, posts_loader, comments_loader = make_tracked_loaders(tracker)
     UserDeepView = make_views(user_loader, posts_loader, comments_loader)
 
     users = [UserDeepView(id=i, name=f"User_{i}") for i in range(1, n_users + 1)]
     tracker.reset()
-    await Resolver(mode=mode).resolve(users)
-
-
-async def _get_stats(n_users: int):
-    """Run both modes and return (dfs_stats, bfs_stats)."""
-    dfs_tracker = BatchTracker()
-    bfs_tracker = BatchTracker()
-
-    await _run_comparison(n_users, "dfs", dfs_tracker)
-    await _run_comparison(n_users, "bfs", bfs_tracker)
-
-    return dfs_tracker, bfs_tracker
-
-
-async def test_bfs_fewer_batches_than_dfs():
-    """BFS should produce <= DFS batch calls at each depth level.
-
-    With 10 users, each with 3 posts, each with 2 comments:
-    - Level 1 (user→posts): 1 batch of 10 keys in both modes
-    - Level 2 (post→comments): BFS = 1 batch of 30 keys,
-      DFS may split into multiple smaller batches
-    """
-    dfs, bfs = await _get_stats(10)
-
-    # Both should load all data
-    assert dfs.total_keys == bfs.total_keys
-
-    # BFS should make no more batch calls than DFS
-    assert bfs.total_calls <= dfs.total_calls
-
-
-async def test_bfs_max_batch_size_larger():
-    """BFS should produce batches at least as large as DFS."""
-    dfs, bfs = await _get_stats(10)
-
-    # The largest single batch in BFS should be >= DFS's largest
-    assert bfs.max_batch >= dfs.max_batch
+    await Resolver().resolve(users)
 
 
 async def test_bfs_2_level_batch_count():
-    """With enough nodes, DFS splits the level-2 batch.
+    """With 10 users, BFS should produce exactly 2 batch calls (1 for posts, 1 for comments).
 
     The 2-level scenario (User→Post→Comment) has:
-    - Level 1: 10 user_loads (both modes batch into 1 call)
-    - Level 2: 30 post_ids for comments
-
-    In DFS, each User's _execute_resolve_method_field recursively
-    traverses its own posts, potentially splitting the 30-key batch
-    across multiple event loop ticks.
-
-    In BFS, all 30 posts are collected into one level, producing
-    exactly 1 batch call for comments.
+    - Level 1: 10 user loads → 1 batch of 10
+    - Level 2: 30 post loads for comments → 1 batch of 30
     """
-    dfs, bfs = await _get_stats(10)
+    tracker = BatchTracker()
+    await _run(10, tracker)
 
-    # Level 1 (posts): both should be 1 batch of 10
-    # Level 2 (comments):
-    #   BFS: 1 batch of 30
-    #   DFS: >= 1 batch, possibly split
+    # Total keys: 10 posts + 30 comments = 40
+    assert tracker.total_keys == 40
 
-    # Total keys must be identical (10 posts + 30 comments = 40)
-    assert dfs.total_keys == 40
-    assert bfs.total_keys == 40
-
-    # BFS should have exactly 2 batch calls (1 for posts, 1 for comments)
-    assert bfs.total_calls == 2
-
-    # DFS should have >= 2 batch calls (often more due to splitting)
-    assert dfs.total_calls >= 2
-
-    # The key assertion: BFS makes no more calls than DFS
-    # (usually strictly fewer for deeper trees)
-    if dfs.total_calls > bfs.total_calls:
-        # If DFS splits, print details for visibility
-        pass  # assertion already implied by <= above
+    # Exactly 2 batch calls (1 for posts, 1 for comments)
+    assert tracker.total_calls == 2
 
 
-async def test_bfs_single_level_no_difference():
-    """With only 1 level of resolve, DFS and BFS should be identical."""
+async def test_bfs_single_level():
+    """With only 1 level of resolve, should produce exactly 1 batch call."""
     tracker = BatchTracker()
     user_loader, _, _ = make_tracked_loaders(tracker)
 
@@ -196,31 +138,28 @@ async def test_bfs_single_level_no_difference():
     tasks = [TaskView(id=i, owner_id=(i % 5) + 1) for i in range(20)]
 
     tracker.reset()
-    await Resolver(mode="dfs").resolve([TaskView(id=t.id, owner_id=t.owner_id) for t in tasks])
-    dfs_calls = tracker.total_calls
-    dfs_keys = tracker.total_keys
+    await Resolver().resolve(tasks)
 
-    tracker.reset()
-    await Resolver(mode="bfs").resolve([TaskView(id=t.id, owner_id=t.owner_id) for t in tasks])
-    bfs_calls = tracker.total_calls
-    bfs_keys = tracker.total_keys
-
-    # Single level: both should produce identical batching
-    assert dfs_calls == bfs_calls
-    assert dfs_keys == bfs_keys
+    assert tracker.total_calls == 1
+    # DataLoader deduplicates: 20 tasks but only 5 unique owner_ids
+    assert tracker.total_keys == 5
 
 
 async def test_bfs_large_tree_batch_efficiency():
-    """With 50 users, verify BFS consolidates batches more efficiently."""
-    dfs, bfs = await _get_stats(50)
+    """With 50 users, verify BFS consolidates batches efficiently."""
+    tracker = BatchTracker()
+    await _run(50, tracker)
 
-    # Same total work
-    assert dfs.total_keys == bfs.total_keys
+    # DataLoader deduplicates keys:
+    # Level 1: 50 unique user_ids → 50 keys for posts
+    # Level 2: 150 unique post_ids → 150 keys for comments
+    # Total: 50 + 150 = 200
+    assert tracker.total_keys == 200
 
-    # BFS should consolidate more: fewer calls, larger max batch
-    assert bfs.total_calls <= dfs.total_calls
-    assert bfs.max_batch >= dfs.max_batch
+    # Exactly 2 batch calls
+    assert tracker.total_calls == 2
 
-    # Print for manual inspection (visible with -s flag)
-    print(f"\n  DFS: {dfs.total_calls} batch calls, sizes={sorted(dfs.calls, reverse=True)}")
-    print(f"  BFS: {bfs.total_calls} batch calls, sizes={sorted(bfs.calls, reverse=True)}")
+    # Largest batch should be 150 (comments)
+    assert tracker.max_batch == 150
+
+    print(f"\n  BFS: {tracker.total_calls} batch calls, sizes={sorted(tracker.calls, reverse=True)}")

@@ -1,6 +1,4 @@
-"""Generate DFS vs BFS benchmark comparison report.
-
-Runs both modes and produces a side-by-side comparison table.
+"""Generate benchmark report for pydantic-resolve Resolver.
 
 Usage:
     uv run python benchmarks/bench_compare.py
@@ -266,33 +264,33 @@ def _make_view_models(loaders):
 # Benchmark scenarios
 # ──────────────────────────────────────────────────────────
 
-async def bench_q1(sf, views, mode):
+async def bench_q1(sf, views):
     async with sf() as session:
         result = await session.execute(select(Task).order_by(Task.id))
         tasks = result.scalars().all()
     items = [views["TaskToOwner"](id=t.id, title=t.title, owner_id=t.owner_id) for t in tasks]
-    return await Resolver(mode=mode).resolve(items)
+    return await Resolver().resolve(items)
 
-async def bench_q2(sf, views, mode):
+async def bench_q2(sf, views):
     async with sf() as session:
         result = await session.execute(select(Sprint).order_by(Sprint.id))
         sprints = result.scalars().all()
     items = [views["SprintToTasks"](id=s.id, name=s.name) for s in sprints]
-    return await Resolver(mode=mode).resolve(items)
+    return await Resolver().resolve(items)
 
-async def bench_q3(sf, views, mode):
+async def bench_q3(sf, views):
     async with sf() as session:
         result = await session.execute(select(User).order_by(User.id))
         users = result.scalars().all()
     items = [views["UserDeep"](id=u.id, name=u.name) for u in users]
-    return await Resolver(mode=mode).resolve(items)
+    return await Resolver().resolve(items)
 
-async def bench_q4(sf, views, mode):
+async def bench_q4(sf, views):
     async with sf() as session:
         result = await session.execute(select(User).order_by(User.id))
         users = result.scalars().all()
     items = [views["UserWide"](id=u.id, name=u.name) for u in users]
-    return await Resolver(mode=mode).resolve(items)
+    return await Resolver().resolve(items)
 
 # ──────────────────────────────────────────────────────────
 # Runner
@@ -325,7 +323,7 @@ async def main():
         db_label = "SQLite (file: bench_temp.db)"
 
     print("=" * 100)
-    print("  pydantic-resolve Benchmark: DFS vs BFS Comparison")
+    print("  pydantic-resolve Benchmark")
     print(f"  Database: {db_label}")
     print("=" * 100)
 
@@ -358,41 +356,27 @@ async def main():
         if scale_name == "Medium":
             print("  Verifying correctness...")
             try:
-                await bench_q4(sf, views, "dfs")
-                await bench_q4(sf, views, "bfs")
+                await bench_q4(sf, views)
                 print("  Correctness verification: PASSED\n")
             except Exception as e:
                 print(f"  Correctness verification: FAILED ({e})\n")
 
         # Header
-        print(f"  {'Scenario':<45s} │ {'DFS P50':>9s} {'DFS P95':>9s} │ {'BFS P50':>9s} {'BFS P95':>9s} │ {'Δ P50':>9s} {'Δ%':>7s}")
-        print(f"  {'─' * 45}─┼─{'─' * 9}─{'─' * 9}─┼─{'─' * 9}─{'─' * 9}─┼─{'─' * 9}─{'─' * 7}")
+        print(f"  {'Scenario':<45s} │ {'P50':>9s} {'P95':>9s} │ {'Total':>9s}")
+        print(f"  {'─' * 45}─┼─{'─' * 9}─{'─' * 9}─┼─{'─' * 9}")
 
         for label, bench_fn in scenarios:
-            # Run DFS
-            async def run_dfs(_fn=bench_fn, _sf=sf, _views=views):
-                await _fn(_sf, _views, "dfs")
-            await run_bench(run_dfs, N_WARMUP)
-            dfs_times = await run_bench(run_dfs, N_RUNS)
+            async def run_fn(_fn=bench_fn, _sf=sf, _views=views):
+                await _fn(_sf, _views)
+            await run_bench(run_fn, N_WARMUP)
+            times = await run_bench(run_fn, N_RUNS)
 
-            # Run BFS
-            async def run_bfs(_fn=bench_fn, _sf=sf, _views=views):
-                await _fn(_sf, _views, "bfs")
-            await run_bench(run_bfs, N_WARMUP)
-            bfs_times = await run_bench(run_bfs, N_RUNS)
-
-            dfs_p50 = quantiles(dfs_times, n=4)[0]
-            dfs_p95 = quantiles(dfs_times, n=20)[18]
-            bfs_p50 = quantiles(bfs_times, n=4)[0]
-            bfs_p95 = quantiles(bfs_times, n=20)[18]
-
-            delta = bfs_p50 - dfs_p50
-            pct = (delta / dfs_p50 * 100) if dfs_p50 > 0 else 0
+            p50 = quantiles(times, n=4)[0]
+            p95 = quantiles(times, n=20)[18]
+            total = sum(times)
 
             print(
-                f"  {label:<45s} │ {fmt_ms(dfs_p50):>9s} {fmt_ms(dfs_p95):>9s} │ "
-                f"{fmt_ms(bfs_p50):>9s} {fmt_ms(bfs_p95):>9s} │ "
-                f"{fmt_ms(delta):>9s} {pct:>+6.1f}%"
+                f"  {label:<45s} │ {fmt_ms(p50):>9s} {fmt_ms(p95):>9s} │ {fmt_ms(total):>9s}"
             )
 
     print()

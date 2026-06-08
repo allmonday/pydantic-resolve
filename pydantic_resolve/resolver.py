@@ -1,6 +1,5 @@
 import os
 import asyncio
-import contextvars
 from dataclasses import dataclass
 from inspect import iscoroutine
 from typing import TypeVar, Callable, Any
@@ -23,7 +22,7 @@ T = TypeVar("T")
 
 
 @dataclass
-class _BfsNode:
+class _Node:
     """A node in BFS traversal with explicit context (no contextvars)."""
     node: object
     kls: type
@@ -50,15 +49,6 @@ def _set_metadata_to_cache(resolver_class_id: int, root_class: type, metadata) -
     METADATA_CACHE[resolver_class_id][root_class] = metadata
 
 
-def _safe_reset_contextvar(contextvar: contextvars.ContextVar, token):
-    """Safely reset a contextvar, ignoring errors if token is from a different context."""
-    try:
-        contextvar.reset(token)
-    except (ValueError, LookupError):
-        # Token was created in a different context or already reset
-        pass
-
-
 class Resolver:
     # define class attribute using constant to avoid hardcoded name
     locals()[const.ER_DIAGRAM] = None
@@ -76,34 +66,12 @@ class Resolver:
             annotation: type[T] | None=None,
             split_loader_by_type=False,
             resolved_hooks: list[Callable] | None = None,
-            mode: str = "dfs",
             ):
-        
+
         self.debug = debug or os.getenv("PYDANTIC_RESOLVE_DEBUG", "false").lower() == "true"
 
         self.performance = profile_util.Profile()
         self.loader_instance_cache = {}
-
-        # Optimization: Use single dict-based ContextVar for all ancestors
-        # Instead of multiple ContextVars (one per field), use one that holds a dict
-        self._ancestor_contextvar = contextvars.ContextVar(
-            '_ancestors',
-            default=MappingProxyType({}),
-        )
-
-        # Optimization: Use single dict-based ContextVar for collectors
-        self._collector_contextvar = contextvars.ContextVar(
-            '_collectors',
-            default=MappingProxyType({}),
-        )
-
-        # Pre-create parent ContextVar
-        self._parent_contextvar = contextvars.ContextVar('parent', default=None)
-
-        # Legacy compatibility - keep dict-based access for now
-        self.ancestor_vars = {}
-        self.collector_contextvars = {}
-        self.parent_contextvars = {}
 
         # for dataloader which has class attributes, you can assign the value at here
         self.loader_params = loader_params or {}
@@ -121,16 +89,16 @@ class Resolver:
         # only use with pydantic v2
         # for scenario of upgrading from pydantic v1
         # in v1, it supports parsing from another pydantic object which contains not only the fields target
-        # class required but also other fields, but in v2, this will raise exception, type adapter by default only support parsing from 
+        # class required but also other fields, but in v2, this will raise exception, type adapter by default only support parsing from
         # dict or pydantic object which is exactly the same with target class
         #
         # class A(BaseModel):
         #   name: str
         #   id: int
-        # 
+        #
         # class B(BaseModel):
         #   name: str
-        # 
+        #
         # in pydantc v1, parse_obj_as can parse B from A, but in v2, it will raise exception
         # however, with typeAdapter.validate_python(data, from_attribute=True), it can work
         # the cost is performance (about 10% overhead), so it is disabled by default
@@ -148,8 +116,6 @@ class Resolver:
         self.split_loader_by_type = split_loader_by_type
 
         self.resolved_hooks = resolved_hooks or []
-
-        self.mode = mode
 
     def _validate_loader_instance(self, loader_instances: dict[Any, Any]):
         for cls, loader in loader_instances.items():
@@ -176,325 +142,28 @@ class Resolver:
                 'Check Resolver loader_params/global_loader_param or loader_instances.'
             )
         return instance
-    
-    def _prepare_collectors(self, node: object, kls: type):
-        alias_map = analysis.generate_alias_map_with_cloned_collector(kls, self.metadata)
-        if alias_map:
-            # store for later post methods
-            self.object_level_collect_alias_map_store[id(node)] = alias_map
-
-            # Optimization: Use single dict-based ContextVar
-            current_collectors = self._collector_contextvar.get()
-            new_collectors = dict(current_collectors)
-
-            for alias_name, sign_collector_kv in alias_map.items():
-                if alias_name not in new_collectors:
-                    new_collectors[alias_name] = {}
-
-                current_pair = new_collectors[alias_name]
-                if set(sign_collector_kv.keys()) - set(current_pair.keys()):
-                    new_collectors[alias_name] = {**current_pair, **sign_collector_kv}
-
-            token = self._collector_contextvar.set(new_collectors)
-            return lambda: _safe_reset_contextvar(self._collector_contextvar, token)
-
-        return lambda: None
-
-    def _prepare_parent(self, node: object):
-        # Optimization: Use pre-created ContextVar
-        token = self._parent_contextvar.set(node)
-        return lambda: _safe_reset_contextvar(self._parent_contextvar, token)
-
-    def _prepare_expose_fields(self, node: object):
-        expose_dict: dict | None = getattr(node, const.EXPOSE_TO_DESCENDANT, None)
-        if expose_dict:
-            # Optimization: Use single dict-based ContextVar
-            current_ancestors = self._ancestor_contextvar.get()
-            new_ancestors = dict(current_ancestors)
-
-            for field, alias in expose_dict.items():
-                try:
-                    val = getattr(node, field)
-                except AttributeError:
-                    raise AttributeError(f'{field} does not exist')
-                new_ancestors[alias] = val
-
-            token = self._ancestor_contextvar.set(new_ancestors)
-            return lambda: _safe_reset_contextvar(self._ancestor_contextvar, token)
-
-        return lambda: None
-
-    def _prepare_ancestor_context(self):
-        # Optimization: Single .get() call instead of multiple
-        return self._ancestor_contextvar.get()
-
-    def _execute_resolve_method(
-            self,
-            kls: type,
-            field: str,
-            method: Callable):
-
-        params = {}
-        resolve_param = analysis.get_resolve_method_param(kls, field, self.metadata)
-
-        if resolve_param['context']:
-            params['context'] = self.context
-        if resolve_param['ancestor_context']:
-            params['ancestor_context'] = self._prepare_ancestor_context()
-        if resolve_param['parent']:
-            params['parent'] = self._parent_contextvar.get()
-        
-        for loader in resolve_param['dataloaders']:
-            loader_instance = self._get_loader_instance(loader['path'], loader['type_key'])
-            params[loader['param']] = loader_instance
-
-        return method(**params)
-
-    def _execute_post_method(
-            self,
-            node: object,
-            kls: type,
-            kls_path: str,
-            field: str,
-            method: Callable):
-
-        params = {}
-        post_param = analysis.get_post_method_params(kls, field, self.metadata)
-
-        if post_param['context']:
-            params['context'] = self.context
-        if post_param['ancestor_context']:
-            params['ancestor_context'] = self._prepare_ancestor_context()
-        if post_param['parent']:
-            params['parent'] = self._parent_contextvar.get()
-        
-        for loader in post_param['dataloaders']:
-            loader_instance = self._get_loader_instance(loader['path'], loader['type_key'])
-            params[loader['param']] = loader_instance
-
-        alias_map = self.object_level_collect_alias_map_store.get(id(node), {})
-        if alias_map:
-            for collector in post_param['collectors']:
-                signature = analysis.get_collector_sign(kls_path, collector)
-                alias, param = collector['alias'], collector['param']
-                params[param] = alias_map[alias][signature]
-        
-        return method(**params)
-
-    def _execute_post_default_handler(
-            self,
-            node: object,
-            kls: type,
-            kls_path: str,
-            method: Callable):
-
-        params = {}
-        post_default_param = analysis.get_post_default_handler_params(kls, self.metadata)
-
-        if post_default_param is None:
-            return
-
-        if post_default_param['context']:
-            params['context'] = self.context
-        if post_default_param['ancestor_context']:
-            params['ancestor_context'] = self._prepare_ancestor_context()
-        if post_default_param['parent']:
-            params['parent'] = self._parent_contextvar.get()
-
-        alias_map = self.object_level_collect_alias_map_store.get(id(node), {})
-        if alias_map:
-            for collector in post_default_param['collectors']:
-                alias, param = collector['alias'], collector['param']
-                signature = (kls_path, const.POST_DEFAULT_HANDLER, param)
-                params[param] = alias_map[alias][signature]
-
-        return method(**params)
-
-    def _add_values_into_collectors(self, node: object, kls: type):
-        for field, alias in analysis.get_collector_candidates(kls, self.metadata):
-            alias_list = alias if isinstance(alias, (tuple, list)) else (alias,)
-
-            for alias in alias_list:
-                # Use the single dict-based ContextVar
-                collectors = self._collector_contextvar.get()
-                if alias in collectors:
-                    for _, instance in collectors[alias].items():
-                        if isinstance(field, tuple):  # only tuple are allowed to be key
-                            val = [getattr(node, f) for f in field]
-                        else:
-                            val = getattr(node, field)
-                        instance.add(val)
-
-    def _bfs_add_values_into_collectors(self, bn: _BfsNode):
-        """BFS version: add values into ancestor collectors via explicit reference (no contextvar)."""
-        if bn.ancestor_collectors is None:
-            return
-        for field, alias in analysis.get_collector_candidates(bn.kls, self.metadata):
-            alias_list = alias if isinstance(alias, (tuple, list)) else (alias,)
-
-            for alias in alias_list:
-                collectors = bn.ancestor_collectors.get(alias)
-                if collectors:
-                    for _, instance in collectors.items():
-                        if isinstance(field, tuple):
-                            val = [getattr(bn.node, f) for f in field]
-                        else:
-                            val = getattr(bn.node, field)
-                        instance.add(val)
-
-    async def _execute_resolve_method_field(
-            self,
-            node: object,
-            kls: type,
-            field: str,
-            trim_field: str,
-            method: Callable):
-        if self.ensure_type:
-            if not method.__annotations__:
-                raise MissingAnnotationError(f'{field}: return annotation is required')
-
-        val = self._execute_resolve_method(kls, field, method)
-
-        while iscoroutine(val) or asyncio.isfuture(val):
-            val = await val
-
-        if not getattr(method, const.HAS_MAPPER_FUNCTION, False):  # defined in util.mapper
-            val = conversion_util.try_parse_data_to_target_field_type(
-                node,
-                trim_field,
-                val,
-                self.enable_from_attribute_in_type_adapter)
-
-        # Execute resolved hooks (e.g., nested pagination injection)
-        for hook in self.resolved_hooks:
-            hook(node, trim_field, val)
-
-        val = await self._traverse(val, node)
-        setattr(node, trim_field, val)
-
-    async def _execute_post_method_field(
-         self,
-         node: object,
-         kls: type,
-         kls_path: str,
-         field: str,
-         trim_field: str,
-         method: Callable
-    ):
-        val = self._execute_post_method(node, kls, kls_path, field, method)
-
-        while iscoroutine(val) or asyncio.isfuture(val):
-            val = await val
-            
-        if not getattr(method, const.HAS_MAPPER_FUNCTION, False):  # defined in util.mapper
-            val = conversion_util.try_parse_data_to_target_field_type(
-                node,
-                trim_field,
-                val,
-                self.enable_from_attribute_in_type_adapter)
-
-        setattr(node, trim_field, val)
-    
-    async def _traverse(self, node: T, parent: object) -> T:
-        """
-        life cycle:
-        - prepare 
-            - collectors, 
-            - ancestor expose fields 
-            - parent
-        - execute 
-            - resolve method fields/ object fields
-            - post method fields
-            - post default handler
-        - collect
-            - values into ancestor collectors
-        - return node
-        """
-        if isinstance(node, (list, tuple)):
-            await asyncio.gather(*[self._traverse(t, parent) for t in node])
-            return node
-
-        if not analysis.is_acceptable_instance(node):
-            return node
-
-        kls = node.__class__
-        kls_path = class_util.get_kls_full_name(kls)
-
-        reset1 = self._prepare_collectors(node, kls)
-        reset2 = self._prepare_expose_fields(node)
-        reset3 = self._prepare_parent(parent)
-
-        token = None
-        tid = None
-        new_ancestors = None
-
-        if self.debug:
-            ancestors = self.ancestor_list.get() or []
-            new_ancestors = ancestors + [node.__class__.__name__]
-            token = self.ancestor_list.set(new_ancestors)
-            tid = self.performance.get_timer(new_ancestors).start()
-
-        try:
-            resolve_tasks = []
-            post_tasks = []
-
-            # resolve process
-            resolve_fields, object_fields = analysis.get_resolve_fields_and_object_fields_from_object(node, kls, self.metadata)
-            for field, resolve_trim_field, method in resolve_fields:
-                resolve_tasks.append(self._execute_resolve_method_field(
-                    node=node, 
-                    kls=kls, 
-                    field=field, 
-                    trim_field=resolve_trim_field, 
-                    method=method))
-
-            for field, attr_object in object_fields:
-                resolve_tasks.append(self._traverse(attr_object, node))
-
-            await asyncio.gather(*resolve_tasks)
-
-            # post process
-            for post_field, post_trim_field, method in analysis.get_post_methods(node, kls, self.metadata):
-                post_tasks.append(self._execute_post_method_field(
-                    node=node, 
-                    kls=kls, 
-                    kls_path=kls_path, 
-                    field=post_field, 
-                    trim_field=post_trim_field,
-                    method=method))
-
-            await asyncio.gather(*post_tasks)
-
-            default_post_method = getattr(node, const.POST_DEFAULT_HANDLER, None)
-            if default_post_method:
-                val = self._execute_post_default_handler(node, kls, kls_path, default_post_method)
-                while iscoroutine(val) or asyncio.isfuture(val):
-                    val = await val
-
-            self._add_values_into_collectors(node, kls)
-        finally:
-            if self.debug and tid is not None and new_ancestors is not None:
-                self.performance.get_timer(new_ancestors).end(tid)  # type: ignore
-            # reset all contextvars
-            reset1()
-            reset2()
-            reset3()
-            if self.debug and token is not None:
-                _safe_reset_contextvar(self.ancestor_list, token)
-
-        return node
 
     # ──────────────────────────────────────────────────────────
     # BFS traversal
     # ──────────────────────────────────────────────────────────
 
-    def _make_bfs_nodes(self, items: list, parent: object, ancestor_context: dict) -> list[_BfsNode]:
-        """Create _BfsNode wrappers for a list of items."""
+    def _build_ancestor_path(self, bn: _Node, node_to_bn: dict[int, _Node]) -> list[str]:
+        """Build class name path from root to this node (for profile timing keys)."""
+        path = []
+        current = bn
+        while current is not None:
+            path.append(current.kls.__name__)
+            current = node_to_bn.get(id(current.parent)) if current.parent else None
+        path.reverse()
+        return path
+
+    def _make_nodes(self, items: list, parent: object, ancestor_context: dict) -> list[_Node]:
+        """Create _Node wrappers for a list of items."""
         nodes = []
         for item in items:
             if analysis.is_acceptable_instance(item):
                 kls = item.__class__
-                nodes.append(_BfsNode(
+                nodes.append(_Node(
                     node=item,
                     kls=kls,
                     kls_path=class_util.get_kls_full_name(kls),
@@ -503,8 +172,8 @@ class Resolver:
                 ))
         return nodes
 
-    def _child_ancestor_context(self, bn: _BfsNode) -> dict:
-        """Build ancestor context snapshot for children of a BFS node."""
+    def _child_ancestor_context(self, bn: _Node) -> dict:
+        """Build ancestor context snapshot for children of a node."""
         child_ctx = dict(bn.ancestor_context)
         expose_dict: dict | None = getattr(bn.node, const.EXPOSE_TO_DESCENDANT, None)
         if expose_dict:
@@ -515,8 +184,8 @@ class Resolver:
                     raise AttributeError(f'{fld} does not exist')
         return child_ctx
 
-    def _collect_bfs_children(self, val: object, parent: object, ancestor_context: dict) -> list[_BfsNode]:
-        """Collect Pydantic model instances from a resolved value as next-level BFS nodes."""
+    def _collect_children(self, val: object, parent: object, ancestor_context: dict) -> list[_Node]:
+        """Collect Pydantic model instances from a resolved value as next-level nodes."""
         children = []
         if val is None:
             return children
@@ -524,53 +193,62 @@ class Resolver:
             for item in val:
                 if analysis.is_acceptable_instance(item):
                     kls = item.__class__
-                    children.append(_BfsNode(
+                    children.append(_Node(
                         node=item, kls=kls,
                         kls_path=class_util.get_kls_full_name(kls),
                         parent=parent, ancestor_context=ancestor_context,
                     ))
         elif analysis.is_acceptable_instance(val):
             kls = val.__class__
-            children.append(_BfsNode(
+            children.append(_Node(
                 node=val, kls=kls,
                 kls_path=class_util.get_kls_full_name(kls),
                 parent=parent, ancestor_context=ancestor_context,
             ))
         return children
 
-    async def _bfs_do_resolve(self, job: tuple) -> list[_BfsNode]:
+    async def _do_resolve(self, job: tuple, node_to_bn: dict[int, _Node]) -> list[_Node]:
         """Execute a single resolve job. Set value on node, return child nodes for next level."""
         bn, field_name, trim_field, method = job
 
-        if self.ensure_type and not method.__annotations__:
-            raise MissingAnnotationError(f'{field_name}: return annotation is required')
+        tid = None
+        if self.debug:
+            path = self._build_ancestor_path(bn, node_to_bn)
+            tid = self.performance.get_timer(path).start()
 
-        # Execute resolve method with explicit context
-        val = self._bfs_execute_resolve_method(
-            bn.kls, field_name, method, bn.parent, bn.ancestor_context)
+        try:
+            if self.ensure_type and not method.__annotations__:
+                raise MissingAnnotationError(f'{field_name}: return annotation is required')
 
-        while iscoroutine(val) or asyncio.isfuture(val):
-            val = await val
+            # Execute resolve method with explicit context
+            val = self._execute_resolve_method(
+                bn.kls, field_name, method, bn.parent, bn.ancestor_context)
 
-        # Type conversion
-        if not getattr(method, const.HAS_MAPPER_FUNCTION, False):
-            val = conversion_util.try_parse_data_to_target_field_type(
-                bn.node, trim_field, val, self.enable_from_attribute_in_type_adapter)
+            while iscoroutine(val) or asyncio.isfuture(val):
+                val = await val
 
-        # Resolved hooks
-        for hook in self.resolved_hooks:
-            hook(bn.node, trim_field, val)
+            # Type conversion
+            if not getattr(method, const.HAS_MAPPER_FUNCTION, False):
+                val = conversion_util.try_parse_data_to_target_field_type(
+                    bn.node, trim_field, val, self.enable_from_attribute_in_type_adapter)
 
-        setattr(bn.node, trim_field, val)
+            # Resolved hooks
+            for hook in self.resolved_hooks:
+                hook(bn.node, trim_field, val)
 
-        # Build child ancestor context
-        child_ctx = self._child_ancestor_context(bn)
-        return self._collect_bfs_children(val, bn.node, child_ctx)
+            setattr(bn.node, trim_field, val)
 
-    def _bfs_execute_resolve_method(
+            # Build child ancestor context
+            child_ctx = self._child_ancestor_context(bn)
+            return self._collect_children(val, bn.node, child_ctx)
+        finally:
+            if self.debug and tid is not None:
+                self.performance.get_timer(path).end(tid)
+
+    def _execute_resolve_method(
             self, kls: type, field: str, method: Callable,
             parent: object, ancestor_context: dict):
-        """Execute resolve method with explicit context (no contextvars)."""
+        """Execute resolve method with explicit context."""
         params = {}
         resolve_param = analysis.get_resolve_method_param(kls, field, self.metadata)
 
@@ -587,8 +265,8 @@ class Resolver:
 
         return method(**params)
 
-    def _bfs_execute_post_method(self, bn: _BfsNode, post_field: str, method: Callable):
-        """Execute post method with explicit context (no contextvars)."""
+    def _execute_post_method(self, bn: _Node, post_field: str, method: Callable):
+        """Execute post method with explicit context."""
         params = {}
         post_param = analysis.get_post_method_params(bn.kls, post_field, self.metadata)
 
@@ -612,8 +290,8 @@ class Resolver:
 
         return method(**params)
 
-    def _bfs_execute_post_default_handler(self, bn: _BfsNode, method: Callable):
-        """Execute post_default_handler with explicit context (no contextvars)."""
+    def _execute_post_default_handler(self, bn: _Node, method: Callable):
+        """Execute post_default_handler with explicit context."""
         params = {}
         post_default_param = analysis.get_post_default_handler_params(bn.kls, self.metadata)
 
@@ -636,7 +314,24 @@ class Resolver:
 
         return method(**params)
 
-    async def _bfs_traverse(self, root):
+    def _add_values_into_collectors(self, bn: _Node):
+        """Add values into ancestor collectors via explicit reference."""
+        if bn.ancestor_collectors is None:
+            return
+        for field, alias in analysis.get_collector_candidates(bn.kls, self.metadata):
+            alias_list = alias if isinstance(alias, (tuple, list)) else (alias,)
+
+            for alias in alias_list:
+                collectors = bn.ancestor_collectors.get(alias)
+                if collectors:
+                    for _, instance in collectors.items():
+                        if isinstance(field, tuple):
+                            val = [getattr(bn.node, f) for f in field]
+                        else:
+                            val = getattr(bn.node, field)
+                        instance.add(val)
+
+    async def _traverse(self, root):
         """BFS level-by-level resolution. Two phases: resolve (top-down), post (bottom-up).
 
         Phase A: resolve_* methods execute top-down, level by level.
@@ -653,19 +348,24 @@ class Resolver:
             items = [root]
 
         # Build initial level
-        levels: list[list[_BfsNode]] = []
-        level_0 = self._make_bfs_nodes(items, parent=None, ancestor_context={})
+        levels: list[list[_Node]] = []
+        level_0 = self._make_nodes(items, parent=None, ancestor_context={})
         if not level_0:
             return root
         levels.append(level_0)
+
+        # Build node_to_bn index incrementally (used for profile timing and collector lookup)
+        node_to_bn: dict[int, _Node] = {}
+        for bn in level_0:
+            node_to_bn[id(bn.node)] = bn
 
         # Phase A: resolve top-down, level by level
         while True:
             current = levels[-1]
 
             # Collect resolve jobs and object_field children
-            resolve_jobs: list[tuple[_BfsNode, str, str, Callable]] = []
-            object_children: list[_BfsNode] = []
+            resolve_jobs: list[tuple[_Node, str, str, Callable]] = []
+            object_children: list[_Node] = []
 
             for bn in current:
                 resolve_fields, object_fields = analysis.get_resolve_fields_and_object_fields_from_object(
@@ -680,18 +380,20 @@ class Resolver:
                     if attr_object is None:
                         continue
                     object_children.extend(
-                        self._collect_bfs_children(attr_object, bn.node, child_ctx))
+                        self._collect_children(attr_object, bn.node, child_ctx))
 
             if not resolve_jobs:
                 # No more resolves at this level, check object children
                 if object_children:
                     levels.append(object_children)
+                    for bn in object_children:
+                        node_to_bn[id(bn.node)] = bn
                     continue
                 break
 
             # Execute all resolves concurrently (DataLoader batches across entire level)
             results = await asyncio.gather(
-                *[self._bfs_do_resolve(job) for job in resolve_jobs]
+                *[self._do_resolve(job, node_to_bn) for job in resolve_jobs]
             )
 
             # Merge resolved children with object children
@@ -703,16 +405,17 @@ class Resolver:
                 break
             levels.append(next_level)
 
+            # Register new level nodes into node_to_bn
+            for bn in next_level:
+                node_to_bn[id(bn.node)] = bn
+
         # Phase B-1: prepare collectors top-down (root→leaf)
         # For each node, clone its collectors and store in object_level_collect_alias_map_store.
         # Also build ancestor_collectors for each node so children know which
         # collector instances to add values to.
-        # Build a node→BfsNode index for O(1) parent lookup.
-        node_to_bn: dict[int, _BfsNode] = {}
+        # (node_to_bn already built during Phase A)
         for depth in range(len(levels)):
             for bn in levels[depth]:
-                node_to_bn[id(bn.node)] = bn
-
                 alias_map = analysis.generate_alias_map_with_cloned_collector(bn.kls, self.metadata)
                 if alias_map:
                     self.object_level_collect_alias_map_store[id(bn.node)] = alias_map
@@ -734,40 +437,58 @@ class Resolver:
                 bn.ancestor_collectors = ac
 
         # Phase B-2: execute post methods + add values into collectors, bottom-up
-        # Within each level: post methods must run first (they may modify fields
-        # that are then collected), then add_into_collectors sends the values up.
+        # Within each level: named post methods run first, then post_default_handler
+        # runs after all named post methods complete, then add_into_collectors sends
+        # the values up.
         for depth in range(len(levels) - 1, -1, -1):
             post_tasks = []
+            default_post_nodes = []
             add_nodes = []
+            post_timers: list[tuple[list[str], object]] = []
             for bn in levels[depth]:
                 add_nodes.append(bn)
 
-                # Execute post methods
+                if self.debug:
+                    path = self._build_ancestor_path(bn, node_to_bn)
+                    tid = self.performance.get_timer(path).start()
+                    post_timers.append((path, tid))
+
+                # Execute named post methods
                 for post_field, post_trim_field, method in analysis.get_post_methods(
                     bn.node, bn.kls, self.metadata
                 ):
                     post_tasks.append(
-                        self._bfs_execute_post_field(bn, post_field, post_trim_field, method))
+                        self._execute_post_field(bn, post_field, post_trim_field, method))
 
-                # post_default_handler
+                # Collect nodes that have post_default_handler (run after gather)
                 default_post_method = getattr(bn.node, const.POST_DEFAULT_HANDLER, None)
                 if default_post_method:
-                    val = self._bfs_execute_post_default_handler(bn, default_post_method)
-                    while iscoroutine(val) or asyncio.isfuture(val):
-                        val = await val
+                    default_post_nodes.append((bn, default_post_method))
 
+            # Wait for all named post methods to complete
             await asyncio.gather(*post_tasks)
+
+            # post_default_handler runs after all named post methods are done
+            for bn, method in default_post_nodes:
+                val = self._execute_post_default_handler(bn, method)
+                while iscoroutine(val) or asyncio.isfuture(val):
+                    val = await val
+
+            # End profile timers for this level
+            if self.debug:
+                for path, tid in post_timers:
+                    self.performance.get_timer(path).end(tid)
 
             # After all post methods complete for this level, add values into collectors
             for bn in add_nodes:
-                self._bfs_add_values_into_collectors(bn)
+                self._add_values_into_collectors(bn)
 
         return root
 
-    async def _bfs_execute_post_field(
-            self, bn: _BfsNode, post_field: str, post_trim_field: str, method: Callable):
-        """Execute a single post method field for BFS mode."""
-        val = self._bfs_execute_post_method(bn, post_field, method)
+    async def _execute_post_field(
+            self, bn: _Node, post_field: str, post_trim_field: str, method: Callable):
+        """Execute a single post method field."""
+        val = self._execute_post_method(bn, post_field, method)
 
         while iscoroutine(val) or asyncio.isfuture(val):
             val = await val
@@ -808,17 +529,12 @@ class Resolver:
             self.metadata,
             self.context,
             split_loader_by_type=self.split_loader_by_type)
-        
+
         has_context = analysis.has_context(self.metadata)
         if has_context and self.context is None:
             raise AttributeError('context is missing')
 
-        self.ancestor_list = contextvars.ContextVar('ancestor_list', default=None)
-
-        if self.mode == "bfs":
-            await self._bfs_traverse(node)
-        else:
-            await self._traverse(node, None)
+        await self._traverse(node)
 
         if self.debug:
             self.performance.report()
