@@ -78,6 +78,7 @@ nav:
   - Reference:
     - Migration Guide: ./migration.md
     - Changelog: ./changelog.md
+    - Benchmark: ./benchmark.md
   - Articles:
     - "Clean Architecture for Python": ./architecture_entity_first.md
     - "Reframing Data Assembly: pydantic-resolve vs SQLAlchemy ORM": ./blog_pydantic_resolve_vs_orm.md
