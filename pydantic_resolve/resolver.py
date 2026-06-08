@@ -337,136 +337,112 @@ class Resolver:
                             val = getattr(bn.node, field)
                         instance.add(val)
 
-    async def _traverse(self, root):
-        """BFS level-by-level resolution. Two phases: resolve (top-down), post (bottom-up).
+    # ──────────────────────────────────────────────────────────
+    # Phase A: resolve top-down
+    # ──────────────────────────────────────────────────────────
 
-        Phase A: resolve_* methods execute top-down, level by level.
-                 All resolves at the same level run concurrently via asyncio.gather,
-                 maximizing DataLoader batch sizes.
+    def _collect_level_jobs(self, current_level: list[_Node]):
+        """Collect resolve jobs and object_fields from all nodes in a level."""
+        resolve_jobs: list[_ResolveJob] = []
+        bn_object_fields: list[tuple[_Node, list]] = []
 
-        Phase B: post_* methods execute bottom-up, level by level.
-                 Ensures children are fully resolved before parent post methods run.
-        """
-        # Flatten root to list
-        if isinstance(root, (list, tuple)):
-            items = list(root)
-        else:
-            items = [root]
+        for bn in current_level:
+            resolve_fields, object_fields = analysis.get_resolve_fields_and_object_fields_from_object(
+                bn.node, bn.kls, self.metadata)
 
-        # Build initial level
-        levels: list[list[_Node]] = []
-        level_0 = self._make_nodes(items, parent=None, ancestor_context={})
-        if not level_0:
-            return root
-        levels.append(level_0)
+            for field_name, trim_field, method in resolve_fields:
+                resolve_jobs.append(_ResolveJob(bn, field_name, trim_field, method))
 
-        # Build node_to_bn index incrementally (used for profile timing and collector lookup)
-        node_to_bn: dict[int, _Node] = {}
-        for bn in level_0:
-            node_to_bn[id(bn.node)] = bn
+            if object_fields:
+                bn_object_fields.append((bn, object_fields))
 
-        # Phase A: resolve top-down, level by level
+        return resolve_jobs, bn_object_fields
+
+    def _collect_next_level(self, resolve_results, bn_object_fields):
+        """Collect child nodes from resolved values and object_fields."""
+        next_level = []
+
+        # Children from resolved values
+        for bn, val in resolve_results:
+            child_ctx = self._child_ancestor_context(bn)
+            next_level.extend(self._collect_children(val, bn.node, child_ctx))
+
+        # Children from object_fields
+        for bn, object_fields in bn_object_fields:
+            child_ctx = self._child_ancestor_context(bn)
+            for _field_name, attr_object in object_fields:
+                if attr_object is None:
+                    continue
+                next_level.extend(
+                    self._collect_children(attr_object, bn.node, child_ctx))
+
+        return next_level
+
+    async def _phase_a_resolve(self, levels: list[list[_Node]], node_to_bn: dict[int, _Node]):
+        """Phase A: resolve_* methods execute top-down, level by level.
+        All resolves at the same level run concurrently via asyncio.gather,
+        maximizing DataLoader batch sizes."""
         while True:
             current = levels[-1]
+            resolve_jobs, bn_object_fields = self._collect_level_jobs(current)
 
-            # Collect resolve jobs and record object_fields per node
-            resolve_jobs: list[tuple[_Node, str, str, Callable]] = []
-            bn_object_fields: list[tuple[_Node, list]] = []
-
-            for bn in current:
-                resolve_fields, object_fields = analysis.get_resolve_fields_and_object_fields_from_object(
-                    bn.node, bn.kls, self.metadata)
-
-                for field_name, trim_field, method in resolve_fields:
-                    resolve_jobs.append(_ResolveJob(bn, field_name, trim_field, method))
-
-                if object_fields:
-                    bn_object_fields.append((bn, object_fields))
-
-            if not resolve_jobs:
-                # No resolves: process object_fields with current (unchanged) context
-                object_children = []
-                for bn, object_fields in bn_object_fields:
-                    child_ctx = self._child_ancestor_context(bn)
-                    for _field_name, attr_object in object_fields:
-                        if attr_object is None:
-                            continue
-                        object_children.extend(
-                            self._collect_children(attr_object, bn.node, child_ctx))
-                if object_children:
-                    levels.append(object_children)
-                    for bn in object_children:
-                        node_to_bn[id(bn.node)] = bn
-                    continue
-                break
-
-            # Execute all resolves concurrently (DataLoader batches across entire level)
+            # Execute all resolves concurrently (empty gather is a no-op)
             results = await asyncio.gather(
                 *[self._do_resolve(job, node_to_bn) for job in resolve_jobs]
             )
 
-            # After ALL resolves complete: collect children with resolved ancestor context.
-            # This ensures expose fields set by resolve_ methods are visible to all children.
-            next_level = []
+            # No jobs at all → done
+            if not resolve_jobs and not bn_object_fields:
+                break
 
-            # Children from resolved values
-            for bn, val in results:
-                child_ctx = self._child_ancestor_context(bn)
-                next_level.extend(self._collect_children(val, bn.node, child_ctx))
-
-            # Children from object_fields
-            for bn, object_fields in bn_object_fields:
-                child_ctx = self._child_ancestor_context(bn)
-                for _field_name, attr_object in object_fields:
-                    if attr_object is None:
-                        continue
-                    next_level.extend(
-                        self._collect_children(attr_object, bn.node, child_ctx))
+            # Collect children from resolved values and object_fields
+            next_level = self._collect_next_level(results, bn_object_fields)
 
             if not next_level:
                 break
             levels.append(next_level)
 
-            # Register new level nodes into node_to_bn
             for bn in next_level:
                 node_to_bn[id(bn.node)] = bn
 
-        # Phase B-1: prepare collectors top-down (root→leaf)
-        # For each node, clone its collectors and store in object_level_collect_alias_map_store.
-        # Also build ancestor_collectors for each node so children know which
-        # collector instances to add values to.
-        # (node_to_bn already built during Phase A)
+    # ──────────────────────────────────────────────────────────
+    # Phase B: post bottom-up
+    # ──────────────────────────────────────────────────────────
+
+    def _phase_b_prepare_collectors(self, levels: list[list[_Node]], node_to_bn: dict[int, _Node]):
+        """Phase B-1: prepare collectors top-down (root→leaf).
+        Clone collectors for each node and build ancestor_collectors references."""
         for depth in range(len(levels)):
             for bn in levels[depth]:
                 alias_map = analysis.generate_alias_map_with_cloned_collector(bn.kls, self.metadata)
                 if alias_map:
                     self.object_level_collect_alias_map_store[id(bn.node)] = alias_map
 
-                # Build ancestor_collectors snapshot: merge parent's collectors with this node's
-                # (this node's collectors shadow parent's for same alias)
-                ac = {}
+                # Build ancestor_collectors: merge parent's collectors with this node's own
+                ancestor_cols = {}
                 if bn.parent is not None:
                     parent_bn = node_to_bn.get(id(bn.parent))
                     if parent_bn and parent_bn.ancestor_collectors:
-                        ac = {k: dict(v) for k, v in parent_bn.ancestor_collectors.items()}
+                        ancestor_cols = {k: dict(v) for k, v in parent_bn.ancestor_collectors.items()}
 
                 if alias_map:
                     for alias_name, sign_kv in alias_map.items():
-                        if alias_name not in ac:
-                            ac[alias_name] = {}
-                        ac[alias_name].update(sign_kv)
+                        if alias_name not in ancestor_cols:
+                            ancestor_cols[alias_name] = {}
+                        ancestor_cols[alias_name].update(sign_kv)
 
-                bn.ancestor_collectors = ac
+                bn.ancestor_collectors = ancestor_cols
 
-        # Phase B-2: execute post methods + add values into collectors, bottom-up
-        # Within each level: named post methods run first, then post_default_handler
-        # runs after all named post methods complete, then add_into_collectors sends
-        # the values up.
+    async def _phase_b_execute_posts(self, levels: list[list[_Node]], node_to_bn: dict[int, _Node]):
+        """Phase B-2: execute post methods bottom-up, level by level.
+        Within each level: named post methods run concurrently first,
+        then post_default_handler runs serially, then add values into collectors."""
         for depth in range(len(levels) - 1, -1, -1):
             post_tasks = []
             default_post_nodes = []
             add_nodes = []
             post_timers: list[tuple[list[str], object]] = []
+
             for bn in levels[depth]:
                 add_nodes.append(bn)
 
@@ -475,35 +451,51 @@ class Resolver:
                     tid = self.performance.get_timer(path).start()
                     post_timers.append((path, tid))
 
-                # Execute named post methods
                 for post_field, post_trim_field, method in analysis.get_post_methods(
                     bn.node, bn.kls, self.metadata
                 ):
                     post_tasks.append(
                         self._execute_post_field(bn, post_field, post_trim_field, method))
 
-                # Collect nodes that have post_default_handler (run after gather)
                 default_post_method = getattr(bn.node, const.POST_DEFAULT_HANDLER, None)
                 if default_post_method:
                     default_post_nodes.append((bn, default_post_method))
 
-            # Wait for all named post methods to complete
             await asyncio.gather(*post_tasks)
 
-            # post_default_handler runs after all named post methods are done
             for bn, method in default_post_nodes:
                 val = self._execute_post_default_handler(bn, method)
                 while iscoroutine(val) or asyncio.isfuture(val):
                     val = await val
 
-            # End profile timers for this level
             if self.debug:
                 for path, tid in post_timers:
                     self.performance.get_timer(path).end(tid)
 
-            # After all post methods complete for this level, add values into collectors
             for bn in add_nodes:
                 self._add_values_into_collectors(bn)
+
+    # ──────────────────────────────────────────────────────────
+    # BFS traversal entry point
+    # ──────────────────────────────────────────────────────────
+
+    async def _traverse(self, root):
+        """BFS level-by-level resolution. Two phases: resolve (top-down), post (bottom-up)."""
+        if isinstance(root, (list, tuple)):
+            items = list(root)
+        else:
+            items = [root]
+
+        level_0 = self._make_nodes(items, parent=None, ancestor_context={})
+        if not level_0:
+            return root
+
+        levels = [level_0]
+        node_to_bn: dict[int, _Node] = {id(bn.node): bn for bn in level_0}
+
+        await self._phase_a_resolve(levels, node_to_bn)
+        self._phase_b_prepare_collectors(levels, node_to_bn)
+        await self._phase_b_execute_posts(levels, node_to_bn)
 
         return root
 
