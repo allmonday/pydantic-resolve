@@ -5,9 +5,6 @@ from pydantic_resolve.use_case import UseCaseService
 from src.entities import MyResolver
 from src.service.task.dtos import TaskSummary
 from src.service.task.methods import (
-    create_task as _create_task,
-)
-from src.service.task.methods import (
     get_task as _get_task,
 )
 from src.service.task.methods import (

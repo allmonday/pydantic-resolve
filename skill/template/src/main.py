@@ -5,7 +5,6 @@ Phase 2: + GraphQL
 Phase 3: + REST + MCP
 """
 from contextlib import asynccontextmanager
-from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

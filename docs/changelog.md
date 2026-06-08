@@ -4,6 +4,27 @@
 - **Minor (x.Y.0)**: New features, backward compatible
 - **Patch (x.y.Z)**: Bug fixes and minor improvements
 
+## 5.8
+
+### 5.8.0 (2026-6-8)
+
+- feat:
+  - **BFS execution mode for Resolver**: replace recursive DFS traversal with level-by-level BFS. All `resolve_*` methods at the same level run concurrently via `asyncio.gather`, maximizing DataLoader batch sizes. Two-phase design: Phase A resolves top-down, Phase B executes `post_*` bottom-up
+- perf:
+  - **DataLoader batch efficiency**: same-level resolves now share a single gather call, significantly increasing DataLoader batch coalescing. Benchmarked P50 improvement: MySQL -22% to -43%, SQLite -14% to -35%
+- fix:
+  - **`post_default_handler` ordering**: now runs after all named `post_*` methods complete at the same level, ensuring consistent data visibility
+  - **`expose_to_descendant` timing**: child ancestor context is now built after all resolves at a level finish, so `resolve_` methods that set expose fields are visible to children
+  - **Debug/profile mode**: restore timing data collection in BFS traversal
+- refactor:
+  - Remove DFS recursive traversal and ContextVar infrastructure (~379 lines)
+  - Replace bare tuple with `_ResolveJob` dataclass for resolve job representation
+  - Extract `_traverse` into `_phase_a_resolve`, `_phase_b_prepare_collectors`, `_phase_b_execute_posts` for readability
+- docs:
+  - Redesign landing page with Clean Architecture emphasis
+  - Improve quick start, post-processing, UseCase MCP, and Voyager guides
+  - Update README with before/after comparison and advanced examples
+
 ## 5.7
 
 ### 5.7.0 (2026-5-21)

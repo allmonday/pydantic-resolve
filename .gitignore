@@ -13,4 +13,7 @@ cov
 .benchmarks
 CLAUDE.md
 .claude
-sitebenchmarks/results/
+site
+*.db
+issues
+benchmarks/results/

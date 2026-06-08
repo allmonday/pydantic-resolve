@@ -4,7 +4,6 @@ from typing import Annotated
 from pydantic_resolve import AutoLoad, DefineSubset
 
 from src.entities import SprintEntity, TaskEntity
-from src.service.task.dtos import TaskSummary
 
 
 class SprintSummary(DefineSubset):

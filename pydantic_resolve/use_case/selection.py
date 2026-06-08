@@ -11,7 +11,7 @@ from __future__ import annotations
 import inspect
 import typing
 from types import UnionType as _UnionType
-from typing import Any, Optional, get_args, get_origin
+from typing import Any, get_args, get_origin
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, create_model
 from pydantic_core import PydanticUndefined
