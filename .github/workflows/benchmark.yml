@@ -2,10 +2,8 @@ name: Benchmark
 
 on:
   push:
-    branches: [master]
-    paths:
-      - 'pydantic_resolve/**'
-      - 'benchmarks/bench_compare.py'
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
