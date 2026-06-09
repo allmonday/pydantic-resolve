@@ -53,7 +53,9 @@
   - Improve quick start, post-processing, UseCase MCP, and Voyager guides
   - Update README with before/after comparison and advanced examples
 
-### 5.8.1 (2026-6-9)
+## 5.9
+
+### 5.9.0 (2026-6-9)
 
 - perf:
   - **BFS resolver hot path optimization**: reduce per-node overhead across all BFS phases. Benchmark comparison (5.8.0 → 5.8.1, pytest-benchmark, mean time):
