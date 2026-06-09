@@ -38,10 +38,15 @@ async def test_annotation_param():
 
 @pytest.mark.asyncio
 async def test_without_annotation_param():
+    """Without annotation, Resolver deduces root_class from the first element.
+    In BFS mode only the first element's class is scanned, so B's post_desc
+    is silently skipped (no error, but desc remains empty for B instances)."""
     items: list[Item] = [
         A(id=1, name='item1'),
         B(id=2, name='item2'),
         A(id=3, name='item3'),
     ]
-    with pytest.raises(Exception):
-        await Resolver().resolve(items)
+    resolved = await Resolver().resolve(items)
+    assert resolved[0].desc == 'a: item1-1'
+    assert resolved[1].desc == ''  # B was not scanned, post_desc never ran
+    assert resolved[2].desc == 'a: item3-3'
