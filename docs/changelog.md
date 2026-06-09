@@ -53,6 +53,27 @@
   - Improve quick start, post-processing, UseCase MCP, and Voyager guides
   - Update README with before/after comparison and advanced examples
 
+### 5.8.1 (2026-6-9)
+
+- perf:
+  - **BFS resolver hot path optimization**: reduce per-node overhead across all BFS phases. Benchmark comparison (5.8.0 → 5.8.1, pytest-benchmark, mean time):
+
+    | Scenario                        | 5.8.0 (ms) | 5.8.1 (ms) | Delta   |
+    |---------------------------------|------------|------------|---------|
+    | very_large_dataset              | 53.75      | 45.68      | -15.0%  |
+    | large_dataset_simple_objects    | 29.02      | 22.56      | -22.3%  |
+    | large_dataset_with_post         | 20.28      | 17.19      | -15.2%  |
+    | expose_three_levels             | 25.10      | 21.72      | -13.5%  |
+    | deep_nesting_standard           | 14.92      | 13.85      | -7.2%   |
+    | dataloader                      | 27.67      | 27.41      | -0.9%   |
+
+  - Optimizations applied:
+    - `setattr` → `object.__setattr__` to bypass pydantic validation on already-validated values
+    - `copy.deepcopy` → lightweight `_clone_collector` for collector cloning in Phase B
+    - `isinstance` fast path in `try_parse_data_to_target_field_type` to skip redundant `validate_python`
+    - Cache `kls_path` from metadata instead of repeated f-string construction
+    - Inline metadata lookups, eliminating per-node function call overhead and intermediate allocation
+
 ## 5.7
 
 ### 5.7.0 (2026-5-21)
