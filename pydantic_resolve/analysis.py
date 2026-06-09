@@ -785,8 +785,8 @@ def get_collector_sign(kls_path: str, collector: CollectorType) -> tuple:
 
 
 def generate_alias_map_with_cloned_collector(kls: type, mapped_metadata: MappedMetaType):
-    kls_meta = mapped_metadata.get(kls, {})
-    proto = kls_meta.get('alias_map_proto')
+    kls_meta = mapped_metadata[kls]
+    proto = kls_meta['alias_map_proto']
     if not proto:
         return None
     return { alias: {

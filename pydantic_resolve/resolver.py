@@ -326,9 +326,7 @@ class Resolver:
         """Add values into ancestor collectors via explicit reference."""
         if bn.ancestor_collectors is None:
             return
-        kls_meta = self.metadata.get(bn.kls)
-        if kls_meta is None:
-            return
+        kls_meta = self.metadata[bn.kls]
         for field, alias in kls_meta['collect_dict'].items():
             alias_list = alias if isinstance(alias, (tuple, list)) else (alias,)
 
@@ -353,9 +351,7 @@ class Resolver:
         metadata = self.metadata
 
         for bn in current_level:
-            kls_meta = metadata.get(bn.kls)
-            if kls_meta is None:
-                continue
+            kls_meta = metadata[bn.kls]
 
             node = bn.node
             for resolve_field in kls_meta['resolve']:
@@ -465,13 +461,12 @@ class Resolver:
                     tid = self.performance.get_timer(path).start()
                     post_timers.append((path, tid))
 
-                kls_meta = self.metadata.get(bn.kls)
-                if kls_meta is not None:
-                    for post_field in kls_meta['post']:
-                        attr = getattr(bn.node, post_field)
-                        trim_field = kls_meta['post_params'][post_field]['trim_field']
-                        post_tasks.append(
-                            self._execute_post_field(bn, post_field, trim_field, attr))
+                kls_meta = self.metadata[bn.kls]
+                for post_field in kls_meta['post']:
+                    attr = getattr(bn.node, post_field)
+                    trim_field = kls_meta['post_params'][post_field]['trim_field']
+                    post_tasks.append(
+                        self._execute_post_field(bn, post_field, trim_field, attr))
 
                 default_post_method = getattr(bn.node, const.POST_DEFAULT_HANDLER, None)
                 if default_post_method:
