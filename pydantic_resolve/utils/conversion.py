@@ -34,11 +34,9 @@ def try_parse_data_to_target_field_type(
     1. get type of target field
     2. parse
     """
-    field_type = None
-
     # from_attribute by default is None
     # if set False it will fail when dealing with namedtuple
-    _enable_from_attribute = True if enable_from_attribute else None 
+    _enable_from_attribute = True if enable_from_attribute else None
 
     # 1. get type of target field
     if isinstance(target, BaseModel):
@@ -49,19 +47,25 @@ def try_parse_data_to_target_field_type(
         if data is None and not _fields[field_name].is_required():
             return data
 
-    # 2. parse
-    if field_type:
-        try:
-            # https://docs.pydantic.dev/latest/concepts/performance/#typeadapter-instantiated-once
-            adapter = TypeAdapterManager.get(field_type)
-            result = adapter.validate_python(data, from_attributes=_enable_from_attribute)
-            return result
-        except ValidationError as e:
-            logger.warning(f'Type mismatch for field "{field_name}", expected: {field_type}')
-            raise e
-
     else:
-        return data  #noqa
+        return data
+
+    # 2. Fast path: data is already the correct type
+    try:
+        if isinstance(data, field_type):
+            return data
+    except TypeError:
+        pass  # parameterized generic (e.g. list[int]) - fall through to validate
+
+    # 3. parse
+    try:
+        # https://docs.pydantic.dev/latest/concepts/performance/#typeadapter-instantiated-once
+        adapter = TypeAdapterManager.get(field_type)
+        result = adapter.validate_python(data, from_attributes=_enable_from_attribute)
+        return result
+    except ValidationError as e:
+        logger.warning(f'Type mismatch for field "{field_name}", expected: {field_type}')
+        raise e
 
 
 def _get_mapping_rule(target, source) -> Callable | None:

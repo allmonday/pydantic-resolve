@@ -1,4 +1,3 @@
-import copy
 import inspect
 from typing import TypedDict
 from inspect import isfunction, isclass
@@ -766,41 +765,6 @@ def is_acceptable_instance(target: object):
     return isinstance(target, BaseModel)
 
 
-def get_resolve_fields_and_object_fields_from_object(node: object, kls: type, mapped_metadata: MappedMetaType):
-    """
-    resolve_fields: a field with resolve_field method
-    object_fields: a field without resolve_field method but is an object (should traversal)
-    """
-    resolve_fields, object_fields = [], []
-    kls_meta = mapped_metadata.get(kls)
-
-    if kls_meta is None:
-        return [], []
-
-    for resolve_field in kls_meta['resolve']:
-        attr = getattr(node, resolve_field)
-        trim_field = kls_meta['resolve_params'][resolve_field]['trim_field']
-        resolve_fields.append((resolve_field, trim_field, attr))
-
-    for attr_name in kls_meta['object_fields']:
-        attr = getattr(node, attr_name)
-        object_fields.append((attr_name, attr))
-
-    return resolve_fields, object_fields
-
-
-def get_post_methods(node: object, kls: type, mapped_metadata: MappedMetaType):
-    kls_meta = mapped_metadata.get(kls)
-
-    if kls_meta is None:
-        return []
-
-    for post_field in kls_meta['post']:
-        attr = getattr(node, post_field)
-        trim_field = kls_meta['post_params'][post_field]['trim_field']
-        yield post_field, trim_field, attr
-
-
 def get_resolve_method_param(kls: type, resolve_field: str, mapped_metadata: MappedMetaType):
     kls_meta = mapped_metadata.get(kls, {})
     return kls_meta['resolve_params'][resolve_field]
@@ -821,18 +785,24 @@ def get_collector_sign(kls_path: str, collector: CollectorType) -> tuple:
 
 
 def generate_alias_map_with_cloned_collector(kls: type, mapped_metadata: MappedMetaType):
-    kls_meta = mapped_metadata.get(kls, {})
+    kls_meta = mapped_metadata[kls]
+    proto = kls_meta['alias_map_proto']
+    if not proto:
+        return None
     return { alias: {
-        sign: copy.deepcopy(collector) for sign, collector in v.items()
-    } for alias, v in kls_meta['alias_map_proto'].items()}
+        sign: _clone_collector(collector) for sign, collector in v.items()
+    } for alias, v in proto.items()}
 
 
-def get_collector_candidates(kls: type, metadata: MappedMetaType):
-    kls_meta = metadata.get(kls, {})
-    collect_dict = kls_meta['collect_dict']
-
-    for field, alias in collect_dict.items():
-        yield field, alias
+def _clone_collector(collector):
+    """Create a fresh collector instance without deepcopy overhead."""
+    cls = collector.__class__
+    new = cls.__new__(cls)
+    new.alias = collector.alias
+    if hasattr(collector, 'flat'):
+        new.flat = collector.flat
+    new.val = []
+    return new
 
 
 def has_context(mapped_metadata: MappedMetaType):
