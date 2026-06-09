@@ -588,6 +588,12 @@ app.mount('/voyager', create_voyager(app, er_diagram=diagram))
 
 ---
 
+## Credits
+
+- [Faster Breadth-First GraphQL Execution — Shopify Engineering](https://shopify.engineering/faster-breadth-first-graphql-execution)
+
+---
+
 ## License
 
 MIT License
