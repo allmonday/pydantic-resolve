@@ -168,13 +168,14 @@ class Resolver:
     def _make_nodes(self, items: list, parent: object, ancestor_context: dict) -> list[_Node]:
         """Create _Node wrappers for a list of items."""
         nodes = []
+        cache = self._kls_path_cache
         for item in items:
             if analysis.is_acceptable_instance(item):
                 kls = item.__class__
                 nodes.append(_Node(
                     node=item,
                     kls=kls,
-                    kls_path=class_util.get_kls_full_name(kls),
+                    kls_path=cache.get(kls, class_util.get_kls_full_name(kls)),
                     parent=parent,
                     ancestor_context=ancestor_context,
                 ))
@@ -195,6 +196,7 @@ class Resolver:
     def _collect_children(self, val: object, parent: object, ancestor_context: dict) -> list[_Node]:
         """Collect Pydantic model instances from a resolved value as next-level nodes."""
         children = []
+        cache = self._kls_path_cache
         if val is None:
             return children
         if isinstance(val, (list, tuple)):
@@ -203,14 +205,14 @@ class Resolver:
                     kls = item.__class__
                     children.append(_Node(
                         node=item, kls=kls,
-                        kls_path=class_util.get_kls_full_name(kls),
+                        kls_path=cache.get(kls, class_util.get_kls_full_name(kls)),
                         parent=parent, ancestor_context=ancestor_context,
                     ))
         elif analysis.is_acceptable_instance(val):
             kls = val.__class__
             children.append(_Node(
                 node=val, kls=kls,
-                kls_path=class_util.get_kls_full_name(kls),
+                kls_path=cache.get(kls, class_util.get_kls_full_name(kls)),
                 parent=parent, ancestor_context=ancestor_context,
             ))
         return children
@@ -245,7 +247,7 @@ class Resolver:
             for hook in self.resolved_hooks:
                 hook(bn.node, trim_field, val)
 
-            setattr(bn.node, trim_field, val)
+            object.__setattr__(bn.node, trim_field, val)
             return bn, val
         finally:
             if self.debug and tid is not None:
@@ -324,7 +326,10 @@ class Resolver:
         """Add values into ancestor collectors via explicit reference."""
         if bn.ancestor_collectors is None:
             return
-        for field, alias in analysis.get_collector_candidates(bn.kls, self.metadata):
+        kls_meta = self.metadata.get(bn.kls)
+        if kls_meta is None:
+            return
+        for field, alias in kls_meta['collect_dict'].items():
             alias_list = alias if isinstance(alias, (tuple, list)) else (alias,)
 
             for alias in alias_list:
@@ -345,16 +350,25 @@ class Resolver:
         """Collect resolve jobs and object_fields from all nodes in a level."""
         resolve_jobs: list[_ResolveJob] = []
         bn_object_fields: list[tuple[_Node, list]] = []
+        metadata = self.metadata
 
         for bn in current_level:
-            resolve_fields, object_fields = analysis.get_resolve_fields_and_object_fields_from_object(
-                bn.node, bn.kls, self.metadata)
+            kls_meta = metadata.get(bn.kls)
+            if kls_meta is None:
+                continue
 
-            for field_name, trim_field, method in resolve_fields:
-                resolve_jobs.append(_ResolveJob(bn, field_name, trim_field, method))
+            node = bn.node
+            for resolve_field in kls_meta['resolve']:
+                attr = getattr(node, resolve_field)
+                trim_field = kls_meta['resolve_params'][resolve_field]['trim_field']
+                resolve_jobs.append(_ResolveJob(bn, resolve_field, trim_field, attr))
 
-            if object_fields:
-                bn_object_fields.append((bn, object_fields))
+            if kls_meta['object_fields']:
+                obj_fields = []
+                for attr_name in kls_meta['object_fields']:
+                    attr = getattr(node, attr_name)
+                    obj_fields.append((attr_name, attr))
+                bn_object_fields.append((bn, obj_fields))
 
         return resolve_jobs, bn_object_fields
 
@@ -451,11 +465,13 @@ class Resolver:
                     tid = self.performance.get_timer(path).start()
                     post_timers.append((path, tid))
 
-                for post_field, post_trim_field, method in analysis.get_post_methods(
-                    bn.node, bn.kls, self.metadata
-                ):
-                    post_tasks.append(
-                        self._execute_post_field(bn, post_field, post_trim_field, method))
+                kls_meta = self.metadata.get(bn.kls)
+                if kls_meta is not None:
+                    for post_field in kls_meta['post']:
+                        attr = getattr(bn.node, post_field)
+                        trim_field = kls_meta['post_params'][post_field]['trim_field']
+                        post_tasks.append(
+                            self._execute_post_field(bn, post_field, trim_field, attr))
 
                 default_post_method = getattr(bn.node, const.POST_DEFAULT_HANDLER, None)
                 if default_post_method:
@@ -511,7 +527,7 @@ class Resolver:
             val = conversion_util.try_parse_data_to_target_field_type(
                 bn.node, post_trim_field, val, self.enable_from_attribute_in_type_adapter)
 
-        setattr(bn.node, post_trim_field, val)
+        object.__setattr__(bn.node, post_trim_field, val)
 
     async def resolve(self, node: T) -> T:
         if isinstance(node, list) and node == []:
@@ -547,6 +563,9 @@ class Resolver:
         has_context = analysis.has_context(self.metadata)
         if has_context and self.context is None:
             raise AttributeError('context is missing')
+
+        # Build kls → kls_path cache from metadata
+        self._kls_path_cache = {kls: meta['kls_path'] for kls, meta in self.metadata.items()}
 
         await self._traverse(node)
 
