@@ -23,7 +23,11 @@ from pydantic_resolve.graphql.mcp.types.errors import (
     create_success_response,
 )
 from pydantic_resolve.use_case.business import USE_CASE_METHODS_ATTR
-from pydantic_resolve.use_case.compose import ComposeError, compose_and_resolve
+from pydantic_resolve.use_case.compose import (
+    ComposeError,
+    compose_and_resolve,
+    is_introspection_query,
+)
 from pydantic_resolve.use_case.context import FromContext
 from pydantic_resolve.use_case.manager import UseCaseManager
 from pydantic_resolve.use_case.selection import SelectionError, apply_selection
@@ -462,6 +466,14 @@ def create_use_case_mcp_server(
                 ''',
             )
         """
+        if is_introspection_query(query):
+            return create_error_response(
+                "GraphQL introspection is not available via MCP. "
+                "Use describe_service(app_name=..., service_name=...) to discover "
+                "available services, methods, and DTO fields.",
+                MCPErrors.VALIDATION_ERROR,
+            )
+
         try:
             app = manager.get_app(app_name)
         except ValueError:
