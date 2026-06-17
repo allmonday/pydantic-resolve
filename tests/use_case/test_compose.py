@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Annotated, Optional
 
@@ -102,18 +103,57 @@ class ContextService(UseCaseService):
         return [TaskDTO(id=task_id, title=f"Task of {user_id}", owner_id=user_id) for task_id in (1, 2)]
 
 
+# Module-level log so SeqService methods can record their completion order
+# across calls within a single compose query. Cleared per-test via fixture.
+_seq_log: list[str] = []
+
+
+class SeqService(UseCaseService):
+    """Service for verifying execution ordering of queries vs mutations."""
+
+    @query
+    async def slow_query(cls) -> str:
+        await asyncio.sleep(0.02)
+        _seq_log.append("slow_query")
+        return "slow_query"
+
+    @query
+    async def fast_query(cls) -> str:
+        _seq_log.append("fast_query")
+        return "fast_query"
+
+    @mutation
+    async def slow_mutation(cls) -> str:
+        await asyncio.sleep(0.02)
+        _seq_log.append("slow_mutation")
+        return "slow_mutation"
+
+    @mutation
+    async def fast_mutation(cls) -> str:
+        _seq_log.append("fast_mutation")
+        return "fast_mutation"
+
+
 # ──────────────────────────────────────────────────
 # Manager / app fixtures
 # ──────────────────────────────────────────────────
 
 
-def _make_manager(*, enable_mutation: bool = True, context_extractor=None) -> UseCaseManager:
+def _make_manager(
+    *,
+    enable_mutation: bool = True,
+    context_extractor=None,
+    with_seq: bool = False,
+) -> UseCaseManager:
+    services = [SprintService, TaskService]
+    if with_seq:
+        services.append(SeqService)
     return UseCaseManager(
         apps=[
             UseCaseAppConfig(
                 name="project",
                 description="project app",
-                services=[SprintService, TaskService],
+                services=services,
                 enable_mutation=enable_mutation,
                 context_extractor=context_extractor,
             ),
@@ -374,6 +414,97 @@ class TestComposeValidation:
                 app,
                 "{ SprintService { list_sprints { id { foo } } } }",
             )
+
+
+# ──────────────────────────────────────────────────
+# Security: FromContext params cannot be overridden via query args
+# ──────────────────────────────────────────────────
+
+
+class TestComposeFromContextSecurity:
+    """Regression for privilege-escalation via argument override.
+
+    Before the fix, a query like ``{ CtxService { whoami(user_id: 999) } }``
+    would let the client impersonate any user by overwriting the
+    server-injected ``user_id`` FromContext param.
+    """
+
+    @pytest.mark.asyncio
+    async def test_from_context_param_in_query_args_is_rejected(self):
+        app = _make_context_manager().get_app("project")
+        with pytest.raises(ComposeError, match="server-injected") as exc_info:
+            await compose_and_resolve(
+                app,
+                "{ ContextService { get_my_tasks(user_id: 999) { id title } } }",
+            )
+        assert exc_info.value.error_type == "validation_error"
+
+    @pytest.mark.asyncio
+    async def test_from_context_param_still_works_without_query_arg(self):
+        # Sanity: the legitimate path (no query arg, value comes from context)
+        # must still work after the fix.
+        app = _make_context_manager().get_app("project")
+        # context_extractor returns {"user_id": ctx.get("user_id", 0)},
+        # so passing user_id=7 in context yields tasks for user 7.
+        result = await compose_and_resolve(
+            app,
+            "{ ContextService { get_my_tasks { id title } } }",
+            context={"user_id": 7},
+        )
+        tasks = result["ContextService"]["get_my_tasks"]
+        assert all("Task of 7" in t["title"] for t in tasks)
+
+
+# ──────────────────────────────────────────────────
+# Execution ordering: mutations serial, queries parallel
+# ──────────────────────────────────────────────────
+
+
+class TestComposeExecutionOrdering:
+    """Regression for concurrent mutation execution.
+
+    Before the fix, ``asyncio.gather`` ran all plans concurrently, so
+    mutations could complete out of declaration order. GraphQL spec
+    requires mutations to execute serially.
+    """
+
+    def setup_method(self):
+        _seq_log.clear()
+
+    @pytest.mark.asyncio
+    async def test_mutations_execute_in_declaration_order(self):
+        # slow_mutation is declared first but sleeps; if gather ran them
+        # concurrently, fast_mutation would complete first and the log
+        # would be ["fast_mutation", "slow_mutation"]. Serial execution
+        # preserves declaration order: ["slow_mutation", "fast_mutation"].
+        app = _make_manager(with_seq=True).get_app("project")
+        await compose_and_resolve(
+            app,
+            "{ SeqService { slow_mutation fast_mutation } }",
+        )
+        assert _seq_log == ["slow_mutation", "fast_mutation"]
+
+    @pytest.mark.asyncio
+    async def test_queries_run_concurrently(self):
+        # If queries were serial, slow_query (declared first, sleeps 20ms)
+        # would always complete before fast_query. Concurrent execution
+        # lets fast_query win — log = ["fast_query", "slow_query"].
+        app = _make_manager(with_seq=True).get_app("project")
+        await compose_and_resolve(
+            app,
+            "{ SeqService { slow_query fast_query } }",
+        )
+        assert _seq_log == ["fast_query", "slow_query"]
+
+    @pytest.mark.asyncio
+    async def test_single_mutation_works(self):
+        # Sanity: a lone mutation executes and returns a value.
+        app = _make_manager(with_seq=True).get_app("project")
+        result = await compose_and_resolve(
+            app,
+            "{ SeqService { fast_mutation } }",
+        )
+        assert result["SeqService"]["fast_mutation"] == "fast_mutation"
 
 
 # ──────────────────────────────────────────────────

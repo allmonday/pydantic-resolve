@@ -111,8 +111,7 @@ async def compose_and_resolve(
 
     plans = _build_plans(app, parsed)
 
-    results = await asyncio.gather(*[_exec_method(app, p, context) for p in plans])
-    plan_to_result: dict[int, Any] = {id(p): r for p, r in zip(plans, results)}
+    plan_to_result: dict[int, Any] = await _execute_plans(app, plans, context)
 
     root_instance = _build_wrapper_instance(plans, plan_to_result)
 
@@ -250,6 +249,48 @@ async def _exec_method(
         ) from e
 
 
+async def _execute_plans(
+    app: Any,
+    plans: list[ServiceExecutionPlan],
+    context: dict[str, Any] | None,
+) -> dict[int, Any]:
+    """Run plans with GraphQL-compliant execution semantics.
+
+    - ``@query`` methods run concurrently via ``asyncio.gather``.
+    - ``@mutation`` methods run serially in declaration order.
+
+    The relative ordering between the query batch and the mutation batch
+    is NOT guaranteed. If you need create-then-read semantics, issue the
+    mutation and the read as separate compose calls.
+
+    Args:
+        app: UseCaseResources.
+        plans: All ServiceExecutionPlans for this query.
+        context: Request context (flows into FromContext params).
+
+    Returns:
+        ``{id(plan): result}`` map. Each plan in ``plans`` is guaranteed
+        to have an entry.
+    """
+    query_plans = [p for p in plans if p.method_meta.get("kind") != "mutation"]
+    mutation_plans = [p for p in plans if p.method_meta.get("kind") == "mutation"]
+
+    query_results = await asyncio.gather(
+        *[_exec_method(app, p, context) for p in query_plans]
+    )
+
+    plan_to_result: dict[int, Any] = {
+        id(p): r for p, r in zip(query_plans, query_results)
+    }
+
+    # Mutations run sequentially — GraphQL spec requires this so that
+    # writes within a single operation are observable in order.
+    for p in mutation_plans:
+        plan_to_result[id(p)] = await _exec_method(app, p, context)
+
+    return plan_to_result
+
+
 def _prepare_method_kwargs(
     plan: ServiceExecutionPlan, context: dict[str, Any] | None
 ) -> dict[str, Any]:
@@ -260,6 +301,18 @@ def _prepare_method_kwargs(
     sig = inspect.signature(func)
     hints = _resolve_function_type_hints(func)
     valid_params = {n for n in sig.parameters if n != "cls"}
+
+    # FromContext params are server-injected (auth, tenant, etc.) and must
+    # never be settable from query arguments — otherwise a client could
+    # impersonate another user via e.g. ``whoami(user_id: 999)``.
+    leaked_context_args = raw_args.keys() & from_context_params
+    if leaked_context_args:
+        raise ComposeError(
+            f"Argument(s) {sorted(leaked_context_args)} on "
+            f"{plan.service_name}.{plan.method_name} are server-injected "
+            f"(FromContext) and cannot be set from the query.",
+            "validation_error",
+        )
 
     for arg_name in raw_args:
         if arg_name not in valid_params:

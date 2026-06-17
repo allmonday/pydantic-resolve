@@ -430,9 +430,21 @@ def create_use_case_mcp_server(
           the service. Use ``describe_service`` to see signatures.
         - Method arguments go in parentheses on the method field:
           ``get_sprint(sprint_id: 1)``.
+        - Parameters marked ``FromContext`` (server-injected: auth user,
+          tenant, etc.) CANNOT be set from query arguments — doing so
+          returns ``validation_error``. This prevents privilege
+          escalation via argument override.
         - DTO field selection under each method projects into that
           method's return DTO. Nested DTOs require sub-selection.
         - Mutations are only allowed when the app has ``enable_mutation=True``.
+
+        Execution semantics:
+        - ``@query`` methods run concurrently.
+        - ``@mutation`` methods run serially in declaration order.
+        - The relative ordering between queries and mutations within a
+          single compose call is NOT guaranteed. If you need
+          create-then-read semantics (e.g. create a task then read it
+          back), issue them as separate compose_query calls.
 
         The response shape mirrors the request: each Service becomes a
         key whose value is a dict of method-name → result.
