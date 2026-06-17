@@ -34,9 +34,12 @@ from typing import Annotated, Any, get_args, get_origin
 from pydantic import BaseModel, ConfigDict, TypeAdapter, create_model
 from pydantic_core import PydanticUndefined
 
+from graphql import graphql_sync
+
 from pydantic_resolve.graphql.exceptions import QueryParseError
 from pydantic_resolve.graphql.query_parser import QueryParser
 from pydantic_resolve.graphql.types import FieldSelection, ParsedQuery
+from pydantic_resolve.use_case.compose_schema import build_compose_schema
 from pydantic_resolve.resolver import Resolver
 from pydantic_resolve.use_case.business import USE_CASE_METHODS_ATTR
 from pydantic_resolve.use_case.context import FromContext
@@ -84,17 +87,24 @@ async def compose_and_resolve(
     Args:
         app: :class:`UseCaseResources` instance (from ``UseCaseManager.get_app``).
         query: GraphQL query string. Fixed 3-level hierarchy:
-            root → service → method → DTO field selection.
+            root → service → method → DTO field selection. Introspection
+            queries (``__schema`` / ``__type`` / ``__typename``) are
+            auto-routed to :func:`compose_introspect`.
         context: Request-scoped context dict. Flows into ``Resolver``
             and into method params annotated with ``FromContext``.
 
     Returns:
-        Nested dict shaped like ``{service: {method: result}}``.
+        Nested dict shaped like ``{service: {method: result}}`` for
+        normal queries, or ``{"data": ..., "errors": ...}`` for
+        introspection queries (GraphQL response envelope).
 
     Raises:
         ComposeError: For any validation or execution failure. The
             ``error_type`` attribute carries the MCP error code.
     """
+    if is_introspection_query(query):
+        return compose_introspect(app, query)
+
     parsed = _parse_query(query)
     if not parsed.field_tree:
         raise ComposeError("Query is empty", "validation_error")
@@ -437,3 +447,165 @@ def _serialize_result(result: Any) -> Any:
     if hasattr(result, "model_dump"):
         return result.model_dump()
     return result
+
+
+# ============================================================================
+# Introspection (auto-routed from compose_and_resolve)
+# ============================================================================
+
+
+_INTROSPEPTION_KEYWORDS: tuple[str, ...] = ("__schema", "__type", "__typename")
+
+
+def is_introspection_query(query: str) -> bool:
+    """Return True if ``query`` is a GraphQL introspection query.
+
+    Detects ``__schema`` / ``__type`` / ``__typename`` anywhere in the
+    query body. Mirrors the keyword-based detection used by the existing
+    Entity GraphQLHandler (see ``pydantic_resolve/graphql/introspection.py``).
+    """
+    if not query:
+        return False
+    return any(kw in query for kw in _INTROSPEPTION_KEYWORDS)
+
+
+def compose_introspect(
+    app: Any,
+    query: str | None = None,
+) -> dict[str, Any]:
+    """Run a GraphQL introspection query against the app's compose schema.
+
+    Args:
+        app: :class:`UseCaseResources` instance.
+        query: GraphQL query string targeting ``__schema`` / ``__type`` /
+            ``__typename``. If ``None``, runs the canonical full-schema
+            introspection query (the one GraphiQL sends on startup).
+
+    Returns:
+        Standard GraphQL response envelope::
+
+            {"data": {...}, "errors": None or [...]}
+
+    Raises:
+        ComposeError: If the schema cannot be built or the query fails
+            to execute.
+    """
+    try:
+        schema = build_compose_schema(app)
+    except Exception as e:
+        raise ComposeError(
+            f"Failed to build compose schema: {e}",
+            "internal_error",
+        ) from e
+
+    actual_query = query if query is not None else _FULL_INTROSPEPTION_QUERY
+    result = graphql_sync(schema, actual_query)
+
+    if result.errors:
+        messages = [
+            err.message if hasattr(err, "message") else str(err)
+            for err in result.errors
+        ]
+        raise ComposeError(
+            f"Introspection query failed: {'; '.join(messages)}",
+            "validation_error",
+        )
+
+    return {"data": result.data, "errors": None}
+
+
+# Canonical introspection query — subset of what GraphiQL sends.
+# Includes __schema with all standard fields and __type(name:) lookup.
+_FULL_INTROSPEPTION_QUERY = """
+query IntrospectionQuery {
+  __schema {
+    queryType { name }
+    mutationType { name }
+    subscriptionType { name }
+    types {
+      ...FullType
+    }
+    directives {
+      name
+      description
+      locations
+      args {
+        ...InputValue
+      }
+    }
+  }
+}
+
+fragment FullType on __Type {
+  kind
+  name
+  description
+  fields(includeDeprecated: true) {
+    name
+    description
+    args {
+      ...InputValue
+    }
+    type {
+      ...TypeRef
+    }
+    isDeprecated
+    deprecationReason
+  }
+  inputFields {
+    ...InputValue
+  }
+  interfaces {
+    ...TypeRef
+  }
+  enumValues(includeDeprecated: true) {
+    name
+    description
+    isDeprecated
+    deprecationReason
+  }
+  possibleTypes {
+    ...TypeRef
+  }
+}
+
+fragment InputValue on __InputValue {
+  name
+  description
+  type { ...TypeRef }
+  defaultValue
+}
+
+fragment TypeRef on __Type {
+  kind
+  name
+  ofType {
+    kind
+    name
+    ofType {
+      kind
+      name
+      ofType {
+        kind
+        name
+        ofType {
+          kind
+          name
+          ofType {
+            kind
+            name
+            ofType {
+              kind
+              name
+              ofType {
+                kind
+                name
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"""
