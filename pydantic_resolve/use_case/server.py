@@ -23,6 +23,7 @@ from pydantic_resolve.graphql.mcp.types.errors import (
     create_success_response,
 )
 from pydantic_resolve.use_case.business import USE_CASE_METHODS_ATTR
+from pydantic_resolve.use_case.compose import ComposeError, compose_and_resolve
 from pydantic_resolve.use_case.context import FromContext
 from pydantic_resolve.use_case.manager import UseCaseManager
 from pydantic_resolve.use_case.selection import SelectionError, apply_selection
@@ -403,6 +404,90 @@ def create_use_case_mcp_server(
         )
         return response
 
+    # Layer 4: Compose multiple methods in a single GraphQL query
+    @mcp.tool()
+    async def compose_query(
+        app_name: str,
+        query: str,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        """Compose multiple UseCaseService methods in a single GraphQL query.
+
+        Fixed 3-level hierarchy: Query root → Service → Method → DTO field
+        selection. Useful for fetching related data across services in one
+        round trip instead of N ``call_use_case`` invocations.
+
+        Rules:
+        - No aliases (GraphQL ``field:`` syntax). Each field name must be
+          unique within its parent.
+        - Service names must match registered services in the app. Use
+          ``list_services`` to discover them.
+        - Method names must match ``@query`` or ``@mutation`` methods on
+          the service. Use ``describe_service`` to see signatures.
+        - Method arguments go in parentheses on the method field:
+          ``get_sprint(sprint_id: 1)``.
+        - DTO field selection under each method projects into that
+          method's return DTO. Nested DTOs require sub-selection.
+        - Mutations are only allowed when the app has ``enable_mutation=True``.
+
+        The response shape mirrors the request: each Service becomes a
+        key whose value is a dict of method-name → result.
+
+        Args:
+            app_name: Name of the application (from list_apps).
+            query: GraphQL query string.
+            ctx: MCP request context (used for context_extractor).
+
+        Returns:
+            Dictionary with success, data (nested {service: {method:
+            result}}), and optional hint. On failure: error and
+            error_type (one of: validation_error, type_not_found,
+            operation_not_found, query_execution_error,
+            mutation_execution_error, app_not_found, internal_error).
+
+        Example::
+
+            compose_query(
+                app_name="project",
+                query='''
+                {
+                  SprintService {
+                    list_sprints { id name }
+                    get_sprint(sprint_id: 1) { name }
+                  }
+                  TaskService {
+                    get_task(task_id: 1) { title owner_id }
+                  }
+                }
+                ''',
+            )
+        """
+        try:
+            app = manager.get_app(app_name)
+        except ValueError:
+            return create_error_response(
+                f"App '{app_name}' not found. Use list_apps() to see available apps.",
+                MCPErrors.APP_NOT_FOUND,
+            )
+
+        try:
+            context = await _extract_context(app, ctx)
+            data = await compose_and_resolve(app, query, context=context)
+            response = create_success_response(data)
+            response["hint"] = (
+                f"Composed query executed for app '{app_name}'. "
+                f"Use list_services(app_name='{app_name}') to explore more services."
+            )
+            return response
+        except ComposeError as e:
+            error_enum = _compose_error_to_enum(e.error_type)
+            return create_error_response(str(e), error_enum)
+        except Exception as e:
+            return create_error_response(
+                f"Internal error while composing query: {e}",
+                MCPErrors.INTERNAL_ERROR,
+            )
+
     async def _extract_context(
         app: "UseCaseResources", ctx: "Context"
     ) -> dict | None:
@@ -442,6 +527,19 @@ def _coerce_value(value: Any, annotation: Any) -> Any:
         return adapter.validate_python(value)
     except Exception:
         return value
+
+
+def _compose_error_to_enum(error_type: str) -> MCPErrors:
+    """Map ComposeError.error_type string to an MCPErrors member.
+
+    Falls back to VALIDATION_ERROR when the string does not match a known
+    member — this keeps the MCP response well-formed even if compose.py
+    raises with a typo'd error_type.
+    """
+    for member in MCPErrors:
+        if member.value == error_type:
+            return member
+    return MCPErrors.VALIDATION_ERROR
 
 
 def _coerce_kwargs(func: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
