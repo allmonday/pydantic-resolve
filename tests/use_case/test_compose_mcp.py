@@ -1,10 +1,11 @@
 """Tests for the UseCase GraphQL compose MCP server.
 
-Covers ``create_use_case_graphql_mcp_server`` 3-layer progressive
+Covers ``create_use_case_graphql_mcp_server`` 4-layer progressive
 disclosure:
 - Layer 1: ``list_apps`` (cheap app discovery)
-- Layer 2: ``describe_compose_schema`` (per-app compact schema overview)
-- Layer 3: ``compose_query`` (data execution; introspection rejected)
+- Layer 2: ``describe_compose_schema`` (services + method listing)
+- Layer 3: ``describe_compose_method`` (per-method detail)
+- Layer 4: ``compose_query`` (data execution; introspection rejected)
 """
 
 from __future__ import annotations
@@ -167,48 +168,37 @@ class TestListApps:
 
 
 # ──────────────────────────────────────────────────
-# Layer 2: describe_compose_schema
+# Layer 2: describe_compose_schema (services + methods listing only)
 # ──────────────────────────────────────────────────
 
 
 class TestDescribeComposeSchema:
     @pytest.mark.asyncio
-    async def test_returns_services_methods_args_returns_fields(self, mcp_server):
+    async def test_returns_services_and_methods_only(self, mcp_server):
+        """Layer 2 is intentionally lightweight: just service/method
+        names + kinds + descriptions. No args, return types, or DTO
+        fields — those live in Layer 3 to keep this response compact.
+        """
         result = await mcp_server.call_tool(
             "describe_compose_schema", {"app_name": "project"}
         )
         data = json.loads(result.content[0].text)["data"]
-        assert "SprintService" in data["services"]
-        assert "TaskService" in data["services"]
+        assert set(data["services"].keys()) == {"SprintService", "TaskService"}
 
         task_svc = data["services"]["TaskService"]
+        assert task_svc["description"] == "Task service."
+
         method_names = [m["name"] for m in task_svc["methods"]]
-        assert "list_tasks" in method_names
-        assert "get_task" in method_names
-        assert "create_task" in method_names
+        assert {"list_tasks", "get_task", "create_task"} == set(method_names)
 
+        # Each method entry is minimal — name, kind, description only
+        for method in task_svc["methods"]:
+            assert set(method.keys()) == {"name", "kind", "description"}
+        # Args / returns / fields must NOT leak into Layer 2
         get_task = next(m for m in task_svc["methods"] if m["name"] == "get_task")
-        assert get_task["kind"] == "query"
-        assert get_task["returns"] == "Optional[TaskDTO]"
-        arg_names = [a["name"] for a in get_task["args"]]
-        assert arg_names == ["task_id", "include_owner"]
-        task_id_arg = next(a for a in get_task["args"] if a["name"] == "task_id")
-        assert task_id_arg["type"] == "int"
-        include_owner_arg = next(
-            a for a in get_task["args"] if a["name"] == "include_owner"
-        )
-        assert include_owner_arg.get("default") is True
-
-        # Fields are exposed for the return DTO
-        assert {f["name"] for f in get_task["fields"]} == {
-            "id",
-            "title",
-            "owner_id",
-            "owner",
-        }
-        # Nested DTO is marked so LLM knows to sub-select (not expanded)
-        owner_field = next(f for f in get_task["fields"] if f["name"] == "owner")
-        assert owner_field["nested"] is True
+        assert "args" not in get_task
+        assert "returns" not in get_task
+        assert "fields" not in get_task
 
     @pytest.mark.asyncio
     async def test_mutation_filtered_when_disabled(self):
@@ -241,40 +231,179 @@ class TestDescribeComposeSchema:
         assert "project" in body["error"]  # lists available apps
 
     @pytest.mark.asyncio
-    async def test_hint_points_to_compose_query(self, mcp_server):
+    async def test_hint_points_to_describe_compose_method(self, mcp_server):
+        """Layer 2 hint drills into Layer 3, not Layer 4 — the LLM needs
+        method args / return types / DTO fields before it can write a
+        compose query."""
         result = await mcp_server.call_tool(
             "describe_compose_schema", {"app_name": "project"}
         )
         body = json.loads(result.content[0].text)
         hint = body["hint"]
-        assert "compose_query" in hint
+        assert "describe_compose_method" in hint
         # Hint must not cross-reference classic-server tools
         for forbidden in ("list_services", "describe_service", "call_use_case"):
             assert forbidden not in hint, (
                 f"hint must not reference classic tool '{forbidden}'"
             )
 
+
+# ──────────────────────────────────────────────────
+# Layer 3: describe_compose_method (per-method detail)
+# ──────────────────────────────────────────────────
+
+
+class TestDescribeComposeMethod:
+    @pytest.mark.asyncio
+    async def test_returns_args_returns_and_fields(self, mcp_server):
+        result = await mcp_server.call_tool(
+            "describe_compose_method",
+            {
+                "app_name": "project",
+                "service_name": "TaskService",
+                "method_name": "get_task",
+            },
+        )
+        body = json.loads(result.content[0].text)
+        assert body["success"] is True
+        method = body["data"]
+        assert method["name"] == "get_task"
+        assert method["kind"] == "query"
+        assert method["returns"] == "Optional[TaskDTO]"
+
+        # Args include types and defaults
+        arg_names = [a["name"] for a in method["args"]]
+        assert arg_names == ["task_id", "include_owner"]
+        task_id_arg = next(a for a in method["args"] if a["name"] == "task_id")
+        assert task_id_arg["type"] == "int"
+        include_owner_arg = next(
+            a for a in method["args"] if a["name"] == "include_owner"
+        )
+        assert include_owner_arg.get("default") is True
+
+        # Top-level DTO fields are exposed
+        assert {f["name"] for f in method["fields"]} == {
+            "id",
+            "title",
+            "owner_id",
+            "owner",
+        }
+        # Nested DTO is marked but not expanded
+        owner_field = next(f for f in method["fields"] if f["name"] == "owner")
+        assert owner_field["nested"] is True
+
+    @pytest.mark.asyncio
+    async def test_app_not_found(self, mcp_server):
+        result = await mcp_server.call_tool(
+            "describe_compose_method",
+            {
+                "app_name": "no_such_app",
+                "service_name": "TaskService",
+                "method_name": "get_task",
+            },
+        )
+        body = json.loads(result.content[0].text)
+        assert body["success"] is False
+        assert body["error_type"] == "app_not_found"
+
+    @pytest.mark.asyncio
+    async def test_service_not_found(self, mcp_server):
+        result = await mcp_server.call_tool(
+            "describe_compose_method",
+            {
+                "app_name": "project",
+                "service_name": "NoSuchService",
+                "method_name": "get_task",
+            },
+        )
+        body = json.loads(result.content[0].text)
+        assert body["success"] is False
+        assert body["error_type"] == "type_not_found"
+        assert "NoSuchService" in body["error"]
+        # Lists available services so LLM can self-correct
+        assert "TaskService" in body["error"]
+
+    @pytest.mark.asyncio
+    async def test_method_not_found(self, mcp_server):
+        result = await mcp_server.call_tool(
+            "describe_compose_method",
+            {
+                "app_name": "project",
+                "service_name": "TaskService",
+                "method_name": "no_such_method",
+            },
+        )
+        body = json.loads(result.content[0].text)
+        assert body["success"] is False
+        assert body["error_type"] == "operation_not_found"
+        assert "no_such_method" in body["error"]
+        # Lists available methods so LLM can self-correct
+        assert "list_tasks" in body["error"]
+        assert "get_task" in body["error"]
+
+    @pytest.mark.asyncio
+    async def test_mutation_rejected_when_disabled(self):
+        server = create_use_case_graphql_mcp_server(
+            apps=[
+                UseCaseAppConfig(
+                    name="project",
+                    services=[TaskService],
+                    enable_mutation=False,
+                ),
+            ],
+        )
+        result = await server.call_tool(
+            "describe_compose_method",
+            {
+                "app_name": "project",
+                "service_name": "TaskService",
+                "method_name": "create_task",
+            },
+        )
+        body = json.loads(result.content[0].text)
+        assert body["success"] is False
+        assert body["error_type"] == "operation_not_found"
+        assert "mutation" in body["error"].lower()
+
     @pytest.mark.asyncio
     async def test_does_not_leak_from_context_params(
         self, mcp_server_with_context
     ):
+        """user_id is server-injected via FromContext — must NOT appear
+        as a query arg in the method detail (clients cannot set it)."""
         result = await mcp_server_with_context.call_tool(
-            "describe_compose_schema", {"app_name": "project"}
+            "describe_compose_method",
+            {
+                "app_name": "project",
+                "service_name": "ContextService",
+                "method_name": "get_my_tasks",
+            },
         )
-        data = json.loads(result.content[0].text)["data"]
-        get_my_tasks = next(
-            m
-            for m in data["services"]["ContextService"]["methods"]
-            if m["name"] == "get_my_tasks"
-        )
-        # user_id is server-injected via FromContext — must NOT appear as a query arg
-        arg_names = [a["name"] for a in get_my_tasks["args"]]
+        body = json.loads(result.content[0].text)
+        method = body["data"]
+        arg_names = [a["name"] for a in method["args"]]
         assert "user_id" not in arg_names
         assert arg_names == []
 
+    @pytest.mark.asyncio
+    async def test_hint_points_to_compose_query(self, mcp_server):
+        """Layer 3 hint drills into Layer 4 (execution)."""
+        result = await mcp_server.call_tool(
+            "describe_compose_method",
+            {
+                "app_name": "project",
+                "service_name": "TaskService",
+                "method_name": "get_task",
+            },
+        )
+        body = json.loads(result.content[0].text)
+        assert "compose_query" in body["hint"]
+        assert "TaskService" in body["hint"]
+        assert "get_task" in body["hint"]
+
 
 # ──────────────────────────────────────────────────
-# Layer 3: compose_query (data only; introspection rejected)
+# Layer 4: compose_query (data only; introspection rejected)
 # ──────────────────────────────────────────────────
 
 
@@ -320,9 +449,10 @@ class TestComposeQueryTool:
 
     @pytest.mark.asyncio
     async def test_introspection_rejected_with_hint_to_layer_2(self, mcp_server):
-        """Layer 3 rejects ``__schema`` / ``__type`` / ``__typename`` and
-        redirects the LLM to ``describe_compose_schema`` (Layer 2). Layer 2
-        owns schema discovery; Layer 3 owns execution — clean separation.
+        """Layer 4 rejects ``__schema`` / ``__type`` / ``__typename`` and
+        redirects the LLM to ``describe_compose_schema`` (Layer 2). Layers
+        2/3 own schema discovery; Layer 4 owns execution — clean
+        separation.
         """
         result = await mcp_server.call_tool(
             "compose_query",

@@ -8,10 +8,11 @@ UseCaseService business services to AI agents:
   ``call_use_case``. Flat JSON parameters; LLM doesn't need GraphQL
   knowledge.
 - ``create_use_case_graphql_mcp_server`` — GraphQL string style with
-  3-layer progressive disclosure: ``list_apps`` (cheap discovery) →
-  ``describe_compose_schema`` (compact per-app schema overview) →
-  ``compose_query`` (data execution). Mirrors the classic server's
-  pattern, collapsed to 3 layers.
+  4-layer progressive disclosure: ``list_apps`` (cheap discovery) →
+  ``describe_compose_schema`` (service + method listing) →
+  ``describe_compose_method`` (per-method detail: args / returns /
+  DTO fields) → ``compose_query`` (data execution). Mirrors the
+  classic server's pattern.
 
 The two servers are intentionally independent: their docstrings and
 hints do not cross-reference each other. Pick the one that matches your

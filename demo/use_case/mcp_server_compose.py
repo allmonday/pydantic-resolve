@@ -1,9 +1,10 @@
 """GraphQL compose UseCase MCP server for Sprint/Task/User management.
 
-Demonstrates the GraphQL-string MCP style with 3-layer progressive
-disclosure: ``list_apps`` → ``describe_compose_schema`` →
-``compose_query`` (data only; introspection is rejected, schema
-discovery is via Layer 2).
+Demonstrates the GraphQL-string MCP style with 4-layer progressive
+disclosure: ``list_apps`` → ``describe_compose_schema`` (services +
+methods) → ``describe_compose_method`` (single method's args / returns
+/ fields) → ``compose_query`` (data only; introspection is rejected,
+schema discovery is via Layer 2/3).
 
 Independent from ``mcp_server.py`` (the classic progressive-disclosure
 server). Both demos use the same ``services.py`` so the underlying

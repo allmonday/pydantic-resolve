@@ -1,17 +1,19 @@
-"""UseCase GraphQL MCP Server — 3-layer progressive disclosure.
+"""UseCase GraphQL MCP Server — 4-layer progressive disclosure.
 
 A standalone MCP server (independent from ``server.create_use_case_mcp_server``)
-that exposes the compose surface via three tools mirroring the classic
-server's progressive-disclosure pattern (collapsed to 3 layers):
+that exposes the compose surface via four tools mirroring the classic
+server's progressive-disclosure pattern:
 
 - ``list_apps`` — Layer 1: cheap app discovery (names + service counts).
-- ``describe_compose_schema`` — Layer 2: per-app compact schema overview
-  (services + methods + args + return type names + top-level return DTO
-  fields). Nested DTOs are marked ``nested=true`` but not expanded —
-  their field lists are discovered via error recovery in Layer 3 (the
-  ``Unknown field. Available fields: [...]`` message from
-  ``build_subset_model``).
-- ``compose_query`` — Layer 3: execute a GraphQL data query against the
+- ``describe_compose_schema`` — Layer 2: per-app service + method
+  listing (names, kinds, descriptions only). Compact — does NOT include
+  args, return types, or DTO fields.
+- ``describe_compose_method`` — Layer 3: per-method detail (args with
+  types/defaults, return type, top-level DTO fields). Nested DTO fields
+  are marked ``nested=true`` but not expanded — their field lists are
+  discovered via error recovery in Layer 4 (the ``Unknown field.
+  Available fields: [...]`` message from ``build_subset_model``).
+- ``compose_query`` — Layer 4: execute a GraphQL data query against the
   compose surface (3-level hierarchy: Service → Method → DTO field
   selection). Pure data — introspection queries (``__schema`` /
   ``__type`` / ``__typename``) are rejected with a hint pointing back to
@@ -59,12 +61,13 @@ def create_use_case_graphql_mcp_server(
     apps: list[UseCaseAppConfig],
     name: str = "Pydantic-Resolve UseCase GraphQL API",
 ) -> "FastMCP":
-    """Create an MCP server with 3-layer progressive disclosure.
+    """Create an MCP server with 4-layer progressive disclosure.
 
     Independent from ``create_use_case_mcp_server`` (the classic
-    progressive-disclosure server). ``describe_compose_schema`` and
-    ``compose_query`` take ``app_name`` to target a specific app in
-    ``apps``; ``list_apps`` returns the list of valid app names.
+    progressive-disclosure server). ``describe_compose_schema``,
+    ``describe_compose_method``, and ``compose_query`` take ``app_name``
+    to target a specific app in ``apps``; ``list_apps`` returns the list
+    of valid app names.
 
     Args:
         apps: List of ``UseCaseAppConfig`` (same shape as the classic server).
@@ -120,20 +123,16 @@ def create_use_case_graphql_mcp_server(
         except Exception as e:
             return create_error_response(str(e), MCPErrors.INTERNAL_ERROR)
 
-    # Layer 2: compact schema overview
+    # Layer 2: per-app service + method listing (cheap overview)
     @mcp.tool()
     def describe_compose_schema(app_name: str) -> dict[str, Any]:
-        """Compact schema summary for ``compose_query``.
+        """List services and methods for an app.
 
-        Returns services with their ``@query`` / ``@mutation`` methods,
-        each method's args, return type, and (for DTO returns) the list
-        of selectable top-level fields. Use this before composing a query
-        to learn what services / methods / fields exist.
-
-        Nested DTO fields are marked ``nested=true`` but NOT expanded —
-        if you select a nested field with the wrong sub-field, the error
-        response from ``compose_query`` will list the available fields
-        for that DTO.
+        Returns each service's name + description and its ``@query`` /
+        ``@mutation`` method names + kinds + descriptions. Intentionally
+        does NOT include method args, return types, or DTO fields — to
+        keep the response compact. Use ``describe_compose_method`` for
+        any method whose args / return shape you need.
 
         Mutations are filtered out when the app has ``enable_mutation=False``.
 
@@ -142,9 +141,9 @@ def create_use_case_graphql_mcp_server(
 
         Returns:
             Dictionary with ``success``, ``data`` (nested
-            ``{service: {methods: [...]}}``), and a ``hint`` pointing
-            to ``compose_query``. On failure: ``success=False``,
-            ``error``, ``error_type``.
+            ``{service: {methods: [{name, kind, description}]}}``), and
+            a ``hint`` pointing to ``describe_compose_method``. On
+            failure: ``success=False``, ``error``, ``error_type``.
         """
         try:
             app = manager.get_app(app_name)
@@ -163,36 +162,121 @@ def create_use_case_graphql_mcp_server(
                 kind = meta.get("kind", "query") if isinstance(meta, dict) else "query"
                 if kind == "mutation" and not app.enable_mutation:
                     continue
-                method = meta["method"]
-                func = getattr(method, "__func__", method)
-                return_anno = get_return_annotation(method)
-                core_type = _get_pydantic_core_type(return_anno)
-
-                method_info: dict[str, Any] = {
-                    "name": m_name,
-                    "kind": kind,
-                    "description": (
-                        meta.get("description") if isinstance(meta, dict) else None
-                    ),
-                    "args": _build_args_info(func),
-                    "returns": _python_type_to_str(return_anno),
-                }
-                if core_type is not None:
-                    method_info["fields"] = _dto_fields_info(core_type)
-                method_list.append(method_info)
+                method_list.append(
+                    {
+                        "name": m_name,
+                        "kind": kind,
+                        "description": (
+                            meta.get("description") if isinstance(meta, dict) else None
+                        ),
+                    }
+                )
             services[svc_name] = {
                 "description": (svc_cls.__doc__ or None),
                 "methods": method_list,
             }
 
-        data = {"services": services}
+        first_svc = next(iter(services.keys()), "ServiceName")
+        first_method = (
+            services[first_svc]["methods"][0]["name"]
+            if services.get(first_svc, {}).get("methods")
+            else "method_name"
+        )
         return {
             "success": True,
-            "data": data,
+            "data": {"services": services},
+            "hint": (
+                f"Use describe_compose_method(app_name='{app_name}', "
+                f"service_name='{first_svc}', method_name='{first_method}') "
+                f"to inspect args / return type / DTO fields for a method."
+            ),
+        }
+
+    # Layer 3: per-method detail (args, returns, DTO fields)
+    @mcp.tool()
+    def describe_compose_method(
+        app_name: str, service_name: str, method_name: str
+    ) -> dict[str, Any]:
+        """Get detailed info for a single method.
+
+        Returns the method's args (with types + defaults), return type,
+        and (for DTO returns) the list of selectable top-level fields.
+        Use this after ``describe_compose_schema`` to learn a specific
+        method's signature before calling it via ``compose_query``.
+
+        Nested DTO fields are marked ``nested=true`` but NOT expanded —
+        if you select a nested field with the wrong sub-field, the
+        ``compose_query`` error response will list the available fields
+        for that DTO.
+
+        Args:
+            app_name: Name of the application (from ``list_apps``).
+            service_name: Name of the service (from ``describe_compose_schema``).
+            method_name: Name of the method (from ``describe_compose_schema``).
+
+        Returns:
+            Dictionary with ``success``, ``data`` (method detail), and
+            a ``hint`` pointing to ``compose_query``. On failure:
+            ``success=False``, ``error``, ``error_type``.
+        """
+        try:
+            app = manager.get_app(app_name)
+        except ValueError:
+            return create_error_response(
+                f"App '{app_name}' not found. Available apps: "
+                f"{list(manager.apps.keys())}.",
+                MCPErrors.APP_NOT_FOUND,
+            )
+
+        service_cls = app.services.get(service_name)
+        if service_cls is None:
+            return create_error_response(
+                f"Service '{service_name}' not found in app '{app_name}'. "
+                f"Available services: {list(app.services.keys())}.",
+                MCPErrors.TYPE_NOT_FOUND,
+            )
+
+        methods_meta = getattr(service_cls, USE_CASE_METHODS_ATTR, {})
+        meta = methods_meta.get(method_name)
+        if meta is None:
+            return create_error_response(
+                f"Method '{method_name}' not found in service '{service_name}'. "
+                f"Available methods: {list(methods_meta.keys())}.",
+                MCPErrors.OPERATION_NOT_FOUND,
+            )
+
+        kind = meta.get("kind", "query") if isinstance(meta, dict) else "query"
+        if kind == "mutation" and not app.enable_mutation:
+            return create_error_response(
+                f"Method '{method_name}' is a mutation and mutations are "
+                f"disabled for app '{app_name}'.",
+                MCPErrors.OPERATION_NOT_FOUND,
+            )
+
+        method = meta["method"]
+        func = getattr(method, "__func__", method)
+        return_anno = get_return_annotation(method)
+        core_type = _get_pydantic_core_type(return_anno)
+
+        method_info: dict[str, Any] = {
+            "name": method_name,
+            "kind": kind,
+            "description": (
+                meta.get("description") if isinstance(meta, dict) else None
+            ),
+            "args": _build_args_info(func),
+            "returns": _python_type_to_str(return_anno),
+        }
+        if core_type is not None:
+            method_info["fields"] = _dto_fields_info(core_type)
+
+        return {
+            "success": True,
+            "data": method_info,
             "hint": (
                 f"Use compose_query(app_name='{app_name}', "
-                f"query='{{ Service {{ method {{ field }} }} }}') to execute. "
-                f"Method args go in parentheses: get_x(id: 1)."
+                f"query='{{ {service_name} {{ {method_name} {{ field }} }} }}') "
+                f"to execute."
             ),
         }
 
