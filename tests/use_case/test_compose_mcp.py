@@ -273,7 +273,12 @@ class TestDescribeComposeSchema:
 
 class TestDescribeComposeMethod:
     @pytest.mark.asyncio
-    async def test_returns_args_returns_and_fields(self, mcp_server):
+    async def test_returns_args_returns_and_sdl(self, mcp_server):
+        """Layer 3 returns args + returns + sdl. ``fields`` was removed
+        (redundant with sdl — sdl shows the full type tree, including
+        nested DTOs, in one string). Field-shape assertions live in
+        ``test_sdl_includes_method_signature_and_return_type``.
+        """
         result = await mcp_server.call_tool(
             "describe_compose_method",
             {
@@ -299,16 +304,10 @@ class TestDescribeComposeMethod:
         )
         assert include_owner_arg.get("default") is True
 
-        # Top-level DTO fields are exposed
-        assert {f["name"] for f in method["fields"]} == {
-            "id",
-            "title",
-            "owner_id",
-            "owner",
-        }
-        # Nested DTO is marked but not expanded
-        owner_field = next(f for f in method["fields"] if f["name"] == "owner")
-        assert owner_field["nested"] is True
+        # fields key must not be present (redundant with sdl)
+        assert "fields" not in method
+        # sdl is the source of truth for field info
+        assert "sdl" in method
 
     @pytest.mark.asyncio
     async def test_app_not_found(self, mcp_server):

@@ -9,10 +9,10 @@ server's progressive-disclosure pattern:
   listing (names, kinds, descriptions only). Compact — does NOT include
   args, return types, or DTO fields.
 - ``describe_compose_method`` — Layer 3: per-method detail (args with
-  types/defaults, return type, top-level DTO fields). Nested DTO fields
-  are marked ``nested=true`` but not expanded — their field lists are
-  discovered via error recovery in Layer 4 (the ``Unknown field.
-  Available fields: [...]`` message from ``build_subset_model``).
+  types/defaults, return type, and an ``sdl`` string showing the method
+  signature + return DTO + every nested DTO reachable through its
+  fields). The ``sdl`` is the source of truth for field info — top-level
+  and nested alike.
 - ``compose_query`` — Layer 4: execute a GraphQL data query against the
   compose surface (3-level hierarchy: Service → Method → DTO field
   selection). Pure data — introspection queries (``__schema`` /
@@ -48,7 +48,6 @@ from pydantic_resolve.use_case.compose import (
 )
 from pydantic_resolve.use_case.context import FromContext
 from pydantic_resolve.use_case.manager import UseCaseManager
-from pydantic_resolve.use_case.selection import _get_pydantic_core_type
 from pydantic_resolve.use_case.server import _extract_context
 from pydantic_resolve.use_case.types import UseCaseAppConfig
 from pydantic_resolve.utils.types import _resolve_function_type_hints, get_return_annotation
@@ -200,8 +199,7 @@ def create_use_case_graphql_mcp_server(
         """Get detailed info for a single method.
 
         Returns the method's args (with types + defaults), return type,
-        the list of selectable top-level fields (for DTO returns), AND
-        an ``sdl`` string showing the method signature plus full type
+        and an ``sdl`` string showing the method signature plus full type
         definitions for the return DTO and every nested DTO reachable
         through its fields. Use the ``sdl`` field to learn nested DTO
         shapes (e.g. what fields ``owner_detail: UserSummary`` exposes)
@@ -217,8 +215,8 @@ def create_use_case_graphql_mcp_server(
 
         Returns:
             Dictionary with ``success``, ``data`` (``{name, kind,
-            description, args, returns, fields?, sdl?}``), and a ``hint``
-            pointing to ``compose_query``. On failure: ``success=False``,
+            description, args, returns, sdl?}``), and a ``hint`` pointing
+            to ``compose_query``. On failure: ``success=False``,
             ``error``, ``error_type``.
         """
         try:
@@ -258,7 +256,6 @@ def create_use_case_graphql_mcp_server(
         method = meta["method"]
         func = getattr(method, "__func__", method)
         return_anno = get_return_annotation(method)
-        core_type = _get_pydantic_core_type(return_anno)
 
         method_info: dict[str, Any] = {
             "name": method_name,
@@ -269,8 +266,6 @@ def create_use_case_graphql_mcp_server(
             "args": _build_args_info(func),
             "returns": _python_type_to_str(return_anno),
         }
-        if core_type is not None:
-            method_info["fields"] = _dto_fields_info(core_type)
 
         # Focused SDL: method signature + return type + every reachable
         # nested DTO. None when the method returns a scalar (no nested
@@ -457,28 +452,6 @@ def _python_type_to_str(anno: Any) -> str:
     s = str(anno).replace("typing.", "")
     s = re.sub(r"\b[\w.]+\.([A-Z]\w*)", r"\1", s)
     return s
-
-
-def _dto_fields_info(model_cls: type) -> list[dict[str, Any]]:
-    """Compact field info for a Pydantic DTO.
-
-    ``nested=True`` marks fields whose type is itself a Pydantic model
-    (so they require sub-selection in the compose query). Nested DTOs
-    are NOT recursively expanded — their full definitions appear in
-    the ``sdl`` field returned by ``describe_compose_method``.
-    """
-    fields: list[dict[str, Any]] = []
-    for name, field_info in model_cls.model_fields.items():
-        anno = field_info.annotation
-        core = _get_pydantic_core_type(anno)
-        fields.append(
-            {
-                "name": name,
-                "type": _python_type_to_str(anno),
-                "nested": core is not None,
-            }
-        )
-    return fields
 
 
 def _method_sdl(app: Any, service_name: str, method_name: str) -> str | None:
