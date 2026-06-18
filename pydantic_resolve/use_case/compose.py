@@ -12,16 +12,16 @@ Accepts a single GraphQL query with a fixed 3-level hierarchy::
       }
     }
 
-Each (service, method) pair is invoked concurrently. Results are wrapped
-into a dynamic Pydantic model and passed through the existing ``Resolver``
-so any ``resolve_*`` / ``AutoLoad`` on the DTOs still fires. Per-method
-field selection (the third level) is then projected via
+Each (service, method) pair is invoked concurrently. Whether/how to run
+``Resolver`` on the returned DTOs (``resolve_*`` / ``AutoLoad``) is the
+business method's responsibility — compose does not re-resolve. Compose
+only applies the per-method field selection (the third level) via
 ``build_subset_model`` before serialization.
 
 This module is intentionally self-contained: it reuses public utilities
-(``QueryParser``, ``build_subset_model``, ``Resolver``) but does not
-modify ``server_graphql.py`` internals. The MCP tool ``compose_query``
-in ``server_graphql.py`` is a thin wrapper around
+(``QueryParser``, ``build_subset_model``) but does not modify
+``server_graphql.py`` internals. The MCP tool ``compose_query`` in
+``server_graphql.py`` is a thin wrapper around
 :func:`compose_and_resolve`.
 """
 
@@ -32,8 +32,7 @@ import inspect
 from dataclasses import dataclass
 from typing import Annotated, Any, get_args, get_origin
 
-from pydantic import BaseModel, ConfigDict, TypeAdapter, create_model
-from pydantic_core import PydanticUndefined
+from pydantic import BaseModel, TypeAdapter
 
 from graphql import graphql_sync
 
@@ -41,7 +40,6 @@ from pydantic_resolve.graphql.exceptions import QueryParseError
 from pydantic_resolve.graphql.query_parser import QueryParser
 from pydantic_resolve.graphql.types import FieldSelection, ParsedQuery
 from pydantic_resolve.use_case.compose_schema import build_compose_schema
-from pydantic_resolve.resolver import Resolver
 from pydantic_resolve.use_case.business import USE_CASE_METHODS_ATTR
 from pydantic_resolve.use_case.context import FromContext
 from pydantic_resolve.use_case.selection import (
@@ -83,7 +81,7 @@ async def compose_and_resolve(
     query: str,
     context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Parse, validate, execute, resolve, and project a compose query.
+    """Parse, validate, execute, and project a compose query.
 
     Args:
         app: :class:`UseCaseResources` instance (from ``UseCaseManager.get_app``).
@@ -91,8 +89,8 @@ async def compose_and_resolve(
             root → service → method → DTO field selection. Introspection
             queries (``__schema`` / ``__type`` / ``__typename``) are
             auto-routed to :func:`compose_introspect`.
-        context: Request-scoped context dict. Flows into ``Resolver``
-            and into method params annotated with ``FromContext``.
+        context: Request-scoped context dict. Flows into method params
+            annotated with ``FromContext``.
 
     Returns:
         Nested dict shaped like ``{service: {method: result}}`` for
@@ -102,6 +100,12 @@ async def compose_and_resolve(
     Raises:
         ComposeError: For any validation or execution failure. The
             ``error_type`` attribute carries the MCP error code.
+
+    Note:
+        Compose does NOT run ``Resolver`` on the returned DTOs. Business
+        methods are responsible for resolving their own outputs (firing
+        ``resolve_*`` / ``AutoLoad``) before returning. Compose only
+        applies the per-method field selection.
     """
     if is_introspection_query(query):
         return compose_introspect(app, query)
@@ -114,24 +118,10 @@ async def compose_and_resolve(
 
     plan_to_result: dict[int, Any] = await _execute_plans(app, plans, context)
 
-    root_instance = _build_wrapper_instance(plans, plan_to_result)
-
-    if _has_pydantic_return(plans):
-        try:
-            resolved = await Resolver(context=context).resolve(root_instance)
-        except ComposeError:
-            raise
-        except Exception as e:
-            raise ComposeError(f"Resolver error: {e}", "internal_error") from e
-    else:
-        resolved = root_instance
-
     output: dict[str, Any] = {}
     for plan in plans:
         svc_dict = output.setdefault(plan.service_name, {})
-        svc_instance = getattr(resolved, plan.service_name)
-        method_value = getattr(svc_instance, plan.method_name)
-        svc_dict[plan.method_name] = _project_one(method_value, plan)
+        svc_dict[plan.method_name] = _project_one(plan_to_result[id(plan)], plan)
     return output
 
 
@@ -384,56 +374,7 @@ def _get_from_context_params(method: Any) -> set[str]:
 
 
 # ============================================================================
-# Wrapper model + Resolver
-# ============================================================================
-
-
-def _has_pydantic_return(plans: list[ServiceExecutionPlan]) -> bool:
-    for p in plans:
-        if p.return_anno is not None and _get_pydantic_core_type(p.return_anno) is not None:
-            return True
-    return False
-
-
-def _build_wrapper_instance(
-    plans: list[ServiceExecutionPlan], plan_to_result: dict[int, Any]
-) -> BaseModel:
-    by_service: dict[str, list[ServiceExecutionPlan]] = {}
-    for p in plans:
-        by_service.setdefault(p.service_name, []).append(p)
-
-    service_field_defs: dict[str, tuple[Any, Any]] = {}
-    service_model_classes: dict[str, type[BaseModel]] = {}
-
-    for svc_name, svc_plans in by_service.items():
-        method_fields: dict[str, tuple[Any, Any]] = {}
-        for p in svc_plans:
-            anno = p.return_anno if p.return_anno is not None else Any
-            method_fields[p.method_name] = (anno, ...)
-        svc_model = create_model(
-            f"{svc_name}Compose",
-            __config__=ConfigDict(arbitrary_types_allowed=True),
-            **method_fields,
-        )
-        service_model_classes[svc_name] = svc_model
-        service_field_defs[svc_name] = (svc_model, ...)
-
-    root_model = create_model(
-        "ComposeRoot",
-        __config__=ConfigDict(arbitrary_types_allowed=True),
-        **service_field_defs,
-    )
-
-    svc_instances: dict[str, BaseModel] = {}
-    for svc_name, svc_plans in by_service.items():
-        method_values = {p.method_name: plan_to_result[id(p)] for p in svc_plans}
-        svc_instances[svc_name] = service_model_classes[svc_name](**method_values)
-
-    return root_model(**svc_instances)
-
-
-# ============================================================================
-# Selection projection (post-Resolver)
+# Selection projection
 # ============================================================================
 
 

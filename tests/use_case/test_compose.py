@@ -15,7 +15,7 @@ from typing import Annotated, Optional
 import pytest
 from pydantic import BaseModel
 
-from pydantic_resolve import query, mutation
+from pydantic_resolve import Resolver, query, mutation
 from pydantic_resolve.use_case.business import UseCaseService
 from pydantic_resolve.use_case.compose import ComposeError, compose_and_resolve
 from pydantic_resolve.use_case.context import FromContext
@@ -89,7 +89,11 @@ class TaskService(UseCaseService):
         cls, task_id: int, include_owner: bool = True
     ) -> Optional[TaskDTO]:
         """Get a task by ID."""
-        return TaskDTO(id=task_id, title=f"Task {task_id}", owner_id=1)
+        dto = TaskDTO(id=task_id, title=f"Task {task_id}", owner_id=1)
+        # Method self-resolves so resolve_owner fires — compose does not
+        # run Resolver on returned DTOs.
+        resolved = await Resolver().resolve([dto])
+        return resolved[0]
 
     @mutation
     async def create_task(cls, title: str) -> TaskDTO:
@@ -263,8 +267,8 @@ class TestComposeHappyPath:
         assert result["SprintService"]["get_sprint"] is None
 
     @pytest.mark.asyncio
-    async def test_resolver_runs_on_dto_resolve_method(self):
-        """DTO.resolve_owner should fire during Resolver phase, then be projected."""
+    async def test_self_resolved_method_result_is_projected(self):
+        """DTO.resolve_owner fires inside the method (self-resolve); compose just projects."""
         app = _make_manager().get_app("project")
         result = await compose_and_resolve(
             app,
