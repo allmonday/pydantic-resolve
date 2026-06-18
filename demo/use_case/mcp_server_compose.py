@@ -1,22 +1,25 @@
-"""Classic UseCase MCP server for Sprint/Task/User management.
+"""GraphQL compose UseCase MCP server for Sprint/Task/User management.
 
-Demonstrates the progressive-disclosure MCP style:
-- list_apps → list_services → describe_service → call_use_case
+Demonstrates the GraphQL-string MCP style:
+- describe_compose_schema → compose_query
 
-For the GraphQL-string MCP style, see ``mcp_server_compose.py``.
-
-Services and DTOs live in ``services.py`` so the two demos stay in sync.
+Independent from ``mcp_server.py`` (the classic progressive-disclosure
+server). Both demos use the same ``services.py`` so the underlying
+UseCaseService classes stay consistent.
 """
 
-from pydantic_resolve.use_case import UseCaseAppConfig, create_use_case_mcp_server
+from pydantic_resolve.use_case import (
+    UseCaseAppConfig,
+    create_use_case_graphql_mcp_server,
+)
 
 from demo.use_case.database import init_db
 from demo.use_case.services import SprintService, TaskService, UserService
 
 
 def create_server():
-    """Create the classic UseCase MCP server."""
-    return create_use_case_mcp_server(
+    """Create the GraphQL compose UseCase MCP server."""
+    return create_use_case_graphql_mcp_server(
         apps=[
             UseCaseAppConfig(
                 name="sprint",
@@ -24,7 +27,7 @@ def create_server():
                 services=[UserService, TaskService, SprintService],
             ),
         ],
-        name="Sprint UseCase MCP Demo",
+        name="Sprint UseCase GraphQL MCP Demo",
     )
 
 
@@ -38,7 +41,7 @@ def main() -> None:
     mcp = create_server()
 
     mcp_app = mcp.http_app(transport="streamable-http", stateless_http=True)
-    uvicorn.run(mcp_app, host="0.0.0.0", port=8006)
+    uvicorn.run(mcp_app, host="0.0.0.0", port=8007)
 
 
 if __name__ == "__main__":

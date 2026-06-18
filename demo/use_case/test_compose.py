@@ -17,7 +17,6 @@ import pytest
 from demo.use_case.database import init_db
 from pydantic_resolve.use_case.compose import compose_and_resolve
 from pydantic_resolve.use_case.manager import UseCaseManager
-from pydantic_resolve.use_case.server import create_use_case_mcp_server
 from pydantic_resolve.use_case.types import UseCaseAppConfig
 
 
@@ -134,9 +133,12 @@ async def test_compose_autoload_owner_detail_through_selection():
 
 @pytest.mark.asyncio
 async def test_compose_query_tool_end_to_end():
-    from demo.use_case.mcp_server import SprintService, TaskService, UserService
+    from demo.use_case.services import SprintService, TaskService, UserService
+    from pydantic_resolve.use_case.server_graphql import (
+        create_use_case_graphql_mcp_server,
+    )
 
-    mcp = create_use_case_mcp_server(
+    mcp = create_use_case_graphql_mcp_server(
         apps=[
             UseCaseAppConfig(
                 name="sprint",
