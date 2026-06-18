@@ -328,11 +328,10 @@ class TestEntryRouting:
         assert result["data"]["__typename"] == "Query"
 
     @pytest.mark.asyncio
-    async def test_mcp_tool_accepts_introspection(self):
-        """MCP ``compose_query`` accepts GraphQL introspection queries and
-        returns the same envelope as the HTTP/GraphiQL path. Regression
-        for the prior design where MCP rejected ``__schema`` / ``__type``
-        and steered users to a separate discovery tool.
+    async def test_mcp_tool_rejects_introspection_with_hint(self):
+        """Layer 3 (compose_query) rejects GraphQL introspection and
+        redirects to Layer 2 (describe_compose_schema). Schema discovery
+        belongs to Layer 2; Layer 3 owns execution only.
         """
         mcp = create_use_case_graphql_mcp_server(
             apps=[
@@ -348,14 +347,9 @@ class TestEntryRouting:
             {"app_name": "project", "query": "{ __schema { types { name } } }"},
         )
         data = json.loads(result.content[0].text)
-        assert data["success"] is True
-        # Introspection responses are wrapped twice: MCP envelope {success, data, hint}
-        # contains the GraphQL envelope {data, errors} under data.
-        gql_data = data["data"]["data"]
-        type_names = {t["name"] for t in gql_data["__schema"]["types"]}
-        # Query (root), services, and DTOs all surface as types
-        assert "Query" in type_names
-        assert "SprintDTO" in type_names
+        assert data["success"] is False
+        assert "describe_compose_schema" in data["error"]
+        assert data["error_type"] == "validation_error"
 
 
 # ──────────────────────────────────────────────────
