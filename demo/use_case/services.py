@@ -1,9 +1,7 @@
 """Shared UseCase services for the Sprint/Task/User demo.
 
-Used by both the classic progressive-disclosure MCP demo
-(``mcp_server.py``) and the GraphQL compose MCP demo
-(``mcp_server_compose.py``), so the two demos stay in sync without
-duplicating service definitions.
+Consumed by the GraphQL compose MCP demo (``mcp_server_compose.py``)
+and the FastAPI compose demo (``app_compose.py``).
 """
 
 from typing import Annotated

@@ -16,7 +16,6 @@ left-hand Explorer panel will show every service, method, and DTO.
 
 Port 8008 avoids collisions with the other demos:
 - 8000: ``demo/graphql/app.py`` (Entity-based GraphQL)
-- 8006: ``demo/use_case/mcp_server.py`` (UseCase MCP)
 - 8007: ``demo/use_case/app.py`` (UseCase FastAPI REST-style)
 """
 
@@ -36,7 +35,7 @@ from pydantic_resolve.use_case.manager import UseCaseManager
 from pydantic_resolve.use_case.types import UseCaseAppConfig
 
 from demo.use_case.database import init_db
-from demo.use_case.mcp_server import SprintService, TaskService, UserService
+from demo.use_case.services import SprintService, TaskService, UserService
 
 
 # Single shared app — built once at import time so the schema is stable

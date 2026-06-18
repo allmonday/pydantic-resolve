@@ -92,4 +92,4 @@ erDiagram
 - [DefineSubset](./api_subset.zh.md) — `DefineSubset`、`SubsetConfig`
 - [GraphQL API](./api_graphql.zh.md) — `GraphQLHandler`、`@query`、`@mutation`
 - [MCP API](./api_mcp.zh.md) — `create_mcp_server`、`AppConfig`
-- [UseCase MCP API](./api_use_case_mcp.zh.md) — `create_use_case_mcp_server`、`UseCaseService`、`FromContext`
+- [UseCase MCP API](./api_use_case_mcp.zh.md) — `create_use_case_graphql_mcp_server`、`UseCaseService`、`FromContext`

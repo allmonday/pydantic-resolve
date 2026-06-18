@@ -20,8 +20,9 @@ field selection (the third level) is then projected via
 
 This module is intentionally self-contained: it reuses public utilities
 (``QueryParser``, ``build_subset_model``, ``Resolver``) but does not
-modify ``server.py`` internals. The MCP tool ``compose_query`` in
-``server.py`` is a thin wrapper around :func:`compose_and_resolve`.
+modify ``server_graphql.py`` internals. The MCP tool ``compose_query``
+in ``server_graphql.py`` is a thin wrapper around
+:func:`compose_and_resolve`.
 """
 
 from __future__ import annotations

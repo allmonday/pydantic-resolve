@@ -22,16 +22,19 @@ class TaskService(UseCaseService):
 You want AI agents to discover and call these methods through a standard MCP protocol:
 
 ```
-Agent → "What services are available?"
+Agent → "What apps are available?"
       → list_apps() → ["project"]
 
 Agent → "What can TaskService do?"
-      → describe_service("project", "TaskService")
+      → describe_compose_schema("project")
       → [list_tasks(), get_task(task_id)]
 
-Agent → "Show me task 1"
-      → call_use_case("project", "TaskService", "get_task", {"task_id": 1})
-      → {id: 1, title: "Design docs", owner_name: "Ada"}
+Agent → "Show me task 1's title and owner"
+      → describe_compose_method("project", "TaskService", "get_task")
+      → args, return type, SDL with nested DTOs
+
+Agent → compose_query("project", "{ TaskService { get_task(task_id: 1) { title owner { name } } } }")
+      → {TaskService: {get_task: {title: "...", owner: {name: "..."}}}}
 ```
 
 The same `TaskService` classmethods power both FastAPI routes and MCP tool calls. Business logic lives in one place.
@@ -92,9 +95,9 @@ class TaskService(UseCaseService):
 ## Step 2: Create MCP Server
 
 ```python
-from pydantic_resolve.use_case import UseCaseAppConfig, create_use_case_mcp_server
+from pydantic_resolve.use_case import UseCaseAppConfig, create_use_case_graphql_mcp_server
 
-mcp = create_use_case_mcp_server(  # (1)
+mcp = create_use_case_graphql_mcp_server(  # (1)
     apps=[
         UseCaseAppConfig(
             name="project",  # (2)
@@ -102,20 +105,20 @@ mcp = create_use_case_mcp_server(  # (1)
             description="Project management with users and tasks",
         ),
     ],
-    name="Project UseCase API",
+    name="Project UseCase GraphQL API",
 )
 
 mcp.run(transport="streamable-http", port=8080)  # (4)
 ```
 
-1.  `create_use_case_mcp_server` scans services and generates MCP tools.
+1.  `create_use_case_graphql_mcp_server` scans services and registers four discovery tools.
 2.  `name` is the app identifier agents use to target a specific group of services.
 3.  Pass service classes directly — no need to instantiate them.
 4.  Starts an HTTP server that MCP clients connect to.
 
 ## How the Discovery Works
 
-The MCP server exposes four tools that guide AI agents step by step:
+The MCP server exposes four tools that guide AI agents through a discovery funnel:
 
 ```mermaid
 sequenceDiagram
@@ -126,28 +129,26 @@ sequenceDiagram
     A->>M: list_apps()
     M-->>A: ["project"]
 
-    A->>M: list_services("project")
-    M-->>A: ["UserService", "TaskService"]
+    A->>M: describe_compose_schema("project")
+    M-->>A: services, method names (no types)
 
-    A->>M: describe_service("project", "TaskService")
-    M-->>A: methods, schemas, selection hints
+    A->>M: describe_compose_method("project", "TaskService", "get_task")
+    M-->>A: args, return type, SDL with nested DTOs
 
-    A->>M: call_use_case("project", "TaskService", "get_task", {"task_id": 1})
+    A->>M: compose_query("project", "{ TaskService { get_task(task_id: 1) { title owner { name } } } }")
     M->>S: TaskService.get_task(task_id=1)
     S-->>M: TaskSummary(...)
-    M-->>A: {id: 1, title: "Design docs", ...}
+    M-->>A: {TaskService: {get_task: {title, owner: {name}}}}
 ```
 
-1.  `list_apps` — discover available applications.
-2.  `list_services` — list services within an app.
-3.  `describe_service` — show method signatures, parameter schemas, and DTO type definitions.
-4.  `call_use_case` — execute a method and return the result.
+1.  `list_apps` — cheap app discovery (names + service counts).
+2.  `describe_compose_schema` — list services and methods for an app (compact: names + descriptions only).
+3.  `describe_compose_method` — full detail for one method: args, return type, and an `sdl` string showing the method signature plus every nested DTO reachable from its return type.
+4.  `compose_query` — execute a GraphQL data query against the compose surface. Fixed 3-level hierarchy: `Query → Service → Method → DTO field selection`.
 
-!!! tip "Selection support"
+!!! tip "Schema discovery is not introspection"
 
-    For methods returning Pydantic DTOs, `call_use_case` accepts an optional `selection` parameter — a rootless GraphQL-like projection string. It filters the response fields without changing method parameters, data loading, or business execution.
-
-    `describe_service` includes `selection_supported` and `selection_example` on each method so agents know when and how to use it.
+    `compose_query` rejects GraphQL introspection (`__schema`, `__type`, `__typename`). Schema discovery flows through Layers 2 and 3. The `sdl` field in `describe_compose_method` is the source of truth for valid field names — top-level and nested alike.
 
 ## FromContext: Inject Request Context
 
@@ -168,7 +169,7 @@ class TaskService(UseCaseService):
         ...
 ```
 
-1.  `FromContext()` tells the MCP server to inject this parameter from the request context, not from the agent's `params` JSON.
+1.  `FromContext()` tells the MCP server to inject this parameter from the request context, not from the GraphQL query.
 
 Then configure a `context_extractor` on the app:
 
@@ -186,7 +187,7 @@ def extract_user_context(ctx: Context) -> dict:
     return {}
 
 
-mcp = create_use_case_mcp_server(
+mcp = create_use_case_graphql_mcp_server(
     apps=[
         UseCaseAppConfig(
             name="project",
@@ -206,7 +207,7 @@ Data flow:
 flowchart LR
     A["HTTP Request<br/>Bearer token"] --> B["FastMCP Context"]
     B --> C["context_extractor"]
-    C --> D["call_use_case"]
+    C --> D["compose_query"]
     D --> E["TaskService.get_my_tasks<br/>user_id=1"]
 ```
 
@@ -265,7 +266,7 @@ class TaskService(UseCaseService):
         ...
 
 
-mcp = create_use_case_mcp_server(
+mcp = create_use_case_graphql_mcp_server(
     apps=[
         UseCaseAppConfig(
             name="readonly-project",
@@ -276,14 +277,14 @@ mcp = create_use_case_mcp_server(
 )
 ```
 
-1.  When `enable_mutation=False`: `list_services` excludes mutation methods from the count, `describe_service` omits them, and `call_use_case` returns an error if one is called.
+1.  When `enable_mutation=False`: `describe_compose_schema` omits mutation methods, `describe_compose_method` returns an error if one is targeted, and `compose_query` rejects mutations.
 
 ## Multi-App Support
 
 Serve multiple independent application groups from one MCP server:
 
 ```python
-mcp = create_use_case_mcp_server(
+mcp = create_use_case_graphql_mcp_server(
     apps=[
         UseCaseAppConfig(name="project", services=[SprintService, TaskService]),
         UseCaseAppConfig(name="admin", services=[UserService, RoleService]),
@@ -294,18 +295,46 @@ mcp = create_use_case_mcp_server(
 
 Each app has its own services and optional `context_extractor`.
 
+## Composing Multi-Service Queries
+
+The `compose_query` tool executes a single GraphQL query that can fan out across services and methods in one round trip:
+
+```python
+compose_query(
+    app_name="project",
+    query='''
+    {
+      SprintService {
+        list_sprints { id name }
+        get_sprint(sprint_id: 1) { name }
+      }
+      TaskService {
+        get_task(task_id: 1) { title owner_id }
+        list_tasks { title }
+      }
+    }
+    ''',
+)
+```
+
+**Execution semantics:**
+
+- `@query` methods run concurrently.
+- `@mutation` methods run serially in declaration order.
+- Relative ordering between queries and mutations within a single call is NOT guaranteed — split into separate calls for create-then-read flows.
+
 ## GraphQL MCP vs UseCase MCP
 
 | | GraphQL MCP | UseCase MCP |
 |---|---|---|
 | Input | ER Diagram | `UseCaseService` classes |
-| Query | GraphQL syntax | Method signatures |
+| Query | Full GraphQL | GraphQL compose (fixed 3-level: Service → Method → DTO fields) |
 | Best for | Flexible ad-hoc queries | Fixed business operations |
-| Setup | `create_mcp_server` + ERD | `create_use_case_mcp_server` + services |
+| Setup | `create_mcp_server` + ERD | `create_use_case_graphql_mcp_server` + services |
 
 If you already have `UseCaseService` classes powering your FastAPI endpoints, UseCase MCP is the natural choice — zero duplication.
 
 ## Next
 
 - [UseCase MCP API](./api_use_case_mcp.md) — detailed API signatures.
-- [MCP Service](./mcp_service.md) — the GraphQL-based MCP approach.
+- [MCP Service](./mcp_service.md) — the ER-diagram-driven GraphQL MCP approach.

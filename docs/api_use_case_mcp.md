@@ -2,28 +2,28 @@
 
 [中文版](./api_use_case_mcp.zh.md)
 
-## create_use_case_mcp_server
+## create_use_case_graphql_mcp_server
 
 ```python
-from pydantic_resolve.use_case import create_use_case_mcp_server
+from pydantic_resolve.use_case import create_use_case_graphql_mcp_server
 
-mcp = create_use_case_mcp_server(
+mcp = create_use_case_graphql_mcp_server(
     apps: list[UseCaseAppConfig],
-    name: str = "Pydantic-Resolve UseCase API",
+    name: str = "Pydantic-Resolve UseCase GraphQL API",
 ) -> "FastMCP"
 ```
 
-Creates an MCP server that exposes `UseCaseService` methods to AI agents via progressive disclosure.
+Creates an MCP server that exposes `UseCaseService` methods to AI agents via a 4-layer progressive disclosure pattern using GraphQL-string style for the data layer.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `apps` | `list[UseCaseAppConfig]` | Application configurations |
-| `name` | `str` | MCP server name (default: `"Pydantic-Resolve UseCase API"`) |
+| `name` | `str` | MCP server name (default: `"Pydantic-Resolve UseCase GraphQL API"`) |
 
 Returns a configured `FastMCP` server instance.
 
 ```python
-mcp = create_use_case_mcp_server(
+mcp = create_use_case_graphql_mcp_server(
     apps=[UseCaseAppConfig(name="project", services=[TaskService])]
 )
 mcp.run(transport="streamable-http", port=8080)
@@ -84,7 +84,7 @@ Data flow:
 HTTP Request (Authorization: Bearer <token>)
   → FastMCP Context
     → context_extractor(ctx) → {"user_id": 1}
-      → call_use_case merges context into kwargs
+      → method invocation merges context into kwargs
         → TaskService.get_my_tasks(user_id=1)
 ```
 
@@ -143,7 +143,7 @@ from pydantic_resolve.use_case import FromContext
 user_id: Annotated[int, FromContext()]
 ```
 
-Marker annotation for method parameters that should receive values from `context_extractor` rather than from the MCP tool's `params` JSON. This keeps the method signature identical for both FastAPI (parameter passed directly) and MCP (injected from context).
+Marker annotation for method parameters that should receive values from `context_extractor` rather than from the GraphQL query. This keeps the method signature identical for both FastAPI (parameter passed directly) and MCP (injected from context).
 
 ```python
 class TaskService(UseCaseService):
@@ -158,52 +158,136 @@ class TaskService(UseCaseService):
 - If the context key is present, it is injected into the method call
 - If the context key is missing and the parameter has no default, an error is returned
 - If the context key is missing and the parameter has a default, the default is used
+- `FromContext` parameters cannot be supplied via GraphQL query arguments
 
 ## Progressive Disclosure Tools
 
-The MCP server registers these tools automatically:
+The MCP server registers four tools, organized as a discovery funnel from cheap (broad) to expensive (precise):
 
 | Tool | Layer | Description |
 |------|-------|-------------|
-| `list_apps` | 0 | Discover available applications |
-| `list_services` | 1 | List services in an app |
-| `describe_service` | 2 | Get method signatures, parameter schemas, DTO type definitions, and selection hints |
-| `call_use_case` | 3 | Execute a specific method |
+| `list_apps` | 1 | Cheap app discovery — names + service counts |
+| `describe_compose_schema` | 2 | Per-app service + method listing (no args / types / DTO fields) |
+| `describe_compose_method` | 3 | Per-method detail: args, return type, and an SDL string with the full type tree |
+| `compose_query` | 4 | Execute a GraphQL data query against the compose surface |
 
-The `describe_service` response now includes `selection_supported` and `selection_example` on each method, plus a top-level `selection_usage` block. Agents can use these fields to decide whether `call_use_case(selection=...)` is appropriate and how to format the projection.
+The funnel intentionally delays loading detailed type information until the agent has selected a specific method. Schema discovery is via Layers 2 + 3 — `compose_query` rejects GraphQL introspection (`__schema`, `__type`, `__typename`) and points back to `describe_compose_schema`.
 
-### call_use_case
+### list_apps
 
 ```python
-call_use_case(
+list_apps() -> dict
+```
+
+Returns metadata for every configured application.
+
+```python
+{
+  "success": True,
+  "data": [
+    {"name": "project", "description": "...", "services_count": 3}
+  ],
+  "hint": "Use describe_compose_schema(app_name='project') ..."
+}
+```
+
+### describe_compose_schema
+
+```python
+describe_compose_schema(app_name: str) -> dict
+```
+
+Lists services and methods for an app. Compact: names + kinds + descriptions only. Mutations are filtered out when the app has `enable_mutation=False`.
+
+```python
+{
+  "success": True,
+  "data": {
+    "services": {
+      "TaskService": {
+        "description": "Task management service.",
+        "methods": [
+          {"name": "list_tasks", "kind": "query", "description": "Get all tasks."},
+          {"name": "get_task", "kind": "query", "description": "Get a task by ID."}
+        ]
+      }
+    }
+  },
+  "hint": "Use describe_compose_method(app_name='project', service_name='TaskService', method_name='get_task') ..."
+}
+```
+
+### describe_compose_method
+
+```python
+describe_compose_method(
     app_name: str,
     service_name: str,
     method_name: str,
-    params: str = "{}",
-    selection: str | None = None,
-)
+) -> dict
 ```
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `app_name` | `str` | Application name (from `list_apps`) |
-| `service_name` | `str` | Service name (from `list_services`) |
-| `method_name` | `str` | Method name (from `describe_service`) |
-| `params` | `str` | JSON string with method parameters (default: `"{}"`) |
-| `selection` | `str \| None` | Optional rootless GraphQL-like field projection for Pydantic return values |
-
-The `params` string is parsed as JSON and passed as keyword arguments to the method. Parameters annotated with `FromContext` are injected from the context_extractor result, not from `params`.
-
-Use `selection` to reduce large Pydantic DTO responses before they are returned to the MCP client:
+Returns detailed info for a single method: args (with types + defaults), return type, and an `sdl` string. The `sdl` shows the method signature as a comment header followed by full type definitions for the return DTO and every nested DTO reachable through its fields. Use this as the source of truth for field names — top-level and nested alike — before composing a query.
 
 ```python
-call_use_case(
+{
+  "success": True,
+  "data": {
+    "name": "get_task",
+    "kind": "query",
+    "description": "Get a task by ID.",
+    "args": [{"name": "task_id", "type": "int"}],
+    "returns": "TaskSummary",
+    "sdl": "# TaskService.get_task(task_id: Int): TaskSummary\n\ntype TaskSummary {\n  id: Int!\n  title: String!\n  owner: UserSummary\n}\n\ntype UserSummary {\n  id: Int!\n  name: String!\n}"
+  },
+  "hint": "Use compose_query(app_name='project', query='{ TaskService { get_task(task_id: 1) { title } } }') ..."
+}
+```
+
+### compose_query
+
+```python
+compose_query(
+    app_name: str,
+    query: str,
+) -> dict
+```
+
+Executes a GraphQL data query against the compose surface. Fixed 3-level hierarchy: `Query → Service → Method → DTO field selection`. Useful for fetching related data across services in one round trip.
+
+**Rules:**
+
+- No aliases (GraphQL `field:` syntax). Each field name must be unique within its parent.
+- Service / method names must match the schema. Use `describe_compose_schema` to discover valid names.
+- Method arguments go in parentheses on the method field: `get_sprint(sprint_id: 1)`.
+- Parameters marked `FromContext` cannot be set from query arguments — they are server-injected.
+- DTO field selection under each method projects into that method's return DTO. Nested DTOs require sub-selection; on a wrong sub-field the error response lists the available fields for that DTO.
+- Mutations require the app to have `enable_mutation=True`.
+- Introspection queries (`__schema` / `__type` / `__typename`) are rejected — use `describe_compose_schema` instead.
+
+**Execution semantics:**
+
+- `@query` methods run concurrently.
+- `@mutation` methods run serially in declaration order.
+- The relative ordering between queries and mutations within a single `compose_query` call is NOT guaranteed. For create-then-read semantics, issue them as separate calls.
+
+**Response shape** mirrors the request: each Service becomes a key whose value is a dict of method-name → result.
+
+```python
+compose_query(
     app_name="project",
-    service_name="TaskService",
-    method_name="get_task",
-    params='{"task_id": 1}',
-    selection="{ id title owner { name } }",
+    query='''
+    {
+      SprintService {
+        list_sprints { id name }
+        get_sprint(sprint_id: 1) { name }
+      }
+      TaskService {
+        get_task(task_id: 1) { title owner_id }
+      }
+    }
+    ''',
 )
 ```
 
-The selection is applied after the use case method executes and before the existing response serialization layer. It only supports methods whose return annotation is a Pydantic model, `list[PydanticModel]`, or optional variants. Prefer the `types`, `selection_supported`, `selection_example`, and `selection_usage` values returned by `describe_service` when choosing fields and formatting the projection. Fields must exist on the return DTO, nested Pydantic DTO fields require sub-selections, scalar/dict/`Any` fields cannot have sub-selections, and GraphQL arguments are not supported.
+On failure: `success=False`, `error`, `error_type` (one of `validation_error`, `type_not_found`, `operation_not_found`, `query_execution_error`, `mutation_execution_error`, `app_not_found`, `internal_error`).

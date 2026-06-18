@@ -5,10 +5,6 @@ disclosure: ``list_apps`` → ``describe_compose_schema`` (services +
 methods) → ``describe_compose_method`` (single method's args / returns
 / fields) → ``compose_query`` (data only; introspection is rejected,
 schema discovery is via Layer 2/3).
-
-Independent from ``mcp_server.py`` (the classic progressive-disclosure
-server). Both demos use the same ``services.py`` so the underlying
-UseCaseService classes stay consistent.
 """
 
 from pydantic_resolve.use_case import (

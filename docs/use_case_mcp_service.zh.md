@@ -2,16 +2,16 @@
 
 [English](./use_case_mcp_service.md)
 
-UseCase MCP 可以将业务服务方法直接暴露给 AI agent，无需经过 GraphQL。同一套 `UseCaseService` 类同时服务 FastAPI HTTP 路由和 MCP 工具调用——业务逻辑只维护一份。
+UseCase MCP 可以将业务服务方法直接暴露给 AI agent。同一套 `UseCaseService` 类同时服务 FastAPI HTTP 路由和 MCP 工具调用——业务逻辑只维护一份。
 
 ## 与 GraphQL MCP 的选择
 
 | | GraphQL MCP | UseCase MCP |
 |---|---|---|
 | 输入 | ER Diagram | `UseCaseService` 类 |
-| 查询方式 | GraphQL 语法 | 方法签名 |
+| 查询方式 | 完整 GraphQL | GraphQL compose（固定 3 层：Service → Method → DTO 字段） |
 | 适用场景 | 灵活的即席查询 | 固定的业务操作 |
-| 入口 | `create_mcp_server` + ERD | `create_use_case_mcp_server` + services |
+| 入口 | `create_mcp_server` + ERD | `create_use_case_graphql_mcp_server` + services |
 
 如果你已经有 `UseCaseService` 类驱动 FastAPI 端点，UseCase MCP 是自然的选择——零重复。
 
@@ -70,9 +70,9 @@ class TaskService(UseCaseService):
 ### 2. 创建 MCP 服务
 
 ```python
-from pydantic_resolve.use_case import UseCaseAppConfig, create_use_case_mcp_server
+from pydantic_resolve.use_case import UseCaseAppConfig, create_use_case_graphql_mcp_server
 
-mcp = create_use_case_mcp_server(
+mcp = create_use_case_graphql_mcp_server(
     apps=[
         UseCaseAppConfig(
             name="project",
@@ -80,7 +80,7 @@ mcp = create_use_case_mcp_server(
             description="项目管理系统，包含用户和任务",
         ),
     ],
-    name="项目 UseCase API",
+    name="项目 UseCase GraphQL API",
 )
 
 mcp.run(transport="streamable-http", port=8080)
@@ -88,28 +88,29 @@ mcp.run(transport="streamable-http", port=8080)
 
 ## 渐进式发现
 
-MCP 服务提供四个工具，引导 AI agent 逐步探索：
+MCP 服务提供四个工具，构成一个发现漏斗：
 
 ```
-Layer 0: list_apps         → "有哪些应用？"
-Layer 1: list_services     → "这个应用有哪些服务？"
-Layer 2: describe_service  → "这个服务暴露了哪些方法和类型？"
-Layer 3: call_use_case     → "执行某个方法"
+Layer 1: list_apps              → "有哪些应用？"
+Layer 2: describe_compose_schema → "这个应用有哪些 service 和 method？"
+Layer 3: describe_compose_method → "这个方法的参数、返回类型、字段树是什么？"
+Layer 4: compose_query           → "对 compose surface 执行 GraphQL 查询"
 ```
 
 调用流程示例：
 
 1. Agent 调用 `list_apps` → 发现 `["project"]`
-2. Agent 调用 `list_services(app_name="project")` → 发现 `["UserService", "TaskService"]`
-3. Agent 调用 `describe_service(app_name="project", service_name="TaskService")` → 看到方法签名、参数 schema 和 DTO 类型定义
-4. Agent 调用 `call_use_case(app_name="project", service_name="TaskService", method_name="get_task", params='{"task_id": 1}', selection="{ id title owner { name } }")` → 获得精简结果
+2. Agent 调用 `describe_compose_schema(app_name="project")` → 看到 services 和 methods 的紧凑列表（名称 + 类型 + 描述）
+3. Agent 调用 `describe_compose_method(app_name="project", service_name="TaskService", method_name="get_task")` → 看到参数、返回类型和 SDL（包含返回 DTO 及其所有嵌套 DTO）
+4. Agent 调用 `compose_query(app_name="project", query="{ TaskService { get_task(task_id: 1) { title owner { name } } } }")` → 获得结构化结果
 
-`describe_service` 会返回服务引用的所有 DTO 的 SDL 类型定义，并为每个方法附带 `selection_supported` / `selection_example`，同时在顶层返回 `selection_usage`。agent 可以先用这些字段判断某个方法是否适合传 `selection`，以及该如何拼写投影。
-对于返回 Pydantic DTO 的方法，`call_use_case` 还可以接收无根字段的 GraphQL-like `selection` 字符串，只返回选中的字段。`selection` 只是响应投影：不会改变方法参数、数据加载、分页或业务执行。
+`describe_compose_method` 返回的 `sdl` 字段是字段名的唯一真相来源 —— 顶层和嵌套字段都在里面。
+
+`compose_query` 拒绝 GraphQL introspection（`__schema`、`__type`、`__typename`），schema 发现走 Layer 2 + 3。查询固定为 3 层结构：`Query → Service → Method → DTO 字段选择`，每个 service 下的 method 可以并发执行（mutation 串行）。
 
 ## FromContext：注入请求上下文
 
-当方法需要用户身份等请求级数据时，用 `FromContext` 标记应从 MCP 上下文注入的参数，而非从工具的 `params` JSON 传入：
+当方法需要用户身份等请求级数据时，用 `FromContext` 标记应从 MCP 上下文注入的参数，而非从 GraphQL 查询传入：
 
 ```python
 from typing import Annotated
@@ -140,7 +141,7 @@ def extract_user_context(ctx: Context) -> dict:
         return {"user_id": int(token)}  # 生产环境中应解码 JWT
     return {}
 
-mcp = create_use_case_mcp_server(
+mcp = create_use_case_graphql_mcp_server(
     apps=[
         UseCaseAppConfig(
             name="project",
@@ -157,7 +158,7 @@ mcp = create_use_case_mcp_server(
 HTTP 请求 (Authorization: Bearer <token>)
   → FastMCP Context
     → context_extractor(ctx) → {"user_id": 1}
-      → call_use_case 将 context 合并到 kwargs
+      → 方法调用时将 context 合并到 kwargs
         → TaskService.get_my_tasks(user_id=1)
 ```
 
@@ -215,7 +216,7 @@ class TaskService(UseCaseService):
         """创建新任务。"""
         ...
 
-mcp = create_use_case_mcp_server(
+mcp = create_use_case_graphql_mcp_server(
     apps=[
         UseCaseAppConfig(
             name="readonly-project",
@@ -227,9 +228,9 @@ mcp = create_use_case_mcp_server(
 ```
 
 当 `enable_mutation=False` 时：
-- `list_services` 的方法计数不包含 mutation
-- `describe_service` 的返回结果中不包含 mutation 方法
-- `call_use_case` 调用 mutation 方法会返回错误
+- `describe_compose_schema` 的方法列表不包含 mutation
+- `describe_compose_method` 对 mutation 方法返回错误
+- `compose_query` 拒绝执行 mutation
 
 适用于需要向 AI agent 提供只读访问权限，同时限制写操作的场景。
 
@@ -238,7 +239,7 @@ mcp = create_use_case_mcp_server(
 一个 MCP 服务可以承载多个独立的应用组：
 
 ```python
-mcp = create_use_case_mcp_server(
+mcp = create_use_case_graphql_mcp_server(
     apps=[
         UseCaseAppConfig(name="project", services=[SprintService, TaskService]),
         UseCaseAppConfig(name="admin", services=[UserService, RoleService]),
@@ -249,7 +250,35 @@ mcp = create_use_case_mcp_server(
 
 每个应用有独立的服务列表和可选的 `context_extractor`。
 
+## 跨 Service 组合查询
+
+`compose_query` 工具接收单条 GraphQL 查询，可一次性扇出到多个 service 和 method：
+
+```python
+compose_query(
+    app_name="project",
+    query='''
+    {
+      SprintService {
+        list_sprints { id name }
+        get_sprint(sprint_id: 1) { name }
+      }
+      TaskService {
+        get_task(task_id: 1) { title owner_id }
+        list_tasks { title }
+      }
+    }
+    ''',
+)
+```
+
+**执行语义：**
+
+- `@query` 方法并发执行。
+- `@mutation` 方法按声明顺序串行执行。
+- 单次调用内 query 和 mutation 之间的相对顺序不保证 —— 「先创建后读取」的语义请拆成两次调用。
+
 ## 接下来
 
 - [UseCase MCP API](./api_use_case_mcp.zh.md) 查看详细的 API 签名
-- [MCP 服务](./mcp_service.zh.md) 了解基于 GraphQL 的 MCP 方案
+- [MCP 服务](./mcp_service.zh.md) 了解基于 ER 图的 GraphQL MCP 方案

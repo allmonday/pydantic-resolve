@@ -18,11 +18,6 @@ compose surface via four tools in a progressive-disclosure pattern:
   ``__type`` / ``__typename``) are rejected with a hint pointing back to
   Layer 2.
 
-The two servers are intentionally separate. The classic server follows
-the progressive-disclosure + flat-parameter MCP style; this one follows
-the GraphQL-string style. Each is self-contained: their docstrings and
-hints do not cross-reference the other server's tools.
-
 See ``demo/use_case/mcp_server_compose.py`` for a runnable example.
 """
 
