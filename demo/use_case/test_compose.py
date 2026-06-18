@@ -15,7 +15,7 @@ import json
 import pytest
 
 from demo.use_case.database import init_db
-from pydantic_resolve.use_case.compose import compose_and_resolve
+
 from pydantic_resolve.use_case.manager import UseCaseManager
 from pydantic_resolve.use_case.types import UseCaseAppConfig
 
@@ -54,8 +54,7 @@ def _print(label: str, payload: object) -> None:
 @pytest.mark.asyncio
 async def test_compose_multi_service_parallel():
     app = _make_manager().get_app("sprint")
-    result = await compose_and_resolve(
-        app,
+    result = await app.compose(
         """
         {
           SprintService { list_sprints { id name task_count } }
@@ -78,8 +77,7 @@ async def test_compose_multi_service_parallel():
 @pytest.mark.asyncio
 async def test_compose_single_service_multiple_methods():
     app = _make_manager().get_app("sprint")
-    result = await compose_and_resolve(
-        app,
+    result = await app.compose(
         """
         {
           SprintService {
@@ -105,8 +103,7 @@ async def test_compose_autoload_owner_detail_through_selection():
     """TaskSummary.owner_detail is AutoLoad — Resolver must fire and the
     selection must project it out."""
     app = _make_manager().get_app("sprint")
-    result = await compose_and_resolve(
-        app,
+    result = await app.compose(
         """
         {
           TaskService {
@@ -176,7 +173,6 @@ async def test_compose_query_tool_end_to_end():
 async def test_compose_unknown_service_error():
     app = _make_manager().get_app("sprint")
     with pytest.raises(Exception, match="NoSuchService"):
-        await compose_and_resolve(
-            app,
+        await app.compose(
             "{ NoSuchService { anything { id } } }",
         )

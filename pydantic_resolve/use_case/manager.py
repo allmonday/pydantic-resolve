@@ -40,6 +40,34 @@ class UseCaseResources:
         """Get set of service names."""
         return set(self.services.keys())
 
+    async def compose(
+        self,
+        query: str,
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Execute a GraphQL data query against this app's services.
+
+        Thin wrapper around :func:`_compose_and_resolve` — see that function
+        for the full pipeline (parse → plan → execute → project).
+
+        Args:
+            query: GraphQL data query string (3-level hierarchy:
+                Service → Method → DTO field selection).
+            context: Request-scoped context dict. Flows into method params
+                annotated with ``FromContext``.
+
+        Returns:
+            Nested dict ``{service: {method: result}}``.
+
+        Raises:
+            ComposeError: For any validation or execution failure.
+        """
+        # Local import to avoid circular dependency (compose.py imports
+        # nothing from manager.py, but keeping it lazy is safer).
+        from pydantic_resolve.use_case.compose import _compose_and_resolve
+
+        return await _compose_and_resolve(self, query, context)
+
 
 class UseCaseManager:
     """Manages multiple UseCase applications for MCP server.

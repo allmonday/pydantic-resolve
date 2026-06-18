@@ -1,10 +1,11 @@
-"""FastAPI app exposing ``compose_and_resolve`` as an HTTP endpoint with GraphiQL.
+"""FastAPI app exposing the compose surface as an HTTP endpoint with GraphiQL.
 
 This is the UseCase counterpart of ``demo/graphql/app.py``: instead of an
 ErDiagram-driven GraphQL handler, it serves the fixed 3-level compose query
-hierarchy (``Query → Service → Method → DTO fields``) and lets GraphiQL
-introspect it via the ``compose_introspect`` route baked into
-``compose_and_resolve``.
+hierarchy (``Query → Service → Method → DTO fields``). Introspection
+queries (``__schema`` / ``__type`` / ``__typename``) are dispatched
+explicitly to :func:`compose_introspect`; data queries go through
+``app.compose``.
 
 Run::
 
@@ -30,7 +31,10 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from pydantic_resolve.graphql import get_graphiql_html
-from pydantic_resolve.use_case.compose import compose_and_resolve
+from pydantic_resolve.use_case.compose import (
+    compose_introspect,
+    is_introspection_query,
+)
 from pydantic_resolve.use_case.manager import UseCaseManager
 from pydantic_resolve.use_case.types import UseCaseAppConfig
 
@@ -62,7 +66,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Pydantic-Resolve Compose GraphiQL Demo",
     description=(
-        "HTTP + GraphiQL frontend for ``compose_and_resolve``. "
+        "HTTP + GraphiQL frontend for the compose surface. "
         "POST /graphql with a GraphQL query shaped as "
         "{ Service { method(args) { dtoField } } }."
     ),
@@ -99,7 +103,7 @@ async def graphiql() -> str:
 
 @router.post("/graphql")
 async def graphql_endpoint(req: GraphQLRequest, request: Request) -> JSONResponse:
-    """Run a compose query (or introspection query — auto-routed)."""
+    """Run a compose query (data) or introspection query, dispatched explicitly."""
     auth_header = request.headers.get("Authorization", "")
     context: dict[str, Any] | None = None
     if auth_header.startswith("Bearer "):
@@ -107,17 +111,19 @@ async def graphql_endpoint(req: GraphQLRequest, request: Request) -> JSONRespons
         context = {"user_id": 1}
 
     try:
-        data = await compose_and_resolve(_APP, req.query, context=context)
+        if is_introspection_query(req.query):
+            # Introspection: returns {data, errors} envelope directly.
+            data = compose_introspect(_APP, req.query)
+        else:
+            # Data query: returns nested {service: {method: ...}}.
+            nested = await _APP.compose(req.query, context=context)
+            data = {"data": nested, "errors": None}
     except Exception as e:
         # ComposeError and any other exception — return as GraphQL-style
         # {errors: [...]} envelope so GraphiQL surfaces them in the UI.
         return JSONResponse({"data": None, "errors": [{"message": str(e)}]})
 
-    # compose_and_resolve returns either the nested {service: {method: ...}}
-    # result, or already an introspection envelope {"data": ..., "errors": None}.
-    if isinstance(data, dict) and set(data.keys()) <= {"data", "errors"}:
-        return JSONResponse(data)
-    return JSONResponse({"data": data, "errors": None})
+    return JSONResponse(data)
 
 
 app.include_router(router)

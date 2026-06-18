@@ -22,7 +22,8 @@ This module is intentionally self-contained: it reuses public utilities
 (``QueryParser``, ``build_subset_model``) but does not modify
 ``server_graphql.py`` internals. The MCP tool ``compose_query`` in
 ``server_graphql.py`` is a thin wrapper around
-:func:`compose_and_resolve`.
+:meth:`UseCaseResources.compose`, which in turn calls the private
+:func:`_compose_and_resolve` defined here.
 """
 
 from __future__ import annotations
@@ -76,7 +77,7 @@ class ServiceExecutionPlan:
     return_anno: Any
 
 
-async def compose_and_resolve(
+async def _compose_and_resolve(
     app: Any,
     query: str,
     context: dict[str, Any] | None = None,
@@ -85,21 +86,23 @@ async def compose_and_resolve(
 
     Args:
         app: :class:`UseCaseResources` instance (from ``UseCaseManager.get_app``).
-        query: GraphQL query string. Fixed 3-level hierarchy:
+        query: GraphQL data query string. Fixed 3-level hierarchy:
             root → service → method → DTO field selection. Introspection
-            queries (``__schema`` / ``__type`` / ``__typename``) are
-            auto-routed to :func:`compose_introspect`.
+            queries (``__schema`` / ``__type`` / ``__typename``) are NOT
+            handled here — callers must dispatch to
+            :func:`compose_introspect` themselves (typically by checking
+            :func:`is_introspection_query` first).
         context: Request-scoped context dict. Flows into method params
             annotated with ``FromContext``.
 
     Returns:
-        Nested dict shaped like ``{service: {method: result}}`` for
-        normal queries, or ``{"data": ..., "errors": ...}`` for
-        introspection queries (GraphQL response envelope).
+        Nested dict shaped like ``{service: {method: result}}``.
 
     Raises:
         ComposeError: For any validation or execution failure. The
-            ``error_type`` attribute carries the MCP error code.
+            ``error_type`` attribute carries the MCP error code. An
+            introspection query passed here will surface as
+            ``type_not_found`` (``__schema`` etc. are not services).
 
     Note:
         Compose does NOT run ``Resolver`` on the returned DTOs. Business
@@ -107,9 +110,6 @@ async def compose_and_resolve(
         ``resolve_*`` / ``AutoLoad``) before returning. Compose only
         applies the per-method field selection.
     """
-    if is_introspection_query(query):
-        return compose_introspect(app, query)
-
     parsed = _parse_query(query)
     if not parsed.field_tree:
         raise ComposeError("Query is empty", "validation_error")
@@ -324,7 +324,9 @@ def _prepare_method_kwargs(
             kwargs[name] = _coerce_strict(raw_args[name], anno, name, plan)
         elif name in from_context_params:
             if context is not None and name in context:
-                kwargs[name] = context[name]
+                # Same pydantic validation as query args — wrong type surfaces
+                # as validation_error here, not deep inside the method body.
+                kwargs[name] = _coerce_strict(context[name], anno, name, plan)
             elif param.default is inspect.Parameter.empty:
                 raise ComposeError(
                     f"Required FromContext parameter '{name}' not found in context "
@@ -445,7 +447,7 @@ def _serialize_result(result: Any) -> Any:
 
 
 # ============================================================================
-# Introspection (auto-routed from compose_and_resolve)
+# Introspection (explicit sibling — callers dispatch via is_introspection_query)
 # ============================================================================
 
 

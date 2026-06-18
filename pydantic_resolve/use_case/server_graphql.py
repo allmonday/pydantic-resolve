@@ -37,7 +37,6 @@ from pydantic_resolve.graphql.mcp.types.errors import (
 from pydantic_resolve.use_case.business import USE_CASE_METHODS_ATTR
 from pydantic_resolve.use_case.compose import (
     ComposeError,
-    compose_and_resolve,
     is_introspection_query,
 )
 from pydantic_resolve.use_case.context import FromContext
@@ -371,7 +370,7 @@ def create_use_case_graphql_mcp_server(
 
         try:
             context = await _extract_context(app, ctx)
-            data = await compose_and_resolve(app, query, context=context)
+            data = await app.compose(query, context=context)
             response = create_success_response(data)
             response["hint"] = (
                 f"Composed query executed for app '{app_name}'. "

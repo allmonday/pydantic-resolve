@@ -588,7 +588,7 @@ class TestComposeQueryWithContext:
     """End-to-end coverage for the context flow:
 
     FastMCP Context → _extract_context → context_extractor → dict →
-    compose_and_resolve → _prepare_method_kwargs → FromContext param.
+    app.compose → _prepare_method_kwargs → FromContext param.
     """
 
     @pytest.mark.asyncio

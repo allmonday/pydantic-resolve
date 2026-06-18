@@ -21,7 +21,6 @@ from pydantic_resolve import query, mutation
 from pydantic_resolve.use_case.business import UseCaseService
 from pydantic_resolve.use_case.compose import (
     ComposeError,
-    compose_and_resolve,
     compose_introspect,
     is_introspection_query,
 )
@@ -298,15 +297,23 @@ class TestMutationControl:
 
 class TestEntryRouting:
     @pytest.mark.asyncio
-    async def test_compose_and_resolve_auto_routes_introspection(self):
+    async def test_introspection_query_no_longer_auto_routed(self):
+        """Introspection queries must NOT be handled by ``app.compose``.
+        Passing one now surfaces as type_not_found — callers must dispatch
+        to compose_introspect themselves via is_introspection_query."""
         app = _make_manager().get_app("project")
-        # Even though compose_and_resolve is async, introspection is sync
-        # internally — must still return envelope shape.
-        result = await compose_and_resolve(
-            app, "{ __schema { queryType { name } } }"
-        )
-        assert result["data"]["__schema"]["queryType"]["name"] == "Query"
-        assert result["errors"] is None
+        with pytest.raises(ComposeError) as exc_info:
+            await app.compose("{ __schema { queryType { name } } }")
+        assert exc_info.value.error_type == "type_not_found"
+        # __schema is parsed as a service name, which doesn't exist
+        assert "__schema" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_data_query_still_works_via_compose(self):
+        """Sanity check: removing the auto-route doesn't break data queries."""
+        app = _make_manager().get_app("project")
+        result = await app.compose("{ SprintService { list_sprints { id name } } }")
+        assert "SprintService" in result
 
     def test_compose_introspect_explicit_call_returns_envelope(self):
         app = _make_manager().get_app("project")

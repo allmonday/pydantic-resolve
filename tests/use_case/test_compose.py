@@ -1,10 +1,10 @@
-"""Tests for UseCase compose_query — GraphQL-style multi-method composition.
+"""Tests for UseCase compose — GraphQL-style multi-method composition.
 
 The MCP-tool surface (``list_apps`` → ``describe_compose_schema`` →
 ``describe_compose_method`` → ``compose_query`` via the FastMCP server
 factory) lives in ``test_compose_mcp.py``. This file covers
-``compose_and_resolve`` — the Python API used by the MCP tool, the HTTP
-GraphiQL demo, and direct callers.
+``UseCaseResources.compose`` — the Python API used by the MCP tool, the
+HTTP GraphiQL demo, and direct callers.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 from pydantic_resolve import Resolver, query, mutation
 from pydantic_resolve.use_case.business import UseCaseService
-from pydantic_resolve.use_case.compose import ComposeError, compose_and_resolve
+from pydantic_resolve.use_case.compose import ComposeError
 from pydantic_resolve.use_case.context import FromContext
 from pydantic_resolve.use_case.manager import UseCaseManager
 from pydantic_resolve.use_case.types import UseCaseAppConfig
@@ -192,8 +192,7 @@ class TestComposeHappyPath:
     @pytest.mark.asyncio
     async def test_single_service_single_method(self):
         app = _make_manager().get_app("project")
-        result = await compose_and_resolve(
-            app,
+        result = await app.compose(
             "{ SprintService { list_sprints { id name } } }",
         )
         assert list(result.keys()) == ["SprintService"]
@@ -205,8 +204,7 @@ class TestComposeHappyPath:
     @pytest.mark.asyncio
     async def test_single_service_multiple_methods(self):
         app = _make_manager().get_app("project")
-        result = await compose_and_resolve(
-            app,
+        result = await app.compose(
             "{ SprintService { list_sprints { id } get_sprint(sprint_id: 1) { name } } }",
         )
         svc = result["SprintService"]
@@ -216,8 +214,7 @@ class TestComposeHappyPath:
     @pytest.mark.asyncio
     async def test_multiple_services_parallel(self):
         app = _make_manager().get_app("project")
-        result = await compose_and_resolve(
-            app,
+        result = await app.compose(
             """
             {
               SprintService { list_sprints { id } }
@@ -231,8 +228,7 @@ class TestComposeHappyPath:
     @pytest.mark.asyncio
     async def test_method_with_argument_int_coercion(self):
         app = _make_manager().get_app("project")
-        result = await compose_and_resolve(
-            app,
+        result = await app.compose(
             "{ TaskService { get_task(task_id: 42) { id title } } }",
         )
         assert result["TaskService"]["get_task"] == {"id": 42, "title": "Task 42"}
@@ -241,8 +237,7 @@ class TestComposeHappyPath:
     async def test_optional_argument_with_default_omitted(self):
         app = _make_manager().get_app("project")
         # include_owner has default=True; omit it.
-        result = await compose_and_resolve(
-            app,
+        result = await app.compose(
             "{ TaskService { get_task(task_id: 1) { id } } }",
         )
         assert result["TaskService"]["get_task"]["id"] == 1
@@ -250,8 +245,7 @@ class TestComposeHappyPath:
     @pytest.mark.asyncio
     async def test_list_return_with_projection(self):
         app = _make_manager().get_app("project")
-        result = await compose_and_resolve(
-            app,
+        result = await app.compose(
             "{ SprintService { list_sprints { id name } } }",
         )
         sprints = result["SprintService"]["list_sprints"]
@@ -260,8 +254,7 @@ class TestComposeHappyPath:
     @pytest.mark.asyncio
     async def test_optional_dto_returning_none(self):
         app = _make_manager().get_app("project")
-        result = await compose_and_resolve(
-            app,
+        result = await app.compose(
             "{ SprintService { get_sprint(sprint_id: 999) { name } } }",
         )
         assert result["SprintService"]["get_sprint"] is None
@@ -270,8 +263,7 @@ class TestComposeHappyPath:
     async def test_self_resolved_method_result_is_projected(self):
         """DTO.resolve_owner fires inside the method (self-resolve); compose just projects."""
         app = _make_manager().get_app("project")
-        result = await compose_and_resolve(
-            app,
+        result = await app.compose(
             "{ TaskService { get_task(task_id: 1) { id owner { id name } } } }",
         )
         task = result["TaskService"]["get_task"]
@@ -280,8 +272,7 @@ class TestComposeHappyPath:
     @pytest.mark.asyncio
     async def test_mutation_allowed_when_enabled(self):
         app = _make_manager(enable_mutation=True).get_app("project")
-        result = await compose_and_resolve(
-            app,
+        result = await app.compose(
             '{ TaskService { create_task(title: "New") { id title } } }',
         )
         assert result["TaskService"]["create_task"]["title"] == "New"
@@ -289,13 +280,26 @@ class TestComposeHappyPath:
     @pytest.mark.asyncio
     async def test_from_context_param_injection(self):
         app = _make_context_manager().get_app("project")
-        result = await compose_and_resolve(
-            app,
+        result = await app.compose(
             "{ ContextService { get_my_tasks { id title } } }",
             context={"user_id": 7},
         )
         tasks = result["ContextService"]["get_my_tasks"]
         assert all("Task of 7" in t["title"] for t in tasks)
+
+    @pytest.mark.asyncio
+    async def test_from_context_wrong_type_returns_validation_error(self):
+        """FromContext value goes through the same pydantic validation as
+        query args — wrong type surfaces as validation_error ComposeError,
+        not deep inside the method body."""
+        app = _make_context_manager().get_app("project")
+        with pytest.raises(ComposeError) as exc_info:
+            await app.compose(
+                "{ ContextService { get_my_tasks { id title } } }",
+                context={"user_id": "not-an-int"},
+            )
+        assert exc_info.value.error_type == "validation_error"
+        assert "user_id" in str(exc_info.value)
 
 
 # ──────────────────────────────────────────────────
@@ -308,20 +312,19 @@ class TestComposeValidation:
     async def test_empty_query(self):
         app = _make_manager().get_app("project")
         with pytest.raises(ComposeError, match="Query is empty"):
-            await compose_and_resolve(app, "")
+            await app.compose("")
 
     @pytest.mark.asyncio
     async def test_syntax_error(self):
         app = _make_manager().get_app("project")
         with pytest.raises(ComposeError, match="GraphQL syntax error"):
-            await compose_and_resolve(app, "{ SprintService ")
+            await app.compose("{ SprintService ")
 
     @pytest.mark.asyncio
     async def test_alias_rejected(self):
         app = _make_manager().get_app("project")
         with pytest.raises(ComposeError, match="alias"):
-            await compose_and_resolve(
-                app,
+            await app.compose(
                 "{ s1: SprintService { list_sprints { id } } }",
             )
 
@@ -329,8 +332,7 @@ class TestComposeValidation:
     async def test_unknown_service(self):
         app = _make_manager().get_app("project")
         with pytest.raises(ComposeError, match="Service 'NoSuchService'"):
-            await compose_and_resolve(
-                app,
+            await app.compose(
                 "{ NoSuchService { anything { id } } }",
             )
 
@@ -338,8 +340,7 @@ class TestComposeValidation:
     async def test_unknown_method(self):
         app = _make_manager().get_app("project")
         with pytest.raises(ComposeError, match="Method 'no_such_method'"):
-            await compose_and_resolve(
-                app,
+            await app.compose(
                 "{ SprintService { no_such_method { id } } }",
             )
 
@@ -347,8 +348,7 @@ class TestComposeValidation:
     async def test_missing_required_argument(self):
         app = _make_manager().get_app("project")
         with pytest.raises(ComposeError, match="Missing required argument 'sprint_id'"):
-            await compose_and_resolve(
-                app,
+            await app.compose(
                 "{ SprintService { get_sprint { name } } }",
             )
 
@@ -356,8 +356,7 @@ class TestComposeValidation:
     async def test_unexpected_argument(self):
         app = _make_manager().get_app("project")
         with pytest.raises(ComposeError, match="Unexpected argument 'foobar'"):
-            await compose_and_resolve(
-                app,
+            await app.compose(
                 "{ SprintService { get_sprint(sprint_id: 1, foobar: 2) { name } } }",
             )
 
@@ -365,8 +364,7 @@ class TestComposeValidation:
     async def test_argument_type_coercion_failure(self):
         app = _make_manager().get_app("project")
         with pytest.raises(ComposeError, match="Failed to coerce argument 'sprint_id'"):
-            await compose_and_resolve(
-                app,
+            await app.compose(
                 '{ SprintService { get_sprint(sprint_id: "not-an-int") { name } } }',
             )
 
@@ -374,8 +372,7 @@ class TestComposeValidation:
     async def test_mutation_when_disabled(self):
         app = _make_manager(enable_mutation=False).get_app("project")
         with pytest.raises(ComposeError, match="mutations are disabled"):
-            await compose_and_resolve(
-                app,
+            await app.compose(
                 '{ TaskService { create_task(title: "x") { id } } }',
             )
 
@@ -383,8 +380,7 @@ class TestComposeValidation:
     async def test_dto_method_requires_selection(self):
         app = _make_manager().get_app("project")
         with pytest.raises(ComposeError, match="requires field selection"):
-            await compose_and_resolve(
-                app,
+            await app.compose(
                 "{ SprintService { get_sprint(sprint_id: 1) } }",
             )
 
@@ -392,8 +388,7 @@ class TestComposeValidation:
     async def test_dto_leaf_arguments_rejected(self):
         app = _make_manager().get_app("project")
         with pytest.raises(ComposeError, match="Arguments are not allowed on DTO field"):
-            await compose_and_resolve(
-                app,
+            await app.compose(
                 "{ TaskService { get_task(task_id: 1) { owner(limit: 5) { id } } } }",
             )
 
@@ -401,8 +396,7 @@ class TestComposeValidation:
     async def test_service_level_arguments_rejected(self):
         app = _make_manager().get_app("project")
         with pytest.raises(ComposeError, match="not allowed on Service"):
-            await compose_and_resolve(
-                app,
+            await app.compose(
                 "{ SprintService(limit: 5) { list_sprints { id } } }",
             )
 
@@ -410,8 +404,7 @@ class TestComposeValidation:
     async def test_unknown_field_in_selection(self):
         app = _make_manager().get_app("project")
         with pytest.raises(ComposeError, match="Unknown field"):
-            await compose_and_resolve(
-                app,
+            await app.compose(
                 "{ SprintService { list_sprints { nonexistent } } }",
             )
 
@@ -421,8 +414,7 @@ class TestComposeValidation:
         # recover without a separate schema discovery call.
         app = _make_manager().get_app("project")
         with pytest.raises(ComposeError, match="Available fields:") as exc_info:
-            await compose_and_resolve(
-                app,
+            await app.compose(
                 "{ SprintService { list_sprints { nonexistent } } }",
             )
         assert "id" in str(exc_info.value)
@@ -464,8 +456,7 @@ class TestSelectionErrorListsAvailable:
     async def test_sub_selection_on_scalar_rejected(self):
         app = _make_manager().get_app("project")
         with pytest.raises(ComposeError):
-            await compose_and_resolve(
-                app,
+            await app.compose(
                 "{ SprintService { list_sprints { id { foo } } } }",
             )
 
@@ -487,8 +478,7 @@ class TestComposeFromContextSecurity:
     async def test_from_context_param_in_query_args_is_rejected(self):
         app = _make_context_manager().get_app("project")
         with pytest.raises(ComposeError, match="server-injected") as exc_info:
-            await compose_and_resolve(
-                app,
+            await app.compose(
                 "{ ContextService { get_my_tasks(user_id: 999) { id title } } }",
             )
         assert exc_info.value.error_type == "validation_error"
@@ -500,8 +490,7 @@ class TestComposeFromContextSecurity:
         app = _make_context_manager().get_app("project")
         # context_extractor returns {"user_id": ctx.get("user_id", 0)},
         # so passing user_id=7 in context yields tasks for user 7.
-        result = await compose_and_resolve(
-            app,
+        result = await app.compose(
             "{ ContextService { get_my_tasks { id title } } }",
             context={"user_id": 7},
         )
@@ -532,8 +521,7 @@ class TestComposeExecutionOrdering:
         # would be ["fast_mutation", "slow_mutation"]. Serial execution
         # preserves declaration order: ["slow_mutation", "fast_mutation"].
         app = _make_manager(with_seq=True).get_app("project")
-        await compose_and_resolve(
-            app,
+        await app.compose(
             "{ SeqService { slow_mutation fast_mutation } }",
         )
         assert _seq_log == ["slow_mutation", "fast_mutation"]
@@ -544,8 +532,7 @@ class TestComposeExecutionOrdering:
         # would always complete before fast_query. Concurrent execution
         # lets fast_query win — log = ["fast_query", "slow_query"].
         app = _make_manager(with_seq=True).get_app("project")
-        await compose_and_resolve(
-            app,
+        await app.compose(
             "{ SeqService { slow_query fast_query } }",
         )
         assert _seq_log == ["fast_query", "slow_query"]
@@ -554,8 +541,7 @@ class TestComposeExecutionOrdering:
     async def test_single_mutation_works(self):
         # Sanity: a lone mutation executes and returns a value.
         app = _make_manager(with_seq=True).get_app("project")
-        result = await compose_and_resolve(
-            app,
+        result = await app.compose(
             "{ SeqService { fast_mutation } }",
         )
         assert result["SeqService"]["fast_mutation"] == "fast_mutation"
