@@ -8,6 +8,7 @@ and exposed via MCP.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
 from typing import Any
 
 import pydantic_resolve.constant as const
@@ -38,7 +39,8 @@ class BusinessMeta(type):
 
     Scans the class namespace for async classmethods marked with ``@query`` or
     ``@mutation`` decorators and stores their metadata in
-    ``__use_case_methods__`` for use by ServiceIntrospector.
+    ``__use_case_methods__`` for use by the MCP server's progressive
+    disclosure tools.
     """
 
     def __new__(mcs, name: str, bases: tuple, namespace: dict, **kwargs):
@@ -93,6 +95,26 @@ def _unwrap_classmethod(value: Any) -> Any | None:
     if isinstance(value, classmethod):
         return value.__func__
     return None
+
+
+def iter_use_case_methods(
+    service_cls: type,
+    *,
+    enable_mutation: bool = True,
+) -> Iterator[tuple[str, str, dict[str, Any]]]:
+    """Iterate ``(name, kind, meta)`` for each exposed method on a service.
+
+    Skips mutations when ``enable_mutation`` is False. ``kind`` is the
+    resolved method kind (``"query"`` or ``"mutation"``), defaulting to
+    ``"query"`` when ``meta`` is malformed — matches the defensive
+    fallback every caller was already doing by hand.
+    """
+    methods: dict[str, Any] = getattr(service_cls, USE_CASE_METHODS_ATTR, {})
+    for name, meta in methods.items():
+        kind = meta.get("kind", "query") if isinstance(meta, dict) else "query"
+        if kind == "mutation" and not enable_mutation:
+            continue
+        yield name, kind, meta
 
 
 class UseCaseService(metaclass=BusinessMeta):

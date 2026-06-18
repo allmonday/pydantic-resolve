@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import inspect
 import re
-from typing import TYPE_CHECKING, Annotated, Any, get_args, get_origin
+from typing import TYPE_CHECKING, Any
 
 from fastmcp.server.context import Context
 
@@ -34,14 +34,12 @@ from pydantic_resolve.graphql.mcp.types.errors import (
     create_error_response,
     create_success_response,
 )
-from pydantic_resolve.use_case.business import USE_CASE_METHODS_ATTR
-from pydantic_resolve.use_case.compose import (
-    ComposeError,
-    is_introspection_query,
-)
-from pydantic_resolve.use_case.context import FromContext
-from pydantic_resolve.use_case.manager import UseCaseManager
-from pydantic_resolve.use_case.types import UseCaseAppConfig
+from pydantic_resolve.use_case.business import USE_CASE_METHODS_ATTR, iter_use_case_methods
+from pydantic_resolve.use_case.compose import ComposeError
+from pydantic_resolve.use_case.compose_schema import method_sdl
+from pydantic_resolve.use_case.context import is_from_context_annotation
+from pydantic_resolve.use_case.introspection import is_introspection_query
+from pydantic_resolve.use_case.manager import UseCaseAppConfig, UseCaseManager
 from pydantic_resolve.utils.types import _resolve_function_type_hints, get_return_annotation
 
 if TYPE_CHECKING:
@@ -147,12 +145,10 @@ def create_use_case_graphql_mcp_server(
 
         services: dict[str, Any] = {}
         for svc_name, svc_cls in app.services.items():
-            methods_meta = getattr(svc_cls, USE_CASE_METHODS_ATTR, {})
             method_list: list[dict[str, Any]] = []
-            for m_name, meta in methods_meta.items():
-                kind = meta.get("kind", "query") if isinstance(meta, dict) else "query"
-                if kind == "mutation" and not app.enable_mutation:
-                    continue
+            for m_name, kind, meta in iter_use_case_methods(
+                svc_cls, enable_mutation=app.enable_mutation
+            ):
                 method_list.append(
                     {
                         "name": m_name,
@@ -264,7 +260,7 @@ def create_use_case_graphql_mcp_server(
         # types to describe) or when schema-building fails — both are
         # safe to skip.
         try:
-            sdl = _method_sdl(app, service_name, method_name)
+            sdl = method_sdl(app.compose_schema, service_name, method_name)
             if sdl is not None:
                 method_info["sdl"] = sdl
         except Exception:
@@ -423,7 +419,7 @@ def _build_args_info(func: Any) -> list[dict[str, Any]]:
         if name == "cls":
             continue
         anno = hints.get(name, param.annotation)
-        if _is_from_context_param(anno):
+        if is_from_context_annotation(anno):
             continue
         info: dict[str, Any] = {
             "name": name,
@@ -433,14 +429,6 @@ def _build_args_info(func: Any) -> list[dict[str, Any]]:
             info["default"] = param.default
         args_info.append(info)
     return args_info
-
-
-def _is_from_context_param(annotation: Any) -> bool:
-    if annotation is None or annotation is inspect.Parameter.empty:
-        return False
-    if get_origin(annotation) is not Annotated:
-        return False
-    return any(isinstance(arg, FromContext) for arg in get_args(annotation))
 
 
 def _python_type_to_str(anno: Any) -> str:
@@ -460,102 +448,6 @@ def _python_type_to_str(anno: Any) -> str:
     s = str(anno).replace("typing.", "")
     s = re.sub(r"\b[\w.]+\.([A-Z]\w*)", r"\1", s)
     return s
-
-
-def _method_sdl(app: Any, service_name: str, method_name: str) -> str | None:
-    """Focused SDL for one method: signature + return type's transitive closure.
-
-    Returns a GraphQL SDL string showing:
-    - The method signature (args + return type) as a comment header
-    - Full type definitions for the return DTO and every nested DTO
-      reachable through its fields (handles cycles)
-
-    Returns ``None`` if the method or its return type can't be located
-    in the built schema (e.g. scalar returns have no nested types to
-    print).
-    """
-    from graphql.utilities import print_type
-
-    from pydantic_resolve.use_case.compose_schema import build_compose_schema
-
-    schema = build_compose_schema(app)
-
-    service_field = schema.query_type.fields.get(service_name)
-    if service_field is None:
-        return None
-    service_type = _unwrap_type(service_field.type)
-    method_field = service_type.fields.get(method_name) if service_type else None
-    if method_field is None:
-        return None
-
-    # Collect reachable object types from the return type
-    reachable: dict[str, Any] = {}
-    _collect_reachable_types(method_field.type, schema.type_map, reachable)
-
-    sdl_parts: list[str] = []
-    # Method signature as a comment header
-    args_sdl = ", ".join(
-        f"{name}: {_graphql_type_to_sdl(arg.type)}"
-        for name, arg in method_field.args.items()
-    )
-    sdl_parts.append(
-        f"# {service_name}.{method_name}({args_sdl}): "
-        f"{_graphql_type_to_sdl(method_field.type)}"
-    )
-    for type_name, type_def in sorted(reachable.items()):
-        sdl_parts.append(print_type(type_def))
-    return "\n\n".join(sdl_parts)
-
-
-def _unwrap_type(type_ref: Any) -> Any:
-    """Peel NonNull / List wrappers to get the underlying named type."""
-    while hasattr(type_ref, "of_type"):
-        type_ref = type_ref.of_type
-    return type_ref
-
-
-def _graphql_type_to_sdl(type_ref: Any) -> str:
-    """Render a graphql-core type reference as SDL syntax.
-
-    ``GraphQLNonNull(GraphQLList(GraphQLNonNull(GraphQLObjectType(X))))``
-    → ``[X!]!``
-    """
-    type_name = getattr(type_ref, "name", None)
-    if type_name is not None:
-        return type_name
-    inner = getattr(type_ref, "of_type", None)
-    if inner is None:
-        return str(type_ref)
-    inner_sdl = _graphql_type_to_sdl(inner)
-    # GraphQLNonNull wraps as ``T!``; GraphQLList wraps as ``[T]``
-    class_name = type(type_ref).__name__
-    if class_name == "GraphQLNonNull":
-        return f"{inner_sdl}!"
-    if class_name == "GraphQLList":
-        return f"[{inner_sdl}]"
-    return inner_sdl
-
-
-def _collect_reachable_types(
-    type_ref: Any, type_map: dict[str, Any], seen: dict[str, Any]
-) -> None:
-    """DFS-walk a graphql-core type reference, recording every object type.
-
-    Used to build the transitive closure of types reachable from a
-    method's return type — so the SDL response shows nested DTOs
-    without dumping the entire schema.
-    """
-    from graphql.type import GraphQLObjectType
-
-    core = _unwrap_type(type_ref)
-    name = getattr(core, "name", None)
-    if name is None or name in seen:
-        return
-    if isinstance(core, GraphQLObjectType):
-        seen[name] = core
-        for field in core.fields.values():
-            _collect_reachable_types(field.type, type_map, seen)
-
 
 
 def _compose_error_to_enum(error_type: str) -> MCPErrors:

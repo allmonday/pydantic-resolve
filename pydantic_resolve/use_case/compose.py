@@ -31,18 +31,15 @@ from __future__ import annotations
 import asyncio
 import inspect
 from dataclasses import dataclass
-from typing import Annotated, Any, get_args, get_origin
+from typing import Any
 
 from pydantic import BaseModel, TypeAdapter
-
-from graphql import graphql_sync
 
 from pydantic_resolve.graphql.exceptions import QueryParseError
 from pydantic_resolve.graphql.query_parser import QueryParser
 from pydantic_resolve.graphql.types import FieldSelection, ParsedQuery
-from pydantic_resolve.use_case.compose_schema import build_compose_schema
 from pydantic_resolve.use_case.business import USE_CASE_METHODS_ATTR
-from pydantic_resolve.use_case.context import FromContext
+from pydantic_resolve.use_case.context import is_from_context_annotation
 from pydantic_resolve.use_case.selection import (
     SelectionError,
     _get_pydantic_core_type,
@@ -90,8 +87,10 @@ async def _compose_and_resolve(
             root → service → method → DTO field selection. Introspection
             queries (``__schema`` / ``__type`` / ``__typename``) are NOT
             handled here — callers must dispatch to
-            :func:`compose_introspect` themselves (typically by checking
-            :func:`is_introspection_query` first).
+            :func:`pydantic_resolve.use_case.introspection.compose_introspect`
+            themselves (typically by checking
+            :func:`pydantic_resolve.use_case.introspection.is_introspection_query`
+            first).
         context: Request-scoped context dict. Flows into method params
             annotated with ``FromContext``.
 
@@ -360,19 +359,13 @@ def _coerce_strict(
 
 
 def _get_from_context_params(method: Any) -> set[str]:
-    from_context_params: set[str] = set()
     hints = _resolve_function_type_hints(method)
     sig = inspect.signature(method)
-    for name in sig.parameters:
-        if name == "cls":
-            continue
-        annotation = hints.get(name)
-        if annotation is not None and get_origin(annotation) is Annotated:
-            for arg in get_args(annotation):
-                if isinstance(arg, FromContext):
-                    from_context_params.add(name)
-                    break
-    return from_context_params
+    return {
+        name
+        for name in sig.parameters
+        if name != "cls" and is_from_context_annotation(hints.get(name))
+    }
 
 
 # ============================================================================
@@ -444,165 +437,3 @@ def _serialize_result(result: Any) -> Any:
     if hasattr(result, "model_dump"):
         return result.model_dump()
     return result
-
-
-# ============================================================================
-# Introspection (explicit sibling — callers dispatch via is_introspection_query)
-# ============================================================================
-
-
-_INTROSPEPTION_KEYWORDS: tuple[str, ...] = ("__schema", "__type", "__typename")
-
-
-def is_introspection_query(query: str) -> bool:
-    """Return True if ``query`` is a GraphQL introspection query.
-
-    Detects ``__schema`` / ``__type`` / ``__typename`` anywhere in the
-    query body. Mirrors the keyword-based detection used by the existing
-    Entity GraphQLHandler (see ``pydantic_resolve/graphql/introspection.py``).
-    """
-    if not query:
-        return False
-    return any(kw in query for kw in _INTROSPEPTION_KEYWORDS)
-
-
-def compose_introspect(
-    app: Any,
-    query: str | None = None,
-) -> dict[str, Any]:
-    """Run a GraphQL introspection query against the app's compose schema.
-
-    Args:
-        app: :class:`UseCaseResources` instance.
-        query: GraphQL query string targeting ``__schema`` / ``__type`` /
-            ``__typename``. If ``None``, runs the canonical full-schema
-            introspection query (the one GraphiQL sends on startup).
-
-    Returns:
-        Standard GraphQL response envelope::
-
-            {"data": {...}, "errors": None or [...]}
-
-    Raises:
-        ComposeError: If the schema cannot be built or the query fails
-            to execute.
-    """
-    try:
-        schema = build_compose_schema(app)
-    except Exception as e:
-        raise ComposeError(
-            f"Failed to build compose schema: {e}",
-            "internal_error",
-        ) from e
-
-    actual_query = query if query is not None else _FULL_INTROSPEPTION_QUERY
-    result = graphql_sync(schema, actual_query)
-
-    if result.errors:
-        messages = [
-            err.message if hasattr(err, "message") else str(err)
-            for err in result.errors
-        ]
-        raise ComposeError(
-            f"Introspection query failed: {'; '.join(messages)}",
-            "validation_error",
-        )
-
-    return {"data": result.data, "errors": None}
-
-
-# Canonical introspection query — subset of what GraphiQL sends.
-# Includes __schema with all standard fields and __type(name:) lookup.
-_FULL_INTROSPEPTION_QUERY = """
-query IntrospectionQuery {
-  __schema {
-    queryType { name }
-    mutationType { name }
-    subscriptionType { name }
-    types {
-      ...FullType
-    }
-    directives {
-      name
-      description
-      locations
-      args {
-        ...InputValue
-      }
-    }
-  }
-}
-
-fragment FullType on __Type {
-  kind
-  name
-  description
-  fields(includeDeprecated: true) {
-    name
-    description
-    args {
-      ...InputValue
-    }
-    type {
-      ...TypeRef
-    }
-    isDeprecated
-    deprecationReason
-  }
-  inputFields {
-    ...InputValue
-  }
-  interfaces {
-    ...TypeRef
-  }
-  enumValues(includeDeprecated: true) {
-    name
-    description
-    isDeprecated
-    deprecationReason
-  }
-  possibleTypes {
-    ...TypeRef
-  }
-}
-
-fragment InputValue on __InputValue {
-  name
-  description
-  type { ...TypeRef }
-  defaultValue
-}
-
-fragment TypeRef on __Type {
-  kind
-  name
-  ofType {
-    kind
-    name
-    ofType {
-      kind
-      name
-      ofType {
-        kind
-        name
-        ofType {
-          kind
-          name
-          ofType {
-            kind
-            name
-            ofType {
-              kind
-              name
-              ofType {
-                kind
-                name
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-"""

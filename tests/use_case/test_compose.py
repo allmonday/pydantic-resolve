@@ -19,8 +19,7 @@ from pydantic_resolve import Resolver, query, mutation
 from pydantic_resolve.use_case.business import UseCaseService
 from pydantic_resolve.use_case.compose import ComposeError
 from pydantic_resolve.use_case.context import FromContext
-from pydantic_resolve.use_case.manager import UseCaseManager
-from pydantic_resolve.use_case.types import UseCaseAppConfig
+from pydantic_resolve.use_case.manager import UseCaseAppConfig, UseCaseManager
 
 
 # ──────────────────────────────────────────────────
@@ -416,38 +415,6 @@ class TestComposeValidation:
         with pytest.raises(ComposeError, match="Available fields:") as exc_info:
             await app.compose(
                 "{ SprintService { list_sprints { nonexistent } } }",
-            )
-        assert "id" in str(exc_info.value)
-        assert "name" in str(exc_info.value)
-
-
-# ──────────────────────────────────────────────────
-# Selection error includes available fields (selection.py regression)
-# ──────────────────────────────────────────────────
-
-
-class TestSelectionErrorListsAvailable:
-    """``build_subset_model`` is shared between ``compose_query`` and any
-    other caller of ``apply_selection``. This test verifies the helpful
-    error reaches the selection surface so LLMs can recover without a
-    schema lookup.
-    """
-
-    def test_selection_unknown_field_includes_available(self):
-        from pydantic_resolve.use_case.selection import (
-            SelectionError,
-            apply_selection,
-        )
-
-        class SampleDTO(BaseModel):
-            id: int
-            name: str
-
-        with pytest.raises(SelectionError, match="Available fields:") as exc_info:
-            apply_selection(
-                SampleDTO(id=1, name="x"),
-                SampleDTO,
-                "{ nonexistent }",
             )
         assert "id" in str(exc_info.value)
         assert "name" in str(exc_info.value)

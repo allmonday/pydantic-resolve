@@ -19,8 +19,8 @@ from pydantic import BaseModel
 
 from pydantic_resolve import query, mutation
 from pydantic_resolve.use_case.business import UseCaseService
-from pydantic_resolve.use_case.compose import (
-    ComposeError,
+from pydantic_resolve.use_case.compose import ComposeError
+from pydantic_resolve.use_case.introspection import (
     compose_introspect,
     is_introspection_query,
 )
@@ -28,7 +28,7 @@ from pydantic_resolve.use_case.manager import UseCaseManager
 from pydantic_resolve.use_case.server_graphql import (
     create_use_case_graphql_mcp_server,
 )
-from pydantic_resolve.use_case.types import UseCaseAppConfig
+from pydantic_resolve.use_case.manager import UseCaseAppConfig
 
 
 # ──────────────────────────────────────────────────

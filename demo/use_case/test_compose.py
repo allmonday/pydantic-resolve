@@ -16,8 +16,7 @@ import pytest
 
 from demo.use_case.database import init_db
 
-from pydantic_resolve.use_case.manager import UseCaseManager
-from pydantic_resolve.use_case.types import UseCaseAppConfig
+from pydantic_resolve.use_case.manager import UseCaseAppConfig, UseCaseManager
 
 
 @pytest.fixture(autouse=True)

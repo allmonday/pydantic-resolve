@@ -31,12 +31,12 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from pydantic_resolve.graphql import get_graphiql_html
-from pydantic_resolve.use_case.compose import (
+from pydantic_resolve.use_case.introspection import (
     compose_introspect,
     is_introspection_query,
 )
 from pydantic_resolve.use_case.manager import UseCaseManager
-from pydantic_resolve.use_case.types import UseCaseAppConfig
+from pydantic_resolve.use_case.manager import UseCaseAppConfig
 
 from demo.use_case.database import init_db
 from demo.use_case.services import SprintService, TaskService, UserService

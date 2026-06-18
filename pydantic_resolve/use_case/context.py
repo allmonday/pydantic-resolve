@@ -1,5 +1,9 @@
 """FromContext marker for UseCaseService method parameters."""
 
+from __future__ import annotations
+
+from typing import Annotated, Any, get_args, get_origin
+
 
 class FromContext:
     """Marker annotation for parameters injected from MCP context_extractor.
@@ -31,3 +35,15 @@ class FromContext:
     """
 
     pass
+
+
+def is_from_context_annotation(annotation: Any) -> bool:
+    """Return True if ``annotation`` is ``Annotated[..., FromContext()]``.
+
+    False for None, missing annotations, and non-Annotated types —
+    ``get_origin`` already returns None for those, so no explicit
+    sentinel check is needed.
+    """
+    if get_origin(annotation) is not Annotated:
+        return False
+    return any(isinstance(arg, FromContext) for arg in get_args(annotation))
