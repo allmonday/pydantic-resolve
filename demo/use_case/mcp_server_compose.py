@@ -1,7 +1,9 @@
 """GraphQL compose UseCase MCP server for Sprint/Task/User management.
 
-Demonstrates the GraphQL-string MCP style:
-- describe_compose_schema → compose_query
+Demonstrates the GraphQL-string MCP style: a single ``compose_query``
+tool that accepts both data queries (Service → Method → DTO field
+selection) and standard GraphQL introspection (``__schema`` /
+``__type``) for schema discovery.
 
 Independent from ``mcp_server.py`` (the classic progressive-disclosure
 server). Both demos use the same ``services.py`` so the underlying

@@ -1,9 +1,9 @@
 """Tests for UseCase compose_query — GraphQL-style multi-method composition.
 
-The MCP-tool surface (``describe_compose_schema`` + ``compose_query`` via the
-FastMCP server factory) lives in ``test_compose_mcp.py``. This file covers
-``compose_and_resolve`` — the Python API used by the MCP tool, the HTTP
-GraphiQL demo, and direct callers.
+The MCP-tool surface (``compose_query`` via the FastMCP server factory)
+lives in ``test_compose_mcp.py``. This file covers ``compose_and_resolve``
+— the Python API used by the MCP tool, the HTTP GraphiQL demo, and
+direct callers.
 """
 
 from __future__ import annotations
