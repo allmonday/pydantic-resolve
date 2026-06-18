@@ -151,10 +151,30 @@ def mcp_server_with_context():
                 name="project",
                 description="Project management",
                 services=[ContextService],
-                context_extractor=lambda ctx: {"user_id": ctx.get("user_id", 0)},
+                # Hardcoded return — fixture verifies compose's wiring
+                # (extractor dict → FromContext injection), not FastMCP's
+                # HTTP header plumbing. Production extractors typically use
+                # ``get_http_headers(include={...})`` from fastmcp.server.dependencies.
+                context_extractor=lambda ctx: {"user_id": 7},
             ),
         ],
         name="Compose Context Test API",
+    )
+
+
+@pytest.fixture
+def mcp_server_with_empty_extractor():
+    """Extractor returns no keys — exercises the missing-required-key path."""
+    return create_use_case_graphql_mcp_server(
+        apps=[
+            UseCaseAppConfig(
+                name="project",
+                description="Project management",
+                services=[ContextService],
+                context_extractor=lambda ctx: {},
+            ),
+        ],
+        name="Compose Empty Context Test API",
     )
 
 
@@ -557,3 +577,55 @@ class TestComposeQueryTool:
             assert forbidden not in hint, (
                 f"compose_query hint must not reference classic tool '{forbidden}'"
             )
+
+
+# ──────────────────────────────────────────────────
+# Layer 4 + FromContext: end-to-end extractor → injection
+# ──────────────────────────────────────────────────
+
+
+class TestComposeQueryWithContext:
+    """End-to-end coverage for the context flow:
+
+    FastMCP Context → _extract_context → context_extractor → dict →
+    compose_and_resolve → _prepare_method_kwargs → FromContext param.
+    """
+
+    @pytest.mark.asyncio
+    async def test_extractor_output_flows_into_from_context_param(
+        self, mcp_server_with_context
+    ):
+        """Extractor's dict reaches the FromContext param via compose_query."""
+        result = await mcp_server_with_context.call_tool(
+            "compose_query",
+            {
+                "app_name": "project",
+                "query": "{ ContextService { get_my_tasks { id title } } }",
+            },
+        )
+        data = json.loads(result.content[0].text)
+        assert data["success"] is True
+        tasks = data["data"]["ContextService"]["get_my_tasks"]
+        # ContextService.get_my_tasks embeds user_id into title as f"Task of {user_id}".
+        # Extractor returns {"user_id": 7} → every title must contain "Task of 7".
+        assert len(tasks) > 0
+        assert all("Task of 7" in t["title"] for t in tasks)
+
+    @pytest.mark.asyncio
+    async def test_missing_required_context_key_returns_error_envelope(
+        self, mcp_server_with_empty_extractor
+    ):
+        """Extractor missing a required FromContext key surfaces as a
+        validation_error envelope, not silent success."""
+        result = await mcp_server_with_empty_extractor.call_tool(
+            "compose_query",
+            {
+                "app_name": "project",
+                "query": "{ ContextService { get_my_tasks { id title } } }",
+            },
+        )
+        data = json.loads(result.content[0].text)
+        assert data["success"] is False
+        assert data["error_type"] == "validation_error"
+        # _prepare_method_kwargs raises "Required FromContext parameter 'user_id'..."
+        assert "user_id" in data["error"]
