@@ -28,7 +28,7 @@ async def setup_db():
 
 def _make_manager() -> UseCaseManager:
     # Import here so DB init runs first.
-    from demo.use_case.mcp_server import SprintService, TaskService, UserService
+    from demo.use_case.services import SprintService, TaskService, UserService
 
     return UseCaseManager(
         apps=[

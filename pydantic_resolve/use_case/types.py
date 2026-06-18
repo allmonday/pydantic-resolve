@@ -17,8 +17,9 @@ class UseCaseAppConfig(BaseModel):
         services: List of UseCaseService subclasses for this app (required)
         description: Optional application description
         enable_mutation: Whether mutation methods are exposed via MCP (default: True).
-            When False, mutation methods are hidden from list_services,
-            describe_service, and call_use_case tools.
+            When False, mutation methods are hidden from
+            ``describe_compose_schema``, ``describe_compose_method``,
+            and ``compose_query``.
         context_extractor: Optional callback that extracts request-scoped context
             (e.g. user identity from Authorization header). Receives the FastMCP
             Context object and returns a dict injected as ``_context`` parameter

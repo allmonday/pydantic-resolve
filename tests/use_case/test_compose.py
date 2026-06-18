@@ -431,10 +431,10 @@ class TestComposeValidation:
 
 
 class TestSelectionErrorListsAvailable:
-    """The classic ``call_use_case(selection=...)`` shares the same
-    ``build_subset_model`` helper as ``compose_and_resolve``. This test
-    verifies the helpful error reaches the classic selection surface too,
-    so LLMs can recover without a schema lookup.
+    """``build_subset_model`` is shared between ``compose_query`` and any
+    other caller of ``apply_selection``. This test verifies the helpful
+    error reaches the selection surface so LLMs can recover without a
+    schema lookup.
     """
 
     def test_selection_unknown_field_includes_available(self):

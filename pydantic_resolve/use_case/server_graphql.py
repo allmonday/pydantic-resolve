@@ -1,8 +1,7 @@
 """UseCase GraphQL MCP Server — 4-layer progressive disclosure.
 
-A standalone MCP server (independent from ``server.create_use_case_mcp_server``)
-that exposes the compose surface via four tools mirroring the classic
-server's progressive-disclosure pattern:
+The single MCP server factory for UseCase services. Exposes the
+compose surface via four tools in a progressive-disclosure pattern:
 
 - ``list_apps`` — Layer 1: cheap app discovery (names + service counts).
 - ``describe_compose_schema`` — Layer 2: per-app service + method
@@ -48,12 +47,13 @@ from pydantic_resolve.use_case.compose import (
 )
 from pydantic_resolve.use_case.context import FromContext
 from pydantic_resolve.use_case.manager import UseCaseManager
-from pydantic_resolve.use_case.server import _extract_context
 from pydantic_resolve.use_case.types import UseCaseAppConfig
 from pydantic_resolve.utils.types import _resolve_function_type_hints, get_return_annotation
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
+
+    from pydantic_resolve.use_case.manager import UseCaseResources
 
 
 def create_use_case_graphql_mcp_server(
@@ -62,14 +62,12 @@ def create_use_case_graphql_mcp_server(
 ) -> "FastMCP":
     """Create an MCP server with 4-layer progressive disclosure.
 
-    Independent from ``create_use_case_mcp_server`` (the classic
-    progressive-disclosure server). ``describe_compose_schema``,
-    ``describe_compose_method``, and ``compose_query`` take ``app_name``
-    to target a specific app in ``apps``; ``list_apps`` returns the list
-    of valid app names.
+    ``describe_compose_schema``, ``describe_compose_method``, and
+    ``compose_query`` take ``app_name`` to target a specific app in
+    ``apps``; ``list_apps`` returns the list of valid app names.
 
     Args:
-        apps: List of ``UseCaseAppConfig`` (same shape as the classic server).
+        apps: List of ``UseCaseAppConfig``.
         name: MCP server name shown to clients.
 
     Returns:
@@ -400,6 +398,22 @@ def create_use_case_graphql_mcp_server(
 # ============================================================================
 # Helpers (local; intentionally not exported)
 # ============================================================================
+
+
+async def _extract_context(
+    app: "UseCaseResources", ctx: "Context"
+) -> dict | None:
+    """Call the app's ``context_extractor`` if configured.
+
+    Returns ``None`` when no extractor is set or no context is available
+    (e.g. MCP request context missing). Awaitable results are awaited.
+    """
+    if app.context_extractor is None or ctx is None:
+        return None
+    result = app.context_extractor(ctx)
+    if inspect.isawaitable(result):
+        return await result
+    return result
 
 
 def _build_args_info(func: Any) -> list[dict[str, Any]]:

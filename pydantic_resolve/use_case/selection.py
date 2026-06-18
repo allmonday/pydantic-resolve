@@ -1,9 +1,10 @@
 """Selection projection for UseCase MCP responses.
 
-This module implements a lightweight, DTO-only projection layer for
-``call_use_case(selection=...)``.  It intentionally reuses the GraphQL
-``QueryParser``/``FieldSelection`` structures while avoiding ERD-specific
-response building behavior such as relationships, pagination, and FK fields.
+This module implements a lightweight, DTO-only projection layer for the
+field-selection level of ``compose_query``.  It intentionally reuses the
+GraphQL ``QueryParser``/``FieldSelection`` structures while avoiding
+ERD-specific response building behavior such as relationships,
+pagination, and FK fields.
 """
 
 from __future__ import annotations

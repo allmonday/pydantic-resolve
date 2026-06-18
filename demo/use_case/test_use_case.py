@@ -1,8 +1,6 @@
-"""Tests for demo/use_case — Service methods, MCP tools, and FastAPI endpoints."""
+"""Tests for demo/use_case — Service methods and FastAPI endpoints."""
 
 from __future__ import annotations
-
-import json
 
 import pytest
 
@@ -23,7 +21,7 @@ async def setup_db():
 class TestUserService:
     @pytest.mark.asyncio
     async def test_list_users(self):
-        from demo.use_case.mcp_server import UserService
+        from demo.use_case.services import UserService
 
         users = await UserService.list_users()
         assert len(users) == 3
@@ -33,7 +31,7 @@ class TestUserService:
 
     @pytest.mark.asyncio
     async def test_get_user(self):
-        from demo.use_case.mcp_server import UserService
+        from demo.use_case.services import UserService
 
         user = await UserService.get_user(user_id=1)
         assert user is not None
@@ -42,7 +40,7 @@ class TestUserService:
 
     @pytest.mark.asyncio
     async def test_get_user_not_found(self):
-        from demo.use_case.mcp_server import UserService
+        from demo.use_case.services import UserService
 
         user = await UserService.get_user(user_id=999)
         assert user is None
@@ -51,7 +49,7 @@ class TestUserService:
 class TestTaskService:
     @pytest.mark.asyncio
     async def test_list_tasks(self):
-        from demo.use_case.mcp_server import TaskService
+        from demo.use_case.services import TaskService
 
         tasks = await TaskService.list_tasks()
         assert len(tasks) == 5
@@ -60,7 +58,7 @@ class TestTaskService:
 
     @pytest.mark.asyncio
     async def test_get_tasks_by_sprint(self):
-        from demo.use_case.mcp_server import TaskService
+        from demo.use_case.services import TaskService
 
         tasks = await TaskService.get_tasks_by_sprint(sprint_id=1)
         assert len(tasks) == 2
@@ -69,7 +67,7 @@ class TestTaskService:
 
     @pytest.mark.asyncio
     async def test_get_task(self):
-        from demo.use_case.mcp_server import TaskService
+        from demo.use_case.services import TaskService
 
         task = await TaskService.get_task(task_id=1)
         assert task is not None
@@ -80,7 +78,7 @@ class TestTaskService:
 
     @pytest.mark.asyncio
     async def test_get_task_not_found(self):
-        from demo.use_case.mcp_server import TaskService
+        from demo.use_case.services import TaskService
 
         task = await TaskService.get_task(task_id=999)
         assert task is None
@@ -89,14 +87,14 @@ class TestTaskService:
 class TestSprintService:
     @pytest.mark.asyncio
     async def test_list_sprints(self):
-        from demo.use_case.mcp_server import SprintService
+        from demo.use_case.services import SprintService
 
         sprints = await SprintService.list_sprints()
         assert len(sprints) == 2
 
     @pytest.mark.asyncio
     async def test_sprint_has_tasks(self):
-        from demo.use_case.mcp_server import SprintService
+        from demo.use_case.services import SprintService
 
         sprints = await SprintService.list_sprints()
         sprint1 = next(s for s in sprints if s.id == 1)
@@ -105,7 +103,7 @@ class TestSprintService:
 
     @pytest.mark.asyncio
     async def test_sprint_contributor_names(self):
-        from demo.use_case.mcp_server import SprintService
+        from demo.use_case.services import SprintService
 
         sprints = await SprintService.list_sprints()
         sprint1 = next(s for s in sprints if s.id == 1)
@@ -114,7 +112,7 @@ class TestSprintService:
 
     @pytest.mark.asyncio
     async def test_get_sprint(self):
-        from demo.use_case.mcp_server import SprintService
+        from demo.use_case.services import SprintService
 
         sprint = await SprintService.get_sprint(sprint_id=1)
         assert sprint is not None
@@ -124,141 +122,8 @@ class TestSprintService:
 
     @pytest.mark.asyncio
     async def test_get_sprint_not_found(self):
-        from demo.use_case.mcp_server import SprintService
+        from demo.use_case.services import SprintService
 
         sprint = await SprintService.get_sprint(sprint_id=999)
         assert sprint is None
 
-
-# ──────────────────────────────────────────────────
-# Tests: MCP Server tools
-# ──────────────────────────────────────────────────
-
-
-@pytest.fixture
-def mcp_server():
-    from demo.use_case.mcp_server import create_server
-
-    return create_server()
-
-
-class TestUseCaseMcpServer:
-    @pytest.mark.asyncio
-    async def test_list_apps(self, mcp_server):
-        result = await mcp_server.call_tool("list_apps", {})
-        data = json.loads(result.content[0].text)
-        assert data["success"] is True
-        assert len(data["data"]) == 1
-        assert data["data"][0]["name"] == "sprint"
-
-    @pytest.mark.asyncio
-    async def test_list_services(self, mcp_server):
-        result = await mcp_server.call_tool(
-            "list_services", {"app_name": "sprint"}
-        )
-        data = json.loads(result.content[0].text)
-        assert data["success"] is True
-        assert len(data["data"]) == 3
-
-    @pytest.mark.asyncio
-    async def test_describe_service(self, mcp_server):
-        result = await mcp_server.call_tool(
-            "describe_service",
-            {"app_name": "sprint", "service_name": "SprintService"},
-        )
-        data = json.loads(result.content[0].text)
-        assert data["success"] is True
-        assert data["data"]["name"] == "SprintService"
-        assert len(data["data"]["methods"]) == 2  # list_sprints + get_sprint
-
-    @pytest.mark.asyncio
-    async def test_call_use_case_list_users(self, mcp_server):
-        result = await mcp_server.call_tool(
-            "call_use_case",
-            {
-                "app_name": "sprint",
-                "service_name": "UserService",
-                "method_name": "list_users",
-                "params": "{}",
-            },
-        )
-        data = json.loads(result.content[0].text)
-        assert data["success"] is True
-        assert len(data["data"]) == 3
-        assert data["data"][0]["name"] == "Alice"
-
-    @pytest.mark.asyncio
-    async def test_call_use_case_get_task(self, mcp_server):
-        result = await mcp_server.call_tool(
-            "call_use_case",
-            {
-                "app_name": "sprint",
-                "service_name": "TaskService",
-                "method_name": "get_task",
-                "params": json.dumps({"task_id": 1}),
-            },
-        )
-        data = json.loads(result.content[0].text)
-        assert data["success"] is True
-        assert data["data"]["id"] == 1
-        assert data["data"]["title"] == "Setup project"
-        assert data["data"]["owner_detail"]["name"] == "Alice"
-
-    @pytest.mark.asyncio
-    async def test_call_use_case_get_sprint(self, mcp_server):
-        result = await mcp_server.call_tool(
-            "call_use_case",
-            {
-                "app_name": "sprint",
-                "service_name": "SprintService",
-                "method_name": "get_sprint",
-                "params": json.dumps({"sprint_id": 1}),
-            },
-        )
-        data = json.loads(result.content[0].text)
-        assert data["success"] is True
-        assert data["data"]["id"] == 1
-        assert data["data"]["task_count"] == 2
-
-    @pytest.mark.asyncio
-    async def test_call_use_case_get_tasks_by_sprint(self, mcp_server):
-        result = await mcp_server.call_tool(
-            "call_use_case",
-            {
-                "app_name": "sprint",
-                "service_name": "TaskService",
-                "method_name": "get_tasks_by_sprint",
-                "params": json.dumps({"sprint_id": 1}),
-            },
-        )
-        data = json.loads(result.content[0].text)
-        assert data["success"] is True
-        assert len(data["data"]) == 2
-
-    @pytest.mark.asyncio
-    async def test_call_use_case_app_not_found(self, mcp_server):
-        result = await mcp_server.call_tool(
-            "call_use_case",
-            {
-                "app_name": "unknown",
-                "service_name": "UserService",
-                "method_name": "list_users",
-                "params": "{}",
-            },
-        )
-        data = json.loads(result.content[0].text)
-        assert data["success"] is False
-
-    @pytest.mark.asyncio
-    async def test_call_use_case_method_not_found(self, mcp_server):
-        result = await mcp_server.call_tool(
-            "call_use_case",
-            {
-                "app_name": "sprint",
-                "service_name": "UserService",
-                "method_name": "nonexistent",
-                "params": "{}",
-            },
-        )
-        data = json.loads(result.content[0].text)
-        assert data["success"] is False
