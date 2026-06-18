@@ -23,11 +23,7 @@ from pydantic_resolve.graphql.mcp.types.errors import (
     create_success_response,
 )
 from pydantic_resolve.use_case.business import USE_CASE_METHODS_ATTR
-from pydantic_resolve.use_case.compose import (
-    ComposeError,
-    compose_and_resolve,
-    is_introspection_query,
-)
+from pydantic_resolve.use_case.compose import _get_from_context_params
 from pydantic_resolve.use_case.context import FromContext
 from pydantic_resolve.use_case.manager import UseCaseManager
 from pydantic_resolve.use_case.selection import SelectionError, apply_selection
@@ -408,138 +404,27 @@ def create_use_case_mcp_server(
         )
         return response
 
-    # Layer 4: Compose multiple methods in a single GraphQL query
-    @mcp.tool()
-    async def compose_query(
-        app_name: str,
-        query: str,
-        ctx: Context = None,  # type: ignore[assignment]
-    ) -> dict[str, Any]:
-        """Compose multiple UseCaseService methods in a single GraphQL query.
-
-        Fixed 3-level hierarchy: Query root → Service → Method → DTO field
-        selection. Useful for fetching related data across services in one
-        round trip instead of N ``call_use_case`` invocations.
-
-        Rules:
-        - No aliases (GraphQL ``field:`` syntax). Each field name must be
-          unique within its parent.
-        - Service names must match registered services in the app. Use
-          ``list_services`` to discover them.
-        - Method names must match ``@query`` or ``@mutation`` methods on
-          the service. Use ``describe_service`` to see signatures.
-        - Method arguments go in parentheses on the method field:
-          ``get_sprint(sprint_id: 1)``.
-        - Parameters marked ``FromContext`` (server-injected: auth user,
-          tenant, etc.) CANNOT be set from query arguments — doing so
-          returns ``validation_error``. This prevents privilege
-          escalation via argument override.
-        - DTO field selection under each method projects into that
-          method's return DTO. Nested DTOs require sub-selection.
-        - Mutations are only allowed when the app has ``enable_mutation=True``.
-
-        Execution semantics:
-        - ``@query`` methods run concurrently.
-        - ``@mutation`` methods run serially in declaration order.
-        - The relative ordering between queries and mutations within a
-          single compose call is NOT guaranteed. If you need
-          create-then-read semantics (e.g. create a task then read it
-          back), issue them as separate compose_query calls.
-
-        The response shape mirrors the request: each Service becomes a
-        key whose value is a dict of method-name → result.
-
-        Args:
-            app_name: Name of the application (from list_apps).
-            query: GraphQL query string.
-            ctx: MCP request context (used for context_extractor).
-
-        Returns:
-            Dictionary with success, data (nested {service: {method:
-            result}}), and optional hint. On failure: error and
-            error_type (one of: validation_error, type_not_found,
-            operation_not_found, query_execution_error,
-            mutation_execution_error, app_not_found, internal_error).
-
-        Example::
-
-            compose_query(
-                app_name="project",
-                query='''
-                {
-                  SprintService {
-                    list_sprints { id name }
-                    get_sprint(sprint_id: 1) { name }
-                  }
-                  TaskService {
-                    get_task(task_id: 1) { title owner_id }
-                  }
-                }
-                ''',
-            )
-        """
-        if is_introspection_query(query):
-            return create_error_response(
-                "GraphQL introspection is not available via MCP. "
-                "Use describe_service(app_name=..., service_name=...) to discover "
-                "available services, methods, and DTO fields.",
-                MCPErrors.VALIDATION_ERROR,
-            )
-
-        try:
-            app = manager.get_app(app_name)
-        except ValueError:
-            return create_error_response(
-                f"App '{app_name}' not found. Use list_apps() to see available apps.",
-                MCPErrors.APP_NOT_FOUND,
-            )
-
-        try:
-            context = await _extract_context(app, ctx)
-            data = await compose_and_resolve(app, query, context=context)
-            response = create_success_response(data)
-            response["hint"] = (
-                f"Composed query executed for app '{app_name}'. "
-                f"Use list_services(app_name='{app_name}') to explore more services."
-            )
-            return response
-        except ComposeError as e:
-            error_enum = _compose_error_to_enum(e.error_type)
-            return create_error_response(str(e), error_enum)
-        except Exception as e:
-            return create_error_response(
-                f"Internal error while composing query: {e}",
-                MCPErrors.INTERNAL_ERROR,
-            )
-
-    async def _extract_context(
-        app: "UseCaseResources", ctx: "Context"
-    ) -> dict | None:
-        """Call the app's context_extractor if configured, returning a context dict."""
-        if app.context_extractor is None or ctx is None:
-            return None
-        result = app.context_extractor(ctx)
-        if inspect.isawaitable(result):
-            return await result
-        return result
-
-    def _get_from_context_params(method: callable) -> set[str]:
-        """Return parameter names annotated with FromContext."""
-        from_context_params = set()
-        hints = _resolve_function_type_hints(method)
-        sig = inspect.signature(method)
-        for name in sig.parameters:
-            if name == "cls":
-                continue
-            annotation = hints.get(name)
-            if annotation is not None and get_origin(annotation) is Annotated:
-                for arg in get_args(annotation):
-                    if isinstance(arg, FromContext):
-                        from_context_params.add(name)
-                        break
-        return from_context_params
+    # compose_query used to live here but has moved to its own server factory
+    # (``server_graphql.create_use_case_graphql_mcp_server``) so the GraphQL
+    # style and the classic progressive-disclosure style stay independent.
 
     return mcp
+
+
+async def _extract_context(
+    app: "UseCaseResources", ctx: "Context"
+) -> dict | None:
+    """Call the app's context_extractor if configured.
+
+    Module-level helper shared by both ``server.create_use_case_mcp_server``
+    and ``server_graphql.create_use_case_graphql_mcp_server``.
+    """
+    if app.context_extractor is None or ctx is None:
+        return None
+    result = app.context_extractor(ctx)
+    if inspect.isawaitable(result):
+        return await result
+    return result
 
 
 def _coerce_value(value: Any, annotation: Any) -> Any:
@@ -551,19 +436,6 @@ def _coerce_value(value: Any, annotation: Any) -> Any:
         return adapter.validate_python(value)
     except Exception:
         return value
-
-
-def _compose_error_to_enum(error_type: str) -> MCPErrors:
-    """Map ComposeError.error_type string to an MCPErrors member.
-
-    Falls back to VALIDATION_ERROR when the string does not match a known
-    member — this keeps the MCP response well-formed even if compose.py
-    raises with a typo'd error_type.
-    """
-    for member in MCPErrors:
-        if member.value == error_type:
-            return member
-    return MCPErrors.VALIDATION_ERROR
 
 
 def _coerce_kwargs(func: Any, kwargs: dict[str, Any]) -> dict[str, Any]:

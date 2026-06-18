@@ -26,7 +26,9 @@ from pydantic_resolve.use_case.compose import (
     is_introspection_query,
 )
 from pydantic_resolve.use_case.manager import UseCaseManager
-from pydantic_resolve.use_case.server import create_use_case_mcp_server
+from pydantic_resolve.use_case.server_graphql import (
+    create_use_case_graphql_mcp_server,
+)
 from pydantic_resolve.use_case.types import UseCaseAppConfig
 
 
@@ -327,7 +329,7 @@ class TestEntryRouting:
 
     @pytest.mark.asyncio
     async def test_mcp_tool_rejects_introspection_with_hint(self):
-        mcp = create_use_case_mcp_server(
+        mcp = create_use_case_graphql_mcp_server(
             apps=[
                 UseCaseAppConfig(
                     name="project",
@@ -342,7 +344,7 @@ class TestEntryRouting:
         )
         data = json.loads(result.content[0].text)
         assert data["success"] is False
-        assert "describe_service" in data["error"]
+        assert "describe_compose_schema" in data["error"]
         assert data["error_type"] == "validation_error"
 
 

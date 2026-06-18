@@ -1,22 +1,30 @@
 """UseCase MCP support for pydantic-resolve.
 
-This module provides MCP server implementation for exposing UseCaseService
-business services to AI agents with progressive disclosure support.
+This module provides two independent MCP server factories for exposing
+UseCaseService business services to AI agents:
 
-Main Components:
-- create_use_case_mcp_server: Create an MCP server for multiple UseCase apps
+- ``create_use_case_mcp_server`` — classic progressive disclosure style.
+  Four tools: ``list_apps`` → ``list_services`` → ``describe_service`` →
+  ``call_use_case``. Flat JSON parameters; LLM doesn't need GraphQL
+  knowledge.
+- ``create_use_case_graphql_mcp_server`` — GraphQL string style. Two
+  tools: ``describe_compose_schema`` + ``compose_query``. Single GraphQL
+  query string batches multiple methods across services.
+
+The two servers are intentionally independent: their docstrings and
+hints do not cross-reference each other. Pick the one that matches your
+LLM's strongest modality (structured JSON vs GraphQL).
+
+Common Components:
 - UseCaseService: Base class for defining business services
 - UseCaseAppConfig: Configuration for each UseCase application
+- FromContext: Marker for server-injected method parameters
 
-Progressive Disclosure Layers:
-- Layer 0: list_apps - Discover available applications
-- Layer 1: list_services - List services in an app
-- Layer 2: describe_service - Get method signatures and DTO types
-- Layer 3: call_use_case - Execute a method
-
-Example:
+Example (classic):
     ```python
-    from pydantic_resolve.use_case import create_use_case_mcp_server, UseCaseService, UseCaseAppConfig
+    from pydantic_resolve.use_case import (
+        create_use_case_mcp_server, UseCaseService, UseCaseAppConfig,
+    )
 
     class UserService(UseCaseService):
         '''User management service.'''
@@ -27,10 +35,19 @@ Example:
             ...
 
     mcp = create_use_case_mcp_server(
-        apps=[
-            UseCaseAppConfig(name="user", services=[UserService]),
-        ],
+        apps=[UseCaseAppConfig(name="user", services=[UserService])],
         name="My API",
+    )
+    mcp.run()
+    ```
+
+Example (graphql):
+    ```python
+    from pydantic_resolve.use_case import create_use_case_graphql_mcp_server
+
+    mcp = create_use_case_graphql_mcp_server(
+        apps=[UseCaseAppConfig(name="user", services=[UserService])],
+        name="My GraphQL API",
     )
     mcp.run()
     ```
@@ -39,6 +56,13 @@ Example:
 from pydantic_resolve.use_case.business import UseCaseService
 from pydantic_resolve.use_case.context import FromContext
 from pydantic_resolve.use_case.server import create_use_case_mcp_server
+from pydantic_resolve.use_case.server_graphql import create_use_case_graphql_mcp_server
 from pydantic_resolve.use_case.types import UseCaseAppConfig
 
-__all__ = ["create_use_case_mcp_server", "UseCaseService", "UseCaseAppConfig", "FromContext"]
+__all__ = [
+    "create_use_case_mcp_server",
+    "create_use_case_graphql_mcp_server",
+    "UseCaseService",
+    "UseCaseAppConfig",
+    "FromContext",
+]

@@ -1,9 +1,14 @@
-"""Tests for UseCase compose_query — GraphQL-style multi-method composition."""
+"""Tests for UseCase compose_query — GraphQL-style multi-method composition.
+
+The MCP-tool surface (``describe_compose_schema`` + ``compose_query`` via the
+FastMCP server factory) lives in ``test_compose_mcp.py``. This file covers
+``compose_and_resolve`` — the Python API used by the MCP tool, the HTTP
+GraphiQL demo, and direct callers.
+"""
 
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Annotated, Optional
 
 import pytest
@@ -14,7 +19,6 @@ from pydantic_resolve.use_case.business import UseCaseService
 from pydantic_resolve.use_case.compose import ComposeError, compose_and_resolve
 from pydantic_resolve.use_case.context import FromContext
 from pydantic_resolve.use_case.manager import UseCaseManager
-from pydantic_resolve.use_case.server import create_use_case_mcp_server
 from pydantic_resolve.use_case.types import UseCaseAppConfig
 
 
@@ -407,6 +411,51 @@ class TestComposeValidation:
             )
 
     @pytest.mark.asyncio
+    async def test_unknown_field_error_lists_available_fields(self):
+        # The error must include the candidate field names so LLMs can
+        # recover without a separate schema discovery call.
+        app = _make_manager().get_app("project")
+        with pytest.raises(ComposeError, match="Available fields:") as exc_info:
+            await compose_and_resolve(
+                app,
+                "{ SprintService { list_sprints { nonexistent } } }",
+            )
+        assert "id" in str(exc_info.value)
+        assert "name" in str(exc_info.value)
+
+
+# ──────────────────────────────────────────────────
+# Selection error includes available fields (selection.py regression)
+# ──────────────────────────────────────────────────
+
+
+class TestSelectionErrorListsAvailable:
+    """The classic ``call_use_case(selection=...)`` shares the same
+    ``build_subset_model`` helper as ``compose_and_resolve``. This test
+    verifies the helpful error reaches the classic selection surface too,
+    so LLMs can recover without a schema lookup.
+    """
+
+    def test_selection_unknown_field_includes_available(self):
+        from pydantic_resolve.use_case.selection import (
+            SelectionError,
+            apply_selection,
+        )
+
+        class SampleDTO(BaseModel):
+            id: int
+            name: str
+
+        with pytest.raises(SelectionError, match="Available fields:") as exc_info:
+            apply_selection(
+                SampleDTO(id=1, name="x"),
+                SampleDTO,
+                "{ nonexistent }",
+            )
+        assert "id" in str(exc_info.value)
+        assert "name" in str(exc_info.value)
+
+    @pytest.mark.asyncio
     async def test_sub_selection_on_scalar_rejected(self):
         app = _make_manager().get_app("project")
         with pytest.raises(ComposeError):
@@ -505,58 +554,3 @@ class TestComposeExecutionOrdering:
             "{ SeqService { fast_mutation } }",
         )
         assert result["SeqService"]["fast_mutation"] == "fast_mutation"
-
-
-# ──────────────────────────────────────────────────
-# MCP integration
-# ──────────────────────────────────────────────────
-
-
-@pytest.fixture
-def mcp_server():
-    return create_use_case_mcp_server(
-        apps=[
-            UseCaseAppConfig(
-                name="project",
-                description="Project management",
-                services=[SprintService, TaskService],
-            ),
-        ],
-        name="Compose Test API",
-    )
-
-
-class TestComposeMcpTool:
-    @pytest.mark.asyncio
-    async def test_compose_query_tool_success(self, mcp_server):
-        result = await mcp_server.call_tool(
-            "compose_query",
-            {
-                "app_name": "project",
-                "query": "{ SprintService { list_sprints { id name } } }",
-            },
-        )
-        data = json.loads(result.content[0].text)
-        assert data["success"] is True
-        assert data["data"]["SprintService"]["list_sprints"][0]["name"] == "Sprint A"
-
-    @pytest.mark.asyncio
-    async def test_compose_query_tool_error_envelope(self, mcp_server):
-        result = await mcp_server.call_tool(
-            "compose_query",
-            {"app_name": "project", "query": "{ NoSuchService { x { id } } }"},
-        )
-        data = json.loads(result.content[0].text)
-        assert data["success"] is False
-        assert data["error_type"] == "type_not_found"
-        assert "NoSuchService" in data["error"]
-
-    @pytest.mark.asyncio
-    async def test_compose_query_tool_app_not_found(self, mcp_server):
-        result = await mcp_server.call_tool(
-            "compose_query",
-            {"app_name": "no_such_app", "query": "{ SprintService { list_sprints { id } } }"},
-        )
-        data = json.loads(result.content[0].text)
-        assert data["success"] is False
-        assert data["error_type"] == "app_not_found"
