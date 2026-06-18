@@ -200,14 +200,15 @@ def create_use_case_graphql_mcp_server(
         """Get detailed info for a single method.
 
         Returns the method's args (with types + defaults), return type,
-        and (for DTO returns) the list of selectable top-level fields.
+        the list of selectable top-level fields (for DTO returns), AND
+        an ``sdl`` string showing the method signature plus full type
+        definitions for the return DTO and every nested DTO reachable
+        through its fields. Use the ``sdl`` field to learn nested DTO
+        shapes (e.g. what fields ``owner_detail: UserSummary`` exposes)
+        without trial-and-error in ``compose_query``.
+
         Use this after ``describe_compose_schema`` to learn a specific
         method's signature before calling it via ``compose_query``.
-
-        Nested DTO fields are marked ``nested=true`` but NOT expanded —
-        if you select a nested field with the wrong sub-field, the
-        ``compose_query`` error response will list the available fields
-        for that DTO.
 
         Args:
             app_name: Name of the application (from ``list_apps``).
@@ -215,9 +216,10 @@ def create_use_case_graphql_mcp_server(
             method_name: Name of the method (from ``describe_compose_schema``).
 
         Returns:
-            Dictionary with ``success``, ``data`` (method detail), and
-            a ``hint`` pointing to ``compose_query``. On failure:
-            ``success=False``, ``error``, ``error_type``.
+            Dictionary with ``success``, ``data`` (``{name, kind,
+            description, args, returns, fields?, sdl?}``), and a ``hint``
+            pointing to ``compose_query``. On failure: ``success=False``,
+            ``error``, ``error_type``.
         """
         try:
             app = manager.get_app(app_name)
@@ -269,6 +271,17 @@ def create_use_case_graphql_mcp_server(
         }
         if core_type is not None:
             method_info["fields"] = _dto_fields_info(core_type)
+
+        # Focused SDL: method signature + return type + every reachable
+        # nested DTO. None when the method returns a scalar (no nested
+        # types to describe) or when schema-building fails — both are
+        # safe to skip.
+        try:
+            sdl = _method_sdl(app, service_name, method_name)
+            if sdl is not None:
+                method_info["sdl"] = sdl
+        except Exception:
+            pass
 
         return {
             "success": True,
@@ -451,9 +464,8 @@ def _dto_fields_info(model_cls: type) -> list[dict[str, Any]]:
 
     ``nested=True`` marks fields whose type is itself a Pydantic model
     (so they require sub-selection in the compose query). Nested DTOs
-    are NOT recursively expanded — their field lists are discovered via
-    error recovery in ``compose_query`` (``Unknown field. Available
-    fields: [...]``).
+    are NOT recursively expanded — their full definitions appear in
+    the ``sdl`` field returned by ``describe_compose_method``.
     """
     fields: list[dict[str, Any]] = []
     for name, field_info in model_cls.model_fields.items():
@@ -467,6 +479,102 @@ def _dto_fields_info(model_cls: type) -> list[dict[str, Any]]:
             }
         )
     return fields
+
+
+def _method_sdl(app: Any, service_name: str, method_name: str) -> str | None:
+    """Focused SDL for one method: signature + return type's transitive closure.
+
+    Returns a GraphQL SDL string showing:
+    - The method signature (args + return type) as a comment header
+    - Full type definitions for the return DTO and every nested DTO
+      reachable through its fields (handles cycles)
+
+    Returns ``None`` if the method or its return type can't be located
+    in the built schema (e.g. scalar returns have no nested types to
+    print).
+    """
+    from graphql.utilities import print_type
+
+    from pydantic_resolve.use_case.compose_schema import build_compose_schema
+
+    schema = build_compose_schema(app)
+
+    service_field = schema.query_type.fields.get(service_name)
+    if service_field is None:
+        return None
+    service_type = _unwrap_type(service_field.type)
+    method_field = service_type.fields.get(method_name) if service_type else None
+    if method_field is None:
+        return None
+
+    # Collect reachable object types from the return type
+    reachable: dict[str, Any] = {}
+    _collect_reachable_types(method_field.type, schema.type_map, reachable)
+
+    sdl_parts: list[str] = []
+    # Method signature as a comment header
+    args_sdl = ", ".join(
+        f"{name}: {_graphql_type_to_sdl(arg.type)}"
+        for name, arg in method_field.args.items()
+    )
+    sdl_parts.append(
+        f"# {service_name}.{method_name}({args_sdl}): "
+        f"{_graphql_type_to_sdl(method_field.type)}"
+    )
+    for type_name, type_def in sorted(reachable.items()):
+        sdl_parts.append(print_type(type_def))
+    return "\n\n".join(sdl_parts)
+
+
+def _unwrap_type(type_ref: Any) -> Any:
+    """Peel NonNull / List wrappers to get the underlying named type."""
+    while hasattr(type_ref, "of_type"):
+        type_ref = type_ref.of_type
+    return type_ref
+
+
+def _graphql_type_to_sdl(type_ref: Any) -> str:
+    """Render a graphql-core type reference as SDL syntax.
+
+    ``GraphQLNonNull(GraphQLList(GraphQLNonNull(GraphQLObjectType(X))))``
+    → ``[X!]!``
+    """
+    type_name = getattr(type_ref, "name", None)
+    if type_name is not None:
+        return type_name
+    inner = getattr(type_ref, "of_type", None)
+    if inner is None:
+        return str(type_ref)
+    inner_sdl = _graphql_type_to_sdl(inner)
+    # GraphQLNonNull wraps as ``T!``; GraphQLList wraps as ``[T]``
+    class_name = type(type_ref).__name__
+    if class_name == "GraphQLNonNull":
+        return f"{inner_sdl}!"
+    if class_name == "GraphQLList":
+        return f"[{inner_sdl}]"
+    return inner_sdl
+
+
+def _collect_reachable_types(
+    type_ref: Any, type_map: dict[str, Any], seen: dict[str, Any]
+) -> None:
+    """DFS-walk a graphql-core type reference, recording every object type.
+
+    Used to build the transitive closure of types reachable from a
+    method's return type — so the SDL response shows nested DTOs
+    without dumping the entire schema.
+    """
+    from graphql.type import GraphQLObjectType
+
+    core = _unwrap_type(type_ref)
+    name = getattr(core, "name", None)
+    if name is None or name in seen:
+        return
+    if isinstance(core, GraphQLObjectType):
+        seen[name] = core
+        for field in core.fields.values():
+            _collect_reachable_types(field.type, type_map, seen)
+
 
 
 def _compose_error_to_enum(error_type: str) -> MCPErrors:

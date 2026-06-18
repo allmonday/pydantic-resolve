@@ -106,6 +106,24 @@ class ContextService(UseCaseService):
         ]
 
 
+class NodeDTO(BaseModel):
+    """Self-referencing DTO for cycle-detection tests."""
+
+    id: int
+    children: list["NodeDTO"] = []
+
+
+NodeDTO.model_rebuild()
+
+
+class TreeService(UseCaseService):
+    """Service for SDL cycle-detection tests."""
+
+    @query
+    async def root(cls) -> Optional[NodeDTO]:
+        return None
+
+
 # ──────────────────────────────────────────────────
 # Fixtures
 # ──────────────────────────────────────────────────
@@ -384,6 +402,57 @@ class TestDescribeComposeMethod:
         arg_names = [a["name"] for a in method["args"]]
         assert "user_id" not in arg_names
         assert arg_names == []
+
+    @pytest.mark.asyncio
+    async def test_sdl_includes_method_signature_and_return_type(self, mcp_server):
+        """``sdl`` field shows the method signature as a comment plus
+        full type definitions for the return DTO and every nested DTO.
+        Closes the Layer 3 gap where ``fields`` only marked ``nested=true``
+        without expanding the nested type's fields.
+        """
+        result = await mcp_server.call_tool(
+            "describe_compose_method",
+            {
+                "app_name": "project",
+                "service_name": "TaskService",
+                "method_name": "get_task",
+            },
+        )
+        body = json.loads(result.content[0].text)
+        sdl = body["data"]["sdl"]
+        # Method signature header (lists all args + return type)
+        assert "# TaskService.get_task(" in sdl
+        assert "task_id: Int!" in sdl
+        assert "): TaskDTO" in sdl
+        # Return type fully expanded
+        assert "type TaskDTO {" in sdl
+        assert "owner: OwnerDTO" in sdl
+        # Nested DTO's fields also exposed (the whole point of SDL here)
+        assert "type OwnerDTO {" in sdl
+        assert "id: Int!" in sdl
+        assert "name: String!" in sdl
+
+    @pytest.mark.asyncio
+    async def test_sdl_handles_self_referencing_dto_without_cycle(self):
+        """Self-referencing DTO (``Node.children: list[Node]``) must
+        terminate — printed once, not infinitely recursed.
+        """
+        server = create_use_case_graphql_mcp_server(
+            apps=[UseCaseAppConfig(name="p", services=[TreeService])],
+        )
+        result = await server.call_tool(
+            "describe_compose_method",
+            {
+                "app_name": "p",
+                "service_name": "TreeService",
+                "method_name": "root",
+            },
+        )
+        body = json.loads(result.content[0].text)
+        sdl = body["data"]["sdl"]
+        # NodeDTO appears once (cycle broken), with the recursive field shown
+        assert sdl.count("type NodeDTO {") == 1
+        assert "children: [NodeDTO!]!" in sdl
 
     @pytest.mark.asyncio
     async def test_hint_points_to_compose_query(self, mcp_server):
