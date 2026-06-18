@@ -59,13 +59,7 @@ class QueryParser:
         for root_field in root_fields:
             root_field_name = root_field.name.value
             parsed_field = self._build_field_tree(root_field, fragments)
-            if root_field_name in field_tree:
-                field_tree[root_field_name] = self._merge_field_selections(
-                    field_tree[root_field_name],
-                    parsed_field,
-                )
-            else:
-                field_tree[root_field_name] = parsed_field
+            self._register_field(field_tree, root_field_name, parsed_field)
 
         return ParsedQuery(
             field_tree=field_tree,
@@ -153,13 +147,7 @@ class QueryParser:
                 if isinstance(selection, FieldNode):
                     sub_field_name = selection.name.value
                     parsed_field = self._build_field_tree(selection, fragments)
-                    if sub_field_name in sub_fields:
-                        sub_fields[sub_field_name] = self._merge_field_selections(
-                            sub_fields[sub_field_name],
-                            parsed_field,
-                        )
-                    else:
-                        sub_fields[sub_field_name] = parsed_field
+                    self._register_field(sub_fields, sub_field_name, parsed_field)
                 elif isinstance(selection, FragmentSpreadNode):
                     fragment_name = selection.name.value
                     fragment = fragments.get(fragment_name)
@@ -169,24 +157,12 @@ class QueryParser:
                     for fragment_field in self._extract_fields_from_selection_set(fragment.selection_set, fragments):
                         sub_field_name = fragment_field.name.value
                         parsed_field = self._build_field_tree(fragment_field, fragments)
-                        if sub_field_name in sub_fields:
-                            sub_fields[sub_field_name] = self._merge_field_selections(
-                                sub_fields[sub_field_name],
-                                parsed_field,
-                            )
-                        else:
-                            sub_fields[sub_field_name] = parsed_field
+                        self._register_field(sub_fields, sub_field_name, parsed_field)
                 elif isinstance(selection, InlineFragmentNode):
                     for inline_field in self._extract_fields_from_selection_set(selection.selection_set, fragments):
                         sub_field_name = inline_field.name.value
                         parsed_field = self._build_field_tree(inline_field, fragments)
-                        if sub_field_name in sub_fields:
-                            sub_fields[sub_field_name] = self._merge_field_selections(
-                                sub_fields[sub_field_name],
-                                parsed_field,
-                            )
-                        else:
-                            sub_fields[sub_field_name] = parsed_field
+                        self._register_field(sub_fields, sub_field_name, parsed_field)
 
         return FieldSelection(
             sub_fields=sub_fields,
@@ -244,32 +220,23 @@ class QueryParser:
         else:
             return None
 
-    def _merge_field_selections(
+    def _register_field(
         self,
-        left: FieldSelection,
-        right: FieldSelection,
-    ) -> FieldSelection:
-        """Merge two selections for the same field name."""
-        merged_arguments = None
-        if left.arguments or right.arguments:
-            merged_arguments = {
-                **(left.arguments or {}),
-                **(right.arguments or {}),
-            }
+        target: dict[str, FieldSelection],
+        name: str,
+        selection: FieldSelection,
+    ) -> None:
+        """Insert ``selection`` into ``target`` under ``name``.
 
-        merged_sub_fields = None
-        if left.sub_fields or right.sub_fields:
-            merged_sub_fields = dict(left.sub_fields or {})
-            for field_name, sub_selection in (right.sub_fields or {}).items():
-                if field_name in merged_sub_fields:
-                    merged_sub_fields[field_name] = self._merge_field_selections(
-                        merged_sub_fields[field_name],
-                        sub_selection,
-                    )
-                else:
-                    merged_sub_fields[field_name] = sub_selection
-
-        return FieldSelection(
-            sub_fields=merged_sub_fields,
-            arguments=merged_arguments,
-        )
+        Raises QueryParseError on duplicate — each field may appear at most
+        once within its parent selection. In compose semantics every
+        (service, method, args) tuple is a real method invocation, so
+        merging duplicate fields would silently clobber arguments and lose
+        calls. Reject outright instead.
+        """
+        if name in target:
+            raise QueryParseError(
+                f"Duplicate field '{name}' — each field may appear at most "
+                "once within its parent selection."
+            )
+        target[name] = selection
