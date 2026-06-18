@@ -87,8 +87,10 @@ def build_subset_model(
     for field_name, selection in field_selection.sub_fields.items():
         field_path = f"{path}.{field_name}" if path else field_name
         if field_name not in model_type.model_fields:
+            available = list(model_type.model_fields.keys())
             raise SelectionError(
-                f"Unknown field '{field_path}' on return type '{model_type.__name__}'"
+                f"Unknown field '{field_path}' on return type "
+                f"'{model_type.__name__}'. Available fields: {available}"
             )
 
         field_info = model_type.model_fields[field_name]
