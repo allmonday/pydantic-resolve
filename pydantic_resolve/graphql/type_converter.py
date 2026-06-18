@@ -48,7 +48,6 @@ from graphql import (
     GraphQLString,
     GraphQLType,
 )
-from graphql.pyutils import cached_property  # noqa: F401  (re-export not needed; defensive import for type clarity)
 
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.types import _is_list, _is_optional
@@ -58,8 +57,6 @@ try:  # Python 3.10+ PEP 604 unions
 except ImportError:  # pragma: no cover
     _UnionType = ()
 
-
-_TYPE_CACHE_KEY = Any  # type alias for clarity; actual keys are Python types
 
 # Scalars without a native GraphQL equivalent fall back to GraphQLString.
 # Users can override the schema post-build if they want custom scalars.
