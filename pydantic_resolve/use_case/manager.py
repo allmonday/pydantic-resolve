@@ -7,13 +7,15 @@ subclasses. Follows the same pattern as GraphQL MCP's MultiAppManager.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, TYPE_CHECKING
 
-from graphql import GraphQLSchema
 from pydantic import BaseModel
 
 from pydantic_resolve.use_case.business import UseCaseService
 from pydantic_resolve.use_case.compose_schema import build_compose_schema
+
+if TYPE_CHECKING:
+    from pydantic_resolve.graphql.schema.type_registry import TypeInfo
 
 
 class UseCaseAppConfig(BaseModel):
@@ -50,14 +52,16 @@ class UseCaseResources:
         name: Application name
         description: Application description
         services: Mapping of service name to service class
-        compose_schema: Cached graphql-core schema (built once at registration).
+        compose_schema: Cached ``{type_name: TypeInfo}`` registry (built once
+            at registration, never mutated after). Read by introspection and
+            ``describe_compose_method``.
         context_extractor: Optional callback to extract request-scoped context
     """
 
     name: str
     description: str
     services: dict[str, type["UseCaseService"]] = field(default_factory=dict)
-    compose_schema: GraphQLSchema | None = None
+    compose_schema: dict[str, "TypeInfo"] | None = None
     context_extractor: Callable[[Any], dict | Awaitable[dict]] | None = field(default=None)
     enable_mutation: bool = True
 

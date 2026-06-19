@@ -1,6 +1,6 @@
-"""Build a graphql-core ``GraphQLSchema`` describing a UseCase app's compose surface.
+"""Build a ``TypeInfo`` registry describing a UseCase app's compose surface.
 
-The schema mirrors the fixed 3-level compose query hierarchy:
+The registry mirrors the fixed 3-level compose query hierarchy::
 
     type Query {
       SprintService: SprintServiceQuery!
@@ -12,183 +12,314 @@ The schema mirrors the fixed 3-level compose query hierarchy:
       get_sprint(sprint_id: Int!): SprintDTO
     }
 
-Each registered ``UseCaseService`` becomes an ``ObjectType`` whose fields
-are its ``@query`` / ``@mutation`` methods. Method arguments become
-``GraphQLArgument`` s; the return annotation becomes the field type via
-``pydantic_to_graphql_type``.
+Each registered ``UseCaseService`` becomes a ``TypeInfo`` (kind=OBJECT,
+``{Service}Query``). Its fields are the ``@query`` / ``@mutation``
+methods; method args become ``ArgumentInfo`` s; the return annotation
+drives which DTO/Enum types get added to the registry.
 
-The resulting ``GraphQLSchema`` is what graphql-core's native
-introspection expects, so GraphiQL works out of the box when this is
-served through any HTTP endpoint that routes ``__schema`` / ``__type``
-queries to ``compose_introspect``.
+The registry is what ``compose_introspect`` walks to produce the
+GraphQL introspection JSON (GraphiQL-compatible) and what ``method_sdl``
+walks to produce the focused per-method SDL string.
 """
 
 from __future__ import annotations
 
 import inspect
-from typing import Any, Callable
+from typing import Any
 
-from graphql import (
-    GraphQLArgument,
-    GraphQLField,
-    GraphQLNonNull,
-    GraphQLObjectType,
-    GraphQLSchema,
-    GraphQLString,
+from pydantic import BaseModel
+
+from pydantic_resolve.graphql.schema.type_mapper import GraphQLTypeInfo, TypeMapper
+from pydantic_resolve.graphql.schema.type_registry import (
+    ArgumentInfo,
+    FieldInfo,
+    TypeInfo,
+    SCALAR_TYPES,
 )
-
-from pydantic_resolve.graphql.type_converter import pydantic_to_graphql_type
+from pydantic_resolve.graphql.type_mapping import is_enum_type
 from pydantic_resolve.use_case.business import iter_use_case_methods
 from pydantic_resolve.use_case.context import is_from_context_annotation
-from pydantic_resolve.utils.types import _resolve_function_type_hints, get_return_annotation
+from pydantic_resolve.utils.class_util import safe_issubclass
+from pydantic_resolve.utils.types import (
+    _is_optional,
+    _resolve_function_type_hints,
+    get_core_types,
+    get_return_annotation,
+)
 
 
-def build_compose_schema(app: Any) -> GraphQLSchema:
-    """Build a graphql-core schema describing ``compose_query``'s surface.
+def build_compose_schema(app: Any) -> dict[str, TypeInfo]:
+    """Build the ``TypeInfo`` registry for a UseCase app.
 
     Args:
         app: ``UseCaseResources`` from ``UseCaseManager.get_app``.
 
     Returns:
-        A ``GraphQLSchema`` whose root Query type has one field per
-        registered service. Each service is its own ``ObjectType``.
-        Mutations appear as fields on the service type (not on a
-        separate Mutation root) when ``app.enable_mutation`` is True.
+        Mapping ``{type_name: TypeInfo}`` covering every type reachable
+        from any registered service: services themselves (as
+        ``{Service}Query``), every DTO they return, every Enum those
+        DTOs reference, plus the root ``Query`` type and the 5 standard
+        GraphQL scalars.
     """
-    type_cache: dict[Any, Any] = {}
+    type_mapper = TypeMapper()
+    registry: dict[str, TypeInfo] = {}
 
-    query_fields: dict[str, GraphQLField] = {}
+    # Seed with the 5 standard GraphQL scalars so introspection reports them.
+    for name, ti in SCALAR_TYPES.items():
+        registry[name] = ti
+
+    query_fields: dict[str, FieldInfo] = {}
+
     for service_name, service_cls in app.services.items():
-        service_type = _build_service_object_type(
-            service_name=service_name,
-            service_cls=service_cls,
-            enable_mutation=app.enable_mutation,
-            type_cache=type_cache,
-        )
-        query_fields[service_name] = GraphQLField(
-            type_=GraphQLNonNull(service_type),
+        service_type_name = f"{service_name}Query"
+        service_type = TypeInfo(
+            name=service_type_name,
+            kind="OBJECT",
+            python_class=service_cls,
             description=(service_cls.__doc__ or None),
         )
+        registry[service_type_name] = service_type
 
-    if not query_fields:
-        # graphql-core refuses to build a schema with an empty Query type;
-        # provide a placeholder so introspection at least returns something.
-        query_fields["_empty"] = GraphQLField(
-            type_=GraphQLString,
-            description="No services registered.",
-        )
+        for method_name, _kind, meta in iter_use_case_methods(
+            service_cls, enable_mutation=app.enable_mutation
+        ):
+            method = meta["method"]
+            func = getattr(method, "__func__", method)
+            return_anno = get_return_annotation(method)
+            args = _build_method_args(type_mapper, func)
 
-    root_query = GraphQLObjectType(
-        name="Query",
-        fields=query_fields,
-        description="Root of the compose_query schema.",
-    )
+            # Register any DTO/Enum reachable from the return annotation.
+            if return_anno is not None:
+                _collect_reachable_types(return_anno, type_mapper, registry)
 
-    return GraphQLSchema(query=root_query, mutation=None)
-
-
-# ============================================================================
-# Internals
-# ============================================================================
-
-
-def _build_service_object_type(
-    service_name: str,
-    service_cls: type,
-    enable_mutation: bool,
-    type_cache: dict[Any, Any],
-) -> GraphQLObjectType:
-    """Build the ObjectType representing a single service.
-
-    Each ``@query`` / ``@mutation`` method on the service becomes a
-    GraphQLField; ``cls`` and ``FromContext`` params are skipped.
-    """
-    fields: dict[str, GraphQLField] = {}
-    for method_name, _kind, meta in iter_use_case_methods(
-        service_cls, enable_mutation=enable_mutation
-    ):
-        method = meta["method"]
-        func = getattr(method, "__func__", method)
-        return_anno = get_return_annotation(method)
-        field_type = (
-            pydantic_to_graphql_type(return_anno, type_cache)
-            if return_anno is not None
-            else GraphQLString
-        )
-        args = _build_method_args(func, type_cache)
-
-        fields[method_name] = GraphQLField(
-            type_=field_type,
-            args=args or None,
-            description=_docstring_or_meta(meta),
-        )
-
-    if not fields:
-        # graphql-core requires ObjectType to have at least one field
-        fields["_no_methods"] = GraphQLField(
-            type_=GraphQLString,
-            description=f"Service '{service_name}' exposes no methods.",
-        )
-
-    return GraphQLObjectType(
-        name=f"{service_name}Query",
-        fields=fields,
-        description=(service_cls.__doc__ or None),
-    )
-
-
-def _build_method_args(
-    func: Callable,
-    type_cache: dict[Any, Any],
-) -> dict[str, GraphQLArgument]:
-    """Build GraphQLArgument dict for a method's parameters.
-
-    Skips ``cls`` and parameters annotated with ``FromContext``.
-    Uses parameter defaults when present; otherwise the arg is required
-    (wrapped in ``GraphQLNonNull`` via the type converter).
-    """
-    sig = inspect.signature(func)
-    hints = _resolve_function_type_hints(func)
-
-    args: dict[str, GraphQLArgument] = {}
-    for name, param in sig.parameters.items():
-        if name == "cls":
-            continue
-        anno = hints.get(name, param.annotation)
-        if is_from_context_annotation(anno):
-            continue
-        if anno is inspect.Parameter.empty or anno is None:
-            anno = str  # unknown → default to String
-
-        has_default = param.default is not inspect.Parameter.empty
-        arg_type = pydantic_to_graphql_type(anno, type_cache)
-        if has_default:
-            # Strip NonNull so the arg becomes optional
-            if isinstance(arg_type, GraphQLNonNull):
-                arg_type = arg_type.of_type
-            args[name] = GraphQLArgument(
-                type_=arg_type,
-                default_value=param.default,
-                description=None,
+            return_graphql_name = _graphql_type_name(
+                type_mapper, return_anno, default="String"
             )
-        else:
-            args[name] = GraphQLArgument(type_=arg_type, description=None)
-    return args
+            service_type.fields[method_name] = FieldInfo(
+                name=method_name,
+                python_type=(return_anno if return_anno is not None else str),
+                graphql_type_name=return_graphql_name,
+                description=(meta.get("description") if isinstance(meta, dict) else None),
+                args=args,
+            )
 
+        # Root Query field for this service
+        query_fields[service_name] = FieldInfo(
+            name=service_name,
+            python_type=service_cls,
+            graphql_type_name=service_type_name,
+        )
 
-def _docstring_or_meta(meta: dict[str, Any]) -> str | None:
-    desc = meta.get("description") if isinstance(meta, dict) else None
-    if desc:
-        return desc
-    return None
+    registry["Query"] = TypeInfo(
+        name="Query",
+        kind="OBJECT",
+        description="Root of the compose_query schema.",
+        fields=query_fields,
+    )
+
+    return registry
 
 
 # ============================================================================
-# SDL rendering (focused per-method view, used by describe_compose_method)
+# Introspection rendering: TypeInfo registry → GraphQL introspection JSON
 # ============================================================================
 
 
-def method_sdl(schema: Any, service_name: str, method_name: str) -> str | None:
+def render_introspection(registry: dict[str, TypeInfo]) -> dict[str, Any]:
+    """Render the registry as a full ``__schema`` introspection payload.
+
+    Returns the inner ``__schema`` value (no ``data`` envelope). The
+    shape matches what graphql-core would produce and what GraphiQL
+    expects.
+    """
+    return {
+        "queryType": {"name": "Query", "kind": "OBJECT"},
+        "mutationType": None,
+        "subscriptionType": None,
+        "types": [
+            _render_type(t) for t in registry.values() if t.kind != "INPUT_OBJECT"
+        ],
+        "directives": _STANDARD_DIRECTIVES,
+    }
+
+
+# The 5 built-in GraphQL directives — same set graphql-core reports.
+# Hard-coded so callers see them even though compose_schema itself never
+# applies them (GraphiQL lists them regardless).
+_NON_NULL_BOOLEAN: dict[str, Any] = {
+    "kind": "NON_NULL",
+    "name": None,
+    "ofType": {"kind": "SCALAR", "name": "Boolean"},
+}
+_STANDARD_DIRECTIVES: list[dict[str, Any]] = [
+    {
+        "name": "skip",
+        "description": "Directs the executor to skip this field or fragment when the `if` argument is true.",
+        "locations": ["FIELD", "FRAGMENT_SPREAD", "INLINE_FRAGMENT"],
+        "args": [
+            {
+                "name": "if",
+                "description": "Skipped when true.",
+                "type": _NON_NULL_BOOLEAN,
+                "defaultValue": None,
+            }
+        ],
+    },
+    {
+        "name": "include",
+        "description": "Directs the executor to include this field or fragment only when the `if` argument is true.",
+        "locations": ["FIELD", "FRAGMENT_SPREAD", "INLINE_FRAGMENT"],
+        "args": [
+            {
+                "name": "if",
+                "description": "Included when true.",
+                "type": _NON_NULL_BOOLEAN,
+                "defaultValue": None,
+            }
+        ],
+    },
+    {
+        "name": "deprecated",
+        "description": "Marks an element of a GraphQL schema as no longer supported.",
+        "locations": ["FIELD_DEFINITION", "ENUM_VALUE"],
+        "args": [
+            {
+                "name": "reason",
+                "description": "Explains why this element was deprecated, usually also including a suggestion for how to access supported similar data. Formatted using the Markdown syntax, as specified by [CommonMark](https://commonmark.org/).",
+                "type": {"kind": "SCALAR", "name": "String"},
+                "defaultValue": '"No longer supported"',
+            }
+        ],
+    },
+    {
+        "name": "specifiedBy",
+        "description": "Exposes a URL that specifies the behavior of this scalar.",
+        "locations": ["SCALAR"],
+        "args": [
+            {
+                "name": "url",
+                "description": "The URL that specifies the behavior of this scalar.",
+                "type": {
+                    "kind": "NON_NULL",
+                    "name": None,
+                    "ofType": {"kind": "SCALAR", "name": "String"},
+                },
+                "defaultValue": None,
+            }
+        ],
+    },
+    {
+        "name": "oneOf",
+        "description": "Indicates exactly one field must be supplied and this field must be null.",
+        "locations": ["INPUT_OBJECT"],
+        "args": [],
+    },
+]
+
+
+def render_type_by_name(registry: dict[str, TypeInfo], name: str) -> dict[str, Any] | None:
+    """Render a single type by name for ``__type(name: ...)`` queries."""
+    t = registry.get(name)
+    return _render_type(t) if t is not None else None
+
+
+def _render_type(type_info: TypeInfo) -> dict[str, Any]:
+    """Render a TypeInfo as a GraphQL introspection type definition dict."""
+    if type_info.kind == "ENUM":
+        enum_values = [
+            {
+                "name": v,
+                "description": None,
+                "isDeprecated": False,
+                "deprecationReason": None,
+            }
+            for v in (type_info.enum_values or [])
+        ]
+    else:
+        enum_values = None
+
+    fields = None
+    if type_info.kind == "OBJECT":
+        fields = [
+            _render_field(f) for f in type_info.fields.values()
+        ] or None
+
+    return {
+        "kind": type_info.kind,
+        "name": type_info.name,
+        "description": type_info.description,
+        "fields": fields,
+        "inputFields": None,
+        "interfaces": [] if type_info.kind == "OBJECT" else None,
+        "enumValues": enum_values,
+        "possibleTypes": None,
+    }
+
+
+def _render_field(field_info: FieldInfo) -> dict[str, Any]:
+    return {
+        "name": field_info.name,
+        "description": field_info.description,
+        "args": [_render_arg(a) for a in field_info.args],
+        "type": _build_type_ref(field_info.python_type, force_non_null=not _is_optional(field_info.python_type)),
+        "isDeprecated": field_info.is_deprecated,
+        "deprecationReason": field_info.deprecation_reason,
+    }
+
+
+def _render_arg(arg_info: ArgumentInfo) -> dict[str, Any]:
+    # An arg is nullable when its annotation is Optional OR it has a default.
+    is_optional = _is_optional(arg_info.python_type) or arg_info.default_value is not None
+    return {
+        "name": arg_info.name,
+        "description": arg_info.description,
+        "type": _build_type_ref(arg_info.python_type, force_non_null=not is_optional),
+        "defaultValue": arg_info.default_value,
+    }
+
+
+def _build_type_ref(python_type: Any, *, force_non_null: bool) -> dict[str, Any]:
+    """Build a ``GraphQLTypeRef``-shaped dict for a Python annotation.
+
+    ``force_non_null`` wraps the result in an outer ``NON_NULL`` layer
+    (i.e. adds the trailing ``!`` in SDL). Callers decide based on
+    whether the field/arg is required.
+    """
+    gql_type = TypeMapper().map_to_graphql_type(python_type)
+    inner = gql_type.to_introspection()
+    if force_non_null:
+        return {
+            "kind": "NON_NULL",
+            "name": None,
+            "description": None,
+            "ofType": inner,
+        }
+    return inner
+
+
+def _graphql_type_name(
+    type_mapper: TypeMapper, annotation: Any, *, default: str
+) -> str:
+    """Return the leaf GraphQL type name for an annotation (for FieldInfo)."""
+    if annotation is None or annotation is inspect.Parameter.empty:
+        return default
+    gql = type_mapper.map_to_graphql_type(annotation)
+    # Walk down NON_NULL / LIST wrappers to find the named type.
+    while gql.of_type is not None:
+        gql = gql.of_type
+    return gql.name or default
+
+
+# ============================================================================
+# Method-SDL rendering (focused per-method view, used by describe_compose_method)
+# ============================================================================
+
+
+def method_sdl(
+    registry: dict[str, TypeInfo],
+    service_name: str,
+    method_name: str,
+) -> str | None:
     """Focused SDL for one method: signature + return type's transitive closure.
 
     Returns a GraphQL SDL string showing:
@@ -197,88 +328,179 @@ def method_sdl(schema: Any, service_name: str, method_name: str) -> str | None:
       reachable through its fields (handles cycles)
 
     Returns ``None`` if the method or its return type can't be located
-    in ``schema`` (e.g. scalar returns have no nested types to print).
-
-    Callers should pass the cached ``app.compose_schema`` rather than
-    rebuilding on each call.
+    in ``registry``.
     """
-    from graphql.utilities import print_type
-
-    service_field = schema.query_type.fields.get(service_name)
-    if service_field is None:
+    service_type = registry.get(f"{service_name}Query")
+    if service_type is None:
         return None
-    service_type = _unwrap_type(service_field.type)
-    method_field = service_type.fields.get(method_name) if service_type else None
-    if method_field is None:
+    field_info = service_type.fields.get(method_name)
+    if field_info is None:
         return None
 
-    # Collect reachable object types from the return type
-    reachable: dict[str, Any] = {}
-    _collect_reachable_types(method_field.type, schema.type_map, reachable)
+    reachable: dict[str, TypeInfo] = {}
+    _collect_reachable_object_types(field_info.python_type, registry, reachable)
 
     sdl_parts: list[str] = []
     # Method signature as a comment header
     args_sdl = ", ".join(
-        f"{name}: {_graphql_type_to_sdl(arg.type)}"
-        for name, arg in method_field.args.items()
+        f"{a.name}: {_type_ref_to_sdl(_build_type_ref(a.python_type, force_non_null=(a.default_value is None and not _is_optional(a.python_type))))}"
+        for a in field_info.args
     )
-    sdl_parts.append(
-        f"# {service_name}.{method_name}({args_sdl}): "
-        f"{_graphql_type_to_sdl(method_field.type)}"
+    return_sdl = _type_ref_to_sdl(
+        _build_type_ref(field_info.python_type, force_non_null=not _is_optional(field_info.python_type))
     )
+    sdl_parts.append(f"# {service_name}.{method_name}({args_sdl}): {return_sdl}")
     for type_name, type_def in sorted(reachable.items()):
-        sdl_parts.append(print_type(type_def))
+        sdl_parts.append(_render_object_type_sdl(type_def))
+
     return "\n\n".join(sdl_parts)
 
 
-def _unwrap_type(type_ref: Any) -> Any:
-    """Peel NonNull / List wrappers to get the underlying named type."""
-    while hasattr(type_ref, "of_type"):
-        type_ref = type_ref.of_type
-    return type_ref
+def _collect_reachable_object_types(
+    annotation: Any,
+    registry: dict[str, TypeInfo],
+    seen: dict[str, TypeInfo],
+) -> None:
+    """DFS-walk ``annotation``, recording every OBJECT TypeInfo reachable."""
+    for core_type in get_core_types(annotation):
+        if isinstance(core_type, str):
+            continue
+        name = getattr(core_type, "__name__", None)
+        if name is None or name in seen:
+            continue
+        type_info = registry.get(name)
+        if type_info is None or type_info.kind != "OBJECT":
+            continue
+        seen[name] = type_info
+        for field in type_info.fields.values():
+            _collect_reachable_object_types(field.python_type, registry, seen)
 
 
-def _graphql_type_to_sdl(type_ref: Any) -> str:
-    """Render a graphql-core type reference as SDL syntax.
+def _render_object_type_sdl(type_info: TypeInfo) -> str:
+    """Render an OBJECT TypeInfo as an SDL ``type X { ... }`` block."""
+    type_mapper = TypeMapper()
+    lines: list[str] = []
+    if type_info.description:
+        lines.append(f'  """{type_info.description.strip()}"""')
+    for field in type_info.fields.values():
+        gql = type_mapper.map_to_graphql_type(field.python_type)
+        sdl = gql.to_sdl()
+        if not _is_optional(field.python_type) and not sdl.endswith("!"):
+            sdl = f"{sdl}!"
+        lines.append(f"  {field.name}: {sdl}")
+    body = "\n".join(lines)
+    return f"type {type_info.name} {{\n{body}\n}}"
 
-    ``GraphQLNonNull(GraphQLList(GraphQLNonNull(GraphQLObjectType(X))))``
-    → ``[X!]!``
+
+def _type_ref_to_sdl(type_ref: dict[str, Any]) -> str:
+    """Render an introspection-style type ref dict as SDL syntax.
+
+    Inverse of ``_build_type_ref``: walks ``kind`` / ``ofType`` to
+    produce e.g. ``[Int!]!``.
     """
-    type_name = getattr(type_ref, "name", None)
-    if type_name is not None:
-        return type_name
-    inner = getattr(type_ref, "of_type", None)
-    if inner is None:
-        return str(type_ref)
-    inner_sdl = _graphql_type_to_sdl(inner)
-    # GraphQLNonNull wraps as ``T!``; GraphQLList wraps as ``[T]``
-    class_name = type(type_ref).__name__
-    if class_name == "GraphQLNonNull":
-        return f"{inner_sdl}!"
-    if class_name == "GraphQLList":
-        return f"[{inner_sdl}]"
-    return inner_sdl
+    kind = type_ref.get("kind")
+    name = type_ref.get("name")
+    if kind == "NON_NULL":
+        return f"{_type_ref_to_sdl(type_ref['ofType'])}!"
+    if kind == "LIST":
+        return f"[{_type_ref_to_sdl(type_ref['ofType'])}]"
+    return name or "String"
+
+
+# ============================================================================
+# Internals
+# ============================================================================
+
+
+def _build_method_args(
+    type_mapper: TypeMapper, func: Any
+) -> list[ArgumentInfo]:
+    """Build ArgumentInfo list for a method's parameters.
+
+    Skips ``cls`` and parameters annotated with ``FromContext``.
+    """
+    sig = inspect.signature(func)
+    hints = _resolve_function_type_hints(func)
+
+    args: list[ArgumentInfo] = []
+    for name, param in sig.parameters.items():
+        if name == "cls":
+            continue
+        anno = hints.get(name, param.annotation)
+        if is_from_context_annotation(anno):
+            continue
+        if anno is inspect.Parameter.empty or anno is None:
+            anno = str
+
+        has_default = param.default is not inspect.Parameter.empty
+        args.append(
+            ArgumentInfo(
+                name=name,
+                python_type=anno,
+                graphql_type_name=_graphql_type_name(type_mapper, anno, default="String"),
+                default_value=(repr(param.default) if has_default else None),
+            )
+        )
+    return args
 
 
 def _collect_reachable_types(
-    type_ref: Any, type_map: dict[str, Any], seen: dict[str, Any]
+    annotation: Any,
+    type_mapper: TypeMapper,
+    registry: dict[str, TypeInfo],
+    visited: set[str] | None = None,
 ) -> None:
-    """DFS-walk a graphql-core type reference, recording every object type.
+    """DFS-walk ``annotation`` and register every BaseModel / Enum reachable."""
+    if visited is None:
+        visited = set()
 
-    Used to build the transitive closure of types reachable from a
-    method's return type — so the SDL response shows nested DTOs
-    without dumping the entire schema.
-    """
-    from graphql.type import GraphQLObjectType
+    for core_type in get_core_types(annotation):
+        if isinstance(core_type, str):
+            continue
 
-    core = _unwrap_type(type_ref)
-    name = getattr(core, "name", None)
-    if name is None or name in seen:
-        return
-    if isinstance(core, GraphQLObjectType):
-        seen[name] = core
-        for field in core.fields.values():
-            _collect_reachable_types(field.type, type_map, seen)
+        if safe_issubclass(core_type, BaseModel):
+            name = core_type.__name__
+            if name in visited or name in registry:
+                continue
+            visited.add(name)
+
+            type_info = TypeInfo(
+                name=name,
+                kind="OBJECT",
+                python_class=core_type,
+                description=(core_type.__doc__ or None),
+            )
+            registry[name] = type_info
+
+            for field_name, field_info in core_type.model_fields.items():
+                field_anno = field_info.annotation
+                type_info.fields[field_name] = FieldInfo(
+                    name=field_name,
+                    python_type=field_anno,
+                    graphql_type_name=_graphql_type_name(
+                        type_mapper, field_anno, default="String"
+                    ),
+                    description=getattr(field_info, "description", None),
+                )
+                _collect_reachable_types(field_anno, type_mapper, registry, visited)
+
+        elif is_enum_type(core_type):
+            name = core_type.__name__
+            if name in visited or name in registry:
+                continue
+            visited.add(name)
+            registry[name] = TypeInfo(
+                name=name,
+                kind="ENUM",
+                python_class=core_type,
+                description=(core_type.__doc__ or None),
+                enum_values=[m.name for m in core_type],
+            )
 
 
-__all__ = ["build_compose_schema"]
+__all__ = [
+    "build_compose_schema",
+    "render_introspection",
+    "render_type_by_name",
+    "method_sdl",
+]

@@ -5,9 +5,9 @@ Two siblings:
 - :func:`is_introspection_query` — cheap keyword-based detector used by
   ``compose_query`` to reject (or by HTTP handlers to route) ``__schema``
   / ``__type`` / ``__typename`` queries.
-- :func:`compose_introspect` — runs a GraphQL introspection query against
-  the app's cached ``compose_schema``, returning the standard
-  ``{data, errors}`` envelope.
+- :func:`compose_introspect` — hand-builds the GraphQL introspection
+  response by walking the app's cached ``compose_schema`` registry.
+  Returns the standard ``{data, errors}`` envelope. GraphiQL-compatible.
 
 These live separately from :mod:`compose` because the execution pipeline
 in ``compose.py`` handles *data* queries only; introspection is a
@@ -16,11 +16,14 @@ parallel path that callers must dispatch to explicitly.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
-from graphql import graphql_sync
-
 from pydantic_resolve.use_case.compose import ComposeError
+from pydantic_resolve.use_case.compose_schema import (
+    render_introspection,
+    render_type_by_name,
+)
 
 
 _INTROSPEPTION_KEYWORDS: tuple[str, ...] = ("__schema", "__type", "__typename")
@@ -30,8 +33,7 @@ def is_introspection_query(query: str) -> bool:
     """Return True if ``query`` is a GraphQL introspection query.
 
     Detects ``__schema`` / ``__type`` / ``__typename`` anywhere in the
-    query body. Mirrors the keyword-based detection used by the existing
-    Entity GraphQLHandler (see ``pydantic_resolve/graphql/introspection.py``).
+    query body.
     """
     if not query:
         return False
@@ -42,140 +44,63 @@ def compose_introspect(
     app: Any,
     query: str | None = None,
 ) -> dict[str, Any]:
-    """Run a GraphQL introspection query against the app's compose schema.
+    """Build a GraphQL introspection response for the app's compose schema.
 
     Args:
         app: :class:`UseCaseResources` instance. Reads ``app.compose_schema``
-            (built once at registration).
-        query: GraphQL query string targeting ``__schema`` / ``__type`` /
-            ``__typename``. If ``None``, runs the canonical full-schema
-            introspection query (the one GraphiQL sends on startup).
+            (a ``{type_name: TypeInfo}`` registry built once at registration).
+        query: GraphQL query string. The detector dispatches by keyword:
+
+            * ``__schema`` (or ``query is None``) → full introspection payload
+            * ``__type(name: "X")`` → single type lookup
+            * ``__typename`` → returns ``"Query"``
+
+            Field selection inside ``__schema { ... }`` is not honored —
+            GraphiQL only ever sends the canonical full query, so the
+            entire schema is always returned.
 
     Returns:
         Standard GraphQL response envelope::
 
-            {"data": {...}, "errors": None or [...]}
+            {"data": {...}, "errors": None}
 
     Raises:
-        ComposeError: If the schema is missing or the query fails to execute.
+        ComposeError: If the schema registry is missing.
     """
-    schema = getattr(app, "compose_schema", None)
-    if schema is None:
+    registry = getattr(app, "compose_schema", None)
+    if registry is None:
         raise ComposeError(
             "App has no cached compose_schema; was it built via UseCaseManager?",
             "internal_error",
         )
 
-    actual_query = query if query is not None else _FULL_INTROSPEPTION_QUERY
-    result = graphql_sync(schema, actual_query)
+    actual_query = query if query is not None else "__schema"
+    data: dict[str, Any] = {}
 
-    if result.errors:
-        messages = [
-            err.message if hasattr(err, "message") else str(err)
-            for err in result.errors
-        ]
-        raise ComposeError(
-            f"Introspection query failed: {'; '.join(messages)}",
-            "validation_error",
-        )
+    if "__schema" in actual_query:
+        data["__schema"] = render_introspection(registry)
 
-    return {"data": result.data, "errors": None}
+    type_name = _extract_type_name_from_query(actual_query)
+    if "__type" in actual_query:
+        if type_name is None:
+            data["__type"] = None
+        else:
+            data["__type"] = render_type_by_name(registry, type_name)
+
+    if "__typename" in actual_query:
+        data["__typename"] = "Query"
+
+    return {"data": data, "errors": None}
 
 
-# Canonical introspection query — subset of what GraphiQL sends.
-# Includes __schema with all standard fields and __type(name:) lookup.
-_FULL_INTROSPEPTION_QUERY = """
-query IntrospectionQuery {
-  __schema {
-    queryType { name }
-    mutationType { name }
-    subscriptionType { name }
-    types {
-      ...FullType
-    }
-    directives {
-      name
-      description
-      locations
-      args {
-        ...InputValue
-      }
-    }
-  }
-}
+_TYPE_NAME_RE = re.compile(r'__type\s*\(\s*name\s*:\s*["\']([^"\']+)["\']')
 
-fragment FullType on __Type {
-  kind
-  name
-  description
-  fields(includeDeprecated: true) {
-    name
-    description
-    args {
-      ...InputValue
-    }
-    type {
-      ...TypeRef
-    }
-    isDeprecated
-    deprecationReason
-  }
-  inputFields {
-    ...InputValue
-  }
-  interfaces {
-    ...TypeRef
-  }
-  enumValues(includeDeprecated: true) {
-    name
-    description
-    isDeprecated
-    deprecationReason
-  }
-  possibleTypes {
-    ...TypeRef
-  }
-}
 
-fragment InputValue on __InputValue {
-  name
-  description
-  type { ...TypeRef }
-  defaultValue
-}
+def _extract_type_name_from_query(query: str) -> str | None:
+    """Extract the type name from a ``__type(name: "X")`` query."""
+    match = _TYPE_NAME_RE.search(query)
+    return match.group(1) if match else None
 
-fragment TypeRef on __Type {
-  kind
-  name
-  ofType {
-    kind
-    name
-    ofType {
-      kind
-      name
-      ofType {
-        kind
-        name
-        ofType {
-          kind
-          name
-          ofType {
-            kind
-            name
-            ofType {
-              kind
-              name
-              ofType {
-                kind
-                name
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-"""
 
 __all__ = ["is_introspection_query", "compose_introspect"]
+
