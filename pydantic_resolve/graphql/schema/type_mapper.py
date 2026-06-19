@@ -61,6 +61,17 @@ class GraphQLTypeInfo:
 
         return result
 
+    @property
+    def leaf_name(self) -> Optional[str]:
+        """Walk the ``of_type`` chain (NON_NULL / LIST wrappers) to the
+        named leaf type. Returns the leaf's ``name`` (e.g. ``"UserDTO"``,
+        ``"Int"``), or ``None`` if the chain doesn't end at a named type.
+        """
+        node: GraphQLTypeInfo | None = self
+        while node is not None and node.of_type is not None:
+            node = node.of_type
+        return node.name if node is not None else None
+
 
 class TypeMapper:
     """
@@ -91,6 +102,52 @@ class TypeMapper:
             resolved = self._get_entity_by_name(core_type)
             return resolved if resolved else core_type
         return core_type
+
+    def collect_referenced_types(
+        self,
+        annotation: Any,
+        *,
+        include_enums: bool = True,
+    ) -> dict[str, type]:
+        """Walk ``annotation`` and return every BaseModel / Enum reachable.
+
+        Includes types reachable transitively through BaseModel fields
+        (e.g. ``UserDTO.owner: OwnerDTO`` pulls in ``OwnerDTO`` and
+        everything ``OwnerDTO`` references). Cycles (self-referencing
+        DTOs) terminate naturally because the result dict is keyed by
+        class name.
+
+        Args:
+            annotation: Any Python type annotation — bare class,
+                ``Optional[X]``, ``list[X]``, ``Union[X, Y]``, etc.
+            include_enums: When True (default), Enum subclasses are
+                included. Set to False for contexts that only care
+                about Pydantic models (e.g. OpenAPI serialization,
+                ErDiagram nested-model discovery).
+
+        Returns:
+            ``{class_name: class}`` for each unique BaseModel (and
+            Enum, if ``include_enums``) discovered. String annotations
+            and unresolved ForwardRefs are silently skipped.
+        """
+        seen: dict[str, type] = {}
+        stack: list[Any] = [annotation]
+        while stack:
+            current = stack.pop()
+            for core_type in get_core_types(current):
+                if isinstance(core_type, str):
+                    continue
+                name = getattr(core_type, "__name__", None)
+                if name is None or name in seen:
+                    continue
+                if safe_issubclass(core_type, BaseModel):
+                    seen[name] = core_type
+                    stack.extend(
+                        f.annotation for f in core_type.model_fields.values()
+                    )
+                elif include_enums and is_enum_type(core_type):
+                    seen[name] = core_type
+        return seen
 
     def map_to_graphql_type(
         self,

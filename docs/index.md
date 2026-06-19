@@ -92,4 +92,4 @@ Detailed signatures and parameters for all public APIs:
 - [DefineSubset](./api_subset.md) — `DefineSubset`, `SubsetConfig`
 - [GraphQL API](./api_graphql.md) — `GraphQLHandler`, `@query`, `@mutation`
 - [MCP API](./api_mcp.md) — `create_mcp_server`, `AppConfig`
-- [UseCase MCP API](./api_use_case_mcp.md) — `create_use_case_mcp_server`, `UseCaseService`, `FromContext`
+- [UseCase MCP API](./api_use_case_mcp.md) — `create_use_case_graphql_mcp_server`, `UseCaseService`, `FromContext`

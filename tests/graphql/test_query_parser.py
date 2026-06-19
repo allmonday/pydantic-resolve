@@ -117,3 +117,51 @@ class TestQueryParser:
         """嵌套字段的 alias 也应该抛出错误"""
         with pytest.raises(QueryParseError, match="alias"):
             self.parser.parse("{ users { a: name } }")
+
+    def test_duplicate_root_field_rejected(self):
+        """根层同名字段不允许出现两次。"""
+        with pytest.raises(QueryParseError, match="Duplicate field 'users'"):
+            self.parser.parse("{ users { id } users { name } }")
+
+    def test_duplicate_nested_field_rejected(self):
+        """service / method 层同名也不允许重复。"""
+        with pytest.raises(QueryParseError, match="Duplicate field 'name'"):
+            self.parser.parse("{ users { id name name } }")
+
+    def test_duplicate_method_with_different_args_rejected(self):
+        """同名 method 即使参数不同也不允许 —— 避免参数被静默覆盖、调用被丢失。"""
+        with pytest.raises(QueryParseError, match="Duplicate field 'get_sprint'"):
+            self.parser.parse(
+                "{ SprintService { get_sprint(sprint_id: 1) { name } "
+                "get_sprint(sprint_id: 2) { id } } }"
+            )
+
+    def test_duplicate_field_via_fragment_spread_rejected(self):
+        """fragment 展开后与同层字段冲突，同样应报错。"""
+        query = """
+        query {
+            users {
+                id
+                ...UserFields
+            }
+        }
+        fragment UserFields on UserEntity {
+            id
+            name
+        }
+        """
+        with pytest.raises(QueryParseError, match="Duplicate field 'id'"):
+            self.parser.parse(query)
+
+    def test_duplicate_field_via_inline_fragment_rejected(self):
+        """inline fragment 展开后与同层字段冲突，同样应报错。"""
+        query = """
+        query {
+            users {
+                id
+                ... on UserEntity { id }
+            }
+        }
+        """
+        with pytest.raises(QueryParseError, match="Duplicate field 'id'"):
+            self.parser.parse(query)

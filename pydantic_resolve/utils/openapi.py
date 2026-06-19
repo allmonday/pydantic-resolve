@@ -1,49 +1,33 @@
-from typing import Any, get_args
+from typing import Any
 from pydantic import BaseModel
+from pydantic_resolve.graphql.schema.type_mapper import TypeMapper
 from pydantic_resolve.utils.class_util import safe_issubclass
-from pydantic_resolve.utils.types import _is_optional, _is_list
+
+
+_TYPE_MAPPER = TypeMapper()
 
 
 def _collect_nested_types(model: type, collected: set[type] = None) -> set[type]:
     """Recursively collect all nested Pydantic BaseModel types from model_fields.
+
+    Thin wrapper over ``TypeMapper.collect_referenced_types`` — kept as a
+    separate function because the ``@serialization`` decorator's public
+    signature depends on the set-shaped return value.
 
     Args:
         model: The Pydantic BaseModel class to scan
         collected: Set of already collected types (to avoid duplicates)
 
     Returns:
-        Set of nested Pydantic BaseModel types
+        Set of nested Pydantic BaseModel types (excludes ``model`` itself)
     """
     if collected is None:
         collected = set()
 
-    for field_name, field_info in model.model_fields.items():
-        field_type = field_info.annotation
-        if field_type is None:
-            continue
-
-        # Handle List[SomeModel]
-        if _is_list(field_type):
-            args = get_args(field_type)
-            if args:
-                nested_type = args[0]
-                if safe_issubclass(nested_type, BaseModel) and nested_type not in collected:
-                    collected.add(nested_type)
-                    _collect_nested_types(nested_type, collected)
-
-        # Handle Union[SomeModel, None] or SomeModel | None
-        elif _is_optional(field_type):
-            args = get_args(field_type)
-            for arg in args:
-                if arg is not type(None) and safe_issubclass(arg, BaseModel) and arg not in collected:
-                    collected.add(arg)
-                    _collect_nested_types(arg, collected)
-
-        # Handle SomeModel directly
-        elif safe_issubclass(field_type, BaseModel) and field_type not in collected:
-            collected.add(field_type)
-            _collect_nested_types(field_type, collected)
-
+    referenced = _TYPE_MAPPER.collect_referenced_types(model, include_enums=False)
+    for cls in referenced.values():
+        if cls is not model and cls not in collected:
+            collected.add(cls)
     return collected
 
 

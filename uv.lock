@@ -1560,7 +1560,7 @@ wheels = [
 
 [[package]]
 name = "pydantic-resolve"
-version = "5.7.0"
+version = "5.9.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiodataloader" },

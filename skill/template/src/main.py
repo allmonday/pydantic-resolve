@@ -18,7 +18,7 @@ from src.database import init_db
 from pydantic_resolve import GraphQLHandler, SchemaBuilder  # noqa: E402
 from pydantic_resolve.use_case import (  # noqa: E402
     UseCaseAppConfig,
-    create_use_case_mcp_server,
+    create_use_case_graphql_mcp_server,
 )
 from src.entities import diagram  # noqa: E402
 from src.service.sprint.service import SprintService  # noqa: E402
@@ -30,7 +30,7 @@ graphql_handler = GraphQLHandler(
 )
 schema_builder = SchemaBuilder(diagram)
 
-use_case_mcp = create_use_case_mcp_server(
+use_case_mcp = create_use_case_graphql_mcp_server(
     apps=[
         UseCaseAppConfig(
             name="template",
@@ -38,7 +38,7 @@ use_case_mcp = create_use_case_mcp_server(
             description="Task & Sprint business services",
         ),
     ],
-    name="Template UseCase MCP",
+    name="Template UseCase GraphQL MCP",
 )
 use_case_mcp_http = use_case_mcp.http_app(
     path="/",

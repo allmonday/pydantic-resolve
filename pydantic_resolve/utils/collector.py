@@ -2,6 +2,7 @@ import abc
 from dataclasses import dataclass
 from typing import Any, Iterator
 import pydantic_resolve.constant as const
+from pydantic_resolve.utils.field_metadata import iter_fields_with_marker
 
 @dataclass
 class SendToInfo:
@@ -16,7 +17,7 @@ def pre_generate_collector_config(kls):
     iterate kls fields, check and collect field who's annotated metadata for SendTo exists
     if kls's const.COLLECTOR_CONFIGURATION exists and the fields is not empty, raise exception
     group those field name based on collector_name, if single, leave it as str, else make it tuple
-    then generate the configuration such as 
+    then generate the configuration such as
     { (field_a, field_b): collector_name } or ( field_a: collector_name })
     and set it into kls's const.COLLECTOR_CONFIGURATION
     """
@@ -40,14 +41,9 @@ def pre_generate_collector_config(kls):
 
     setattr(kls, const.COLLECTOR_CONFIGURATION, collect_dict)
 
-def _get_pydantic_field_items_with_send_to(kls) -> Iterator[tuple[str, SendToInfo, type]]:
-    items = kls.model_fields.items()
-
-    for name, v in items:
-        metadata = v.metadata
-        for meta in metadata:
-            if isinstance(meta, SendToInfo):
-                yield name, meta
+def _get_pydantic_field_items_with_send_to(kls) -> Iterator[tuple[str, SendToInfo]]:
+    for name, _field_info, meta in iter_fields_with_marker(kls, SendToInfo):
+        yield name, meta
 
 class ICollector(metaclass=abc.ABCMeta):
     @abc.abstractmethod

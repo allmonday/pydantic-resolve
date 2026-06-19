@@ -1,11 +1,11 @@
-"""UseCase FastAPI Demo with context — shows the same service used from both FastAPI and MCP.
+"""UseCase FastAPI Demo with context — shows context-aware services called from FastAPI.
 
 This demo mirrors ``app.py`` but uses the context-aware services from
-``mcp_server_with_context``. It demonstrates that a single UseCaseService
-method like ``TaskService.get_my_tasks(user_id=...)`` works identically in:
+``services_context``. It demonstrates that a UseCaseService method like
+``TaskService.get_my_tasks(user_id=...)`` works identically in:
 
 - **FastAPI**: ``user_id`` comes from ``Depends(get_current_user)``
-- **MCP**:    ``user_id`` comes from ``context_extractor`` via ``FromContext()``
+- **MCP**:     ``user_id`` comes from ``context_extractor`` via ``FromContext()``
 
 The method signature is the same; only the parameter source differs.
 
@@ -23,7 +23,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 
 from demo.use_case.database import init_db
-from demo.use_case.mcp_server_with_context import TaskService, UserService
+from demo.use_case.services_context import TaskService, UserService
 
 
 # ──────────────────────────────────────────────────

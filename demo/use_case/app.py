@@ -24,7 +24,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from demo.use_case.database import init_db
-from demo.use_case.mcp_server import SprintService, TaskService, UserService
+from demo.use_case.services import SprintService, TaskService, UserService
 
 
 @asynccontextmanager

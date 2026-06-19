@@ -645,10 +645,7 @@ def _get_pydantic_field_items_with_load_by(kls) -> Iterator[tuple[str, type, Loa
 
     return ('posts', AutoLoad())
     """
-    items = kls.model_fields.items()
+    from pydantic_resolve.utils.field_metadata import iter_fields_with_marker
 
-    for name, v in items:
-        metadata = v.metadata
-        for meta in metadata:
-            if isinstance(meta, LoaderInfo):
-                yield name, v.annotation, meta
+    for name, field_info, meta in iter_fields_with_marker(kls, LoaderInfo):
+        yield name, field_info.annotation, meta

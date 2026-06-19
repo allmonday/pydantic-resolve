@@ -393,7 +393,7 @@ MyResolver = config_resolver("MyResolver", er_diagram=diagram)
   - get 单条：调 methods 拿 `OrmModel | None` → `Dto.model_validate(entity)` → `(await MyResolver(...).resolve([dto]))[0]`
 - **手写 REST 路由**（没有 `create_use_case_router()`）
 - **`enable_from_attribute_in_type_adapter=True`** 在从 ORM 转换时必须设置
-- MCP 使用 `create_use_case_mcp_server()` + `UseCaseAppConfig`
+- MCP 使用 `create_use_case_graphql_mcp_server()` + `UseCaseAppConfig`
 - MCP http_app 使用 `transport="streamable-http", stateless_http=True`
 
 ```python
@@ -474,7 +474,7 @@ async def get_sprints():
 
 - [ ] 1. REST：`curl /api/tasks` 返回字段符合 TaskSummary DTO，不含 sprint_id/owner_id
 - [ ] 2. REST：`curl /api/sprints` 返回 SprintSummary 含 task_count 和 contributor_names
-- [ ] 3. MCP：依次调用 list_apps → list_services → describe_service → call_use_case
+- [ ] 3. MCP：依次调用 list_apps → describe_compose_schema → describe_compose_method → compose_query
 - [ ] 4. GraphQL：list_sprints 返回相同数据
 
 ## 阶段间变化对照

@@ -1,29 +1,43 @@
-"""UseCase MCP server for Sprint/Task/User management.
+"""Shared UseCase services for the Sprint/Task/User demo.
 
-Demonstrates pydantic-resolve patterns:
-- SQLAlchemy ORM + build_relationship for auto-generated loaders
-- ErDiagram + AutoLoad for declarative relationship loading
-- DefineSubset for progressive field complexity
-- UseCaseService for business services exposed via MCP
+Consumed by the GraphQL compose MCP demo (``mcp_server_compose.py``)
+and the FastAPI compose demo (``app_compose.py``).
 """
 
+from enum import Enum
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from pydantic_resolve import ErDiagram, DefineSubset, config_resolver, AutoLoad, query
 from pydantic_resolve.integration.mapping import Mapping
 from pydantic_resolve.integration.sqlalchemy import build_relationship
-from pydantic_resolve.use_case import UseCaseService, UseCaseAppConfig, create_use_case_mcp_server
+from pydantic_resolve.use_case import UseCaseService
 
 from demo.use_case.database import (
     UserOrm,
     TaskOrm,
     SprintOrm,
     session_factory,
-    init_db,
 )
+
+
+# ──────────────────────────────────────────────────
+# Enums
+# ──────────────────────────────────────────────────
+
+
+class TaskStatus(str, Enum):
+    """Lifecycle status of a task.
+
+    Also doubles as the ``str`` value stored in the ORM, so it
+    serializes cleanly to JSON without an explicit value mapping.
+    """
+
+    TODO = "todo"
+    IN_PROGRESS = "in_progress"
+    DONE = "done"
 
 
 # ──────────────────────────────────────────────────
@@ -32,27 +46,37 @@ from demo.use_case.database import (
 
 
 class UserEntity(BaseModel):
+    """A user account. Owner of tasks and member of sprints."""
+
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
-    name: str
-    email: str
+    id: int = Field(description="Primary key.")
+    name: str = Field(description="Display name shown in UI.")
+    email: str = Field(description="Login email, unique per user.")
 
 
 class TaskEntity(BaseModel):
+    """A unit of work belonging to a sprint and owned by a user."""
+
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
-    title: str
-    owner_id: int
-    sprint_id: int
+    id: int = Field(description="Primary key.")
+    title: str = Field(description="Short summary of the work.")
+    owner_id: int = Field(description="FK to ``UserEntity.id``.")
+    sprint_id: int = Field(description="FK to ``SprintEntity.id``.")
+    status: TaskStatus = Field(
+        default=TaskStatus.TODO,
+        description="Current lifecycle status. See ``TaskStatus``.",
+    )
 
 
 class SprintEntity(BaseModel):
+    """A time-boxed iteration containing a set of tasks."""
+
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
-    name: str
+    id: int = Field(description="Primary key.")
+    name: str = Field(description="Sprint name, e.g. ``Sprint 2026-W26``.")
 
 
 # ──────────────────────────────────────────────────
@@ -78,19 +102,48 @@ MyResolver = config_resolver("UseCaseDemoResolver", er_diagram=diagram)
 
 
 class UserSummary(DefineSubset):
+    # NOTE: DefineSubset's metaclass strips class docstrings, so the
+    # SDL output for subset DTOs shows no type-level description even
+    # when one is written here. Field-level descriptions (via Field)
+    # still come through. Entity classes (UserEntity etc.) keep their
+    # docstrings normally.
+    """Lightweight user view used when embedding owner info inside tasks."""
+
     __subset__ = (UserEntity, ["id", "name"])
 
 
 class TaskSummary(DefineSubset):
-    __subset__ = (TaskEntity, ["id", "title"])
-    owner_detail: Annotated[UserSummary | None, AutoLoad(origin="owner")] = None
+    """Task view with auto-loaded owner. Returned by all TaskService methods."""
+
+    __subset__ = (TaskEntity, ["id", "title", "status"])
+    owner_detail: Annotated[
+        UserSummary | None,
+        AutoLoad(origin="owner"),
+    ] = Field(
+        default=None,
+        description="Auto-loaded owner of this task.",
+    )
 
 
 class SprintSummary(DefineSubset):
+    """Sprint view with task list + computed statistics."""
+
     __subset__ = (SprintEntity, ["id", "name"])
-    task_list: Annotated[list[TaskEntity], AutoLoad(origin="tasks")] = []
-    task_count: int = 0
-    contributor_names: list[str] = []
+    task_list: Annotated[
+        list[TaskEntity],
+        AutoLoad(origin="tasks"),
+    ] = Field(
+        default_factory=list,
+        description="All tasks assigned to this sprint.",
+    )
+    task_count: int = Field(
+        default=0,
+        description="Number of tasks in this sprint (computed via ``post_task_count``).",
+    )
+    contributor_names: list[str] = Field(
+        default_factory=list,
+        description="Distinct owner names across this sprint's tasks.",
+    )
 
     def post_task_count(self):
         return len(self.task_list)
@@ -196,39 +249,3 @@ class SprintService(UseCaseService):
         dto = SprintSummary.model_validate(row)
         resolved = await MyResolver(enable_from_attribute_in_type_adapter=True).resolve([dto])
         return resolved[0]
-
-
-# ──────────────────────────────────────────────────
-# MCP Server entry point
-# ──────────────────────────────────────────────────
-
-
-def create_server():
-    """Create the UseCase MCP server."""
-    return create_use_case_mcp_server(
-        apps=[
-            UseCaseAppConfig(
-                name="sprint",
-                description="Sprint management with tasks and users",
-                services=[UserService, TaskService, SprintService],
-            ),
-        ],
-        name="Sprint UseCase MCP Demo",
-    )
-
-
-def main() -> None:
-    """Run the MCP server (stdio or HTTP mode)."""
-    import asyncio
-
-    import uvicorn
-
-    asyncio.run(init_db())
-    mcp = create_server()
-
-    mcp_app = mcp.http_app(transport="streamable-http", stateless_http=True)
-    uvicorn.run(mcp_app, host="0.0.0.0", port=8006)
-
-
-if __name__ == "__main__":
-    main()
