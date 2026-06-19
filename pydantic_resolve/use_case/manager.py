@@ -12,6 +12,7 @@ from typing import Any, Awaitable, Callable, TYPE_CHECKING
 from pydantic import BaseModel
 
 from pydantic_resolve.use_case.business import UseCaseService
+from pydantic_resolve.use_case.compose import _compose_and_resolve
 from pydantic_resolve.use_case.compose_schema import build_compose_schema
 
 if TYPE_CHECKING:
@@ -92,10 +93,6 @@ class UseCaseResources:
         Raises:
             ComposeError: For any validation or execution failure.
         """
-        # Local import to avoid circular dependency (compose.py imports
-        # nothing from manager.py, but keeping it lazy is safer).
-        from pydantic_resolve.use_case.compose import _compose_and_resolve
-
         return await _compose_and_resolve(self, query, context)
 
 

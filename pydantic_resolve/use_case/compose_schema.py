@@ -48,6 +48,11 @@ from pydantic_resolve.utils.types import (
 )
 
 
+# TypeMapper is stateless (er_diagram=None for the UseCase path); reuse one
+# instance instead of paying for construction on every render call.
+_TYPE_MAPPER = TypeMapper()
+
+
 def build_compose_schema(app: Any) -> dict[str, TypeInfo]:
     """Build the ``TypeInfo`` registry for a UseCase app.
 
@@ -61,7 +66,6 @@ def build_compose_schema(app: Any) -> dict[str, TypeInfo]:
         DTOs reference, plus the root ``Query`` type and the 5 standard
         GraphQL scalars.
     """
-    type_mapper = TypeMapper()
     registry: dict[str, TypeInfo] = {}
 
     # Seed with the 5 standard GraphQL scalars so introspection reports them.
@@ -86,15 +90,13 @@ def build_compose_schema(app: Any) -> dict[str, TypeInfo]:
             method = meta["method"]
             func = getattr(method, "__func__", method)
             return_anno = get_return_annotation(method)
-            args = _build_method_args(type_mapper, func)
+            args = _build_method_args(func)
 
             # Register any DTO/Enum reachable from the return annotation.
             if return_anno is not None:
-                _collect_reachable_types(return_anno, type_mapper, registry)
+                _collect_reachable_types(return_anno, registry)
 
-            return_graphql_name = _graphql_type_name(
-                type_mapper, return_anno, default="String"
-            )
+            return_graphql_name = _graphql_type_name(return_anno, default="String")
             service_type.fields[method_name] = FieldInfo(
                 name=method_name,
                 python_type=(return_anno if return_anno is not None else str),
@@ -285,7 +287,7 @@ def _build_type_ref(python_type: Any, *, force_non_null: bool) -> dict[str, Any]
     (i.e. adds the trailing ``!`` in SDL). Callers decide based on
     whether the field/arg is required.
     """
-    gql_type = TypeMapper().map_to_graphql_type(python_type)
+    gql_type = _TYPE_MAPPER.map_to_graphql_type(python_type)
     inner = gql_type.to_introspection()
     if force_non_null:
         return {
@@ -297,13 +299,11 @@ def _build_type_ref(python_type: Any, *, force_non_null: bool) -> dict[str, Any]
     return inner
 
 
-def _graphql_type_name(
-    type_mapper: TypeMapper, annotation: Any, *, default: str
-) -> str:
+def _graphql_type_name(annotation: Any, *, default: str) -> str:
     """Return the leaf GraphQL type name for an annotation (for FieldInfo)."""
     if annotation is None or annotation is inspect.Parameter.empty:
         return default
-    gql = type_mapper.map_to_graphql_type(annotation)
+    gql = _TYPE_MAPPER.map_to_graphql_type(annotation)
     # Walk down NON_NULL / LIST wrappers to find the named type.
     while gql.of_type is not None:
         gql = gql.of_type
@@ -378,12 +378,11 @@ def _collect_reachable_object_types(
 
 def _render_object_type_sdl(type_info: TypeInfo) -> str:
     """Render an OBJECT TypeInfo as an SDL ``type X { ... }`` block."""
-    type_mapper = TypeMapper()
     lines: list[str] = []
     if type_info.description:
         lines.append(f'  """{type_info.description.strip()}"""')
     for field in type_info.fields.values():
-        gql = type_mapper.map_to_graphql_type(field.python_type)
+        gql = _TYPE_MAPPER.map_to_graphql_type(field.python_type)
         sdl = gql.to_sdl()
         if not _is_optional(field.python_type) and not sdl.endswith("!"):
             sdl = f"{sdl}!"
@@ -412,12 +411,11 @@ def _type_ref_to_sdl(type_ref: dict[str, Any]) -> str:
 # ============================================================================
 
 
-def _build_method_args(
-    type_mapper: TypeMapper, func: Any
-) -> list[ArgumentInfo]:
+def _build_method_args(func: Any) -> list[ArgumentInfo]:
     """Build ArgumentInfo list for a method's parameters.
 
     Skips ``cls`` and parameters annotated with ``FromContext``.
+    Delegates per-arg construction to ``TypeMapper.extract_argument_info``.
     """
     sig = inspect.signature(func)
     hints = _resolve_function_type_hints(func)
@@ -434,10 +432,9 @@ def _build_method_args(
 
         has_default = param.default is not inspect.Parameter.empty
         args.append(
-            ArgumentInfo(
-                name=name,
-                python_type=anno,
-                graphql_type_name=_graphql_type_name(type_mapper, anno, default="String"),
+            _TYPE_MAPPER.extract_argument_info(
+                param_name=name,
+                param_type=anno,
                 default_value=(repr(param.default) if has_default else None),
             )
         )
@@ -445,56 +442,40 @@ def _build_method_args(
 
 
 def _collect_reachable_types(
-    annotation: Any,
-    type_mapper: TypeMapper,
-    registry: dict[str, TypeInfo],
-    visited: set[str] | None = None,
+    annotation: Any, registry: dict[str, TypeInfo]
 ) -> None:
-    """DFS-walk ``annotation`` and register every BaseModel / Enum reachable."""
-    if visited is None:
-        visited = set()
+    """Register TypeInfo for every BaseModel / Enum reachable from ``annotation``.
 
-    for core_type in get_core_types(annotation):
-        if isinstance(core_type, str):
+    Delegates the annotation walk to ``TypeMapper.collect_referenced_types``
+    (shared with the ErDiagram path). This function only handles the
+    UseCase-specific TypeInfo construction.
+    """
+    for name, cls in _TYPE_MAPPER.collect_referenced_types(annotation).items():
+        if name in registry:
             continue
-
-        if safe_issubclass(core_type, BaseModel):
-            name = core_type.__name__
-            if name in visited or name in registry:
-                continue
-            visited.add(name)
-
+        if safe_issubclass(cls, BaseModel):
             type_info = TypeInfo(
                 name=name,
                 kind="OBJECT",
-                python_class=core_type,
-                description=(core_type.__doc__ or None),
+                python_class=cls,
+                description=(cls.__doc__ or None),
             )
             registry[name] = type_info
-
-            for field_name, field_info in core_type.model_fields.items():
+            for field_name, field_info in cls.model_fields.items():
                 field_anno = field_info.annotation
                 type_info.fields[field_name] = FieldInfo(
                     name=field_name,
                     python_type=field_anno,
-                    graphql_type_name=_graphql_type_name(
-                        type_mapper, field_anno, default="String"
-                    ),
+                    graphql_type_name=_graphql_type_name(field_anno, default="String"),
                     description=getattr(field_info, "description", None),
                 )
-                _collect_reachable_types(field_anno, type_mapper, registry, visited)
-
-        elif is_enum_type(core_type):
-            name = core_type.__name__
-            if name in visited or name in registry:
-                continue
-            visited.add(name)
+        elif is_enum_type(cls):
             registry[name] = TypeInfo(
                 name=name,
                 kind="ENUM",
-                python_class=core_type,
-                description=(core_type.__doc__ or None),
-                enum_values=[m.name for m in core_type],
+                python_class=cls,
+                description=(cls.__doc__ or None),
+                enum_values=[m.name for m in cls],
             )
 
 

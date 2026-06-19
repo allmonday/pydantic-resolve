@@ -92,6 +92,40 @@ class TypeMapper:
             return resolved if resolved else core_type
         return core_type
 
+    def collect_referenced_types(self, annotation: Any) -> dict[str, type]:
+        """Walk ``annotation`` and return every BaseModel / Enum reachable.
+
+        Includes types reachable transitively through BaseModel fields
+        (e.g. ``UserDTO.owner: OwnerDTO`` pulls in ``OwnerDTO`` and
+        everything ``OwnerDTO`` references). Cycles (self-referencing
+        DTOs) terminate naturally because the result dict is keyed by
+        class name.
+
+        Returns:
+            ``{class_name: class}`` for each unique BaseModel or Enum
+            discovered. String annotations and unresolved ForwardRefs
+            are skipped.
+        """
+        seen: dict[str, type] = {}
+        self._collect_referenced_types(annotation, seen)
+        return seen
+
+    def _collect_referenced_types(
+        self, annotation: Any, seen: dict[str, type]
+    ) -> None:
+        for core_type in get_core_types(annotation):
+            if isinstance(core_type, str):
+                continue
+            name = getattr(core_type, "__name__", None)
+            if name is None or name in seen:
+                continue
+            if safe_issubclass(core_type, BaseModel):
+                seen[name] = core_type
+                for field_info in core_type.model_fields.values():
+                    self._collect_referenced_types(field_info.annotation, seen)
+            elif is_enum_type(core_type):
+                seen[name] = core_type
+
     def map_to_graphql_type(
         self,
         python_type: type,
