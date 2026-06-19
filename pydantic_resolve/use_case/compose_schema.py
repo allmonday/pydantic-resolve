@@ -25,6 +25,7 @@ walks to produce the focused per-method SDL string.
 from __future__ import annotations
 
 import inspect
+import json
 from typing import Any
 
 from pydantic import BaseModel
@@ -138,9 +139,7 @@ def render_introspection(registry: dict[str, TypeInfo]) -> dict[str, Any]:
         "queryType": {"name": "Query", "kind": "OBJECT"},
         "mutationType": None,
         "subscriptionType": None,
-        "types": [
-            _render_type(t) for t in registry.values() if t.kind != "INPUT_OBJECT"
-        ],
+        "types": [_render_type(t) for t in registry.values()],
         "directives": _STANDARD_DIRECTIVES,
     }
 
@@ -326,10 +325,7 @@ def _graphql_type_name(annotation: Any, *, default: str) -> str:
     if annotation is None or annotation is inspect.Parameter.empty:
         return default
     gql = _TYPE_MAPPER.map_to_graphql_type(annotation)
-    # Walk down NON_NULL / LIST wrappers to find the named type.
-    while gql.of_type is not None:
-        gql = gql.of_type
-    return gql.name or default
+    return gql.leaf_name or default
 
 
 # ============================================================================
@@ -437,7 +433,11 @@ def _build_method_args(func: Any) -> list[ArgumentInfo]:
     """Build ArgumentInfo list for a method's parameters.
 
     Skips ``cls`` and parameters annotated with ``FromContext``.
-    Delegates per-arg construction to ``TypeMapper.extract_argument_info``.
+    Builds ArgumentInfo directly — ``TypeMapper.extract_argument_info``
+    has a latent ``is_optional`` bug (it always returns True because
+    ``map_to_graphql_type`` never wraps the outer level in NON_NULL),
+    and ``_render_arg`` re-derives type info from ``python_type`` anyway,
+    so calling it was both wasted compute and a bug trap.
     """
     sig = inspect.signature(func)
     hints = _resolve_function_type_hints(func)
@@ -454,10 +454,17 @@ def _build_method_args(func: Any) -> list[ArgumentInfo]:
 
         has_default = param.default is not inspect.Parameter.empty
         args.append(
-            _TYPE_MAPPER.extract_argument_info(
-                param_name=name,
-                param_type=anno,
-                default_value=(repr(param.default) if has_default else None),
+            ArgumentInfo(
+                name=name,
+                python_type=anno,
+                graphql_type_name=_graphql_type_name(anno, default="String"),
+                # GraphQL spec wants literals like `true` / `"hi"` / `42`,
+                # not Python repr like `True` / `'hi'`. json.dumps matches
+                # the spec for the JSON-encodable subset (which covers all
+                # realistic arg defaults).
+                default_value=(
+                    json.dumps(param.default) if has_default else None
+                ),
             )
         )
     return args

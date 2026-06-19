@@ -219,6 +219,35 @@ class TestSchemaCompleteness:
         assert limit_arg["type"]["kind"] == "SCALAR"
         assert limit_arg["type"]["name"] == "Int"
 
+    def test_arg_default_value_is_graphql_literal(self):
+        """``defaultValue`` must be a GraphQL literal, not Python repr.
+
+        GraphQL spec wants ``true`` / ``false`` (lowercase) and
+        double-quoted strings. Python repr gives ``True`` / ``'hi'``
+        which GraphiQL would reject. Regression for the ``repr()``
+        → ``json.dumps()`` fix.
+        """
+        from pydantic_resolve.use_case.compose_schema import _build_method_args
+
+        class Probe:
+            @classmethod
+            async def m(
+                cls,
+                a: int = 42,
+                b: str = "hi",
+                c: bool = True,
+                d: bool = False,
+                e: list[int] = [1, 2],
+            ):
+                ...
+
+        args = {a.name: a for a in _build_method_args(Probe.m.__func__)}
+        assert args["a"].default_value == "42"          # int — repr and json match
+        assert args["b"].default_value == '"hi"'        # str — JSON double-quoted, not repr's 'hi'
+        assert args["c"].default_value == "true"        # bool True → lowercase true
+        assert args["d"].default_value == "false"       # bool False → lowercase false
+        assert args["e"].default_value == "[1, 2]"      # list → JSON array
+
     def test_dto_fields_appear(self):
         app = _make_manager().get_app("project")
         result = compose_introspect(

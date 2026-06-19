@@ -61,6 +61,17 @@ class GraphQLTypeInfo:
 
         return result
 
+    @property
+    def leaf_name(self) -> Optional[str]:
+        """Walk the ``of_type`` chain (NON_NULL / LIST wrappers) to the
+        named leaf type. Returns the leaf's ``name`` (e.g. ``"UserDTO"``,
+        ``"Int"``), or ``None`` if the chain doesn't end at a named type.
+        """
+        node: GraphQLTypeInfo | None = self
+        while node is not None and node.of_type is not None:
+            node = node.of_type
+        return node.name if node is not None else None
+
 
 class TypeMapper:
     """
