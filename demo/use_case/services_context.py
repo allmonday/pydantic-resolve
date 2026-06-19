@@ -20,6 +20,7 @@ from typing import Annotated
 
 from fastmcp.server.context import Context
 from fastmcp.server.dependencies import get_http_headers
+from pydantic import Field
 from sqlalchemy import select
 
 from pydantic_resolve import AutoLoad, DefineSubset, FromContext, query
@@ -34,8 +35,20 @@ from demo.use_case.services import (
 
 
 class TaskSummary(DefineSubset):
-    __subset__ = (TaskEntity, ["id", "title"])
-    owner_detail: Annotated[UserSummary | None, AutoLoad(origin="owner")] = None
+    """Task view with auto-loaded owner. Mirrors ``services.TaskSummary``;
+
+    re-declared here so ``services_context`` stays a self-contained
+    import target for the context-aware demo.
+    """
+
+    __subset__ = (TaskEntity, ["id", "title", "status"])
+    owner_detail: Annotated[
+        UserSummary | None,
+        AutoLoad(origin="owner"),
+    ] = Field(
+        default=None,
+        description="Auto-loaded owner of this task.",
+    )
 
 
 def extract_user_context(ctx: Context) -> dict:
