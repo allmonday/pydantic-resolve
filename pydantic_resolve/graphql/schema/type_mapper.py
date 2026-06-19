@@ -92,7 +92,12 @@ class TypeMapper:
             return resolved if resolved else core_type
         return core_type
 
-    def collect_referenced_types(self, annotation: Any) -> dict[str, type]:
+    def collect_referenced_types(
+        self,
+        annotation: Any,
+        *,
+        include_enums: bool = True,
+    ) -> dict[str, type]:
         """Walk ``annotation`` and return every BaseModel / Enum reachable.
 
         Includes types reachable transitively through BaseModel fields
@@ -101,30 +106,37 @@ class TypeMapper:
         DTOs) terminate naturally because the result dict is keyed by
         class name.
 
+        Args:
+            annotation: Any Python type annotation — bare class,
+                ``Optional[X]``, ``list[X]``, ``Union[X, Y]``, etc.
+            include_enums: When True (default), Enum subclasses are
+                included. Set to False for contexts that only care
+                about Pydantic models (e.g. OpenAPI serialization,
+                ErDiagram nested-model discovery).
+
         Returns:
-            ``{class_name: class}`` for each unique BaseModel or Enum
-            discovered. String annotations and unresolved ForwardRefs
-            are skipped.
+            ``{class_name: class}`` for each unique BaseModel (and
+            Enum, if ``include_enums``) discovered. String annotations
+            and unresolved ForwardRefs are silently skipped.
         """
         seen: dict[str, type] = {}
-        self._collect_referenced_types(annotation, seen)
+        stack: list[Any] = [annotation]
+        while stack:
+            current = stack.pop()
+            for core_type in get_core_types(current):
+                if isinstance(core_type, str):
+                    continue
+                name = getattr(core_type, "__name__", None)
+                if name is None or name in seen:
+                    continue
+                if safe_issubclass(core_type, BaseModel):
+                    seen[name] = core_type
+                    stack.extend(
+                        f.annotation for f in core_type.model_fields.values()
+                    )
+                elif include_enums and is_enum_type(core_type):
+                    seen[name] = core_type
         return seen
-
-    def _collect_referenced_types(
-        self, annotation: Any, seen: dict[str, type]
-    ) -> None:
-        for core_type in get_core_types(annotation):
-            if isinstance(core_type, str):
-                continue
-            name = getattr(core_type, "__name__", None)
-            if name is None or name in seen:
-                continue
-            if safe_issubclass(core_type, BaseModel):
-                seen[name] = core_type
-                for field_info in core_type.model_fields.values():
-                    self._collect_referenced_types(field_info.annotation, seen)
-            elif is_enum_type(core_type):
-                seen[name] = core_type
 
     def map_to_graphql_type(
         self,

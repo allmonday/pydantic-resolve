@@ -13,11 +13,15 @@ from typing import Any, Callable, Optional, get_type_hints
 
 from pydantic import BaseModel
 
+from .type_mapper import TypeMapper
 from .type_registry import TypeRegistry
 import pydantic_resolve.constant as const
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.types import get_core_types
 from pydantic_resolve.utils.er_diagram import ErDiagram
+
+
+_TYPE_MAPPER = TypeMapper()
 
 
 class TypeCollector:
@@ -172,12 +176,19 @@ class TypeCollector:
         """
         Recursively collect all Pydantic BaseModel types referenced in entity fields.
 
+        Delegates the per-type walk to ``TypeMapper.collect_referenced_types``
+        (shared with the UseCase compose path). The outer iteration over
+        ``entities`` and the "exclude input entities themselves" semantics
+        are preserved for ErDiagram callers.
+
         Args:
             entities: List of entity classes to scan
             visited: Set of already visited type names
 
         Returns:
-            Dictionary mapping type names to type classes
+            Dictionary mapping type names to type classes (excludes the
+            input ``entities`` themselves — those are registered by the
+            caller separately).
         """
         if visited is None:
             visited = set()
@@ -185,33 +196,19 @@ class TypeCollector:
         collected: dict[str, type] = {}
 
         for entity in entities:
-            type_name = entity.__name__
-            if type_name in visited:
+            entity_name = entity.__name__
+            if entity_name in visited:
                 continue
-            visited.add(type_name)
+            visited.add(entity_name)
 
-            # Scan all fields of the entity
-            try:
-                type_hints = get_type_hints(entity)
-            except Exception:
-                type_hints = getattr(entity, '__annotations__', {})
-
-            for field_name, field_type in type_hints.items():
-                if field_name.startswith('__'):
-                    continue
-
-                core_types = get_core_types(field_type)
-                for core_type in core_types:
-                    if safe_issubclass(core_type, BaseModel):
-                        if core_type.__name__ not in collected and core_type.__name__ not in visited:
-                            collected[core_type.__name__] = core_type
-
-        # Recursively collect nested types of newly discovered types
-        if collected:
-            nested_types = self.collect_nested_pydantic_types(
-                list(collected.values()), visited
+            referenced = _TYPE_MAPPER.collect_referenced_types(
+                entity, include_enums=False
             )
-            collected.update(nested_types)
+            for name, cls in referenced.items():
+                if name == entity_name or name in visited or name in collected:
+                    continue
+                collected[name] = cls
+                visited.add(name)
 
         return collected
 
