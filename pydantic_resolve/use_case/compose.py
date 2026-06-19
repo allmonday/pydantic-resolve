@@ -20,8 +20,8 @@ only applies the per-method field selection (the third level) via
 
 This module is intentionally self-contained: it reuses public utilities
 (``QueryParser``, ``build_subset_model``) but does not modify
-``server_graphql.py`` internals. The MCP tool ``compose_query`` in
-``server_graphql.py`` is a thin wrapper around
+``mcp_server.py`` internals. The MCP tool ``compose_query`` in
+``mcp_server.py`` is a thin wrapper around
 :meth:`UseCaseResources.compose`, which in turn calls the private
 :func:`_compose_and_resolve` defined here.
 """

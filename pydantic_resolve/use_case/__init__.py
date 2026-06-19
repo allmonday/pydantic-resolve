@@ -38,13 +38,12 @@ Example:
 
 from pydantic_resolve.use_case.business import UseCaseService
 from pydantic_resolve.use_case.context import FromContext
-from pydantic_resolve.use_case.manager import UseCaseAppConfig, UseCaseResources
-from pydantic_resolve.use_case.server_graphql import create_use_case_graphql_mcp_server
+from pydantic_resolve.use_case.manager import UseCaseAppConfig
+from pydantic_resolve.use_case.mcp_server import create_use_case_graphql_mcp_server
 
 __all__ = [
     "create_use_case_graphql_mcp_server",
     "UseCaseService",
     "UseCaseAppConfig",
-    "UseCaseResources",
     "FromContext",
 ]

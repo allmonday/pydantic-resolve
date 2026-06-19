@@ -130,7 +130,7 @@ async def test_compose_autoload_owner_detail_through_selection():
 @pytest.mark.asyncio
 async def test_compose_query_tool_end_to_end():
     from demo.use_case.services import SprintService, TaskService, UserService
-    from pydantic_resolve.use_case.server_graphql import (
+    from pydantic_resolve.use_case.mcp_server import (
         create_use_case_graphql_mcp_server,
     )
 

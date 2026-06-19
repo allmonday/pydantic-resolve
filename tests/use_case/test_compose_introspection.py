@@ -25,7 +25,7 @@ from pydantic_resolve.use_case.introspection import (
     is_introspection_query,
 )
 from pydantic_resolve.use_case.manager import UseCaseManager
-from pydantic_resolve.use_case.server_graphql import (
+from pydantic_resolve.use_case.mcp_server import (
     create_use_case_graphql_mcp_server,
 )
 from pydantic_resolve.use_case.manager import UseCaseAppConfig
