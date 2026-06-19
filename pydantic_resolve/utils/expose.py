@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Iterator
 import pydantic_resolve.constant as const
+from pydantic_resolve.utils.field_metadata import iter_fields_with_marker
 
 @dataclass
 class ExposeInfo:
@@ -15,7 +16,7 @@ def pre_generate_expose_config(kls):
     iterate kls fields, check and collect field who's annotated metadata for ExposeAs exists
     if kls's const.EXPOSE_CONFIGURATION exists and the fields is not empty, raise exception
 
-    generate the configuration such as 
+    generate the configuration such as
     { field_name: alias }
     and set it into kls's const.EXPOSE_CONFIGURATION
     """
@@ -31,11 +32,6 @@ def pre_generate_expose_config(kls):
     expose_dict = {name: meta.alias for name, meta in fields}
     setattr(kls, const.EXPOSE_TO_DESCENDANT, expose_dict)
 
-def _get_pydantic_field_items_with_expose_as(kls) -> Iterator[tuple[str, ExposeInfo, type]]:
-    items = kls.model_fields.items()
-
-    for name, v in items:
-        metadata = v.metadata
-        for meta in metadata:
-            if isinstance(meta, ExposeInfo):
-                yield name, meta
+def _get_pydantic_field_items_with_expose_as(kls) -> Iterator[tuple[str, ExposeInfo]]:
+    for name, _field_info, meta in iter_fields_with_marker(kls, ExposeInfo):
+        yield name, meta
