@@ -11,10 +11,11 @@ disclosure:
 from __future__ import annotations
 
 import json
+from enum import Enum
 from typing import Annotated, Optional
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from pydantic_resolve import query, mutation
 from pydantic_resolve.use_case.business import UseCaseService
@@ -122,6 +123,29 @@ class TreeService(UseCaseService):
     @query
     async def root(cls) -> Optional[NodeDTO]:
         return None
+
+
+class Priority(Enum):
+    """Test fixture: Enum to verify SDL enum rendering."""
+
+    HIGH = "high"
+    LOW = "low"
+
+
+class WidgetDTO(BaseModel):
+    """A widget in the catalog."""
+
+    id: int = Field(description="Widget identifier.")
+    priority: Priority = Field(description="Urgency level.")
+
+
+class WidgetService(UseCaseService):
+    """Service used by SDL description + Enum inclusion regression tests."""
+
+    @query
+    async def get_widget(cls, widget_id: int) -> WidgetDTO:
+        """Get a widget."""
+        return WidgetDTO(id=widget_id, priority=Priority.HIGH)
 
 
 # ──────────────────────────────────────────────────
@@ -472,6 +496,64 @@ class TestDescribeComposeMethod:
         # NodeDTO appears once (cycle broken), with the recursive field shown
         assert sdl.count("type NodeDTO {") == 1
         assert "children: [NodeDTO!]!" in sdl
+
+    @pytest.mark.asyncio
+    async def test_sdl_descriptions_follow_spec_placement(self):
+        """Descriptions must precede their definition per GraphQL SDL spec:
+
+        - Type description above ``type X {`` (not inside the block)
+        - Field description above each field
+        - Block string format (``\"\"\"…\"\"\"``) for multi-line / markdown
+        """
+        server = create_use_case_graphql_mcp_server(
+            apps=[UseCaseAppConfig(name="p", services=[WidgetService])],
+        )
+        result = await server.call_tool(
+            "describe_compose_method",
+            {
+                "app_name": "p",
+                "service_name": "WidgetService",
+                "method_name": "get_widget",
+            },
+        )
+        sdl = json.loads(result.content[0].text)["data"]["sdl"]
+
+        # Type description ABOVE the `type X {` line (not inside).
+        type_decl_idx = sdl.index("type WidgetDTO {")
+        type_desc_idx = sdl.index('"""A widget in the catalog."""')
+        assert type_desc_idx < type_decl_idx, (
+            "Type description must precede `type X {` per SDL spec"
+        )
+
+        # Field description above the field line.
+        field_line_idx = sdl.index("  id:")
+        field_desc_idx = sdl.index('"""Widget identifier."""')
+        assert field_desc_idx < field_line_idx, (
+            "Field description must precede the field per SDL spec"
+        )
+
+    @pytest.mark.asyncio
+    async def test_sdl_includes_enum_types(self):
+        """Enum types referenced by a method's return DTO must appear in
+        the SDL output as ``enum X { ... }`` blocks, alongside OBJECT
+        types. Regression: reachable-types collection used to filter to
+        OBJECT only; ENUM was dropped.
+        """
+        server = create_use_case_graphql_mcp_server(
+            apps=[UseCaseAppConfig(name="p", services=[WidgetService])],
+        )
+        result = await server.call_tool(
+            "describe_compose_method",
+            {
+                "app_name": "p",
+                "service_name": "WidgetService",
+                "method_name": "get_widget",
+            },
+        )
+        sdl = json.loads(result.content[0].text)["data"]["sdl"]
+        assert "enum Priority {" in sdl
+        assert "HIGH" in sdl
+        assert "LOW" in sdl
 
     @pytest.mark.asyncio
     async def test_hint_points_to_compose_query(self, mcp_server):

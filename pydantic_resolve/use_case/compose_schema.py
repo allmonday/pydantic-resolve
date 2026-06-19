@@ -356,7 +356,7 @@ def method_sdl(
         return None
 
     reachable: dict[str, TypeInfo] = {}
-    _collect_reachable_object_types(field_info.python_type, registry, reachable)
+    _collect_reachable_sdl_types(field_info.python_type, registry, reachable)
 
     sdl_parts: list[str] = []
     # Method signature as a comment header
@@ -369,17 +369,22 @@ def method_sdl(
     )
     sdl_parts.append(f"# {service_name}.{method_name}({args_sdl}): {return_sdl}")
     for type_name, type_def in sorted(reachable.items()):
-        sdl_parts.append(_render_object_type_sdl(type_def))
+        sdl_parts.append(_render_type_sdl(type_def))
 
     return "\n\n".join(sdl_parts)
 
 
-def _collect_reachable_object_types(
+def _collect_reachable_sdl_types(
     annotation: Any,
     registry: dict[str, TypeInfo],
     seen: dict[str, TypeInfo],
 ) -> None:
-    """DFS-walk ``annotation``, recording every OBJECT TypeInfo reachable."""
+    """DFS-walk ``annotation``, recording every OBJECT / ENUM TypeInfo reachable.
+
+    Scalars are skipped (they're standard GraphQL types, always present).
+    Only types that actually need an SDL definition (OBJECT, ENUM) are
+    collected — and only if they're already in ``registry``.
+    """
     for core_type in get_core_types(annotation):
         if isinstance(core_type, str):
             continue
@@ -387,26 +392,70 @@ def _collect_reachable_object_types(
         if name is None or name in seen:
             continue
         type_info = registry.get(name)
-        if type_info is None or type_info.kind != "OBJECT":
+        if type_info is None or type_info.kind not in ("OBJECT", "ENUM"):
             continue
         seen[name] = type_info
-        for field in type_info.fields.values():
-            _collect_reachable_object_types(field.python_type, registry, seen)
+        # Enums have no fields to recurse through; OBJECTs do.
+        if type_info.kind == "OBJECT":
+            for field in type_info.fields.values():
+                _collect_reachable_sdl_types(field.python_type, registry, seen)
+
+
+def _render_type_sdl(type_info: TypeInfo) -> str:
+    """Dispatch SDL rendering by kind (OBJECT or ENUM)."""
+    if type_info.kind == "ENUM":
+        return _render_enum_type_sdl(type_info)
+    return _render_object_type_sdl(type_info)
 
 
 def _render_object_type_sdl(type_info: TypeInfo) -> str:
-    """Render an OBJECT TypeInfo as an SDL ``type X { ... }`` block."""
-    lines: list[str] = []
+    """Render an OBJECT TypeInfo as spec-compliant SDL.
+
+    Description sits above ``type X {`` (not inside, which would violate
+    the GraphQL SDL spec); field descriptions sit above each field.
+    Block strings (``\"\"\"…\"\"\"``) preserve multi-line / markdown.
+    """
+    parts: list[str] = []
     if type_info.description:
-        lines.append(f'  """{type_info.description.strip()}"""')
+        parts.append(_block_string(type_info.description))
+    field_lines: list[str] = []
     for field in type_info.fields.values():
+        if field.description:
+            field_lines.append(_indent(_block_string(field.description), 2))
         gql = _TYPE_MAPPER.map_to_graphql_type(field.python_type)
         sdl = gql.to_sdl()
         if not _is_optional(field.python_type) and not sdl.endswith("!"):
             sdl = f"{sdl}!"
-        lines.append(f"  {field.name}: {sdl}")
-    body = "\n".join(lines)
-    return f"type {type_info.name} {{\n{body}\n}}"
+        field_lines.append(f"  {field.name}: {sdl}")
+    parts.append(f"type {type_info.name} {{\n" + "\n".join(field_lines) + "\n}")
+    return "\n".join(parts)
+
+
+def _render_enum_type_sdl(type_info: TypeInfo) -> str:
+    """Render an ENUM TypeInfo as ``enum X { ... }`` SDL.
+
+    Each enum value can carry its own description per spec; this
+    implementation currently doesn't capture per-value descriptions
+    ( TypeInfo.enum_values holds bare strings), so values render bare.
+    """
+    parts: list[str] = []
+    if type_info.description:
+        parts.append(_block_string(type_info.description))
+    value_lines = [f"  {v}" for v in (type_info.enum_values or [])]
+    body = "\n".join(value_lines)
+    parts.append(f"enum {type_info.name} {{\n{body}\n}}")
+    return "\n".join(parts)
+
+
+def _block_string(text: str) -> str:
+    """Wrap a description as a GraphQL block string (``\"\"\"…\"\"\"``)."""
+    return f'"""{text.strip()}"""'
+
+
+def _indent(text: str, n: int) -> str:
+    """Indent every non-empty line by ``n`` spaces (block-string friendly)."""
+    pad = " " * n
+    return "\n".join(f"{pad}{line}" if line else line for line in text.splitlines())
 
 
 def _type_ref_to_sdl(type_ref: dict[str, Any]) -> str:
