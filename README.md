@@ -95,21 +95,21 @@ For the full architectural analysis, see [Clean Architecture for Python](./docs/
 The same ERD also powers GraphQL queries, MCP services, and admin tools:
 
 ```mermaid
-flowchart TB
+flowchart LR
     entity["Entity + ERD<br/>Enterprise Business Rules"]
-    resolve["Resolver<br/>Application Business Rules"]
-    graphql["GraphQL Generator"]
+    graphql_gen["GraphQL Generator"]
     usecase["UseCase Service"]
+    graphql_uc["GraphQL"]
     api["REST API"]
-    mcp1["MCP Service"]
-    mcp2["MCP Service"]
+    mcp_uc["MCP Service"]
+    mcp_gen["MCP Service"]
 
-    entity --> resolve
-    entity --> graphql
-    resolve --> usecase
+    entity --> graphql_gen
+    entity --> usecase
     usecase --> api
-    usecase --> mcp1
-    graphql --> mcp2
+    usecase --> graphql_uc
+    graphql_uc --> mcp_uc
+    graphql_gen --> mcp_gen
 ```
 
 ### Before and After
