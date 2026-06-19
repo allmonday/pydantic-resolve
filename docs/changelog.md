@@ -4,6 +4,43 @@
 - **Minor (x.Y.0)**: New features, backward compatible
 - **Patch (x.y.Z)**: Bug fixes and minor improvements
 
+## 5.10
+
+### 5.10.0 (2026-6-19)
+
+Introduces a **GraphQL surface for UseCase services** — a way to compose multiple `UseCaseService` methods in a single GraphQL query, plus the schema/introspection machinery that goes with it. MCP is one consumer of this surface (the AI-agent packaging), but the underlying Python APIs (`UseCaseResources.compose`, `compose_introspect`, `build_compose_schema`) work directly from FastAPI or any HTTP framework. See `demo/use_case/app_compose.py` for a non-MCP HTTP example.
+
+The classic 4-tool UseCase MCP server (`create_use_case_mcp_server` / `list_services` / `describe_service` / `call_use_case`) is removed; the GraphQL compose MCP server (`create_use_case_graphql_mcp_server`) is now the single MCP entry point. graphql-core's role in this codebase narrows to query parsing — type representation, schema construction, and introspection execution all switch to the existing ErDiagram type infrastructure (`TypeMapper` + `TypeInfo` registry).
+
+- feat:
+  - **UseCase GraphQL compose** (`UseCaseResources.compose(query, context)`): execute a fixed 3-level GraphQL query — root → Service → Method → DTO field selection — and return a nested `{service: {method: result}}` dict. Each `@query` method runs concurrently via `asyncio.gather`; `@mutation` methods run serially in declaration order. Field selection projects each method's return DTO via `build_subset_model` before serialization. `Resolver` / `AutoLoad` on returned DTOs fire normally — business methods are responsible for resolving their own outputs.
+  - **UseCase GraphQL introspection** (`compose_introspect(app, query)`): GraphiQL-compatible `__schema` / `__type(name: "...")` / `__typename` queries against the app's cached schema registry. Standard 5 built-in directives (`skip` / `include` / `deprecated` / `specifiedBy` / `oneOf`) reported. Walks a hand-built `{type_name: TypeInfo}` registry instead of going through graphql-core.
+  - **`build_compose_schema(app)`**: walks UseCaseService classes once at registration time, producing the `{type_name: TypeInfo}` registry (services as `{Service}Query` OBJECT, every reachable DTO + Enum, plus the 5 standard GraphQL scalars). Cached on `UseCaseResources.compose_schema` so introspection and SDL rendering don't rebuild per call.
+  - **`FromContext` marker** + per-app `context_extractor`: `Annotated[int, FromContext()]` parameters are server-injected (e.g. user identity extracted from the Authorization header), not settable from query args. Same service method works unchanged across FastAPI (`Depends(get_current_user)`) and MCP (`context_extractor`).
+  - **`create_use_case_graphql_mcp_server(apps)`**: MCP packaging of the above. 4-layer progressive disclosure — `list_apps` → `describe_compose_schema` (service + method listing) → `describe_compose_method` (args / returns / focused SDL showing every reachable DTO and Enum) → `compose_query` (data execution). Pure wrapper around the Python APIs; no MCP-specific business logic.
+  - **Spec-compliant SDL rendering**: type descriptions above `type X {`, field descriptions above each field, both as block strings (`"""..."""`). Enum types referenced by a method's return DTO appear in SDL alongside OBJECT types. See `method_sdl(registry, service, method)`.
+
+- refactor:
+  - **graphql-core scope narrowed to query parsing only**. Removed `pydantic_resolve/graphql/type_converter.py` (236 lines) — its `pydantic_to_graphql_type` is fully replaced by `TypeMapper.map_to_graphql_type` from the ErDiagram path. The two paths now share one type system instead of running parallel implementations.
+  - **Classic MCP server removed** (pre-release on a feature branch, no breaking change for downstream users). Drops `pydantic_resolve/use_case/server.py` (480 lines) and `demo/use_case/mcp_server.py` + `mcp_server_with_context.py`.
+  - **`introspector.py` removed** (646 lines): never called from the production path; `mcp_server` + `compose_schema` already cover the same surface via different code paths.
+  - **Shared utilities consolidated**:
+    - `TypeMapper.collect_referenced_types(annotation, *, include_enums=True)` — single canonical walker for "find every BaseModel/Enum reachable from this annotation". `TypeCollector.collect_nested_pydantic_types` and `utils/openapi._collect_nested_types` become thin wrappers.
+    - `utils/field_metadata.iter_fields_with_marker(model_cls, marker_cls)` — centralizes the `ExposeAs` / `SendTo` / `AutoLoad` field-scan pattern.
+    - `GraphQLTypeInfo.leaf_name` property — walks NON_NULL / LIST wrappers to the named leaf.
+    - `business.iter_use_case_methods(cls, *, enable_mutation=True)` — collapses the `getattr + kind-filter` pattern duplicated across compose_schema and mcp_server.
+    - `context.is_from_context_annotation` — consolidates 4 inline copies.
+
+- fix:
+  - **Root Query service fields point at the right OBJECT**: previously degraded to a scalar fallback (`String` / `Int`) because TypeMapper didn't recognize `UseCaseService` subclasses. Now correctly renders `NON_NULL(OBJECT({Service}Query))`.
+  - **GraphQL duplicate fields rejected** instead of silently merged (affects `QueryParser`).
+  - **`defaultValue` uses `json.dumps`** instead of `repr` so booleans serialize as `true` / `false` (not `True` / `False`) and strings use double quotes per GraphQL spec.
+
+- docs:
+  - `docs/use_case_mcp_service.md` + `.zh.md` rewritten for the compose server (4-layer walkthrough, FromContext + context_extractor pattern, SDL examples).
+  - `docs/api_use_case_mcp.md` + `.zh.md` document only `create_use_case_graphql_mcp_server`.
+  - `demo/use_case/services.py` enriched with class docstrings + `Field(description=...)` + a `TaskStatus` Enum so the SDL output is meaningful end-to-end.
+
 ## 5.8
 
 ### 5.8.0 (2026-6-8)
