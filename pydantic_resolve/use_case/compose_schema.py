@@ -29,7 +29,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from pydantic_resolve.graphql.schema.type_mapper import GraphQLTypeInfo, TypeMapper
+from pydantic_resolve.graphql.schema.type_mapper import TypeMapper
 from pydantic_resolve.graphql.schema.type_registry import (
     ArgumentInfo,
     FieldInfo,
