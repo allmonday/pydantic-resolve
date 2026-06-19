@@ -165,6 +165,23 @@ class TestSchemaCompleteness:
         field_names = {f["name"] for f in query_type["fields"]}
         assert field_names >= {"SprintService", "TaskService"}
 
+    def test_query_type_service_fields_reference_service_query_objects(self):
+        """Each root-Query service field must point at its ``{Service}Query``
+        OBJECT, not regress to a scalar fallback (UseCaseService subclasses
+        aren't BaseModels, so TypeMapper alone can't map them)."""
+        app = _make_manager().get_app("project")
+        types = _introspect_types(app)
+        query_type = types["Query"]
+        by_name = {f["name"]: f for f in query_type["fields"]}
+        # SprintService: SprintServiceQuery! → NON_NULL(OBJECT(SprintServiceQuery))
+        sprint = by_name["SprintService"]["type"]
+        assert sprint["kind"] == "NON_NULL"
+        assert sprint["ofType"]["kind"] == "OBJECT"
+        assert sprint["ofType"]["name"] == "SprintServiceQuery"
+        task = by_name["TaskService"]["type"]
+        assert task["kind"] == "NON_NULL"
+        assert task["ofType"]["name"] == "TaskServiceQuery"
+
     def test_service_object_type_has_methods(self):
         app = _make_manager().get_app("project")
         types = _introspect_types(app)

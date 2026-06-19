@@ -37,7 +37,7 @@ from pydantic_resolve.graphql.schema.type_registry import (
     SCALAR_TYPES,
 )
 from pydantic_resolve.graphql.type_mapping import is_enum_type
-from pydantic_resolve.use_case.business import iter_use_case_methods
+from pydantic_resolve.use_case.business import UseCaseService, iter_use_case_methods
 from pydantic_resolve.use_case.context import is_from_context_annotation
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.types import (
@@ -287,6 +287,28 @@ def _build_type_ref(python_type: Any, *, force_non_null: bool) -> dict[str, Any]
     (i.e. adds the trailing ``!`` in SDL). Callers decide based on
     whether the field/arg is required.
     """
+    # UseCaseService subclasses reference their corresponding
+    # ``{Service}Query`` OBJECT — TypeMapper doesn't know about services,
+    # so without this branch it would fall back to SCALAR String.
+    if (
+        isinstance(python_type, type)
+        and safe_issubclass(python_type, UseCaseService)
+    ):
+        inner: dict[str, Any] = {
+            "kind": "OBJECT",
+            "name": f"{python_type.__name__}Query",
+            "description": None,
+            "ofType": None,
+        }
+        if force_non_null:
+            return {
+                "kind": "NON_NULL",
+                "name": None,
+                "description": None,
+                "ofType": inner,
+            }
+        return inner
+
     gql_type = _TYPE_MAPPER.map_to_graphql_type(python_type)
     inner = gql_type.to_introspection()
     if force_non_null:
