@@ -367,7 +367,7 @@ That setup cost is real. The payoff is that relationship knowledge converges int
 ### The Same Example in ERD Mode
 
 ```python
-from typing import Annotated, Optional
+from typing import Optional
 
 from pydantic import BaseModel
 from pydantic_resolve import Relationship, base_entity, config_global_resolver
@@ -404,11 +404,13 @@ config_global_resolver(diagram)
 
 
 class TaskView(TaskEntity):
-    owner: Annotated[Optional[UserEntity], AutoLoad()] = None
+    # Field name matches Relationship(name='owner') → AutoLoad is implicit
+    owner: Optional[UserEntity] = None
 
 
 class SprintView(SprintEntity):
-    tasks: Annotated[list[TaskView], AutoLoad()] = []
+    # Field name matches Relationship(name='tasks') → AutoLoad is implicit
+    tasks: list[TaskView] = []
     task_count: int = 0
 
     def post_task_count(self):
@@ -421,6 +423,7 @@ Compared with the Core API version:
 - `resolve_tasks` disappears.
 - The relationship definitions live in one place.
 - `post_*` still works exactly the same.
+- When a View field's name matches a relationship name, `Annotated[..., AutoLoad()]` is optional (implicit AutoLoad). Use the explicit form only when the field name differs from the relationship name.
 
 If you want to hide internal FK fields such as `owner_id`, add `DefineSubset` on top of the ERD setup:
 
@@ -430,7 +433,7 @@ from pydantic_resolve import DefineSubset
 
 class TaskSummary(DefineSubset):
     __subset__ = (TaskEntity, ('id', 'title'))
-    owner: Annotated[Optional[UserEntity], AutoLoad()] = None
+    owner: Optional[UserEntity] = None  # implicit AutoLoad
 ```
 
 ### If Your ORM Already Knows the Relationships
