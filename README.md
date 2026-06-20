@@ -493,8 +493,8 @@ The library exposes your data through **two entry points** — ERD mode (data-mo
 ```mermaid
 flowchart LR
     entity["Entity + ERD<br/>Enterprise Business Rules"]
-    graphql["graphql"]
-    usecase["UseCase Service"]
+    graphql["GraphQL"]
+    usecase["UseCase Service<br/>business operations"]
     graphql_uc["GraphQL"]
     api["REST API"]
     mcp_uc["MCP Service"]
