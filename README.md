@@ -1,6 +1,6 @@
 # Pydantic Resolve
 
-> Clean Architecture for Python — define business entities, declare relationships, let the framework assemble your data.
+> A progressive data-assembly framework for Python in Clean Architecture style — adopt each layer as you need it.
 
 [![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
 [![PyPI Downloads](https://static.pepy.tech/badge/pydantic-resolve/month)](https://pepy.tech/projects/pydantic-resolve)
@@ -13,109 +13,44 @@
 
 ---
 
-## The Missing Layer
+## TL;DR
 
-Most FastAPI projects follow the same pattern: define SQLAlchemy ORM models first, then create Pydantic schemas that mirror them. This "ORM-First" approach is so common that many developers have never questioned it. But as projects grow, it creates systemic problems:
+pydantic-resolve is a complete framework for **defining and assembling** your data layer.
 
-| # | Problem | Clean Architecture Violation |
-|---|---------|------------------------------|
-| 1 | Schema passively follows ORM — same fields defined twice | API contract (Frameworks) is tied to DB design (Adapters) |
-| 2 | Business concepts lost — frontend sees `owner_id` instead of "task has an owner" | Enterprise Business Rules are permeated by DB structure |
-| 3 | Data assembly has no home — join logic scattered across Repository / Service / Route | Application Business Rules layer is missing |
-| 4 | Multi-source data is hard — each new source means conversion code everywhere | No unified Interface Adapter abstraction |
-| 5 | Schema reuse is hard — copy-paste for UserSummary / UserDetail / UserAvatar | No Enterprise entity to derive Frameworks responses from |
+- **Define** entities and relationships — Pydantic models + ER Diagram as the single source of truth.
+- **Assemble** response trees — `resolve_*` / `post_*` + batch loaders, recursive and N+1-safe.
+- **Expose** the same graph to REST, GraphQL, and AI agents (MCP) without rewriting.
 
-These are not individual tooling issues. They all trace back to one architectural violation: **the system has no Enterprise Business Rules layer independent of the database**. In Clean Architecture terms, the Frameworks layer (ORM) has colonized the Enterprise layer.
+These are progressive layers, not a package deal — most users stay on `resolve_*` and `post_*` forever, reach for ER Diagram only when relationships start repeating, and add GraphQL/MCP only when those surfaces are actually needed.
 
 ```python
-# The data assembly dilemma: where does this logic go?
-@router.get("/tasks")
-async def get_tasks():
-    tasks = await task_service.get_tasks()
+from typing import Optional
+from pydantic import BaseModel
+from pydantic_resolve import Loader, Resolver
 
-    # Collect IDs, batch query, build mapping, assemble result...
-    user_ids = list({t.owner_id for t in tasks})
-    users = await user_service.get_users_by_ids(user_ids)
-    user_map = {u.id: u for u in users}
 
-    result = []
-    for task in tasks:
-        task_dict = task.model_dump()
-        task_dict['owner'] = user_map.get(task.owner_id)
-        result.append(TaskResponse(**task_dict))
-    return result
+class TaskView(BaseModel):
+    id: int
+    title: str
+    owner_id: int
+    owner: Optional[UserView] = None
+
+    def resolve_owner(self, loader=Loader(user_loader)):
+        return loader.load(self.owner_id)
+
+
+tasks = await Resolver().resolve(tasks)  # one query, no N+1
 ```
 
-Whether this code lives in Repository, Service, or Route, the problem is the same: data assembly logic has no proper place in the traditional three-layer architecture.
-
-## Clean Architecture Layer Map
-
-**pydantic-resolve** provides the missing layer. Its components map 1:1 to Clean Architecture:
-
-| Clean Architecture Layer | pydantic-resolve Component |
-|--------------------------|---------------------------|
-| Enterprise Business Rules | Entity + ER Diagram |
-| Application Business Rules | Resolver + resolve/post |
-| Interface Adapters | Loader (data access) |
-| Frameworks & Interfaces | FastAPI routes + GraphQL + MCP |
-
-```mermaid
-flowchart LR
-    subgraph FW["Frameworks & Interfaces"]
-        R["Response<br/>FastAPI routes"]
-    end
-    subgraph APP["Application Business Rules"]
-        RV["Resolver<br/>resolve / post"]
-    end
-    subgraph ENT["Enterprise Business Rules"]
-        E["Entity + ER Diagram"]
-    end
-    subgraph ADP["Interface Adapters"]
-        L["Loader"]
-    end
-    FW --> APP --> ENT --> ADP
-```
-
-The dependency direction always points inward: Entity doesn't know about Loader. Loader doesn't know about FastAPI. FastAPI doesn't know about the database.
-
-For the full architectural analysis, see [Clean Architecture for Python](./docs/architecture_entity_first.md).
+The snippet above is the assembly step — describe what's missing, the framework fetches it. ER Diagram and GraphQL/MCP integrations build on top of the same model graph.
 
 ---
 
-## How pydantic-resolve Works
+## The Problem
 
-**pydantic-resolve** provides three mechanisms — one per Clean Architecture layer:
-
-| What you need | What you write | Clean Architecture Layer | What the framework does |
-|------|----------------|--------------------------|-------------------------|
-| Load related data | `resolve_*` + `Loader(...)` | Interface Adapters | Batch lookups and map results back |
-| Compute derived fields | `post_*` | Application Business Rules | Run after descendants are fully resolved |
-| Reuse relationship declarations | ER Diagram + `AutoLoad` | Enterprise Business Rules | Centralize relationship wiring for many models |
-
-The same ERD also powers GraphQL queries, MCP services, and admin tools:
-
-```mermaid
-flowchart LR
-    entity["Entity + ERD<br/>Enterprise Business Rules"]
-    graphql_gen["GraphQL Generator"]
-    usecase["UseCase Service"]
-    graphql_uc["GraphQL"]
-    api["REST API"]
-    mcp_uc["MCP Service"]
-    mcp_gen["MCP Service"]
-
-    entity --> graphql_gen
-    entity --> usecase
-    usecase --> api
-    usecase --> graphql_uc
-    graphql_uc --> mcp_uc
-    graphql_gen --> mcp_gen
-```
-
-### Before and After
+In most FastAPI projects, you define SQLAlchemy ORM models first, then create Pydantic schemas that mirror them. As the project grows, data-assembly logic ends up scattered across Repository / Service / Route:
 
 ```python
-# Before: manual N+1 assembly in your route (Frameworks layer knows about DB)
 @router.get("/tasks")
 async def get_tasks():
     tasks = await task_service.get_tasks()
@@ -128,28 +63,9 @@ async def get_tasks():
     ]
 ```
 
-```python
-# After: declare what's missing, let the framework assemble (layers stay clean)
-class TaskView(BaseModel):
-    id: int
-    title: str
-    owner_id: int
-    owner: Optional[UserView] = None
+This pattern couples your API contract to the database layout and gives business logic no stable home. pydantic-resolve provides that home. For the full architectural analysis, see [Clean Architecture for Python](./docs/architecture_entity_first.md).
 
-    def resolve_owner(self, loader=Loader(user_loader)):  # Interface Adapter
-        return loader.load(self.owner_id)
-
-@router.get("/tasks")
-async def get_tasks():
-    tasks = [TaskView.model_validate(t) for t in await task_repo.get_tasks()]
-    return await Resolver().resolve(tasks)  # Application Business Rules
-```
-
-Advantages of the new approach:
-
-- **Separation of concerns**: Data loading logic moves from routes into models; routes only handle orchestration
-- **Declarative assembly**: `resolve_*` declares "what data is needed", the framework handles "how to batch-fetch it"
-- **Readability and maintainability**: Field definitions and their data sources live in the same class, clear at a glance
+---
 
 ## Quick Start
 
@@ -168,33 +84,11 @@ Throughout the Quick Start, we build one API:
 - `Task` has one `owner` (a `User`)
 - The API also needs derived fields like `task_count` and `contributors`
 
-Expected response structure:
-
-```json
-{
-  "id": 1,
-  "name": "Sprint 1",
-  "tasks": [
-    {
-      "id": 101,
-      "title": "Implement login",
-      "owner_id": 1,
-      "owner": {
-        "id": 1,
-        "name": "Alice"
-      }
-    }
-  ],
-  "task_count": 1,
-  "contributor_names": ["Alice"]
-}
-```
-
 Each step adds one concept on top of the previous code.
 
-### Step 1: Load Related Data with `resolve_*` — *Interface Adapters*
+### Step 1: Load Related Data with `resolve_*`
 
-Every response model has some fields already filled (from the database, from user input) and some fields that need to be fetched separately. `resolve_*` is how you declare those missing fields — it is your Interface Adapter.
+Every response model has some fields already filled (from the database, from user input) and some fields that need to be fetched separately. `resolve_*` is how you declare those missing fields.
 
 ```python
 from typing import Optional
@@ -227,15 +121,9 @@ tasks = [TaskView.model_validate(task) for task in raw_tasks]
 tasks = await Resolver().resolve(tasks)
 ```
 
-That is the core idea of the library:
+A useful mental model: **`resolve_*` means "this field needs data from outside the current node."** The framework collects every `loader.load(...)` call across the tree, batches one query per loader, and maps the results back.
 
-- `owner` is missing data, so you describe how to fetch it.
-- `user_loader` receives all requested `owner_id` values together.
-- `Resolver().resolve(...)` walks the model tree and fills the field.
-
-A useful mental model is: **`resolve_*` means "this field needs data from outside the current node."**
-
-### Step 2: Compose Nested Trees — *Application Business Rules*
+### Step 2: Compose Nested Trees
 
 Real APIs rarely have just one relationship. When `Sprint` contains many `Task`s, and each `Task` already knows how to load its `owner`, the resolver walks the tree and batch-loads everything recursively.
 
@@ -265,9 +153,7 @@ sprints = await Resolver().resolve(sprints)
 
 **Result:** one query per loader, regardless of how many sprints or tasks you load.
 
-This is why `resolve_*` is the best place to start. You can get value from the library before learning any advanced features.
-
-### Step 3: Compute Derived Fields with `post_*` — *Application Business Rules*
+### Step 3: Compute Derived Fields with `post_*`
 
 `task_count` and `contributor_names` don't come from a query — they're derived from data already on the model. `post_*` handles these: it runs **after** all nested `resolve_*` calls have finished.
 
@@ -295,6 +181,25 @@ Execution order:
 2. Each `TaskView.resolve_owner` loads its owner.
 3. `post_task_count` and `post_contributor_names` run after those nested fields are ready.
 
+Putting it all together, the response looks like:
+
+```json
+{
+  "id": 1,
+  "name": "Sprint 1",
+  "tasks": [
+    {
+      "id": 101,
+      "title": "Implement login",
+      "owner_id": 1,
+      "owner": { "id": 1, "name": "Alice" }
+    }
+  ],
+  "task_count": 1,
+  "contributor_names": ["Alice"]
+}
+```
+
 | | `resolve_*` | `post_*` |
 |---|---|---|
 | Needs external IO? | Yes | Usually no |
@@ -302,24 +207,60 @@ Execution order:
 | Good for counts, sums, formatting? | Sometimes | Yes |
 | Return value resolved again? | Yes | No |
 
-These two patterns cover most API endpoints. The next section covers cross-layer data flow — skip to [ER Diagram](#enterprise-business-rules-er-diagram--autoload) if you don't need it yet.
+These two patterns cover most API endpoints. The next section covers cross-tree coordination — skip it if your tree is simple enough with `resolve_*` and `post_*`.
 
-### Step 4: Coordinate Parent and Child — *Cross-cutting Concern*
+### Step 4: Coordinate Parent and Child *(optional)*
 
-When parent and child nodes need to share data without hard-coding references to each other:
+When parent and child nodes need to share data without hard-coding references to each other, two helpers cover the two directions.
 
-- `ExposeAs`: send ancestor data downward
-- `SendTo` + `Collector`: send child data upward
+#### 4a. ExposeAs — parent → child
+
+Send a value from an ancestor down to its descendants.
 
 ```python
 from typing import Annotated
 
-from pydantic_resolve import Collector, ExposeAs, SendTo
+from pydantic_resolve import ExposeAs
 
 
 class SprintView(BaseModel):
     id: int
-    name: Annotated[str, ExposeAs('sprint_name')]
+    name: Annotated[str, ExposeAs('sprint_name')]  # visible to all descendants
+    tasks: List[TaskView] = []
+
+    def resolve_tasks(self, loader=Loader(task_loader)):
+        return loader.load(self.id)
+
+
+class TaskView(BaseModel):
+    id: int
+    title: str
+    owner_id: int
+    owner: Optional[UserView] = None
+    full_title: str = ""
+
+    def resolve_owner(self, loader=Loader(user_loader)):
+        return loader.load(self.owner_id)
+
+    def post_full_title(self, ancestor_context):
+        return f"{ancestor_context['sprint_name']} / {self.title}"
+```
+
+Use this when a child needs context from an ancestor (sprint name, permissions, locale).
+
+#### 4b. SendTo + Collector — child → parent
+
+Aggregate values from many descendants up to one ancestor.
+
+```python
+from typing import Annotated
+
+from pydantic_resolve import Collector, SendTo
+
+
+class SprintView(BaseModel):
+    id: int
+    name: str
     tasks: List[TaskView] = []
     contributors: list[UserView] = []
 
@@ -335,22 +276,66 @@ class TaskView(BaseModel):
     title: str
     owner_id: int
     owner: Annotated[Optional[UserView], SendTo('contributors')] = None
-    full_title: str = ""
 
     def resolve_owner(self, loader=Loader(user_loader)):
         return loader.load(self.owner_id)
-
-    def post_full_title(self, ancestor_context):
-        return f"{ancestor_context['sprint_name']} / {self.title}"
 ```
 
-Use this when the shape of the tree matters — for example, a child needs ancestor context (sprint name, permissions), or a parent needs to aggregate values from many descendants (all contributors, all tags).
+Use this when a parent needs to aggregate values from many descendants (all contributors, all tags, all attachments).
 
-## Enterprise Business Rules: ER Diagram + AutoLoad
+---
 
-ER Diagram + `AutoLoad` is where Clean Architecture's Enterprise Business Rules layer fully materializes: relationships become the stable core, and every Response is just a different view of the same Entity graph.
+## How It Works
 
-Up to this point, the Core API is enough. Stay there until relationship declarations start repeating across many response models.
+Three mechanisms cover the whole library:
+
+| What you need | What you write | What the framework does |
+|------|----------------|-------------------------|
+| Load related data | `resolve_*` + `Loader(...)` | Batch lookups and map results back |
+| Compute derived fields | `post_*` | Run after descendants are fully resolved |
+| Reuse relationship declarations | ER Diagram + `AutoLoad` (see below) | Centralize relationship wiring for many models |
+
+```mermaid
+flowchart LR
+    subgraph FW["Frameworks & Interfaces"]
+        R["Response<br/>FastAPI routes"]
+    end
+    subgraph APP["Application Business Rules"]
+        RV["Resolver<br/>resolve / post"]
+    end
+    subgraph ENT["Enterprise Business Rules"]
+        E["Entity + ER Diagram"]
+    end
+    subgraph ADP["Interface Adapters"]
+        L["Loader"]
+    end
+    FW --> APP --> ENT --> ADP
+```
+
+The dependency direction always points inward: Entity doesn't know about Loader. Loader doesn't know about FastAPI. FastAPI doesn't know about the database.
+
+---
+
+## Clean Architecture Mapping
+
+pydantic-resolve is built around Clean Architecture. Its components map 1:1 to the layers:
+
+| Clean Architecture Layer | pydantic-resolve Component |
+|--------------------------|---------------------------|
+| Enterprise Business Rules | Entity + ER Diagram |
+| Application Business Rules | Resolver + resolve/post |
+| Interface Adapters | Loader (data access) |
+| Frameworks & Interfaces | FastAPI routes + GraphQL + MCP |
+
+This mapping is what makes the library more than a DataLoader helper — it gives data assembly a stable home that survives framework churn.
+
+For the full architectural analysis, see [Clean Architecture for Python](./docs/architecture_entity_first.md).
+
+---
+
+## Going Further: ER Diagram + AutoLoad
+
+> **Optional.** The Core API above (`resolve_*` / `post_*` + `Loader`) covers most use cases. Read this section only when you notice the same relationship being declared repeatedly across response models.
 
 A common signal is when you see the same relation described again and again:
 
@@ -359,7 +344,7 @@ A common signal is when you see the same relation described again and again:
 - `SprintBoard.resolve_tasks`
 - `SprintReport.resolve_tasks`
 
-At that point, the problem is no longer "how do I load this field?" but "where is the source of truth for relationships?"
+At that point, the problem is no longer "how do I load this field?" but "where is the source of truth for relationships?" ER Diagram + `AutoLoad` is the answer.
 
 ### Cost vs Benefit
 
@@ -377,11 +362,9 @@ ERD mode asks for more discipline up front:
 - Declare relationships explicitly.
 - Create `AutoLoad` from the same `diagram` used by the resolver.
 
-That setup cost is real. The payoff is that relationship knowledge converges into one place — this is precisely the responsibility of Clean Architecture's Enterprise Business Rules layer (Entity Layer): defining core business knowledge independent of external frameworks, so that the database, API, GraphQL, and MCP are all just different projections of it.
+That setup cost is real. The payoff is that relationship knowledge converges into one place — every Response is just a different view of the same Entity graph. The same ERD also powers GraphQL queries, MCP services, and admin tools.
 
 ### The Same Example in ERD Mode
-
-Here is the same `Sprint -> Task -> User` example after moving relationship wiring into an ER Diagram:
 
 ```python
 from typing import Annotated, Optional
@@ -476,6 +459,8 @@ config_global_resolver(diagram)
 
 `build_relationship` supports **SQLAlchemy**, **Django**, and **Tortoise ORM**. This is a good later optimization when your ORM metadata is already stable and you want to avoid duplicating relationship declarations.
 
+---
+
 ## Adoption Path
 
 ### 1. Interface Adapters First
@@ -505,11 +490,31 @@ When your ORM is stable, use `build_relationship()` to import existing relations
 
 [→ Full ERD-Driven Guide](https://allmonday.github.io/pydantic-resolve/erd_driven/)
 
-## Frameworks & Interfaces: Integrations
+---
 
-ERD not only drives REST APIs, but also powers GraphQL queries, MCP services, and admin tools.
+## Frameworks & Integrations
 
-### GraphQL
+The library exposes your data through **two entry points** — ERD mode (data-model-first) and UseCase mode (operation-first). Both can power GraphQL, MCP, and admin tools:
+
+```mermaid
+flowchart LR
+    entity["Entity + ERD<br/>Enterprise Business Rules"]
+    graphql["GraphQL"]
+    usecase["UseCase Service<br/>business operations"]
+    graphql_uc["GraphQL"]
+    api["REST API"]
+    mcp_uc["MCP Service"]
+    mcp_gen["MCP Service"]
+
+    entity --> graphql
+    entity --> usecase
+    usecase --> api
+    usecase --> graphql_uc
+    graphql_uc --> mcp_uc
+    graphql --> mcp_gen
+```
+
+### GraphQL — from ERD
 
 Generate GraphQL schema from ERD and execute queries:
 
@@ -523,7 +528,35 @@ result = await handler.execute("{ users { id name posts { title } } }")
 
 [→ GraphQL Documentation](./demo/graphql/README.md)
 
-### MCP
+### GraphQL — from UseCase Services
+
+Compose GraphQL queries over `UseCaseService` classes — the API surface is a set of business operations, not a graph of entities:
+
+```python
+from pydantic_resolve import query
+from pydantic_resolve.use_case import UseCaseService
+from pydantic_resolve.use_case.manager import UseCaseAppConfig, UseCaseManager
+
+
+class UserService(UseCaseService):
+    """User management."""
+
+    @query
+    async def list_users(cls) -> list[UserSummary]:
+        """Get all users."""
+        ...
+
+
+manager = UseCaseManager(
+    apps=[UseCaseAppConfig(name="blog", services=[UserService])]
+)
+app = manager.get_app("blog")
+result = await app.compose("{ listUsers { id name } }")
+```
+
+Use this when the API is operation-first (RPC-style) rather than entity-graph-first.
+
+### MCP — from ERD
 
 Expose GraphQL APIs to AI agents (requires `pip install pydantic-resolve[mcp]`):
 
@@ -536,6 +569,24 @@ mcp.run()
 ```
 
 [→ MCP Documentation](https://allmonday.github.io/pydantic-resolve/api/)
+
+### MCP — from UseCase Services
+
+Expose UseCase operations to AI agents via the same compose surface:
+
+```python
+from pydantic_resolve.use_case import (
+    UseCaseAppConfig,
+    create_use_case_graphql_mcp_server,
+)
+
+mcp = create_use_case_graphql_mcp_server(
+    apps=[UseCaseAppConfig(name="blog", services=[UserService, PostService])],
+)
+mcp.run()
+```
+
+The MCP server uses a 4-layer progressive disclosure (`list_apps` → `describe_compose_schema` → `describe_compose_method` → `compose_query`) so the agent can discover operations and shape queries without flooding its tool list.
 
 ### Visualization
 
@@ -573,7 +624,7 @@ app.mount('/voyager', create_voyager(app, er_diagram=diagram))
 | **Integration** | Requires dedicated server | Works with any framework |
 | **Query Flexibility** | Any client can query anything | Explicit API contracts |
 
-> **Note:** pydantic-resolve borrows the DataLoader batch pattern from GraphQL ecosystems. The main difference is that you keep your existing REST framework and get automatic batching without adopting a full GraphQL server. If your project already uses strawberry or ariadne and is happy with it, pydantic-resolve may be redundant.
+> **Note:** pydantic-resolve borrows the DataLoader batch pattern from GraphQL ecosystems but stays inside your existing REST framework. If you already use strawberry or ariadne and are happy with it, pydantic-resolve may be redundant for you.
 
 ---
 
