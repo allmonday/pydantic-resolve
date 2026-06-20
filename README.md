@@ -1,6 +1,6 @@
 # Pydantic Resolve
 
-> Clean Architecture for Python — define business entities, declare relationships, let the framework assemble your data.
+> A progressive data-assembly framework for Python in Clean Architecture style — adopt each layer as you need it.
 
 [![pypi](https://img.shields.io/pypi/v/pydantic-resolve.svg)](https://pypi.python.org/pypi/pydantic-resolve)
 [![PyPI Downloads](https://static.pepy.tech/badge/pydantic-resolve/month)](https://pepy.tech/projects/pydantic-resolve)
