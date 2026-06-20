@@ -21,6 +21,8 @@ pydantic-resolve is a complete framework for **defining and assembling** your da
 - **Assemble** response trees — `resolve_*` / `post_*` + batch loaders, recursive and N+1-safe.
 - **Expose** the same graph to REST, GraphQL, and AI agents (MCP) without rewriting.
 
+These are progressive layers, not a package deal — most users stay on `resolve_*` and `post_*` forever, reach for ER Diagram only when relationships start repeating, and add GraphQL/MCP only when those surfaces are actually needed.
+
 ```python
 from typing import Optional
 from pydantic import BaseModel
