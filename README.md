@@ -488,7 +488,7 @@ When your ORM is stable, use `build_relationship()` to import existing relations
 
 ## Frameworks & Integrations
 
-The same ERD drives REST APIs, GraphQL queries, MCP services, and admin tools:
+The library exposes your data through **two entry points** — ERD mode (data-model-first) and UseCase mode (operation-first). Both can power GraphQL, MCP, and admin tools:
 
 ```mermaid
 flowchart LR
@@ -508,7 +508,7 @@ flowchart LR
     graphql_gen --> mcp_gen
 ```
 
-### GraphQL
+### GraphQL — from ERD
 
 Generate GraphQL schema from ERD and execute queries:
 
@@ -522,7 +522,35 @@ result = await handler.execute("{ users { id name posts { title } } }")
 
 [→ GraphQL Documentation](./demo/graphql/README.md)
 
-### MCP
+### GraphQL — from UseCase Services
+
+Compose GraphQL queries over `UseCaseService` classes — the API surface is a set of business operations, not a graph of entities:
+
+```python
+from pydantic_resolve import query
+from pydantic_resolve.use_case import UseCaseService
+from pydantic_resolve.use_case.manager import UseCaseAppConfig, UseCaseManager
+
+
+class UserService(UseCaseService):
+    """User management."""
+
+    @query
+    async def list_users(cls) -> list[UserSummary]:
+        """Get all users."""
+        ...
+
+
+manager = UseCaseManager(
+    apps=[UseCaseAppConfig(name="blog", services=[UserService])]
+)
+app = manager.get_app("blog")
+result = await app.compose("{ listUsers { id name } }")
+```
+
+Use this when the API is operation-first (RPC-style) rather than entity-graph-first.
+
+### MCP — from ERD
 
 Expose GraphQL APIs to AI agents (requires `pip install pydantic-resolve[mcp]`):
 
@@ -535,6 +563,24 @@ mcp.run()
 ```
 
 [→ MCP Documentation](https://allmonday.github.io/pydantic-resolve/api/)
+
+### MCP — from UseCase Services
+
+Expose UseCase operations to AI agents via the same compose surface:
+
+```python
+from pydantic_resolve.use_case import (
+    UseCaseAppConfig,
+    create_use_case_graphql_mcp_server,
+)
+
+mcp = create_use_case_graphql_mcp_server(
+    apps=[UseCaseAppConfig(name="blog", services=[UserService, PostService])],
+)
+mcp.run()
+```
+
+The MCP server uses a 4-layer progressive disclosure (`list_apps` → `describe_compose_schema` → `describe_compose_method` → `compose_query`) so the agent can discover operations and shape queries without flooding its tool list.
 
 ### Visualization
 
