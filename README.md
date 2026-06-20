@@ -15,7 +15,11 @@
 
 ## TL;DR
 
-pydantic-resolve fills in the missing fields of your Pydantic models — batch-loaded, recursive, N+1-safe.
+pydantic-resolve is a complete framework for **defining and assembling** your data layer.
+
+- **Define** entities and relationships — Pydantic models + ER Diagram as the single source of truth.
+- **Assemble** response trees — `resolve_*` / `post_*` + batch loaders, recursive and N+1-safe.
+- **Expose** the same graph to REST, GraphQL, and AI agents (MCP) without rewriting.
 
 ```python
 from typing import Optional
@@ -36,7 +40,7 @@ class TaskView(BaseModel):
 tasks = await Resolver().resolve(tasks)  # one query, no N+1
 ```
 
-That's the whole idea: **describe what's missing, the framework fetches it.**
+The snippet above is the assembly step — describe what's missing, the framework fetches it. ER Diagram and GraphQL/MCP integrations build on top of the same model graph.
 
 ---
 
