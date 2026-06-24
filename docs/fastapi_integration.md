@@ -199,7 +199,7 @@ async def create_task(data: TaskCreate):
 
 ## Performance
 
-1.  **One `Resolver()` per request.** The resolver creates fresh DataLoader instances each time, so batches are scoped correctly.
+1.  **One `Resolver()` per request.** The resolver creates fresh DataLoader instances each time, so batches are scoped correctly. Do not share a single `Resolver` across concurrent requests — `Resolver` is not safe for concurrent `resolve()` calls and will raise `RuntimeError` if it detects overlap (see [Resolver API · Concurrency and reuse](./api_resolver.md#concurrency-and-reuse)).
 
 2.  **Resolve the full list at once.** Don't resolve inside loops:
 

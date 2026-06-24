@@ -58,6 +58,37 @@ def _set_metadata_to_cache(resolver_class_id: int, root_class: type, metadata) -
 
 
 class Resolver:
+    """Walks a Pydantic model tree, executes resolve_* / post_* methods,
+    and manages DataLoader batching.
+
+    Usage semantics
+    ---------------
+    * One ``Resolver`` instance per ``resolve()`` call is the recommended
+      pattern. Inside a request handler, build a fresh ``Resolver()`` and
+      await ``resolve()`` once.
+
+    * Sequential reuse on the same instance is supported::
+
+          resolver = Resolver()
+          await resolver.resolve(tree_a)
+          await resolver.resolve(tree_b)   # OK — runs after tree_a returns
+
+    * Concurrent ``resolve()`` calls on the same instance are NOT
+      supported. ``Resolver`` stores per-call state (metadata, loader
+      cache, collector alias map) on ``self``, so two overlapping
+      ``await`` calls would clobber each other::
+
+          # BAD — second call raises RuntimeError
+          await asyncio.gather(
+              resolver.resolve(tree_a),
+              resolver.resolve(tree_b),
+          )
+
+      The guard inside ``resolve()`` turns the otherwise cryptic
+      ``KeyError`` into a clear ``RuntimeError`` pointing you at the
+      fix. Create a separate ``Resolver()`` per concurrent call.
+    """
+
     # define class attribute using constant to avoid hardcoded name
     locals()[const.ER_DIAGRAM] = None
     locals()[const.ER_DIAGRAM_PRE_GENERATOR] = None
@@ -172,10 +203,13 @@ class Resolver:
         for item in items:
             if analysis.is_acceptable_instance(item):
                 kls = item.__class__
+                kls_path = cache.get(kls)
+                if kls_path is None:
+                    kls_path = class_util.get_kls_full_name(kls)
                 nodes.append(_Node(
                     node=item,
                     kls=kls,
-                    kls_path=cache.get(kls, class_util.get_kls_full_name(kls)),
+                    kls_path=kls_path,
                     parent=parent,
                     ancestor_context=ancestor_context,
                 ))
@@ -203,16 +237,22 @@ class Resolver:
             for item in val:
                 if analysis.is_acceptable_instance(item):
                     kls = item.__class__
+                    kls_path = cache.get(kls)
+                    if kls_path is None:
+                        kls_path = class_util.get_kls_full_name(kls)
                     children.append(_Node(
                         node=item, kls=kls,
-                        kls_path=cache.get(kls, class_util.get_kls_full_name(kls)),
+                        kls_path=kls_path,
                         parent=parent, ancestor_context=ancestor_context,
                     ))
         elif analysis.is_acceptable_instance(val):
             kls = val.__class__
+            kls_path = cache.get(kls)
+            if kls_path is None:
+                kls_path = class_util.get_kls_full_name(kls)
             children.append(_Node(
                 node=val, kls=kls,
-                kls_path=cache.get(kls, class_util.get_kls_full_name(kls)),
+                kls_path=kls_path,
                 parent=parent, ancestor_context=ancestor_context,
             ))
         return children
@@ -528,43 +568,59 @@ class Resolver:
         if isinstance(node, list) and node == []:
             return node
 
-        # by default pydantic-resolve will deduce the root class from input node
-        # but in some scenario like Union types, it is unable to deduce the root class
-        # so user can provide the root class by annotation parameter
-        root_class = self.annotation if self.annotation else class_util.get_class_of_object(node)
-        resolver_class_id = id(self.__class__)
-
-        # Check cache with resolver_class_id for isolation between different resolver configurations
-        cached_metadata = _get_metadata_from_cache(resolver_class_id, root_class)
-        if cached_metadata:
-            self.metadata = cached_metadata
-        else:
-            metadata = analysis.convert_metadata_key_as_kls(
-                analysis.Analytic(
-                    er_pre_generator=getattr(self, const.ER_DIAGRAM_PRE_GENERATOR)
-                ).scan(root_class)
+        # Resolver is NOT reentrant: per-call state lives on self.
+        if getattr(self, '_in_resolve', False):
+            raise RuntimeError(
+                'Resolver.resolve() is already running on this instance. '
+                'A Resolver cannot be shared across concurrent resolve() calls — '
+                'create a fresh Resolver per call.'
             )
-            _set_metadata_to_cache(resolver_class_id, root_class, metadata)
-            self.metadata = metadata
+        self._in_resolve = True
 
-        self.loader_instance_cache = pydantic_resolve.loader_manager.validate_and_create_loader_instance(
-            self.loader_params,
-            self.global_loader_param,
-            self.loader_instances,
-            self.metadata,
-            self.context,
-            split_loader_by_type=self.split_loader_by_type)
+        # Reset per-call state so a Resolver instance can be awaited across
+        # independent trees without leaking collector alias maps from a prior run.
+        self.object_level_collect_alias_map_store = {}
 
-        has_context = analysis.has_context(self.metadata)
-        if has_context and self.context is None:
-            raise AttributeError('context is missing')
+        try:
+            # by default pydantic-resolve will deduce the root class from input node
+            # but in some scenario like Union types, it is unable to deduce the root class
+            # so user can provide the root class by annotation parameter
+            root_class = self.annotation if self.annotation else class_util.get_class_of_object(node)
+            resolver_class_id = id(self.__class__)
 
-        # Build kls → kls_path cache from metadata
-        self._kls_path_cache = {kls: meta['kls_path'] for kls, meta in self.metadata.items()}
+            # Check cache with resolver_class_id for isolation between different resolver configurations
+            cached_metadata = _get_metadata_from_cache(resolver_class_id, root_class)
+            if cached_metadata:
+                self.metadata = cached_metadata
+            else:
+                metadata = analysis.convert_metadata_key_as_kls(
+                    analysis.Analytic(
+                        er_pre_generator=getattr(self, const.ER_DIAGRAM_PRE_GENERATOR)
+                    ).scan(root_class)
+                )
+                _set_metadata_to_cache(resolver_class_id, root_class, metadata)
+                self.metadata = metadata
 
-        await self._traverse(node)
+            self.loader_instance_cache = pydantic_resolve.loader_manager.validate_and_create_loader_instance(
+                self.loader_params,
+                self.global_loader_param,
+                self.loader_instances,
+                self.metadata,
+                self.context,
+                split_loader_by_type=self.split_loader_by_type)
 
-        if self.debug:
-            self.performance.report()
+            has_context = analysis.has_context(self.metadata)
+            if has_context and self.context is None:
+                raise AttributeError('context is missing')
 
-        return node
+            # Build kls → kls_path cache from metadata
+            self._kls_path_cache = {kls: meta['kls_path'] for kls, meta in self.metadata.items()}
+
+            await self._traverse(node)
+
+            if self.debug:
+                self.performance.report()
+
+            return node
+        finally:
+            self._in_resolve = False

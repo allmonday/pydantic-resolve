@@ -65,6 +65,35 @@ result = await Resolver(split_loader_by_type=True).resolve(Dashboard(id=1))
 
 **Incompatible with `loader_instances`:** Pre-created instances are shared by nature and cannot be split per type. Raises `ValueError` if both are provided.
 
+### Concurrency and reuse
+
+A `Resolver` instance is **not safe for concurrent `resolve()` calls**. Per-call state (scanned metadata, loader cache, collector alias map) lives on the instance, so two overlapping calls would clobber each other.
+
+```python
+resolver = Resolver()
+
+# OK: sequential reuse — the second call starts after the first returns
+await resolver.resolve(tree_a)
+await resolver.resolve(tree_b)
+
+# BAD: overlapping calls on the same instance — raises RuntimeError
+await asyncio.gather(
+    resolver.resolve(tree_a),
+    resolver.resolve(tree_b),
+)
+```
+
+If you need concurrency, create a separate `Resolver()` per task:
+
+```python
+await asyncio.gather(
+    Resolver().resolve(tree_a),
+    Resolver().resolve(tree_b),
+)
+```
+
+In request handlers (FastAPI, Starlette, …), build a fresh `Resolver()` per request rather than sharing a module-level singleton — both for this rule and so DataLoader batches stay scoped to a single request. The runtime will raise `RuntimeError` with a clear message if it detects overlap, converting an otherwise cryptic `KeyError` into an actionable error.
+
 ### resolve()
 
 ```python

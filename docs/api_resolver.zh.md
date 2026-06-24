@@ -65,6 +65,35 @@ result = await Resolver(split_loader_by_type=True).resolve(Dashboard(id=1))
 
 **与 `loader_instances` 不兼容：** 预创建的实例本质上是共享的，无法按类型分裂。同时传入会抛出 `ValueError`。
 
+### 并发与复用
+
+`Resolver` 实例**不支持并发的 `resolve()` 调用**。每次调用的状态（扫描得到的 metadata、loader 缓存、collector alias map）都挂在实例上，两个重叠的调用会互相覆写。
+
+```python
+resolver = Resolver()
+
+# OK：顺序复用 —— 第二次调用在第一次返回后才开始
+await resolver.resolve(tree_a)
+await resolver.resolve(tree_b)
+
+# 错误：同一实例上重叠调用 —— 抛出 RuntimeError
+await asyncio.gather(
+    resolver.resolve(tree_a),
+    resolver.resolve(tree_b),
+)
+```
+
+需要并发时，给每个任务新建 `Resolver()`：
+
+```python
+await asyncio.gather(
+    Resolver().resolve(tree_a),
+    Resolver().resolve(tree_b),
+)
+```
+
+在请求处理器里（FastAPI、Starlette 等），**每请求新建一个 `Resolver()`**，不要复用模块级 singleton——既是为了遵守本规则，也是为了让 DataLoader 的批量范围始终限定在单次请求内。运行时如果检测到重叠调用，会抛出 `RuntimeError` 并附明确指引，把原本难以诊断的 `KeyError` 转成可操作的错误。
+
 ### resolve()
 
 ```python
