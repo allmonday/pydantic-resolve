@@ -100,6 +100,37 @@ def test_expose_conflict():
         Analytic().scan(ExposeConflictModel)
 
 
+# ============ Test 4b: Inherited expose_dict must not double-register ============
+# See #292: a subclass that inherits __pydantic_resolve_expose__ without
+# overriding it used to re-register the parent's aliases via getattr-MRO
+# lookup, falsely raising "Expose alias name conflicts" when both classes
+# appear in the same resolve tree.
+class ExposeParent(BaseModel):
+    __pydantic_resolve_expose__ = {'id': 'parent_id'}
+    id: int
+    siblings: list['ExposeChild'] = []
+
+
+class ExposeChild(BaseModel):
+    name: str
+
+
+ExposeParent.model_rebuild()
+
+
+def test_inherited_expose_does_not_conflict():
+    """A subclass that doesn't override __pydantic_resolve_expose__ should
+    not re-register the parent's aliases when walked in the same tree."""
+    # Should not raise — ExposeChild inherits the field but contributes no
+    # expose declaration of its own.
+    result = Analytic().scan(ExposeParent)
+    prefix = 'tests.analysis.test_analysis_edge_cases'
+    parent_expose = result[f'{prefix}.ExposeParent']['expose_dict']
+    assert parent_expose == {'id': 'parent_id'}
+    child_expose = result[f'{prefix}.ExposeChild']['expose_dict']
+    assert child_expose == {}
+
+
 # ============ Test 5: Inheritance chain ============
 class BaseModelWithResolve(BaseModel):
     id: int
