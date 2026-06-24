@@ -197,7 +197,7 @@ async def create_task(data: TaskCreate):
 
 ## 性能
 
-1.  **每个请求一个 `Resolver()`。** resolver 每次都创建新的 DataLoader 实例，因此批次范围正确。
+1.  **每个请求一个 `Resolver()`。** resolver 每次都创建新的 DataLoader 实例，因此批次范围正确。不要在并发请求间复用同一个 `Resolver` —— `Resolver` 不支持并发的 `resolve()` 调用，运行时检测到重叠会抛出 `RuntimeError`（详见 [Resolver API · 并发与复用](./api_resolver.zh.md#并发与复用)）。
 
 2.  **一次性解析整个列表。** 不要在循环内逐项解析：
 

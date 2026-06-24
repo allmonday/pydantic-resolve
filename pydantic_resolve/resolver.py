@@ -58,6 +58,37 @@ def _set_metadata_to_cache(resolver_class_id: int, root_class: type, metadata) -
 
 
 class Resolver:
+    """Walks a Pydantic model tree, executes resolve_* / post_* methods,
+    and manages DataLoader batching.
+
+    Usage semantics
+    ---------------
+    * One ``Resolver`` instance per ``resolve()`` call is the recommended
+      pattern. Inside a request handler, build a fresh ``Resolver()`` and
+      await ``resolve()`` once.
+
+    * Sequential reuse on the same instance is supported::
+
+          resolver = Resolver()
+          await resolver.resolve(tree_a)
+          await resolver.resolve(tree_b)   # OK — runs after tree_a returns
+
+    * Concurrent ``resolve()`` calls on the same instance are NOT
+      supported. ``Resolver`` stores per-call state (metadata, loader
+      cache, collector alias map) on ``self``, so two overlapping
+      ``await`` calls would clobber each other::
+
+          # BAD — second call raises RuntimeError
+          await asyncio.gather(
+              resolver.resolve(tree_a),
+              resolver.resolve(tree_b),
+          )
+
+      The guard inside ``resolve()`` turns the otherwise cryptic
+      ``KeyError`` into a clear ``RuntimeError`` pointing you at the
+      fix. Create a separate ``Resolver()`` per concurrent call.
+    """
+
     # define class attribute using constant to avoid hardcoded name
     locals()[const.ER_DIAGRAM] = None
     locals()[const.ER_DIAGRAM_PRE_GENERATOR] = None
