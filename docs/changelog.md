@@ -6,6 +6,13 @@
 
 ## 5.10
 
+### 5.10.2 (2026-6-24)
+
+- fix:
+  - **UseCase compose: `BaseModel` arg types now register as `INPUT_OBJECT` end-to-end**. The arg-side `_collect_reachable_types` pass is `is_input=True`, so a `payload: CreateTaskInput` parameter produces an `INPUT_OBJECT` type with `inputFields` populated (previously only the method-arg type ref claimed `INPUT_OBJECT` while the schema itself had no such type). `FieldInfo.default_value` is now populated from each pydantic field's default and rendered into `inputFields[i].defaultValue` as a GraphQL literal (`10` / `null` / `"hi"`), matching how method-arg defaults are serialized.
+  - **`describe_compose_method` expands `INPUT_OBJECT` types referenced by args**: `_collect_reachable_sdl_types` now walks `INPUT_OBJECT` entries (and recurses their fields), and a new `_render_struct_type_sdl(keyword="input")` branch emits `input X { ... }` blocks. Previously the method SDL referenced an input type without defining it.
+  - **Same `BaseModel` as both return and arg no longer produces a spec-violating schema**: GraphQL forbids a type from serving as both `OBJECT` and `INPUT_OBJECT`. `build_compose_schema` now runs in two phases (all returns first, then all args) and renames the arg-side registration to `{Name}Input` when the class name is already taken by an `OBJECT`. `_build_type_ref` consults the registry so arg / input-field type refs pick up the renamed leaf. Tooling that consumes introspection (`GraphiQL`, `graphql-core`) sees a valid schema instead of `arg.kind=INPUT_OBJECT` pointing at a type defined as `OBJECT`.
+
 ### 5.10.1 (2026-6-24)
 
 - fix:

@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from pydantic_resolve import query, mutation
 from pydantic_resolve.use_case.business import UseCaseService
 from pydantic_resolve.use_case.compose import ComposeError
+from pydantic_resolve.use_case.compose_schema import method_sdl
 from pydantic_resolve.use_case.introspection import (
     compose_introspect,
     is_introspection_query,
@@ -66,6 +67,105 @@ class SprintDTO(BaseModel):
     name: str
 
 
+class CreateTaskInput(BaseModel):
+    title: str
+    owner_id: int
+    color: Color
+
+
+# ──────────────────────────────────────────────────
+# Edge-case DTOs + services (input-type coverage)
+# ──────────────────────────────────────────────────
+
+
+class CloneDTO(BaseModel):
+    id: int
+    title: str
+
+
+class MDLInput(BaseModel):
+    title: str
+    owner_id: int
+
+
+class FilterInput(BaseModel):
+    keyword: Optional[str] = None
+    limit: int = 10
+    required: str
+
+
+class InnerInput(BaseModel):
+    value: int
+
+
+class OuterInput(BaseModel):
+    name: str
+    inner: InnerInput
+
+
+class OptionalInput(BaseModel):
+    note: Optional[str] = None
+    required: int
+
+
+class ListInput(BaseModel):
+    tags: list[str]
+
+
+class CloneService(UseCaseService):
+    """clone service."""
+
+    @mutation
+    async def clone(cls, payload: CloneDTO) -> CloneDTO:
+        """clone."""
+        return payload
+
+
+class MDLService(UseCaseService):
+    """mdl service."""
+
+    @mutation
+    async def create(cls, payload: MDLInput) -> str:
+        """create."""
+        return ""
+
+
+class FilterService(UseCaseService):
+    """filter service."""
+
+    @query
+    async def search(cls, filter: FilterInput) -> str:
+        """search."""
+        return ""
+
+
+class NestedService(UseCaseService):
+    """nested service."""
+
+    @query
+    async def foo(cls, payload: OuterInput) -> str:
+        """foo."""
+        return ""
+
+
+class OptionalService(UseCaseService):
+    """optional service."""
+
+    @query
+    async def foo(cls, payload: OptionalInput) -> str:
+        """foo."""
+        return ""
+
+
+class ListService(UseCaseService):
+    """list service."""
+
+    @query
+    async def foo(cls, payload: ListInput) -> str:
+        """foo."""
+        return ""
+
+
 # ──────────────────────────────────────────────────
 # Services
 # ──────────────────────────────────────────────────
@@ -97,6 +197,15 @@ class TaskService(UseCaseService):
     @mutation
     async def create_task(cls, title: str) -> TaskDTO:
         return TaskDTO(id=99, title=title, owner_id=1, color=Color.RED)
+
+    @mutation
+    async def create_task_with_input(cls, payload: CreateTaskInput) -> TaskDTO:
+        return TaskDTO(
+            id=100,
+            title=payload.title,
+            owner_id=payload.owner_id,
+            color=payload.color,
+        )
 
 
 # ──────────────────────────────────────────────────
@@ -204,6 +313,28 @@ class TestSchemaCompleteness:
         t = get_sprint["args"][0]["type"]
         assert t["kind"] == "NON_NULL"
         assert t["ofType"]["name"] == "Int"
+
+    def test_input_payload_arg_registers_input_object_type(self):
+        app = _make_manager().get_app("project")
+        types = _introspect_types(app)
+
+        payload_type = types["CreateTaskInput"]
+        assert payload_type["kind"] == "INPUT_OBJECT"
+        input_fields = {f["name"]: f for f in payload_type["inputFields"]}
+        assert set(input_fields) == {"title", "owner_id", "color"}
+        assert input_fields["title"]["type"]["kind"] == "NON_NULL"
+        assert input_fields["title"]["type"]["ofType"]["name"] == "String"
+        assert input_fields["owner_id"]["type"]["ofType"]["name"] == "Int"
+        assert input_fields["color"]["type"]["ofType"]["name"] == "Color"
+
+        task_query = types["TaskServiceQuery"]
+        create_task_with_input = next(
+            f for f in task_query["fields"] if f["name"] == "create_task_with_input"
+        )
+        payload_arg = next(a for a in create_task_with_input["args"] if a["name"] == "payload")
+        assert payload_arg["type"]["kind"] == "NON_NULL"
+        assert payload_arg["type"]["ofType"]["kind"] == "INPUT_OBJECT"
+        assert payload_arg["type"]["ofType"]["name"] == "CreateTaskInput"
 
     def test_optional_arg_becomes_nullable(self):
         app = _make_manager().get_app("project")
@@ -496,3 +627,179 @@ class TestGraphiQLCompatibility:
         # Standard GraphQL directives must be present.
         directive_names = {d["name"] for d in schema["directives"]}
         assert {"skip", "include", "deprecated", "oneOf"} <= directive_names
+
+
+# ──────────────────────────────────────────────────
+# Input-type edge cases
+# ──────────────────────────────────────────────────
+
+
+def _make_edge_app(*services, name: str = "edge"):
+    """Build a single-app manager from the given edge-case services.
+
+    Keeps these scenarios isolated from the module-level SprintService /
+    TaskService fixtures so the assertions depend only on the scenario
+    under test.
+    """
+    manager = UseCaseManager(
+        apps=[
+            UseCaseAppConfig(
+                name=name,
+                description=name,
+                services=list(services),
+                enable_mutation=True,
+            ),
+        ],
+    )
+    return manager.get_app(name)
+
+
+def _types(app) -> dict[str, dict]:
+    return {t["name"]: t for t in compose_introspect(app)["data"]["__schema"]["types"]}
+
+
+class TestInputTypeEdgeCases:
+    """Edge cases for INPUT_OBJECT handling.
+
+    Each test pins down an expected behavior so we can detect regressions
+    and decide policy. Tests expected to fail against the current
+    implementation are flagged in the docstring with ``Currently:`` so the
+    failure mode is interpretable.
+    """
+
+    # ── Case 1: same BaseModel used as both return and arg ──
+
+    def test_dto_used_as_both_return_and_arg_arg_is_input_object(self):
+        """GraphQL spec requires field-arg types to be INPUT_OBJECT and
+        return types to be OBJECT; they cannot share a type definition.
+
+        Currently: ``registry`` is keyed by class name and
+        ``build_compose_schema`` processes ``return_anno`` before ``args``.
+        The arg-side registration is skipped at
+        ``_collect_reachable_types`` (``if name in registry: continue``),
+        so the schema has only an OBJECT ``CloneDTO`` — but the arg's
+        type ref is computed fresh in ``_render_arg`` (with
+        ``is_input=True``) and reports ``INPUT_OBJECT``. The arg ref and
+        the type definition disagree, which is the spec violation.
+        """
+        app = _make_edge_app(CloneService)
+        types = _types(app)
+
+        method = next(
+            f for f in types["CloneServiceQuery"]["fields"] if f["name"] == "clone"
+        )
+        payload_arg = next(a for a in method["args"] if a["name"] == "payload")
+        arg_kind = payload_arg["type"]["ofType"]["kind"]
+        arg_name = payload_arg["type"]["ofType"]["name"]
+
+        # The schema must contain a type matching the arg's type ref.
+        # Spec violation: arg says INPUT_OBJECT but schema only has OBJECT.
+        assert arg_name in types, f"arg references {arg_name} but it's not in the schema"
+        assert types[arg_name]["kind"] == arg_kind, (
+            f"arg ref says kind={arg_kind} but schema defines {arg_name} "
+            f"as kind={types[arg_name]['kind']}"
+        )
+
+    # ── Case 2: method_sdl does not expand INPUT_OBJECT ──
+
+    def test_method_sdl_expands_input_object_referenced_by_args(self):
+        """``describe_compose_method`` should emit ``input X { ... }`` for
+        any INPUT_OBJECT referenced by the method's args, so callers see
+        the full shape of what they need to construct.
+
+        Currently: ``_collect_reachable_sdl_types`` only collects
+        ``("OBJECT", "ENUM")``, so the input type referenced by an arg is
+        never defined in the SDL output.
+        """
+        app = _make_edge_app(MDLService)
+        sdl = method_sdl(app.compose_schema, "MDLService", "create")
+        assert sdl is not None
+        # The input type referenced by the arg must be defined in the SDL.
+        assert "input MDLInput {" in sdl
+        # And its fields must be expanded.
+        assert "title: String!" in sdl
+        assert "owner_id: Int!" in sdl
+
+    # ── Case 3: input field default value is dropped ──
+
+    def test_input_field_default_value_preserved(self):
+        """pydantic field defaults (``limit: int = 10``,
+        ``keyword: Optional[str] = None``) should surface in
+        ``inputFields[i].defaultValue`` as a GraphQL literal, matching
+        how ``_build_method_args`` handles method-arg defaults.
+
+        Currently: ``_render_input_field`` hardcodes
+        ``"defaultValue": None``, so defaults are silently lost.
+        """
+        app = _make_edge_app(FilterService)
+        types = _types(app)
+        fields = {f["name"]: f for f in types["FilterInput"]["inputFields"]}
+        # Int default renders as a GraphQL IntLiteral.
+        assert fields["limit"]["defaultValue"] == "10"
+        # None default renders as ``null``.
+        assert fields["keyword"]["defaultValue"] == "null"
+        # Required field has no default.
+        assert fields["required"]["defaultValue"] is None
+
+    # ── Case 4: nested BaseModel field inside an input ──
+
+    def test_nested_basemodel_in_input_registers_as_input_object(self):
+        """A BaseModel field within an input must also be registered as
+        INPUT_OBJECT (recursing through ``_collect_reachable_types``).
+
+        This case currently passes — the recursive call forwards
+        ``is_input`` correctly — but is not covered by any existing
+        test, so this guards against regressions.
+        """
+        app = _make_edge_app(NestedService)
+        types = _types(app)
+        # Inner must be INPUT_OBJECT (not OBJECT), and reachable from the
+        # outer input's field type ref.
+        assert types["InnerInput"]["kind"] == "INPUT_OBJECT"
+        outer_fields = {f["name"]: f for f in types["OuterInput"]["inputFields"]}
+        assert outer_fields["inner"]["type"]["ofType"]["kind"] == "INPUT_OBJECT"
+        assert outer_fields["inner"]["type"]["ofType"]["name"] == "InnerInput"
+
+    # ── Case 5: Optional field inside an input is nullable ──
+
+    def test_optional_input_field_is_nullable(self):
+        """``Optional[X]`` field within an input must produce a nullable
+        type ref (no trailing ``!``). Guards against the input path
+        accidentally forcing NON_NULL on optional fields.
+        """
+        app = _make_edge_app(OptionalService)
+        types = _types(app)
+        fields = {f["name"]: f for f in types["OptionalInput"]["inputFields"]}
+        # Optional[str] → no NON_NULL wrapper.
+        assert fields["note"]["type"]["kind"] == "SCALAR"
+        assert fields["note"]["type"]["name"] == "String"
+        # Required int → NON_NULL wrapper.
+        assert fields["required"]["type"]["kind"] == "NON_NULL"
+        assert fields["required"]["type"]["ofType"]["name"] == "Int"
+
+    # ── Case 6: List field — pin down nullability semantics ──
+
+    def test_list_input_field_nullability(self):
+        """Pin down the nullability of ``list[T]`` fields inside an input.
+
+        Current implementation produces ``[T!]!`` (outer NON_NULL,
+        inner NON_NULL too) — driven by ``TypeMapper``'s ``LIST``
+        branch wrapping the inner in ``NON_NULL`` unconditionally.
+
+        This test makes the chosen semantics explicit; if we later
+        decide inner elements should be nullable (``[T]!``), this
+        test will flag the change.
+        """
+        app = _make_edge_app(ListService)
+        types = _types(app)
+        fields = {f["name"]: f for f in types["ListInput"]["inputFields"]}
+        tags_type = fields["tags"]["type"]
+        # Outer is NON_NULL (because the field itself is not Optional).
+        assert tags_type["kind"] == "NON_NULL"
+        outer = tags_type["ofType"]
+        # Then LIST.
+        assert outer["kind"] == "LIST"
+        # Inner element is NON_NULL ([String!]!, not [String]!).
+        assert outer["ofType"]["kind"] == "NON_NULL"
+        assert outer["ofType"]["ofType"]["kind"] == "SCALAR"
+        assert outer["ofType"]["ofType"]["name"] == "String"

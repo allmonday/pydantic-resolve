@@ -38,6 +38,9 @@ class FieldInfo:
     args: list[ArgumentInfo] = field(default_factory=list)
     is_deprecated: bool = False
     deprecation_reason: Optional[str] = None
+    # GraphQL-literal default for INPUT_OBJECT fields (e.g. "10", "null", "\"x\"");
+    # ``None`` means the field has no default. Mirrors ArgumentInfo.default_value.
+    default_value: Optional[str] = None
 
 
 @dataclass

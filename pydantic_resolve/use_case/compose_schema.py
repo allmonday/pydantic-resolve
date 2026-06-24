@@ -29,6 +29,7 @@ import json
 from typing import Any
 
 from pydantic import BaseModel
+from pydantic_core import PydanticUndefined
 
 from pydantic_resolve.graphql.schema.type_mapper import TypeMapper
 from pydantic_resolve.graphql.schema.type_registry import (
@@ -85,6 +86,8 @@ def build_compose_schema(app: Any) -> dict[str, TypeInfo]:
         )
         registry[service_type_name] = service_type
 
+        # Build per-method metadata once; register types in two phases below.
+        method_metas: list[tuple[str, dict[str, Any], Any, list[ArgumentInfo]]] = []
         for method_name, _kind, meta in iter_use_case_methods(
             service_cls, enable_mutation=app.enable_mutation
         ):
@@ -92,11 +95,21 @@ def build_compose_schema(app: Any) -> dict[str, TypeInfo]:
             func = getattr(method, "__func__", method)
             return_anno = get_return_annotation(method)
             args = _build_method_args(func)
+            method_metas.append((method_name, meta, return_anno, args))
 
-            # Register any DTO/Enum reachable from the return annotation.
+        # Phase 1: register all OBJECT types reachable from returns. Doing
+        # this before the arg phase means the arg phase always sees the
+        # OBJECT entry and can rename the input version on conflict.
+        for _name, _meta, return_anno, _args in method_metas:
             if return_anno is not None:
                 _collect_reachable_types(return_anno, registry)
 
+        # Phase 2: register INPUT_OBJECT types from args (renamed on conflict).
+        for _name, _meta, _return_anno, args in method_metas:
+            for arg in args:
+                _collect_reachable_types(arg.python_type, registry, is_input=True)
+
+        for method_name, meta, return_anno, args in method_metas:
             return_graphql_name = _graphql_type_name(return_anno, default="String")
             service_type.fields[method_name] = FieldInfo(
                 name=method_name,
@@ -139,7 +152,7 @@ def render_introspection(registry: dict[str, TypeInfo]) -> dict[str, Any]:
         "queryType": {"name": "Query", "kind": "OBJECT"},
         "mutationType": None,
         "subscriptionType": None,
-        "types": [_render_type(t) for t in registry.values()],
+        "types": [_render_type(t, registry) for t in registry.values()],
         "directives": _STANDARD_DIRECTIVES,
     }
 
@@ -221,10 +234,10 @@ _STANDARD_DIRECTIVES: list[dict[str, Any]] = [
 def render_type_by_name(registry: dict[str, TypeInfo], name: str) -> dict[str, Any] | None:
     """Render a single type by name for ``__type(name: ...)`` queries."""
     t = registry.get(name)
-    return _render_type(t) if t is not None else None
+    return _render_type(t, registry) if t is not None else None
 
 
-def _render_type(type_info: TypeInfo) -> dict[str, Any]:
+def _render_type(type_info: TypeInfo, registry: dict[str, TypeInfo]) -> dict[str, Any]:
     """Render a TypeInfo as a GraphQL introspection type definition dict."""
     if type_info.kind == "ENUM":
         enum_values = [
@@ -242,7 +255,13 @@ def _render_type(type_info: TypeInfo) -> dict[str, Any]:
     fields = None
     if type_info.kind == "OBJECT":
         fields = [
-            _render_field(f) for f in type_info.fields.values()
+            _render_field(f, registry) for f in type_info.fields.values()
+        ] or None
+
+    input_fields = None
+    if type_info.kind == "INPUT_OBJECT":
+        input_fields = [
+            _render_input_field(f, registry) for f in type_info.fields.values()
         ] or None
 
     return {
@@ -250,41 +269,76 @@ def _render_type(type_info: TypeInfo) -> dict[str, Any]:
         "name": type_info.name,
         "description": type_info.description,
         "fields": fields,
-        "inputFields": None,
+        "inputFields": input_fields,
         "interfaces": [] if type_info.kind == "OBJECT" else None,
         "enumValues": enum_values,
         "possibleTypes": None,
     }
 
 
-def _render_field(field_info: FieldInfo) -> dict[str, Any]:
+def _render_field(field_info: FieldInfo, registry: dict[str, TypeInfo]) -> dict[str, Any]:
     return {
         "name": field_info.name,
         "description": field_info.description,
-        "args": [_render_arg(a) for a in field_info.args],
-        "type": _build_type_ref(field_info.python_type, force_non_null=not _is_optional(field_info.python_type)),
+        "args": [_render_arg(a, registry) for a in field_info.args],
+        "type": _build_type_ref(
+            field_info.python_type,
+            registry,
+            force_non_null=not _is_optional(field_info.python_type),
+        ),
         "isDeprecated": field_info.is_deprecated,
         "deprecationReason": field_info.deprecation_reason,
     }
 
 
-def _render_arg(arg_info: ArgumentInfo) -> dict[str, Any]:
+def _render_arg(arg_info: ArgumentInfo, registry: dict[str, TypeInfo]) -> dict[str, Any]:
     # An arg is nullable when its annotation is Optional OR it has a default.
     is_optional = _is_optional(arg_info.python_type) or arg_info.default_value is not None
     return {
         "name": arg_info.name,
         "description": arg_info.description,
-        "type": _build_type_ref(arg_info.python_type, force_non_null=not is_optional),
+        "type": _build_type_ref(
+            arg_info.python_type,
+            registry,
+            force_non_null=not is_optional,
+            is_input=True,
+        ),
         "defaultValue": arg_info.default_value,
     }
 
 
-def _build_type_ref(python_type: Any, *, force_non_null: bool) -> dict[str, Any]:
+def _render_input_field(field_info: FieldInfo, registry: dict[str, TypeInfo]) -> dict[str, Any]:
+    return {
+        "name": field_info.name,
+        "description": field_info.description,
+        "type": _build_type_ref(
+            field_info.python_type,
+            registry,
+            force_non_null=not _is_optional(field_info.python_type),
+            is_input=True,
+        ),
+        "defaultValue": field_info.default_value,
+    }
+
+
+def _build_type_ref(
+    python_type: Any,
+    registry: dict[str, TypeInfo] | None = None,
+    *,
+    force_non_null: bool,
+    is_input: bool = False,
+) -> dict[str, Any]:
     """Build a ``GraphQLTypeRef``-shaped dict for a Python annotation.
 
     ``force_non_null`` wraps the result in an outer ``NON_NULL`` layer
     (i.e. adds the trailing ``!`` in SDL). Callers decide based on
     whether the field/arg is required.
+
+    ``registry`` is consulted when ``is_input=True`` to pick up the
+    registered INPUT_OBJECT name — which may differ from the Python class
+    name when the same BaseModel serves as both an OBJECT (return) and
+    an INPUT_OBJECT (arg), in which case the input version is renamed
+    ``{Name}Input`` to satisfy the GraphQL spec.
     """
     # UseCaseService subclasses reference their corresponding
     # ``{Service}Query`` OBJECT — TypeMapper doesn't know about services,
@@ -308,8 +362,10 @@ def _build_type_ref(python_type: Any, *, force_non_null: bool) -> dict[str, Any]
             }
         return inner
 
-    gql_type = _TYPE_MAPPER.map_to_graphql_type(python_type)
+    gql_type = _TYPE_MAPPER.map_to_graphql_type(python_type, is_input=is_input)
     inner = gql_type.to_introspection()
+    if is_input and registry is not None:
+        _override_input_name(inner, python_type, registry)
     if force_non_null:
         return {
             "kind": "NON_NULL",
@@ -318,6 +374,33 @@ def _build_type_ref(python_type: Any, *, force_non_null: bool) -> dict[str, Any]
             "ofType": inner,
         }
     return inner
+
+
+def _override_input_name(
+    inner: dict[str, Any], python_type: Any, registry: dict[str, TypeInfo]
+) -> None:
+    """Walk the introspection type-ref chain to its leaf and, if it points
+    at a BaseModel registered as INPUT_OBJECT, replace the leaf name with
+    the registry's name (handles the ``{Name}Input`` rename-on-conflict).
+    """
+    core_types = get_core_types(python_type)
+    if not core_types or not isinstance(core_types[0], type):
+        return
+    cls = core_types[0]
+    if not safe_issubclass(cls, BaseModel):
+        return
+    input_t = next(
+        (t for t in registry.values()
+         if t.kind == "INPUT_OBJECT" and t.python_class is cls),
+        None,
+    )
+    if input_t is None or input_t.name == cls.__name__:
+        return
+    # Walk to the leaf (past NON_NULL / LIST wrappers) and override the name.
+    node = inner
+    while node.get("ofType") is not None:
+        node = node["ofType"]
+    node["name"] = input_t.name
 
 
 def _graphql_type_name(annotation: Any, *, default: str) -> str:
@@ -357,15 +440,17 @@ def method_sdl(
 
     reachable: dict[str, TypeInfo] = {}
     _collect_reachable_sdl_types(field_info.python_type, registry, reachable)
+    for arg in field_info.args:
+        _collect_reachable_sdl_types(arg.python_type, registry, reachable)
 
     sdl_parts: list[str] = []
     # Method signature as a comment header
     args_sdl = ", ".join(
-        f"{a.name}: {_type_ref_to_sdl(_build_type_ref(a.python_type, force_non_null=(a.default_value is None and not _is_optional(a.python_type))))}"
+        f"{a.name}: {_type_ref_to_sdl(_build_type_ref(a.python_type, registry, force_non_null=(a.default_value is None and not _is_optional(a.python_type)), is_input=True))}"
         for a in field_info.args
     )
     return_sdl = _type_ref_to_sdl(
-        _build_type_ref(field_info.python_type, force_non_null=not _is_optional(field_info.python_type))
+        _build_type_ref(field_info.python_type, registry, force_non_null=not _is_optional(field_info.python_type))
     )
     sdl_parts.append(f"# {service_name}.{method_name}({args_sdl}): {return_sdl}")
     for type_name, type_def in sorted(reachable.items()):
@@ -379,11 +464,11 @@ def _collect_reachable_sdl_types(
     registry: dict[str, TypeInfo],
     seen: dict[str, TypeInfo],
 ) -> None:
-    """DFS-walk ``annotation``, recording every OBJECT / ENUM TypeInfo reachable.
+    """DFS-walk ``annotation``, recording every OBJECT / INPUT_OBJECT / ENUM TypeInfo reachable.
 
     Scalars are skipped (they're standard GraphQL types, always present).
-    Only types that actually need an SDL definition (OBJECT, ENUM) are
-    collected — and only if they're already in ``registry``.
+    Only types that actually need an SDL definition (OBJECT, INPUT_OBJECT,
+    ENUM) are collected — and only if they're already in ``registry``.
     """
     for core_type in get_core_types(annotation):
         if isinstance(core_type, str):
@@ -392,28 +477,32 @@ def _collect_reachable_sdl_types(
         if name is None or name in seen:
             continue
         type_info = registry.get(name)
-        if type_info is None or type_info.kind not in ("OBJECT", "ENUM"):
+        if type_info is None or type_info.kind not in ("OBJECT", "INPUT_OBJECT", "ENUM"):
             continue
         seen[name] = type_info
-        # Enums have no fields to recurse through; OBJECTs do.
-        if type_info.kind == "OBJECT":
+        # Enums have no fields to recurse through; OBJECTs / INPUT_OBJECTs do.
+        if type_info.kind in ("OBJECT", "INPUT_OBJECT"):
             for field in type_info.fields.values():
                 _collect_reachable_sdl_types(field.python_type, registry, seen)
 
 
 def _render_type_sdl(type_info: TypeInfo) -> str:
-    """Dispatch SDL rendering by kind (OBJECT or ENUM)."""
+    """Dispatch SDL rendering by kind (OBJECT / INPUT_OBJECT / ENUM)."""
     if type_info.kind == "ENUM":
         return _render_enum_type_sdl(type_info)
-    return _render_object_type_sdl(type_info)
+    if type_info.kind == "INPUT_OBJECT":
+        return _render_struct_type_sdl(type_info, keyword="input")
+    return _render_struct_type_sdl(type_info, keyword="type")
 
 
-def _render_object_type_sdl(type_info: TypeInfo) -> str:
-    """Render an OBJECT TypeInfo as spec-compliant SDL.
+def _render_struct_type_sdl(type_info: TypeInfo, *, keyword: str) -> str:
+    """Render an OBJECT or INPUT_OBJECT TypeInfo as spec-compliant SDL.
 
-    Description sits above ``type X {`` (not inside, which would violate
-    the GraphQL SDL spec); field descriptions sit above each field.
-    Block strings (``\"\"\"…\"\"\"``) preserve multi-line / markdown.
+    ``keyword`` is ``"type"`` for OBJECT or ``"input"`` for INPUT_OBJECT;
+    the field-rendering logic is otherwise identical. Description sits
+    above the header (not inside, which would violate the GraphQL SDL
+    spec); field descriptions sit above each field. Block strings
+    (``\"\"\"…\"\"\"``) preserve multi-line / markdown.
     """
     parts: list[str] = []
     if type_info.description:
@@ -427,7 +516,7 @@ def _render_object_type_sdl(type_info: TypeInfo) -> str:
         if not _is_optional(field.python_type) and not sdl.endswith("!"):
             sdl = f"{sdl}!"
         field_lines.append(f"  {field.name}: {sdl}")
-    parts.append(f"type {type_info.name} {{\n" + "\n".join(field_lines) + "\n}")
+    parts.append(f"{keyword} {type_info.name} {{\n" + "\n".join(field_lines) + "\n}")
     return "\n".join(parts)
 
 
@@ -478,6 +567,20 @@ def _type_ref_to_sdl(type_ref: dict[str, Any]) -> str:
 # ============================================================================
 
 
+def _field_default_literal(field_info: Any) -> str | None:
+    """Render a pydantic field's default as a GraphQL literal.
+
+    Returns ``None`` when the field has no default (``PydanticUndefined``),
+    matching how ``_build_method_args`` renders method-arg defaults via
+    ``json.dumps``. ``Optional[str] = None`` → ``"null"``; ``int = 10`` →
+    ``"10"``; ``str = "hi"`` → ``"\"hi\""``.
+    """
+    default = field_info.default
+    if default is PydanticUndefined:
+        return None
+    return json.dumps(default)
+
+
 def _build_method_args(func: Any) -> list[ArgumentInfo]:
     """Build ArgumentInfo list for a method's parameters.
 
@@ -520,7 +623,7 @@ def _build_method_args(func: Any) -> list[ArgumentInfo]:
 
 
 def _collect_reachable_types(
-    annotation: Any, registry: dict[str, TypeInfo]
+    annotation: Any, registry: dict[str, TypeInfo], *, is_input: bool = False
 ) -> None:
     """Register TypeInfo for every BaseModel / Enum reachable from ``annotation``.
 
@@ -529,23 +632,43 @@ def _collect_reachable_types(
     UseCase-specific TypeInfo construction.
     """
     for name, cls in _TYPE_MAPPER.collect_referenced_types(annotation).items():
+        if is_input:
+            # If this class already has an INPUT_OBJECT entry, skip (the
+            # entry may live under ``{cls.__name__}`` or ``{Name}Input``
+            # after a rename — match on python_class, not name).
+            already_input = any(
+                t.kind == "INPUT_OBJECT" and t.python_class is cls
+                for t in registry.values()
+            )
+            if already_input:
+                continue
+            # If the class name is already taken by an OBJECT (the
+            # BaseModel is also used as a return type), rename the input
+            # version to ``{Name}Input`` so the GraphQL spec's "type name
+            # uniquely identifies kind" rule holds.
+            existing = registry.get(name)
+            if existing is not None and existing.kind == "OBJECT":
+                name = f"{name}Input"
         if name in registry:
             continue
         if safe_issubclass(cls, BaseModel):
             type_info = TypeInfo(
                 name=name,
-                kind="OBJECT",
+                kind="INPUT_OBJECT" if is_input else "OBJECT",
                 python_class=cls,
                 description=(cls.__doc__ or None),
+                is_input=is_input,
             )
             registry[name] = type_info
             for field_name, field_info in cls.model_fields.items():
                 field_anno = field_info.annotation
+                _collect_reachable_types(field_anno, registry, is_input=is_input)
                 type_info.fields[field_name] = FieldInfo(
                     name=field_name,
                     python_type=field_anno,
                     graphql_type_name=_graphql_type_name(field_anno, default="String"),
                     description=getattr(field_info, "description", None),
+                    default_value=_field_default_literal(field_info),
                 )
         elif is_enum_type(cls):
             registry[name] = TypeInfo(
