@@ -588,8 +588,11 @@ class Analytic:
         object_fields_without_resolver = [a[0] for a in object_fields if a[0] not in fields_with_resolver]
 
         # Scan expose and collect (__pydantic_resolve_xxx__)
-        expose_dict = getattr(kls, const.EXPOSE_TO_DESCENDANT, {})
-        collect_dict = getattr(kls, const.COLLECTOR_CONFIGURATION, {})
+        # Read from kls.__dict__ to skip inherited attributes — a subclass that
+        # doesn't override __pydantic_resolve_expose__ would otherwise re-register
+        # the parent's aliases and falsely trigger the conflict check (#292).
+        expose_dict = kls.__dict__.get(const.EXPOSE_TO_DESCENDANT, {})
+        collect_dict = kls.__dict__.get(const.COLLECTOR_CONFIGURATION, {})
         self._validate_expose(expose_dict, kls_name)
 
         return {
