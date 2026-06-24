@@ -6,6 +6,11 @@
 
 ## 5.10
 
+### 5.10.1 (2026-6-24)
+
+- fix:
+  - **Raise on `post_default_handler` + `default_handler` field conflict**: previously, when a class declared both a `post_default_handler` method (reserved finalizer, no field auto-binding) and a `default_handler` field, the method's return value was silently discarded while the field sat at its declared default — the `post_<field>` naming convention misled users into expecting the method to populate the field. `_scan_and_validate_methods` now detects the conflict at metadata-build time and raises `ValueError` with clear remediation. Backward-compatible: the finalizer behavior is preserved when only the method exists.
+
 ### 5.10.0 (2026-6-19)
 
 Introduces a **GraphQL surface for UseCase services** — a way to compose multiple `UseCaseService` methods in a single GraphQL query, plus the schema/introspection machinery that goes with it. MCP is one consumer of this surface (the AI-agent packaging), but the underlying Python APIs (`UseCaseResources.compose`, `compose_introspect`, `build_compose_schema`) work directly from FastAPI or any HTTP framework. See `demo/use_case/app_compose.py` for a non-MCP HTTP example.

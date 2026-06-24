@@ -290,6 +290,29 @@ def _has_post_default_handler(kls: type) -> bool:
     return len(fields) > 0
 
 
+def _check_default_handler_field_conflict(kls: type) -> None:
+    """Raise if a class declares both post_default_handler and a default_handler field.
+
+    ``post_default_handler`` is a reserved finalizer with no field auto-binding,
+    but the ``post_<field>`` convention elsewhere implies that
+    ``post_default_handler`` would populate a ``default_handler`` field.
+    When both exist, the method's return value is silently discarded while
+    the field sits at its declared default. Fail loud so the user picks a
+    clear remediation instead of debugging the silent miss.
+    """
+    model_fields = getattr(kls, 'model_fields', None)
+    if isinstance(model_fields, dict) and 'default_handler' in model_fields:
+        raise ValueError(
+            f"Conflict on {kls.__name__}: method `post_default_handler` is a "
+            f"reserved finalizer (runs after all post_*, no field auto-binding), "
+            f"but the class also declares a field `default_handler`. The "
+            f"`post_<field>` naming convention suggests the method should "
+            f"populate the field, which it does not. Either rename the method "
+            f"(e.g. `post_finalize`) and assign the field manually in the body, "
+            f"or remove the `default_handler` field."
+        )
+
+
 def _get_resolve_and_post_fields(kls: type) -> tuple:
     """Extract resolve_ and post_ method names from a class.
 
@@ -603,7 +626,11 @@ class Analytic:
                 object_field_pairs.get(field.replace(const.POST_PREFIX, '')))
             for field in post_fields
         }
-        post_default_handler_params = _scan_post_default_handler(getattr(kls, const.POST_DEFAULT_HANDLER)) if _has_post_default_handler(kls) else None
+        if _has_post_default_handler(kls):
+            _check_default_handler_field_conflict(kls)
+            post_default_handler_params = _scan_post_default_handler(getattr(kls, const.POST_DEFAULT_HANDLER))
+        else:
+            post_default_handler_params = None
 
         # Check context config
         resolve_context = any([p['context'] for p in resolve_params.values()])
