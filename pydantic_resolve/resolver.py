@@ -145,6 +145,11 @@ class Resolver:
             or os.getenv("PYDANTIC_RESOLVE_ENABLE_FROM_ATTRIBUTE", "false").lower() == "true"
 
         self.ensure_type = ensure_type
+        if context is not None and not context:
+            raise ValueError(
+                'context must be a non-empty dict when provided. '
+                'Pass None (or omit the parameter) if no context is needed.'
+            )
         self.context = MappingProxyType(context) if context else None
         self.metadata = {}
         self.object_level_collect_alias_map_store: dict[int, dict] = {}
