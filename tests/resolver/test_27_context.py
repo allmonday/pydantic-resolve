@@ -83,8 +83,16 @@ def test_6_empty_context_dict_rejected():
         Resolver(context={})
 
 
-def test_7_none_context_still_allowed():
+@pytest.mark.parametrize('bad', [[1, 2, 3], ('a', 'b'), 'string', 42, object()])
+def test_7_non_dict_context_rejected(bad):
+    """Non-dict context values are rejected with TypeError at __init__,
+    rather than slipping through to MappingProxyType's opaque TypeError."""
+    with pytest.raises(TypeError, match='context must be a dict'):
+        Resolver(context=bad)
+
+
+def test_8_none_context_still_allowed():
     """Resolver() and Resolver(context=None) must remain valid — the rejection
-    only targets the nonsensical empty-dict case."""
+    only targets the nonsensical empty-dict / wrong-type cases."""
     assert Resolver().context is None
     assert Resolver(context=None).context is None
