@@ -70,3 +70,29 @@ async def test_5():
     earth = EarthBad2()
     with pytest.raises(TypeError):
         await Resolver(context={'count': 10}).resolve(earth)
+
+
+def test_6_empty_context_dict_rejected():
+    """Resolver(context={}) is rejected up-front rather than silently coerced to None.
+
+    See #291: previously the empty dict was falsy so self.context became None,
+    and the user only found out later via the unrelated `AttributeError:
+    context is missing` from the has_context check.
+    """
+    with pytest.raises(ValueError, match='context must be a non-empty dict'):
+        Resolver(context={})
+
+
+@pytest.mark.parametrize('bad', [[1, 2, 3], ('a', 'b'), 'string', 42, object()])
+def test_7_non_dict_context_rejected(bad):
+    """Non-dict context values are rejected with TypeError at __init__,
+    rather than slipping through to MappingProxyType's opaque TypeError."""
+    with pytest.raises(TypeError, match='context must be a dict'):
+        Resolver(context=bad)
+
+
+def test_8_none_context_still_allowed():
+    """Resolver() and Resolver(context=None) must remain valid — the rejection
+    only targets the nonsensical empty-dict / wrong-type cases."""
+    assert Resolver().context is None
+    assert Resolver(context=None).context is None

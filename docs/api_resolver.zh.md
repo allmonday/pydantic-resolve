@@ -31,7 +31,7 @@ class Resolver:
 | `loader_params` | `dict \| None` | `None` | 按 loader 类键入的各个 loader 配置 |
 | `global_loader_param` | `dict \| None` | `None` | 应用于所有 loader 的参数 |
 | `loader_instances` | `dict \| None` | `None` | 预创建的 DataLoader 实例 |
-| `context` | `dict \| None` | `None` | 可在所有方法中访问的全局上下文字典 |
+| `context` | `dict \| None` | `None` | 可在所有方法中访问的全局上下文字典。传入时必须为非空 dict —— 空 dict 会抛 `ValueError`；如不需要 context 请传 `None`（或省略）。 |
 | `ensure_type` | `bool` | `False` | 验证返回值是否匹配字段类型注解 |
 | `debug` | `bool` | `False` | 打印每个节点的计时信息 |
 | `enable_from_attribute_in_type_adapter` | `bool` | `False` | 启用 Pydantic v2 的 `from_attributes` 模式 |

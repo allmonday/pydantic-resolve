@@ -31,7 +31,7 @@ class Resolver:
 | `loader_params` | `dict \| None` | `None` | Per-loader configuration keyed by loader class |
 | `global_loader_param` | `dict \| None` | `None` | Parameters applied to all loaders |
 | `loader_instances` | `dict \| None` | `None` | Pre-created DataLoader instances |
-| `context` | `dict \| None` | `None` | Global context dict accessible in all methods |
+| `context` | `dict \| None` | `None` | Global context dict accessible in all methods. Must be non-empty when provided — an empty dict raises `ValueError`; pass `None` (or omit) if no context is needed. |
 | `ensure_type` | `bool` | `False` | Validate return values match field type annotations |
 | `debug` | `bool` | `False` | Print per-node timing information |
 | `enable_from_attribute_in_type_adapter` | `bool` | `False` | Enable Pydantic v2 `from_attributes` mode |
