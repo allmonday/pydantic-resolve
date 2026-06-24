@@ -43,7 +43,7 @@ class Timer():
         return id
     
     def end(self, id: str):
-        start = self.timeset[id]
+        start = self.timeset.pop(id)
         t = self.to_ms(time.time() - start)
 
         self.records.append(t)
