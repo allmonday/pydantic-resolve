@@ -10,6 +10,11 @@ description: "Release-by-release changelog for pydantic-resolve, following semve
 
 ## 5.10
 
+### 5.10.4 (2026-6-25)
+
+- fix:
+  - **Compose JSON serialization for UUID-like values**: `use_case.compose` now serializes projected `BaseModel` results in Pydantic JSON mode, recursively serializes `dict` payloads, and applies JSON-mode fallback serialization for scalar values such as `uuid.UUID`. This fixes compose responses that previously leaked raw Python objects for UUID fields, especially inside nested dictionaries.
+
 ### 5.10.3 (2026-6-25)
 
 - fix:

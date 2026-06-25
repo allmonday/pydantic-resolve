@@ -10,6 +10,7 @@ HTTP GraphiQL demo, and direct callers.
 from __future__ import annotations
 
 import asyncio
+import uuid
 from typing import Annotated, Optional
 
 import pytest
@@ -46,6 +47,10 @@ class SprintDTO(BaseModel):
     id: int
     name: str
     task_count: int = 0
+
+
+class UuidDTO(BaseModel):
+    id: uuid.UUID
 
 
 # ──────────────────────────────────────────────────
@@ -111,6 +116,21 @@ class ContextService(UseCaseService):
         return [TaskDTO(id=task_id, title=f"Task of {user_id}", owner_id=user_id) for task_id in (1, 2)]
 
 
+class UuidService(UseCaseService):
+    @query
+    async def get_one(cls) -> UuidDTO:
+        return UuidDTO(id=uuid.UUID("12345678-1234-5678-1234-567812345678"))
+
+    @query
+    async def get_payload(cls) -> dict:
+        return {
+            "id": uuid.UUID("12345678-1234-5678-1234-567812345678"),
+            "nested": {
+                "item_id": uuid.UUID("87654321-4321-8765-4321-876543218765")
+            },
+        }
+
+
 # Module-level log so SeqService methods can record their completion order
 # across calls within a single compose query. Cleared per-test via fixture.
 _seq_log: list[str] = []
@@ -152,8 +172,11 @@ def _make_manager(
     enable_mutation: bool = True,
     context_extractor=None,
     with_seq: bool = False,
+    with_uuid: bool = False,
 ) -> UseCaseManager:
     services = [SprintService, TaskService]
+    if with_uuid:
+        services.append(UuidService)
     if with_seq:
         services.append(SeqService)
     return UseCaseManager(
@@ -257,6 +280,29 @@ class TestComposeHappyPath:
             "{ SprintService { get_sprint(sprint_id: 999) { name } } }",
         )
         assert result["SprintService"]["get_sprint"] is None
+
+    @pytest.mark.asyncio
+    async def test_uuid_field_serializes_to_json_string(self):
+        app = _make_manager(with_uuid=True).get_app("project")
+        result = await app.compose(
+            "{ UuidService { get_one { id } } }",
+        )
+        assert result["UuidService"]["get_one"] == {
+            "id": "12345678-1234-5678-1234-567812345678"
+        }
+
+    @pytest.mark.asyncio
+    async def test_dict_payload_recursively_serializes_uuid_values(self):
+        app = _make_manager(with_uuid=True).get_app("project")
+        result = await app.compose(
+            "{ UuidService { get_payload } }",
+        )
+        assert result["UuidService"]["get_payload"] == {
+            "id": "12345678-1234-5678-1234-567812345678",
+            "nested": {
+                "item_id": "87654321-4321-8765-4321-876543218765"
+            },
+        }
 
     @pytest.mark.asyncio
     async def test_self_resolved_method_result_is_projected(self):

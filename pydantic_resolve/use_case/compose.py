@@ -427,13 +427,13 @@ def _serialize_result(result: Any) -> Any:
     if result is None:
         return None
     if isinstance(result, BaseModel):
-        return result.model_dump()
+        return result.model_dump(mode="json")
     if isinstance(result, list):
         return [_serialize_result(item) for item in result]
     if isinstance(result, dict):
-        return result
+        return {key: _serialize_result(value) for key, value in result.items()}
     if isinstance(result, (str, int, float, bool)):
         return result
     if hasattr(result, "model_dump"):
-        return result.model_dump()
-    return result
+        return result.model_dump(mode="json")
+    return TypeAdapter(type(result)).dump_python(result, mode="json")
