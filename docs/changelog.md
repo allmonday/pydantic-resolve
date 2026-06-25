@@ -6,6 +6,15 @@
 
 ## 5.10
 
+### 5.10.3 (2026-6-25)
+
+- fix:
+  - **Resolver instance state isolation (#289)**: `object_level_collect_alias_map_store` is now reset at the start of every `resolve()` call instead of accumulating across trees; a new `_in_resolve` guard with `try/finally` raises a clear `RuntimeError` when the same `Resolver` instance is shared across concurrent `resolve()` calls (previously surfaced as a cryptic `KeyError: 'resolve_params'`); `_make_nodes` / `_collect_children` no longer eagerly evaluate `class_util.get_kls_full_name(kls)` on every cache hit (`dict.get(k, expensive_default)` was paying the default argument on every child node — 50 leaves produced 55 calls instead of 4). Documented the one-Resolver-per-concurrent-call contract in `Resolver`'s class docstring and `docs/api_resolver.md` / `docs/fastapi_integration.md` (EN + ZH).
+  - **`Profile.Timer.timeset` no longer grows unboundedly (#290)**: `Timer.end()` now uses `self.timeset.pop(id)` instead of `self.timeset[id]`. Previously every debug-mode `resolve()` pair added one entry to `timeset` that was never removed, leaking memory proportional to the number of timed method calls in any long-lived `Resolver(debug=True)` process.
+  - **`Resolver(context={})` rejected up-front (#291)**: empty dict and non-dict `context` values are now rejected in `__init__` with `ValueError` and `TypeError` respectively, instead of being silently coerced to `None` via the `if context else None` falsy check — which previously surfaced later as the misleading `AttributeError: context is missing` from the unrelated `has_context` check. `Resolver()` and `Resolver(context=None)` still produce `self.context = None`.
+  - **`_validate_expose` no longer false-positives on inherited `__pydantic_resolve_expose__` (#292)**: `_prepare_class_context` now reads `__pydantic_resolve_expose__` / `__pydantic_resolve_collect__` from `kls.__dict__` instead of via `getattr`, so a subclass that doesn't override the attribute no longer re-registers the parent's aliases into `expose_set` and triggers a spurious `ValueError: Expose alias name conflicts` when both classes appear in the same resolve tree. Same change applied to `collect_dict` for consistency.
+  - **`_clone_collector` reverts to `copy.deepcopy` (#293)**: the hand-written clone introduced in `5.9.0` (commit `bfba588`) bypassed `__init__` via `cls.__new__(cls)` and hard-coded `new.val = []`, silently dropping any attribute a subclass set in `__init__` (`key_fn`, `n`, etc.) and breaking every collector whose `val` is a dict/set/custom aggregator. `copy.deepcopy` handles all `ICollector` implementations transparently. Micro-benchmark: 2.89 us/call (deepcopy) vs 0.13 us/call (hand-written) — 22x ratio but absolute cost is dwarfed by IO in any realistic `post_*` workload, and end-to-end benchmarks show 0% impact.
+
 ### 5.10.2 (2026-6-24)
 
 - fix:
