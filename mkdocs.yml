@@ -83,6 +83,7 @@ nav:
     - "Clean Architecture for Python": ./architecture_entity_first.md
     - "Reframing Data Assembly: pydantic-resolve vs SQLAlchemy ORM": ./blog_pydantic_resolve_vs_orm.md
     - "REST vs GraphQL and the Missing Layer: ER Diagram": ./blog_rest_graphql_and_er_diagram.md
+    - "Treat the Context Window as a Data Assembly Problem": ./blog_context_assembly_for_llm.md
 
 markdown_extensions:
   - admonition
@@ -141,6 +142,7 @@ plugins:
             "Clean Architecture for Python": "Python 的整洁架构实现"
             "Reframing Data Assembly: pydantic-resolve vs SQLAlchemy ORM": "重塑数据构建的开发体验：pydantic-resolve vs SQLAlchemy ORM 查询对比"
             "REST vs GraphQL and the Missing Layer: ER Diagram": "REST 与 GraphQL 之争，漏掉了关键的一层"
+            "Treat the Context Window as a Data Assembly Problem": "把「上下文窗口」当作数据装配问题：pydantic-resolve 在 AI 工作流里的位置"
 
 extra:
   analytics:
