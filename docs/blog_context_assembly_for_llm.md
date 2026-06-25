@@ -102,6 +102,17 @@ for s in similar:
 
 LLM calls are an order of magnitude more expensive than database queries. Serial N+1 directly amplifies cost and latency. **And code without a batching abstraction always ends up like this**, because nobody manually maintains a batch queue inside procedural code.
 
+!!! example "Real-world evidence: open-webui"
+    `backend/open_webui/utils/middleware.py:2635` (commit `02dc3e6`, 2026-06)
+
+    ```python
+    for sid in all_skill_ids:
+        if sid in accessible_skill_ids:
+            s = await SkillsModel.get_skill_by_id(sid)   # serial N+1
+    ```
+
+    The same file has at least three more instances (folder lookup, tool connection, access check), all `await`-inside-a-`for`. open-webui is a production-grade AI application, and it still falls into this trap — evidence that the trap is structural, not a coding-quality issue.
+
 ### Pain point 2: Cross-subtree aggregation has no home
 
 ```python
@@ -113,6 +124,19 @@ for t in recent_tickets:
 This "walk the subtree and collect things" logic, in procedural code, can only be written as global variables plus a for loop. As soon as aggregation needs grow — all similar-ticket resolutions, all products mentioned, all features touched — you get a pile of `all_xxx = []` lists scattered across the function, held together by convention.
 
 What makes this worse is that **these aggregations are inherently "parent depends on children"**. In procedural code, they are separated from child-fetch logic. Fetching is above the `for` loop; aggregation is below. The parent→child dependency has been reduced to "line number ordering".
+
+!!! example "Real-world evidence: open-webui"
+    `backend/open_webui/utils/middleware.py` chat-completion orchestration (commit `02dc3e6`, 2026-06)
+
+    ```python
+    sources = []
+    sources.extend(flags.get('sources', []))   # line 2882
+    sources.extend(flags.get('sources', []))   # line 2892
+    sources = [s for s in sources if ...]      # line 2909: mid-function reassignment
+    events.append({'sources': sources})        # line 2916: another accumulator
+    ```
+
+    `sources` and `events` have no structured parent-child dependency declaration — they're stitched across handlers with `extend`. This is exactly the "aggregation has no home" pattern from the previous section — not a one-off defect, but the inevitable shape of procedural code that has to coordinate context across multiple sources.
 
 ### Pain point 3: Prompt shape is welded to data fetching
 
@@ -127,6 +151,23 @@ Summary: {summary}
 This final f-string welds three things together: **data fetching, derived computation, prompt format**. Touching the prompt template means touching the data code; touching data fetching means touching the prompt text; adding a field means editing from top to bottom.
 
 This is the limit of procedural code: **it has no structure, so every change is invasive**.
+
+!!! example "Real-world evidence: open-webui"
+    `backend/open_webui/utils/middleware.py:931` `get_source_context` (commit `02dc3e6`, 2026-06)
+
+    ```python
+    def get_source_context(sources, ...) -> str:
+        context_string = ''
+        for source in sources:
+            for doc, meta in zip(source.get('document', []),
+                                 source.get('metadata', [])):
+                context_string += (
+                    f'<source id="{...}" name="{...}">{body}</source>\n'
+                )
+        return context_string
+    ```
+
+    Iteration, XML template string, and f-string formatting all welded into one function — structurally identical to the hypothetical `build_support_context()` at the top of this article. Not a coincidence; this is the typical shape of procedural LLM code.
 
 ## Redefinition: LLM context = response tree
 

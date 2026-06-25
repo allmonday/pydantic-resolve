@@ -102,6 +102,17 @@ for s in similar:
 
 LLM 调用比数据库查询贵一个数量级，串行 N+1 直接放大成本和延迟。**而没有 batching 抽象的代码，最后都会演化成这样**——因为没有人会在过程式代码里主动维护一个 batch queue。
 
+!!! example "真实代码佐证：open-webui"
+    `backend/open_webui/utils/middleware.py:2635`（commit `02dc3e6`, 2026-06）
+
+    ```python
+    for sid in all_skill_ids:
+        if sid in accessible_skill_ids:
+            s = await SkillsModel.get_skill_by_id(sid)   # 串行 N+1
+    ```
+
+    同文件至少还有 3 处同类模式（folder lookup、tool connection、access check），都是循环里 `await` IO。open-webui 是生产级 AI 应用，依然落入这个陷阱——证明这不是"写得不好"，是过程式代码本身缺 batching 抽象。
+
 ### 痛点二：跨子树聚合没有归宿
 
 ```python
@@ -113,6 +124,19 @@ for t in recent_tickets:
 这种"遍历子树收集一些东西"的逻辑，在过程式代码里只能写成全局变量 + for 循环。一旦聚合需求变多——所有相似工单的 resolution、所有涉及的产品、所有提及的功能——就会出现一堆 `all_xxx = []` 列表，散落在函数各处，靠人为约定维系。
 
 更糟糕的是，**这些聚合逻辑本属于"父节点对子节点的依赖"**，但在过程式代码里它和子节点的获取逻辑分开了。子节点获取在 `for t in recent_tickets` 上面，聚合在下面，父节点对子节点的依赖关系变成了"代码行号顺序"。
+
+!!! example "真实代码佐证：open-webui"
+    `backend/open_webui/utils/middleware.py` 的 chat completion 编排（commit `02dc3e6`, 2026-06）
+
+    ```python
+    sources = []
+    sources.extend(flags.get('sources', []))   # line 2882
+    sources.extend(flags.get('sources', []))   # line 2892
+    sources = [s for s in sources if ...]      # line 2909：中途重新过滤
+    events.append({'sources': sources})        # line 2916：又一个累加器
+    ```
+
+    `sources` 和 `events` 没有任何"父子依赖"的结构化声明，靠 `extend` 在多个 handler 之间手工维系。这就是上一节说的"聚合没有归宿"——它不是某个项目的偶然缺陷，而是过程式代码处理多源上下文的必然形态。
 
 ### 痛点三：prompt 形状和数据获取耦合
 
@@ -127,6 +151,23 @@ Summary: {summary}
 最后这个 f-string 把所有事情焊在了一起：**数据获取、派生计算、prompt 格式**。改 prompt 模板要碰数据代码，改数据获取要碰 prompt 文本，加一个字段要从头改到尾。
 
 这就是过程式代码的极限：**它没有结构，所以一切变化都是侵入式的**。
+
+!!! example "真实代码佐证：open-webui"
+    `backend/open_webui/utils/middleware.py:931` 的 `get_source_context`（commit `02dc3e6`, 2026-06）
+
+    ```python
+    def get_source_context(sources, ...) -> str:
+        context_string = ''
+        for source in sources:
+            for doc, meta in zip(source.get('document', []),
+                                 source.get('metadata', [])):
+                context_string += (
+                    f'<source id="{...}" name="{...}">{body}</source>\n'
+                )
+        return context_string
+    ```
+
+    数据遍历、XML 模板字符串、f-string 格式化全焊在一个函数里——和本文开篇那段虚构的 `build_support_context()` 在结构上完全一致。这不是巧合，而是过程式 LLM 代码的典型形态。
 
 ## 重新定义：LLM 上下文 = 响应树
 
