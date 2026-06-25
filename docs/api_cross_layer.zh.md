@@ -1,3 +1,7 @@
+---
+description: ExposeAs、SendTo、Collector 的 API 参考——在 resolve 树中跨层移动值的注解，类与类之间无需硬编码引用。
+---
+
 # 跨层注解
 
 [English](./api_cross_layer.md)

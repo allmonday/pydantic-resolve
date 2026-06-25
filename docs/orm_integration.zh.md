@@ -1,3 +1,7 @@
+---
+description: 当 ORM 已经知道表关系，build_relationship() 直接读 SQLAlchemy、Django、Tortoise ORM 元数据，自动生成 Relationship 定义和 DataLoader 函数——无需手写 loader。
+---
+
 # ORM 集成
 
 [English](./orm_integration.md)

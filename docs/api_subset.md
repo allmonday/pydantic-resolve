@@ -1,3 +1,7 @@
+---
+description: API reference for DefineSubset — pick a specific field set from an entity for an API response, hide internal FK fields, while keeping ERD relationship wiring intact. Includes SubsetConfig for finer control.
+---
+
 # DefineSubset API
 
 [中文版](./api_subset.zh.md)

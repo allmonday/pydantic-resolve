@@ -1,3 +1,7 @@
+---
+description: Expose your ERD as an MCP (Model Context Protocol) service so AI agents can discover and query your data through progressive disclosure — no hand-written GraphQL schema or resolvers. Translates natural-language queries into GraphQL against your ERD.
+---
+
 # MCP Service
 
 [中文版](./mcp_service.zh.md)

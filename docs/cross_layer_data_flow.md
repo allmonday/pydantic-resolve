@@ -1,3 +1,7 @@
+---
+description: When a child needs ancestor context or a parent aggregates descendants, ExposeAs / SendTo / Collector coordinate data across the response tree without hard-coded references between classes.
+---
+
 # Cross-Layer Data Flow
 
 [中文版](./cross_layer_data_flow.zh.md)

@@ -1,3 +1,7 @@
+---
+description: LLM 上下文装配是数据装配问题，不是 prompt 工程问题。pydantic-resolve 的 resolve_*、post_*、Collector 一一对应三类真实痛点（N+1 LLM 调用、跨子树聚合、prompt 形状耦合），并以 open-webui 等生产级 AI 代码佐证。
+---
+
 # 把「上下文窗口」当作数据装配问题：pydantic-resolve 在 AI 工作流里的位置
 
 ## 一段典型的 AI 代码

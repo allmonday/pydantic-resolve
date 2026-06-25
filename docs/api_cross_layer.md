@@ -1,3 +1,7 @@
+---
+description: API reference for ExposeAs, SendTo, and Collector — the cross-layer annotations that move values between ancestors and descendants in a resolve tree without hard-coded class references.
+---
+
 # Cross-Layer Annotations
 
 [中文版](./api_cross_layer.zh.md)

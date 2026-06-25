@@ -1,3 +1,7 @@
+---
+description: API reference for base_entity, Relationship, and ErDiagram — the ERD primitives that centralize relationship declarations as executable, loader-bound definitions shared across REST, GraphQL, and MCP consumers.
+---
+
 # ER Diagram API
 
 [中文版](./api_erd.zh.md)

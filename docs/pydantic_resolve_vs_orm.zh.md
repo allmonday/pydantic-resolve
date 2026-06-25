@@ -1,3 +1,7 @@
+---
+description: 通过三个递进嵌套场景（单一关系、多层树、派生字段），逐行对比 pydantic-resolve 与 SQLAlchemy ORM 查询模式。让代码自己说话——同一份 ORM 模型，不同的装配体验。
+---
+
 # 重塑数据构建的开发体验：pydantic-resolve vs SQLAlchemy ORM 查询对比
 
 ## 背景

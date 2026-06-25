@@ -1,3 +1,7 @@
+---
+description: base_entity、Relationship、ErDiagram 的 API 参考——把关系声明收敛为可执行、绑定 loader 的 ERD 原语，被 REST、GraphQL、MCP 消费者共享。
+---
+
 # ER 图 API
 
 [English](./api_erd.md)

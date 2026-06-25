@@ -1,3 +1,7 @@
+---
+description: GraphQL 和 MCP 是 ERD 的下游复用层——基于同一份模型图，不是另一套数据装配系统。它们如何与 Core API 以及彼此组合。
+---
+
 # GraphQL and MCP
 
 [English](./graphql_and_mcp.md) | [docs](./index.zh.md)

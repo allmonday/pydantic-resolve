@@ -1,3 +1,7 @@
+---
+description: 在子树就绪后计算派生字段，比如 task_count 和 contributor_names。post_* 自底向上执行，返回值不会再触发 resolve，是计数、求和、格式化的天然归宿。
+---
+
 # 后处理
 
 [English](./post_processing.md)

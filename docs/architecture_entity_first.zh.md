@@ -1,3 +1,7 @@
+---
+description: 为什么 FastAPI 项目默认 ORM-First，以及丢了什么——缺失的企业业务规则层。pydantic-resolve 的实体优先架构论证：让 Pydantic 实体（而非 ORM 模型）成为领域锚点。
+---
+
 # Python 的整洁架构：Entity-First 实现
 
 [English](./architecture_entity_first.md)

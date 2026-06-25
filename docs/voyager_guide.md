@@ -1,3 +1,7 @@
+---
+description: Generate an interactive ERD visualization for your FastAPI app with fastapi-voyager — see how endpoints and Pydantic schemas connect without reading source files. Mounts at a single URL, reads your ERD directly.
+---
+
 # Voyager Visualization
 
 [中文版](./voyager_guide.zh.md)

@@ -1,3 +1,7 @@
+---
+description: Why FastAPI projects default to ORM-First and what gets lost — the missing Enterprise Business Rules layer. The case for entity-first architecture with pydantic-resolve, where Pydantic entities (not ORM models) anchor the domain.
+---
+
 # Clean Architecture for Python: The Entity-First Implementation
 
 [中文版](./architecture_entity_first.zh.md)

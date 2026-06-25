@@ -1,3 +1,7 @@
+---
+description: GraphQLHandler 的 API 参考——对 ERD 执行 GraphQL 查询，支持可选分页和 from-attribute 类型适配。底层与 REST 侧共用同一套 Resolver 和 DataLoader。
+---
+
 # GraphQL API
 
 [English](./api_graphql.md)

@@ -1,3 +1,7 @@
+---
+description: Use pydantic-resolve inside FastAPI route handlers — return resolved Pydantic models directly with relationships loaded, derived fields computed, and zero N+1. Covers async loaders, context injection, and dependency patterns.
+---
+
 # FastAPI Integration
 
 [中文版](./fastapi_integration.zh.md)

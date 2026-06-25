@@ -1,3 +1,7 @@
+---
+description: When your ORM already knows the relationships, build_relationship() inspects SQLAlchemy, Django, or Tortoise ORM metadata and auto-generates Relationship definitions and DataLoader functions — no hand-written loaders needed.
+---
+
 # ORM Integration
 
 [中文版](./orm_integration.zh.md)

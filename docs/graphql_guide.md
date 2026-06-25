@@ -1,3 +1,7 @@
+---
+description: Generate a full GraphQL schema from your ERD and execute queries through GraphQLHandler. The same relationship graph that powers AutoLoad also powers GraphQL — a reuse layer, not a separate data-assembly system.
+---
+
 # GraphQL Guide
 
 [中文版](./graphql_guide.zh.md)

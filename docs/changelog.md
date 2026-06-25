@@ -1,3 +1,7 @@
+---
+description: "Release-by-release changelog for pydantic-resolve, following semver — major for breaking changes, minor for new features, patch for bug fixes. Most recent: 5.10.3."
+---
+
 # Changelog
 
 - **Major (X.0.0)**: Major new features or breaking changes

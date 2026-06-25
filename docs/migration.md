@@ -1,3 +1,7 @@
+---
+description: Migration guide across pydantic-resolve versions. Covers v5.4 → v5.5 (AutoLoad API simplification, implicit relationship resolution) and later breaking changes, with before/after code for each.
+---
+
 # Migration Guide
 
 ## v5.4 to v5.5

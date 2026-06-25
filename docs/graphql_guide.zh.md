@@ -1,3 +1,7 @@
+---
+description: 从 ERD 生成完整 GraphQL schema，通过 GraphQLHandler 执行查询。驱动 AutoLoad 的同一份关系图也驱动 GraphQL——是复用层，不是另一套数据装配系统。
+---
+
 # GraphQL 指南
 
 [English](./graphql_guide.md)

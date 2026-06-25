@@ -1,3 +1,7 @@
+---
+description: LLM context assembly is a data assembly problem, not a prompt-engineering problem. pydantic-resolve's resolve_*, post_*, and Collector map onto three real pain points (N+1 LLM calls, cross-subtree aggregation, prompt-shape coupling) found in production AI code like open-webui.
+---
+
 # Treat the Context Window as a Data Assembly Problem: Where pydantic-resolve Fits in AI Workflows
 
 ## A typical piece of AI code

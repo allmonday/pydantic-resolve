@@ -1,3 +1,7 @@
+---
+description: Compute derived fields like task_count and contributor_names after the subtree is ready. post_* runs bottom-up, never re-resolves its return value, and is the natural home for counts, sums, and formatting.
+---
+
 # Post Processing
 
 [中文版](./post_processing.zh.md)

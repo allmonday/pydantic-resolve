@@ -1,3 +1,7 @@
+---
+description: 子节点需要祖先上下文，或父节点要聚合后代值时，ExposeAs / SendTo / Collector 在响应树里跨层协调数据，类与类之间无需硬编码引用。
+---
+
 # 跨层数据流
 
 [English](./cross_layer_data_flow.md)

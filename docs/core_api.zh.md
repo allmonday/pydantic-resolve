@@ -1,3 +1,7 @@
+---
+description: 用 resolve_* 方法、批量 loader、递归遍历构建嵌套响应树。Core API——还不需要 ERD，也不需要 AutoLoad。无论树的形状如何，每个 loader 只查询一次。
+---
+
 # 核心 API
 
 [English](./core_api.md)

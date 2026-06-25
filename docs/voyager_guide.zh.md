@@ -1,3 +1,7 @@
+---
+description: 用 fastapi-voyager 为 FastAPI 应用生成可交互的 ERD 可视化——不用翻源码就能看清 endpoint 和 schema 怎么连。挂在单个 URL，直接读你的 ERD。
+---
+
 # Voyager 可视化指南
 
 [English](./voyager_guide.md)

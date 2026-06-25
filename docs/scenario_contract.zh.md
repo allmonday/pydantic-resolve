@@ -1,3 +1,7 @@
+---
+description: 所有主路径文档共用的标准 Scenario——让读者不用在页面之间重新映射概念。定义了贯穿教程的实体、关系和字段命名。
+---
+
 # Scenario 约定
 
 [English](./scenario_contract.md) | [docs](./index.zh.md)

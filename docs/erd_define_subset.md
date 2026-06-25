@@ -1,3 +1,7 @@
+---
+description: Hide internal FK fields like owner_id while keeping ERD relationship wiring intact. DefineSubset picks which entity fields appear in an API response, decoupling internal structure from external contract.
+---
+
 # ERD with DefineSubset
 
 [中文版](./erd_define_subset.zh.md)

@@ -1,3 +1,7 @@
+---
+description: 快速解决一个问题——数据里有 owner_id，但 API 要返回完整 owner 对象，且不能 N+1。pydantic-resolve 的最小走查：resolve_*、一个批量 loader、Resolver()。
+---
+
 # 快速开始
 
 [English](./quick_start.md)
