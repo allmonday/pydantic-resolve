@@ -1,3 +1,7 @@
+---
+description: API reference for GraphQLHandler — execute GraphQL queries against your ERD with optional pagination and from-attribute type adaptation. Same Resolver engine and DataLoader batching as the REST side.
+---
+
 # GraphQL API
 
 [中文版](./api_graphql.zh.md)

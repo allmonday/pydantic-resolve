@@ -1,3 +1,7 @@
+---
+description: create_use_case_graphql_mcp_server 的 API 参考——把 UseCase 业务操作通过 MCP 暴露给 AI Agent，复用与 ERD 驱动 MCP 服务相同的 4 层渐进式披露。
+---
+
 # UseCase MCP API
 
 [English](./api_use_case_mcp.md)

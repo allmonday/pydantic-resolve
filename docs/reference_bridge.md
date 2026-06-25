@@ -1,3 +1,7 @@
+---
+description: Where to go after the main docs path — deeper API reference or broader project context. The hand-off page between the tutorial flow and reference material.
+---
+
 # Reference Bridge
 
 [中文版](./reference_bridge.zh.md) | [docs](./index.md)

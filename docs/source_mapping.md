@@ -1,3 +1,7 @@
+---
+description: How the earlier docs_old/ content was consolidated into the current docs/ structure. Reference table for tracking what moved where during the documentation reorganization.
+---
+
 # Source Mapping
 
 [中文版](./source_mapping.zh.md) | [docs](./index.md)

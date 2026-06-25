@@ -1,3 +1,7 @@
+---
+description: 主文档路径读完后去哪里——更深的 API 参考，或更广的项目背景。教程与参考资料之间的过渡页。
+---
+
 # Reference Bridge
 
 [English](./reference_bridge.md) | [docs](./index.zh.md)

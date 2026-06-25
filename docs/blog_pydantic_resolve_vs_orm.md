@@ -1,3 +1,7 @@
+---
+description: A side-by-side comparison of pydantic-resolve and SQLAlchemy ORM query patterns through three progressive nesting scenarios (single relation, multi-level tree, derived fields). Let the code speak — same ORM models, different assembly experience.
+---
+
 # Reframing the Developer Experience of Data Assembly: pydantic-resolve vs SQLAlchemy ORM Query Patterns
 
 ## Background

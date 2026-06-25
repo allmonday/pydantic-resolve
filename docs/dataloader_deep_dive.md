@@ -1,3 +1,7 @@
+---
+description: How DataLoader batching works in pydantic-resolve — key collection, one batch per loader per level, result mapping. Plus patterns for caching, context-scoped loaders, and parameterized fan-out.
+---
+
 # DataLoader Deep Dive
 
 [中文版](./dataloader_deep_dive.zh.md)

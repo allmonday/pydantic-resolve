@@ -1,3 +1,7 @@
+---
+description: 深入 DataLoader 批量化——key 收集、每 loader 每层一次批量、结果映射。还有缓存、上下文作用域 loader、参数化 fan-out 等模式。
+---
+
 # DataLoader 深度解析
 
 [English](./dataloader_deep_dive.md)

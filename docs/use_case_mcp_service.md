@@ -1,3 +1,7 @@
+---
+description: Expose UseCase business operations to AI agents via MCP — same compose surface as the GraphQL layer, but operation-first (RPC-style) rather than entity-graph-first. Lets agents discover operations through a 4-layer progressive disclosure.
+---
+
 # UseCase MCP Service
 
 [中文版](./use_case_mcp_service.zh.md)

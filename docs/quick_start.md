@@ -1,3 +1,7 @@
+---
+description: "Solve one problem fast — your data has owner_id but your API needs the full owner object, without N+1 queries. The minimal pydantic-resolve walkthrough: resolve_*, a batched loader, and Resolver()."
+---
+
 # Quick Start
 
 [中文版](./quick_start.zh.md)

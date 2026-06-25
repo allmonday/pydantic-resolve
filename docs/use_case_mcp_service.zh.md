@@ -1,3 +1,7 @@
+---
+description: 把 UseCase 业务操作通过 MCP 暴露给 AI Agent——与 GraphQL 层同一套 compose 接口，但按操作优先（RPC 风格）而非实体图优先。Agent 通过 4 层渐进式披露发现操作。
+---
+
 # UseCase MCP 服务
 
 [English](./use_case_mcp_service.md)

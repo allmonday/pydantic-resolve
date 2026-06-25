@@ -1,3 +1,7 @@
+---
+description: GraphQL and MCP are downstream of the ERD — reuse layers over the same model graph, not alternative data-assembly systems. How they compose with Core API and each other.
+---
+
 # GraphQL and MCP
 
 [中文版](./graphql_and_mcp.zh.md) | [docs](./index.md)

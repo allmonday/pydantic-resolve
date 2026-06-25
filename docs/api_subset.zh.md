@@ -1,3 +1,7 @@
+---
+description: DefineSubset 的 API 参考——从实体里挑出特定字段用于 API 响应，隐藏内部 FK，同时保持 ERD 关系布线。SubsetConfig 提供更细粒度的控制。
+---
+
 # DefineSubset API
 
 [English](./api_subset.md)

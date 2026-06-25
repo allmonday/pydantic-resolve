@@ -1,5 +1,6 @@
 ---
 template: home.html
+description: pydantic-resolve 把整洁架构带入 Python——定义业务实体，在 ER Diagram 里声明关系，框架自动装配数据，消除 N+1 是其自然产物。同一份 ERD 还能驱动 REST、GraphQL 与 MCP。
 ---
 
 # pydantic-resolve

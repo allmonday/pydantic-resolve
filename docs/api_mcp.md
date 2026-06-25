@@ -1,3 +1,7 @@
+---
+description: API reference for create_mcp_server and AppConfig — build a FastMCP server from your ERD apps, exposing GraphQL queries to AI agents via the Model Context Protocol.
+---
+
 # MCP API
 
 [中文版](./api_mcp.zh.md)

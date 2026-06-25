@@ -1,5 +1,6 @@
 ---
 template: home.html
+description: pydantic-resolve brings Clean Architecture to Python — define business entities, declare relationships in an ER Diagram, let the framework assemble your data and eliminate N+1 as a natural byproduct. The same ERD drives REST, GraphQL, and MCP.
 ---
 
 # pydantic-resolve

@@ -1,3 +1,7 @@
+---
+description: The REST vs GraphQL debate misses the point — both protocols answer the same domain-model questions, just at different layers. Once relationships are centralized in an ER Diagram, the protocol choice becomes technical, not architectural.
+---
+
 # REST 和 GraphQL 之争，漏掉了关键的一层
 
 ## 一个错误的二选一

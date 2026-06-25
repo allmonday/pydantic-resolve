@@ -1,3 +1,7 @@
+---
+description: Once relationships start repeating across response models, centralize them in an ER Diagram. AutoLoad removes the need to write resolve_* at all — field names matching relationship names trigger implicit loading.
+---
+
 # ERD and AutoLoad
 
 [中文版](./erd_and_autoload.zh.md)

@@ -1,3 +1,7 @@
+---
+description: API reference for create_use_case_graphql_mcp_server — expose UseCase business operations to AI agents through MCP, using the same 4-layer progressive disclosure as the ERD-driven MCP server.
+---
+
 # UseCase MCP API
 
 [中文版](./api_use_case_mcp.zh.md)

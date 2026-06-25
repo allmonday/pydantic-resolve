@@ -1,3 +1,7 @@
+---
+description: API reference for Resolver — the main entry point that walks a Pydantic model tree, executes resolve_* and post_* methods, manages DataLoader batching, and supports loader_params, context, and global configuration.
+---
+
 # Resolver API
 
 [中文版](./api_resolver.zh.md)

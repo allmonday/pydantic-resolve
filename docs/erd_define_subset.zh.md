@@ -1,3 +1,7 @@
+---
+description: 在保持 ERD 关系布线完整的同时，隐藏 owner_id 这类内部 FK 字段。DefineSubset 决定哪些字段出现在 API 响应里，把内部结构与外部契约解耦。
+---
+
 # ERD 与 DefineSubset
 
 [English](./erd_define_subset.md)

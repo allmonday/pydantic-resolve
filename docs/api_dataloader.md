@@ -1,3 +1,7 @@
+---
+description: API reference for the DataLoader utilities — Loader (declare a loader dependency in resolve_* signatures), build_object, and build_list for batch-fetching and mapping results back to requesting keys.
+---
+
 # DataLoader Utilities
 
 [中文版](./api_dataloader.zh.md)

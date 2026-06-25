@@ -1,3 +1,7 @@
+---
+description: Resolver 的 API 参考——主入口，遍历 Pydantic 模型树、执行 resolve_* 和 post_*、管理 DataLoader 批量化，支持 loader_params、context、全局配置。
+---
+
 # Resolver API
 
 [English](./api_resolver.md)

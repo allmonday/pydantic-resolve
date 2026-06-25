@@ -1,3 +1,7 @@
+---
+description: Build a nested response tree with resolve_* methods, batched loaders, and recursive traversal. The Core API — no ERD yet, no AutoLoad yet. One query per loader regardless of tree shape.
+---
+
 # Core API
 
 [中文版](./core_api.zh.md)

@@ -1,3 +1,7 @@
+---
+description: 把 ERD 暴露为 MCP（Model Context Protocol）服务，让 AI Agent 通过渐进式披露发现并查询你的数据——无需手写 GraphQL schema 或 resolver。自然语言查询会被翻译成对 ERD 的 GraphQL 调用。
+---
+
 # MCP 服务
 
 [English](./mcp_service.md)

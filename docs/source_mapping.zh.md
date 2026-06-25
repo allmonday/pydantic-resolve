@@ -1,3 +1,7 @@
+---
+description: 早期 docs_old/ 内容如何合并进当前 docs/ 结构。文档重组期间追踪"什么搬到了哪里"的参考表。
+---
+
 # 旧文档映射
 
 [English](./source_mapping.md) | [docs](./index.zh.md)

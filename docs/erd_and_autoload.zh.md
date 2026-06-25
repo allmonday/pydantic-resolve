@@ -1,3 +1,7 @@
+---
+description: 当关系在多个响应模型间重复出现，把它收敛进 ER Diagram。AutoLoad 让你完全不用写 resolve_*——字段名匹配关系名即隐式触发加载。
+---
+
 # ERD 和 AutoLoad
 
 [English](./erd_and_autoload.md)

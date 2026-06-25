@@ -1,3 +1,7 @@
+---
+description: create_mcp_server 和 AppConfig 的 API 参考——从 ERD 应用构建 FastMCP 服务，把 GraphQL 查询通过 Model Context Protocol 暴露给 AI Agent。
+---
+
 # MCP API
 
 [English](./api_mcp.md)

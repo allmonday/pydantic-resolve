@@ -1,3 +1,7 @@
+---
+description: 在 FastAPI 路由里直接用 pydantic-resolve——返回 resolve 好的 Pydantic 模型，关系加载完、派生字段算完、零 N+1。涵盖异步 loader、context 注入、依赖模式。
+---
+
 # FastAPI 集成
 
 [English](./fastapi_integration.md)

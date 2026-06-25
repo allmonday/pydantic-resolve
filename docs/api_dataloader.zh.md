@@ -1,3 +1,7 @@
+---
+description: Loader、build_object、build_list 的 API 参考——DataLoader 工具集，在 resolve_* 签名里声明依赖、批量拉取并把结果映射回请求 key。
+---
+
 # DataLoader 工具
 
 [English](./api_dataloader.md)

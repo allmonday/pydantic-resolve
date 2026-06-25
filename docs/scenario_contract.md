@@ -1,3 +1,7 @@
+---
+description: The canonical Sprint / Task / User scenario used across all main-path docs, so readers never have to remap concepts between pages. Defines the entities, relationships, and field names used throughout the tutorial.
+---
+
 # Scenario Contract
 
 [中文版](./scenario_contract.zh.md) | [docs](./index.md)
