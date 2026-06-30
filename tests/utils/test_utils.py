@@ -24,8 +24,8 @@ def test_get_class_field_annotations():
     
     assert list(pydantic_resolve.utils.class_util.get_fields_default_value_not_provided(B)) == [('hello', True)]
     assert list(pydantic_resolve.utils.class_util.get_fields_default_value_not_provided(C)) == [('hello', False)]
-    assert list(pydantic_resolve.utils.class_util.get_fields_default_value_not_provided(D)) == []
-    assert list(pydantic_resolve.utils.class_util.get_fields_default_value_not_provided(E)) == [('world', False)]
+    assert list(pydantic_resolve.utils.class_util.get_fields_default_value_not_provided(D)) == [('hello', False)]
+    assert list(pydantic_resolve.utils.class_util.get_fields_default_value_not_provided(E)) == [('hello', False), ('world', False)]
 
 
 class User(BaseModel):
@@ -236,4 +236,31 @@ def test_copy_dataloader_kls_state_isolation():
 
     CopiedA.batch_size = 99
     assert CopiedB.batch_size == 10
+
+
+def test_copy_dataloader_kls_inherits_parent_annotations():
+    # Regression: copy_dataloader_kls creates `class NewLoader(Parent): pass`,
+    # which has no __annotations__ in its own __dict__. get_class_field_annotations
+    # must walk the MRO so the parent's loader params remain injectable on the copy.
+    from aiodataloader import DataLoader
+    from pydantic_resolve.utils.dataloader import copy_dataloader_kls
+    from pydantic_resolve.utils.types import get_class_field_annotations
+
+    class ParentLoader(DataLoader):
+        user_id: int
+        permission: str
+        async def batch_load_fn(self, keys):
+            return keys
+
+    Copied = copy_dataloader_kls('Copied', ParentLoader)
+
+    # The copy must expose the parent's annotated fields. (It will also pick up
+    # DataLoader's own annotated fields like `batch`/`cache`/`max_batch_size` —
+    # those have class-level defaults so _create_loader_instance skips them
+    # via its existing has_default branch, no behavior change there.)
+    parent_fields = {'user_id', 'permission'}
+    assert parent_fields.issubset(set(get_class_field_annotations(Copied)))
+    fields = dict(pydantic_resolve.utils.class_util.get_fields_default_value_not_provided(Copied))
+    assert fields['user_id'] is False
+    assert fields['permission'] is False
 
