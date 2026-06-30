@@ -136,16 +136,30 @@ def test_get_class_field_annotations_empty():
 def test_get_class_field_annotations_with_inheritance():
     class BaseClass:
         base_field: int
-    
+
     class DerivedClass(BaseClass):
         derived_field: str
-    
-    # Should only get annotations from the specific class, not inherited ones
+
+    # Annotations are merged across the MRO so subclasses inherit
+    # their parents' annotated fields.
     base_annotations = get_class_field_annotations(BaseClass)
     derived_annotations = get_class_field_annotations(DerivedClass)
-    
+
     assert set(base_annotations) == {'base_field'}
-    assert set(derived_annotations) == {'derived_field'}
+    assert set(derived_annotations) == {'base_field', 'derived_field'}
+
+
+def test_get_class_field_annotations_subclass_with_no_own_fields():
+    # Mirrors copy_dataloader_kls: `class NewLoader(Parent): pass`
+    # must still expose the parent's annotated fields, otherwise
+    # loader param injection in _create_loader_instance breaks.
+    class Parent:
+        user_id: int
+
+    class Child(Parent):
+        pass
+
+    assert set(get_class_field_annotations(Child)) == {'user_id'}
 
 
 def test_is_optional_compatibility():

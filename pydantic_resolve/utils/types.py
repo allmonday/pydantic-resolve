@@ -104,8 +104,12 @@ def get_core_types(tp):
 
 
 def get_class_field_annotations(cls: Type):
-    anno = cls.__dict__.get('__annotations__') or {}
-    return anno.keys()
+    annotations = {}
+    for klass in reversed(cls.__mro__):
+        own = klass.__dict__.get('__annotations__')
+        if own:
+            annotations.update(own)
+    return annotations.keys()
 
 
 def get_type(v):
