@@ -1,5 +1,5 @@
 ---
-description: "Release-by-release changelog for pydantic-resolve, following semver — major for breaking changes, minor for new features, patch for bug fixes. Most recent: 5.10.3."
+description: "Release-by-release changelog for pydantic-resolve, following semver — major for breaking changes, minor for new features, patch for bug fixes. Most recent: 5.10.5."
 ---
 
 # Changelog
@@ -9,6 +9,17 @@ description: "Release-by-release changelog for pydantic-resolve, following semve
 - **Patch (x.y.Z)**: Bug fixes and minor improvements
 
 ## 5.10
+
+### 5.10.5 (2026-6-30)
+
+- fix:
+  - **`copy_dataloader_kls` copies inherit the parent loader's annotated fields (#302)**: `get_class_field_annotations` in `pydantic_resolve/utils/types.py` now walks `cls.__mro__` and merges `__annotations__` from every class in the chain, instead of reading only `cls.__dict__['__annotations__']`. Without this fix, `copy_dataloader_kls('Foo', ParentLoader)` produces a `class NewLoader(ParentLoader): pass` whose own `__dict__['__annotations__']` is empty, so `_create_loader_instance` could no longer see fields like `user_id: int` / `permission: str` declared on the parent — the `setattr` injection loop ran zero times and the loader instance later raised `AttributeError: 'Foo' object has no attribute 'user_id'` from inside `batch_load_fn`. Direct subclasses of `DataLoader` (the common case) were unaffected because their own `__dict__` carried the annotations.
+
+    **Bug history** — the `cls.__dict__.get('__annotations__')` lookup was a latent bug from `e637541` (2023-04-06, "global filter"), present for 3+ years. It was masked until `ba8762e` (2026-05-14, "Replace type() factory with inheritance in empty loaders and `copy_dataloader_kls`") changed `copy_dataloader_kls` from `type(name, loader_kls.__bases__, dict(loader_kls.__dict__))` to the standard `class NewLoader(loader_kls): pass`. The old `type()` factory shallow-copied the parent's `__dict__` into the new class — including `__annotations__` — so the lookup accidentally worked. The refactor correctly fixed the original state-isolation bug (#265/#266: copies sharing mutable class attributes via shallow `__dict__`), but in doing so dropped the `__annotations__` copy and activated this latent issue. Symptom window: ~6 weeks (2026-05-14 → 2026-06-30).
+
+    **Why not `cls.__annotations__.keys()`** — Python's attribute lookup returns the *first* `__annotations__` found in the MRO, not a merge. So `class Child(Parent): extra: str` would yield only `{'extra': str}` and drop the parent's fields. The explicit `reversed(cls.__mro__)` walk merges annotations across all levels (subclass overrides win on key collision).
+
+    **Side effects** — (1) `analysis.py`'s `_is_loader_context_required` uses the same function, so copies of `_context`-aware loaders are now correctly recognized as needing context injection (previously silently skipped). (2) Walking the full MRO also surfaces `aiodataloader.DataLoader`'s own annotated fields (`batch`, `cache`, `max_batch_size`); all of these have class-level defaults, so `_create_loader_instance`'s existing `if has_default and field not in param_config: continue` branch skips them unchanged. (3) Two existing tests in `tests/utils/test_types.py` and `tests/utils/test_utils.py` had been encoding the old "only-this-class" behavior with explicit comments; both are updated to assert the merged-MRO semantics, and a new `test_copy_dataloader_kls_inherits_parent_annotations` regression covers the reported scenario.
 
 ### 5.10.4 (2026-6-25)
 
