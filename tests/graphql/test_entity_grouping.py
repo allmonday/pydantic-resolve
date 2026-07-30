@@ -146,6 +146,10 @@ class TestGroupedErrors:
         assert err["extensions"]["code"] == "BARE_GROUP_FIELD"
         assert err["extensions"]["entity"] == "UserEntity"
         assert "get_all" in err["extensions"]["available_methods"]
+        # The example is derived from the method's real signature — get_all has
+        # no args, so the example must not fabricate an `(id: 1)` argument.
+        assert "(id: 1)" not in err["message"]
+        assert "{ UserEntity { get_all { id } } }" in err["message"]
 
     @pytest.mark.asyncio
     async def test_unknown_entity_group_error(self):

@@ -324,10 +324,31 @@ class QueryExecutor:
         Fires when a query selects ``{ Entity }`` with no method subselection.
         ``{ Entity {} }`` (empty braces) is rejected by graphql-core's parser
         before reaching the executor, so only the truly-bare case is caught.
+
+        The example is built from the first method's actual signature, so it
+        never fabricates arguments the method does not accept.
         """
         method_names = sorted(method_group)
         first = method_names[0] if method_names else "method_name"
-        example = f"{{ {entity_name} {{ {first}(id: 1) {{ id }} }} }}"
+
+        # Derive an honest argument list from the first method's signature.
+        example_args = ""
+        method_info = method_group.get(first) if method_names else None
+        if method_info is not None:
+            try:
+                sig = inspect.signature(method_info[1])
+                params = [
+                    name for name, p in sig.parameters.items()
+                    if name not in ("cls", "self", "_context")
+                    and p.kind not in (inspect.Parameter.VAR_POSITIONAL,
+                                       inspect.Parameter.VAR_KEYWORD)
+                ]
+                if params:
+                    example_args = f"({params[0]}: 1)"
+            except (TypeError, ValueError):
+                pass
+
+        example = f"{{ {entity_name} {{ {first}{example_args} {{ id }} }} }}"
         return {
             "message": (
                 f"Field '{entity_name}' is a grouping field that requires a "
