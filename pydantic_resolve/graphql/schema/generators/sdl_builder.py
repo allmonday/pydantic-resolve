@@ -11,6 +11,7 @@ from typing import ForwardRef, get_type_hints
 from pydantic import BaseModel
 
 from pydantic_resolve.graphql.schema.generators.base import SchemaGenerator
+from pydantic_resolve.graphql.utils import group_type_name
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.er_diagram import Relationship
 from pydantic_resolve.utils.types import get_core_types, _is_list
@@ -342,13 +343,13 @@ class SDLBuilder(SchemaGenerator):
                 continue
 
             method_fields = [f"  {build_def(m)}" for m in methods]
-            group_type_name = f"{kls.__name__}{group_suffix}"
-            body = f"type {group_type_name} {{\n{chr(10).join(method_fields)}\n}}"
+            gt_name = group_type_name(kls.__name__, group_suffix)
+            body = f"type {gt_name} {{\n{chr(10).join(method_fields)}\n}}"
             description = self._get_class_description(kls)
             if description:
                 body = f'"""{description}"""\n{body}'
             group_blocks.append(body)
-            root_lines.append(f"{kls.__name__}: {group_type_name}!")
+            root_lines.append(f"{kls.__name__}: {gt_name}!")
 
         return group_blocks, root_lines
 

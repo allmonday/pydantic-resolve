@@ -24,6 +24,7 @@ from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.types import get_core_types
 from pydantic_resolve.graphql.exceptions import GraphQLError
 from pydantic_resolve.graphql.query_parser import QueryParser
+from pydantic_resolve.graphql.utils import group_type_name
 from pydantic_resolve.graphql.response_builder import ResponseBuilder
 
 logger = logging.getLogger(__name__)
@@ -91,6 +92,7 @@ class QueryExecutor:
 
         # Each task: (entity_name, method_name, return_entity, method, method_selection, response_model)
         execution_tasks = []
+        group_suffix = "Query"
 
         for entity_name, group_sel in parsed.field_tree.items():
             method_group = query_map.get(entity_name)
@@ -98,7 +100,7 @@ class QueryExecutor:
             # Unknown entity group.
             if method_group is None:
                 errors.append({
-                    "message": f"Cannot query field '{entity_name}' on type 'Query'",
+                    "message": f"Cannot query field '{entity_name}' on type '{group_suffix}'",
                     "extensions": {"code": "UNKNOWN_QUERY"},
                     "path": [entity_name],
                 })
@@ -107,7 +109,7 @@ class QueryExecutor:
 
             # Bare group: `{ Entity }` with no method subselection.
             if group_sel.sub_fields is None:
-                errors.append(self._bare_group_field_error(entity_name, method_group, "Query"))
+                errors.append(self._bare_group_field_error(entity_name, method_group, group_suffix))
                 continue
 
             for method_name, method_sel in group_sel.sub_fields.items():
@@ -115,7 +117,10 @@ class QueryExecutor:
                     method_info = method_group.get(method_name)
                     if method_info is None:
                         errors.append({
-                            "message": f"Cannot query field '{method_name}' on type '{entity_name}Query'",
+                            "message": (
+                                f"Cannot query field '{method_name}' on type "
+                                f"'{group_type_name(entity_name, group_suffix)}'"
+                            ),
                             "extensions": {"code": "UNKNOWN_QUERY"},
                             "path": [entity_name, method_name],
                         })
@@ -199,13 +204,14 @@ class QueryExecutor:
 
         # ===== Phase 1 + Phase 2: Serial execution of each mutation =====
         logger.info("Starting serial mutation execution with two-phase resolution")
+        group_suffix = "Mutation"
 
         for entity_name, group_sel in parsed.field_tree.items():
             method_group = mutation_map.get(entity_name)
 
             if method_group is None:
                 errors.append({
-                    "message": f"Cannot query field '{entity_name}' on type 'Mutation'",
+                    "message": f"Cannot query field '{entity_name}' on type '{group_suffix}'",
                     "extensions": {"code": "UNKNOWN_MUTATION"},
                     "path": [entity_name],
                 })
@@ -213,7 +219,7 @@ class QueryExecutor:
                 continue
 
             if group_sel.sub_fields is None:
-                errors.append(self._bare_group_field_error(entity_name, method_group, "Mutation"))
+                errors.append(self._bare_group_field_error(entity_name, method_group, group_suffix))
                 continue
 
             for method_name, method_sel in group_sel.sub_fields.items():
@@ -221,7 +227,10 @@ class QueryExecutor:
                     method_info = method_group.get(method_name)
                     if method_info is None:
                         errors.append({
-                            "message": f"Cannot query field '{method_name}' on type '{entity_name}Mutation'",
+                            "message": (
+                                f"Cannot query field '{method_name}' on type "
+                                f"'{group_type_name(entity_name, group_suffix)}'"
+                            ),
                             "extensions": {"code": "UNKNOWN_MUTATION"},
                             "path": [entity_name, method_name],
                         })

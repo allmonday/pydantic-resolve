@@ -13,6 +13,7 @@ from typing import Any, Callable, Optional, get_type_hints
 from pydantic import BaseModel
 
 from pydantic_resolve.graphql.schema.generators.base import SchemaGenerator
+from pydantic_resolve.graphql.utils import group_type_name
 import pydantic_resolve.constant as const
 from pydantic_resolve.graphql.schema.type_registry import TypeInfo, FieldInfo, ArgumentInfo, SCALAR_TYPES
 from pydantic_resolve.graphql.types import (
@@ -274,10 +275,10 @@ class IntrospectionGenerator(SchemaGenerator):
 
         # Check per-entity group types ({Entity}Query / {Entity}Mutation)
         for entity_name, methods in self.query_map.items():
-            if methods and f"{entity_name}Query" == type_name:
+            if methods and group_type_name(entity_name, "Query") == type_name:
                 return self._build_entity_group_type(entity_name, methods, "Query")
         for entity_name, methods in self.mutation_map.items():
-            if methods and f"{entity_name}Mutation" == type_name:
+            if methods and group_type_name(entity_name, "Mutation") == type_name:
                 return self._build_entity_group_type(entity_name, methods, "Mutation")
 
         # Check Query type
@@ -618,7 +619,7 @@ class IntrospectionGenerator(SchemaGenerator):
                 "name": None,
                 "ofType": {
                     "kind": "OBJECT",
-                    "name": f"{entity_name}{group_suffix}",
+                    "name": group_type_name(entity_name, group_suffix),
                     "ofType": None,
                 },
             },
@@ -639,7 +640,7 @@ class IntrospectionGenerator(SchemaGenerator):
         """
         return {
             "kind": "OBJECT",
-            "name": f"{entity_name}{group_suffix}",
+            "name": group_type_name(entity_name, group_suffix),
             "description": None,
             "fields": self._get_operation_fields(methods, group_suffix),
             "inputFields": None,
