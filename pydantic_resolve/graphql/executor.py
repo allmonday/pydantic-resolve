@@ -66,19 +66,21 @@ class QueryExecutor:
     async def execute_query(
         self,
         query: str,
-        query_map: dict[str, tuple[type, Callable]],
+        query_map: dict[str, dict[str, tuple[type, Callable]]],
         context: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
-        """
-        Execute custom query with optimized two-phase execution:
-        - Phase 1 (Serial): Parse query, build response models (no I/O)
-        - Phase 2 (Concurrent): Parallel execution of (query_method + transform + resolve)
+        """Execute a grouped query: ``{ Entity { method(args) { fields } } }``.
+
+        Two-phase execution, mirroring the grouped schema. Each top-level field
+        is an entity group; the method fields live one level deeper. Dispatch is
+        therefore two-level: group → method. Results nest as
+        ``data[entity_name][method_name]``.
         """
         logger.info("Starting custom query execution with concurrent optimization")
 
         # 1. Parse query
         parsed = self.parser.parse(query)
-        logger.debug(f"Query parsed: {len(parsed.field_tree)} root fields found")
+        logger.debug(f"Query parsed: {len(parsed.field_tree)} root groups found")
 
         # 2. Initialize results
         errors = []
@@ -87,45 +89,65 @@ class QueryExecutor:
         # ===== Phase 1: Serial Preparation (Metadata Only) =====
         logger.info("[Phase 1] Starting serial preparation phase (metadata only)")
 
-        execution_tasks = []  # List of (query_name, entity, query_method, field_selection, response_model)
+        # Each task: (entity_name, method_name, return_entity, method, method_selection, response_model)
+        execution_tasks = []
 
-        for root_query_name, root_field_selection in parsed.field_tree.items():
-            try:
-                # Check if query exists
-                if root_query_name not in query_map:
-                    errors.append({
-                        "message": f"Unknown query: {root_query_name}",
-                        "extensions": {"code": "UNKNOWN_QUERY"}
-                    })
-                    logger.warning(f"[Phase 1] Unknown query: {root_query_name}")
-                    continue
+        for entity_name, group_sel in parsed.field_tree.items():
+            method_group = query_map.get(entity_name)
 
-                entity, query_method = query_map[root_query_name]
-
-                # Build response model (no I/O, just type construction)
-                response_model = self.builder.build_response_model(
-                    entity=entity,
-                    field_selection=root_field_selection
-                )
-                logger.debug(f"[Phase 1] Response model built: {root_query_name}")
-
-                # Store task info for Phase 2
-                execution_tasks.append((
-                    root_query_name,
-                    entity,
-                    query_method,
-                    root_field_selection,
-                    response_model
-                ))
-
-            except GraphQLError as e:
-                errors.append(e.to_dict())
-            except Exception as e:
-                logger.exception(f"Unexpected error in Phase 1 for {root_query_name}")
+            # Unknown entity group.
+            if method_group is None:
                 errors.append({
-                    "message": str(e),
-                    "extensions": {"code": type(e).__name__}
+                    "message": f"Cannot query field '{entity_name}' on type 'Query'",
+                    "extensions": {"code": "UNKNOWN_QUERY"},
+                    "path": [entity_name],
                 })
+                logger.warning(f"[Phase 1] Unknown query group: {entity_name}")
+                continue
+
+            # Bare group: `{ Entity }` with no method subselection.
+            if group_sel.sub_fields is None:
+                errors.append(self._bare_group_field_error(entity_name, method_group, "Query"))
+                continue
+
+            for method_name, method_sel in group_sel.sub_fields.items():
+                try:
+                    method_info = method_group.get(method_name)
+                    if method_info is None:
+                        errors.append({
+                            "message": f"Cannot query field '{method_name}' on type '{entity_name}Query'",
+                            "extensions": {"code": "UNKNOWN_QUERY"},
+                            "path": [entity_name, method_name],
+                        })
+                        logger.warning(f"[Phase 1] Unknown query method: {entity_name}.{method_name}")
+                        continue
+
+                    return_entity, query_method = method_info
+
+                    # Build response model (no I/O, just type construction)
+                    response_model = self.builder.build_response_model(
+                        entity=return_entity,
+                        field_selection=method_sel
+                    )
+                    logger.debug(f"[Phase 1] Response model built: {entity_name}.{method_name}")
+
+                    execution_tasks.append((
+                        entity_name,
+                        method_name,
+                        return_entity,
+                        query_method,
+                        method_sel,
+                        response_model,
+                    ))
+
+                except GraphQLError as e:
+                    errors.append(e.to_dict())
+                except Exception as e:
+                    logger.exception(f"Unexpected error in Phase 1 for {entity_name}.{method_name}")
+                    errors.append({
+                        "message": str(e),
+                        "extensions": {"code": type(e).__name__}
+                    })
 
         logger.info(f"[Phase 1] Completed: {len(execution_tasks)} queries prepared, {len(errors)} errors")
 
@@ -136,14 +158,14 @@ class QueryExecutor:
             # Execute all (query_method + transform + resolve) concurrently
             execution_map = await self._execute_concurrent_queries(execution_tasks, context=context)
 
-            # Collect results and errors
-            for query_name, (result_data, error_dict) in execution_map.items():
+            # Collect results and errors, nested per entity group.
+            for (entity_name, method_name), (result_data, error_dict) in execution_map.items():
                 if error_dict:
                     errors.append(error_dict)
                 else:
-                    data[query_name] = result_data
+                    data.setdefault(entity_name, {})[method_name] = result_data
 
-        logger.info(f"[Phase 2] Completed: {len(data)} queries resolved successfully")
+        logger.info(f"[Phase 2] Completed: {len(data)} query groups resolved successfully")
 
         # 3. Format response
         response = {
@@ -151,25 +173,25 @@ class QueryExecutor:
             "errors": errors if errors else None
         }
 
-        logger.info(f"Query execution complete: {len(data) if data else 0} successful, {len(errors) if errors else 0} errors")
+        logger.info(f"Query execution complete: {len(data) if data else 0} groups, {len(errors) if errors else 0} errors")
         return response
 
     async def execute_mutation(
         self,
         query: str,
-        mutation_map: dict[str, tuple[type, Callable]],
+        mutation_map: dict[str, dict[str, tuple[type, Callable]]],
         context: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
-        """
-        Execute custom mutation with two-phase execution:
-        - Phase 1 (Serial): Mutation method execution, model building, data transformation
-        - Phase 2 (Serial): Execute Resolver to resolve related data (each mutation executed sequentially)
+        """Execute a grouped mutation: ``mutation { Entity { method(args) { fields } } }``.
+
+        Serial two-level dispatch (group → method), same transform/resolve
+        pipeline as before. Results nest as ``data[entity_name][method_name]``.
         """
         logger.info("Starting custom mutation execution")
 
         # 1. Parse mutation
         parsed = self.parser.parse(query)
-        logger.debug(f"Mutation parsed: {len(parsed.field_tree)} root fields found")
+        logger.debug(f"Mutation parsed: {len(parsed.field_tree)} root groups found")
 
         # 2. Initialize results
         errors = []
@@ -178,91 +200,110 @@ class QueryExecutor:
         # ===== Phase 1 + Phase 2: Serial execution of each mutation =====
         logger.info("Starting serial mutation execution with two-phase resolution")
 
-        for root_mutation_name, root_field_selection in parsed.field_tree.items():
-            try:
-                # Check if mutation exists
-                if root_mutation_name not in mutation_map:
-                    errors.append({
-                        "message": f"Unknown mutation: {root_mutation_name}",
-                        "extensions": {"code": "UNKNOWN_MUTATION"}
-                    })
-                    logger.warning(f"Unknown mutation: {root_mutation_name}")
-                    continue
+        for entity_name, group_sel in parsed.field_tree.items():
+            method_group = mutation_map.get(entity_name)
 
-                entity, mutation_method = mutation_map[root_mutation_name]
-
-                # === Phase 1: Execute mutation method ===
-                args = root_field_selection.arguments or {}
-                root_data = await self._execute_method(mutation_method, args, "mutation", entity, context=context)
-                logger.debug(f"Mutation method executed: {root_mutation_name}")
-
-                # === Phase 1: Build response model ===
-                response_model = self.builder.build_response_model(
-                    entity=entity,
-                    field_selection=root_field_selection
-                )
-                logger.debug(f"Response model built: {root_mutation_name}")
-
-                # === Phase 1: Transform to response model ===
-                if isinstance(root_data, list):
-                    typed_data = [
-                        response_model.model_validate(
-                            d.model_dump() if hasattr(d, 'model_dump') else d
-                        )
-                        for d in root_data
-                    ]
-                elif root_data is not None:
-                    typed_data = response_model.model_validate(
-                        root_data.model_dump() if hasattr(root_data, 'model_dump') else root_data
-                    )
-                else:
-                    typed_data = None
-
-                logger.debug(f"Data transformed: {root_mutation_name}")
-
-                # Inject pagination args into model instances
-                if typed_data is not None:
-                    instances = typed_data if isinstance(typed_data, list) else [typed_data]
-                    self.builder.inject_pagination_args(
-                        instances=instances,
-                        entity=entity,
-                        field_selection=root_field_selection,
-                    )
-
-                # === Phase 2: Resolve related data ===
-                if typed_data is not None:
-                    resolver = self.resolver_class(
-                        enable_from_attribute_in_type_adapter=self.enable_from_attribute_in_type_adapter,
-                        context=context,
-                        resolved_hooks=self.resolved_hooks,
-                    )
-
-                    if isinstance(typed_data, list):
-                        resolved = await resolver.resolve(typed_data)
-                        data[root_mutation_name] = [
-                            r.model_dump(mode='json', by_alias=False)
-                            for r in resolved
-                        ] if resolved else []
-                    else:
-                        resolved = await resolver.resolve(typed_data)
-                        data[root_mutation_name] = (
-                            resolved.model_dump(mode='json', by_alias=False)
-                        ) if resolved else None
-                else:
-                    data[root_mutation_name] = None
-
-                logger.debug(f"Mutation resolved: {root_mutation_name}")
-
-            except GraphQLError as e:
-                errors.append(e.to_dict())
-            except Exception as e:
-                logger.exception(f"Unexpected error executing {root_mutation_name}")
+            if method_group is None:
                 errors.append({
-                    "message": str(e),
-                    "extensions": {"code": type(e).__name__}
+                    "message": f"Cannot query field '{entity_name}' on type 'Mutation'",
+                    "extensions": {"code": "UNKNOWN_MUTATION"},
+                    "path": [entity_name],
                 })
+                logger.warning(f"Unknown mutation group: {entity_name}")
+                continue
 
-        logger.info(f"Mutation execution complete: {len(data) if data else 0} successful, {len(errors) if errors else 0} errors")
+            if group_sel.sub_fields is None:
+                errors.append(self._bare_group_field_error(entity_name, method_group, "Mutation"))
+                continue
+
+            for method_name, method_sel in group_sel.sub_fields.items():
+                try:
+                    method_info = method_group.get(method_name)
+                    if method_info is None:
+                        errors.append({
+                            "message": f"Cannot query field '{method_name}' on type '{entity_name}Mutation'",
+                            "extensions": {"code": "UNKNOWN_MUTATION"},
+                            "path": [entity_name, method_name],
+                        })
+                        logger.warning(f"Unknown mutation method: {entity_name}.{method_name}")
+                        continue
+
+                    return_entity, mutation_method = method_info
+                    label = f"{entity_name}.{method_name}"
+
+                    # === Phase 1: Execute mutation method ===
+                    args = method_sel.arguments or {}
+                    root_data = await self._execute_method(mutation_method, args, "mutation", return_entity, context=context)
+                    logger.debug(f"Mutation method executed: {label}")
+
+                    # === Phase 1: Build response model ===
+                    response_model = self.builder.build_response_model(
+                        entity=return_entity,
+                        field_selection=method_sel
+                    )
+                    logger.debug(f"Response model built: {label}")
+
+                    # === Phase 1: Transform to response model ===
+                    if isinstance(root_data, list):
+                        typed_data = [
+                            response_model.model_validate(
+                                d.model_dump() if hasattr(d, 'model_dump') else d
+                            )
+                            for d in root_data
+                        ]
+                    elif root_data is not None:
+                        typed_data = response_model.model_validate(
+                            root_data.model_dump() if hasattr(root_data, 'model_dump') else root_data
+                        )
+                    else:
+                        typed_data = None
+
+                    logger.debug(f"Data transformed: {label}")
+
+                    # Inject pagination args into model instances
+                    if typed_data is not None:
+                        instances = typed_data if isinstance(typed_data, list) else [typed_data]
+                        self.builder.inject_pagination_args(
+                            instances=instances,
+                            entity=return_entity,
+                            field_selection=method_sel,
+                        )
+
+                    # === Phase 2: Resolve related data ===
+                    if typed_data is not None:
+                        resolver = self.resolver_class(
+                            enable_from_attribute_in_type_adapter=self.enable_from_attribute_in_type_adapter,
+                            context=context,
+                            resolved_hooks=self.resolved_hooks,
+                        )
+
+                        if isinstance(typed_data, list):
+                            resolved = await resolver.resolve(typed_data)
+                            result = [
+                                r.model_dump(mode='json', by_alias=False)
+                                for r in resolved
+                            ] if resolved else []
+                        else:
+                            resolved = await resolver.resolve(typed_data)
+                            result = (
+                                resolved.model_dump(mode='json', by_alias=False)
+                            ) if resolved else None
+                    else:
+                        result = None
+
+                    data.setdefault(entity_name, {})[method_name] = result
+                    logger.debug(f"Mutation resolved: {label}")
+
+                except GraphQLError as e:
+                    errors.append(e.to_dict())
+                except Exception as e:
+                    logger.exception(f"Unexpected error executing {entity_name}.{method_name}")
+                    errors.append({
+                        "message": str(e),
+                        "extensions": {"code": type(e).__name__}
+                    })
+
+        logger.info(f"Mutation execution complete: {len(data) if data else 0} groups, {len(errors) if errors else 0} errors")
 
         # 3. Format response
         response = {
@@ -271,6 +312,36 @@ class QueryExecutor:
         }
 
         return response
+
+    @staticmethod
+    def _bare_group_field_error(
+        entity_name: str,
+        method_group: dict[str, tuple[type, Callable]],
+        group_suffix: str,
+    ) -> dict[str, Any]:
+        """Build the friendly error for selecting a bare entity group field.
+
+        Fires when a query selects ``{ Entity }`` with no method subselection.
+        ``{ Entity {} }`` (empty braces) is rejected by graphql-core's parser
+        before reaching the executor, so only the truly-bare case is caught.
+        """
+        method_names = sorted(method_group)
+        first = method_names[0] if method_names else "method_name"
+        example = f"{{ {entity_name} {{ {first}(id: 1) {{ id }} }} }}"
+        return {
+            "message": (
+                f"Field '{entity_name}' is a grouping field that requires a "
+                f"method subselection. Available methods on '{entity_name}': "
+                f"{', '.join(method_names)}.\n"
+                f"Example: {example}"
+            ),
+            "path": [entity_name],
+            "extensions": {
+                "code": "BARE_GROUP_FIELD",
+                "entity": entity_name,
+                "available_methods": method_names,
+            },
+        }
 
     async def _execute_method(
         self,
@@ -468,17 +539,18 @@ class QueryExecutor:
 
     async def _execute_concurrent_queries(
         self,
-        execution_tasks: list[tuple[str, type, Callable, Any, type]],
+        execution_tasks: list[tuple[str, str, type, Callable, Any, type]],
         context: Optional[dict[str, Any]] = None,
-    ) -> dict[str, tuple[Optional[Any], Optional[dict]]]:
+    ) -> dict[tuple[str, str], tuple[Optional[Any], Optional[dict]]]:
         """
         Execute multiple queries concurrently (query_method + transform + resolve).
 
         Args:
-            execution_tasks: List of (query_name, entity, query_method, field_selection, response_model) tuples
+            execution_tasks: List of (entity_name, method_name, return_entity,
+                method, method_selection, response_model) tuples.
 
         Returns:
-            Dict mapping query_name to (result_data, error_dict)
+            Dict mapping (entity_name, method_name) to (result_data, error_dict).
         """
         if not execution_tasks:
             return {}
@@ -493,43 +565,39 @@ class QueryExecutor:
         else:
             semaphore = None
 
-        async def execute_with_semaphore(
-            query_name: str,
-            entity: type,
-            query_method: Callable,
-            field_selection: Any,
-            response_model: type
-        ):
+        async def execute_with_semaphore(task):
+            entity_name, method_name, return_entity, query_method, field_selection, response_model = task
+            label = f"{entity_name}.{method_name}"
             if semaphore:
                 async with semaphore:
                     return await self._execute_single_query(
-                        query_name, entity, query_method, field_selection, response_model, context=context
+                        label, return_entity, query_method, field_selection, response_model, context=context
                     )
             else:
                 return await self._execute_single_query(
-                    query_name, entity, query_method, field_selection, response_model, context=context
+                    label, return_entity, query_method, field_selection, response_model, context=context
                 )
 
         # Execute all (query_method + transform + resolve) tasks concurrently
         results = await asyncio.gather(
-            *[execute_with_semaphore(*task) for task in execution_tasks],
+            *[execute_with_semaphore(task) for task in execution_tasks],
             return_exceptions=True
         )
 
-        # Process results and map to query names
-        query_names = [name for name, _, _, _, _ in execution_tasks]
+        # Process results and map to (entity_name, method_name) keys
+        keys = [(entity_name, method_name) for entity_name, method_name, _, _, _, _ in execution_tasks]
         execution_map = {}
 
-        for query_name, result in zip(query_names, results):
+        for key, result in zip(keys, results):
             if isinstance(result, Exception):
-                logger.exception(f"[Phase 2] Unexpected exception for {query_name}")
+                logger.exception(f"[Phase 2] Unexpected exception for {'.'.join(key)}")
                 error_dict = {
                     "message": f"Unexpected error: {str(result)}",
                     "extensions": {"code": type(result).__name__}
                 }
-                execution_map[query_name] = (None, error_dict)
+                execution_map[key] = (None, error_dict)
             else:
-                execution_map[query_name] = result
+                execution_map[key] = result
 
         logger.info("[Phase 2] Completed concurrent execution")
         return execution_map

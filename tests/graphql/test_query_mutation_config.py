@@ -234,12 +234,12 @@ class TestSchemaBuilderCompatibility:
         builder = SchemaBuilder(diagram)
         schema = builder.build_schema()
 
-        # 验证 Query 类型包含配置的方法（显式 name 生效且保留 entity 前缀）
-        assert 'userEntityForConfigUsers(limit: Int): [UserEntityForConfig!]' in schema
-        assert 'postEntityForConfigGetAllPosts: [PostEntityForConfig!]' in schema
+        # 分组布局：方法字段落在 {Entity}Query/{Entity}Mutation 组类型里，
+        # 字段名用 cfg.name 或方法原名（不再加 entity 前缀、不再 camelCase）。
+        assert 'users(limit: Int): [UserEntityForConfig!]' in schema
+        assert 'get_all_posts: [PostEntityForConfig!]' in schema
 
-        # 验证 Mutation 类型包含配置的方法（显式 name 生效且保留 entity 前缀）
-        assert 'postEntityForConfigCreatePost(input: CreatePostInput!): PostEntityForConfig!' in schema
+        assert 'createPost(input: CreatePostInput!): PostEntityForConfig!' in schema
 
     def test_mixed_decorator_and_config(self):
         """测试装饰器和配置混合使用"""
@@ -255,9 +255,9 @@ class TestSchemaBuilderCompatibility:
         builder = SchemaBuilder(diagram)
         schema = builder.build_schema()
 
-        # 验证两种方式都能被正确识别（配置显式 name 生效且保留 entity 前缀）
-        assert 'userWithDecoratorGetAll(limit: Int): [UserWithDecorator!]' in schema
-        assert 'postWithConfigPosts: [PostWithConfig!]' in schema
+        # 分组布局：方法字段用原名 / cfg.name，落在 {Entity}Query 组类型里。
+        assert 'get_all(limit: Int): [UserWithDecorator!]' in schema
+        assert 'posts: [PostWithConfig!]' in schema
 
 
 # ========== 循环引用测试用的实体（模块级别，避免动态类导致的 teardown 问题）==========
@@ -309,9 +309,9 @@ class TestCircularReferenceScenario:
 
         assert 'type AuthorEntity' in schema
         assert 'type BookEntity' in schema
-        # 显式配置的 operation name 应生效且保留 entity 前缀
-        assert 'authorEntityAuthors: [AuthorEntity!]' in schema
-        assert 'bookEntityBooksByAuthor(author_id: Int!): [BookEntity!]' in schema
+        # 分组布局：显式配置的 name 直接作为方法字段名（落在 {Entity}Query 组类型里）
+        assert 'authors: [AuthorEntity!]' in schema
+        assert 'booksByAuthor(author_id: Int!): [BookEntity!]' in schema
 
 
 class TestEntityDefaultValues:

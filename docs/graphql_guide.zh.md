@@ -22,13 +22,15 @@ flowchart LR
 
 ```graphql
 {
-    sprintEntityGetAll {
-        id
-        name
-        tasks {
+    SprintEntity {
+        get_all {
             id
-            title
-            owner { id name }
+            name
+            tasks {
+                id
+                title
+                owner { id name }
+            }
         }
     }
 }
@@ -38,21 +40,23 @@ flowchart LR
 
 ```json
 {
-    "sprintEntityGetAll": [
-        {
-            "id": 1, "name": "Sprint 24",
-            "tasks": [
-                {"id": 10, "title": "Design docs", "owner": {"id": 7, "name": "Ada"}},
-                {"id": 11, "title": "Refine examples", "owner": {"id": 8, "name": "Bob"}}
-            ]
-        },
-        {
-            "id": 2, "name": "Sprint 25",
-            "tasks": [
-                {"id": 12, "title": "Write tests", "owner": {"id": 7, "name": "Ada"}}
-            ]
-        }
-    ]
+    "SprintEntity": {
+        "get_all": [
+            {
+                "id": 1, "name": "Sprint 24",
+                "tasks": [
+                    {"id": 10, "title": "Design docs", "owner": {"id": 7, "name": "Ada"}},
+                    {"id": 11, "title": "Refine examples", "owner": {"id": 8, "name": "Bob"}}
+                ]
+            },
+            {
+                "id": 2, "name": "Sprint 25",
+                "tasks": [
+                    {"id": 12, "title": "Write tests", "owner": {"id": 7, "name": "Ada"}}
+                ]
+            }
+        ]
+    }
 }
 ```
 
@@ -60,7 +64,7 @@ ERD 驱动 schema 生成和数据解析。
 
 ## Step 1：定义带有查询的实体
 
-使用 `@query` 装饰器添加根入口点。GraphQL 操作名自动生成为 `entityPrefix + MethodCamel`（例如 `SprintEntity.get_all` → `sprintEntityGetAll`）：
+使用 `@query` 装饰器添加根入口点。操作按 entity 分组：方法成为 `{Entity}Query` 组类型上的字段，使用原方法名（例如 `SprintEntity.get_all` 的查询形式为 `{ SprintEntity { get_all {} } }`）：
 
 ```python
 from pydantic import BaseModel
@@ -126,7 +130,7 @@ class SprintEntity(BaseModel, BaseEntity):
 diagram = BaseEntity.get_diagram()
 ```
 
-1.  `@query` 将此方法标记为 GraphQL 根查询。操作名变为 `sprintEntityGetAll`。
+1.  `@query` 将此方法标记为 GraphQL 根查询。它成为 `SprintEntityQuery` 组类型上的 `get_all` 字段。
 
 ## Step 2：执行查询
 
@@ -137,15 +141,17 @@ handler = GraphQLHandler(diagram)  # (1)
 
 result = await handler.execute("""  # (2)
 {
-    sprintEntityGetAll {
-        id
-        name
-        tasks {
+    SprintEntity {
+        get_all {
             id
-            title
-            owner {
+            name
+            tasks {
                 id
-                name
+                title
+                owner {
+                    id
+                    name
+                }
             }
         }
     }
@@ -153,7 +159,7 @@ result = await handler.execute("""  # (2)
 """)
 
 print(result)
-# {'data': {'sprintEntityGetAll': [
+# {'data': {'SprintEntity': {'get_all': [
 #     {'id': 1, 'name': 'Sprint 24', 'tasks': [
 #         {'id': 10, 'title': 'Design docs', 'owner': {'id': 7, 'name': 'Ada'}},
 #         {'id': 11, 'title': 'Refine examples', 'owner': {'id': 8, 'name': 'Bob'}},
@@ -213,7 +219,7 @@ QueryConfig(
 )
 ```
 
-最终的 GraphQL 操作名始终为 `entityPrefix + MethodCamel`（例如 `SprintEntity` + `get_all` → `sprintEntityGetAll`）。`name` 参数仅覆盖方法名部分：`name='sprints'` → `sprintEntitySprints`。
+操作按 entity 分组，字段名使用原方法名：`SprintEntity.get_all` 的查询形式为 `{ SprintEntity { get_all {} } }`。`name` 参数覆盖该字段名：`name='sprints'` → `{ SprintEntity { sprints {} } }`。
 
 ```python
 async def get_all_sprints(cls, limit: int = 20) -> list[SprintEntity]:
@@ -253,8 +259,8 @@ diagram = ErDiagram(entities=[
         kls=SprintEntity,
         relationships=[...],
         queries=[
-            QueryConfig(method=get_all_sprints),          # → sprintEntityGetAllSprints
-            QueryConfig(method=get_sprint_by_id, name='sprint'),  # → sprintEntitySprint
+            QueryConfig(method=get_all_sprints),          # → SprintEntity { get_all_sprints {} }
+            QueryConfig(method=get_sprint_by_id, name='sprint'),  # → SprintEntity { sprint {} }
         ],
         mutations=[
             MutationConfig(method=create_sprint),         # → sprintEntityCreateSprint
@@ -558,7 +564,7 @@ type Pagination {
 
 ```mermaid
 flowchart TB
-    Q["客户端查询<br/>{ sprintEntityGetAll { tasks { owner } } }"]
+    Q["客户端查询<br/>{ SprintEntity { get_all { tasks { owner } } } }"]
     P["查询解析器"]
     R["Resolver + DataLoader"]
     D["DataLoader 批量调用"]

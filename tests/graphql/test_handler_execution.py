@@ -31,10 +31,10 @@ class TestHandlerExecutionBehavior:
         config_global_resolver(diagram)
         handler = GraphQLHandler(diagram)
 
-        result = await handler.execute("{ userEntityGetAll { id label } }")
+        result = await handler.execute("{ UserEntity { get_all { id label } } }")
 
         assert result["errors"] is None
-        assert result["data"]["userEntityGetAll"][0]["label"] == "U-1"
+        assert result["data"]["UserEntity"]["get_all"][0]["label"] == "U-1"
 
     @pytest.mark.asyncio
     async def test_query_not_misclassified_as_mutation_by_substring(self):
@@ -60,11 +60,11 @@ class TestHandlerExecutionBehavior:
 
         # Includes mutation field name text in argument value.
         result = await handler.execute(
-            '{ userEntityGetByNote(note: "userEntityUpdateUser") { id note } }'
+            '{ UserEntity { get_by_note(note: "userEntityUpdateUser") { id note } } }'
         )
 
         assert result["errors"] is None
-        assert result["data"]["userEntityGetByNote"][0]["note"] == "userEntityUpdateUser"
+        assert result["data"]["UserEntity"]["get_by_note"][0]["note"] == "userEntityUpdateUser"
 
     @pytest.mark.asyncio
     async def test_staticmethod_query_with_arguments_works(self):
@@ -75,11 +75,11 @@ class TestHandlerExecutionBehavior:
         config_global_resolver(diagram)
         handler = GraphQLHandler(diagram)
 
-        result = await handler.execute("{ userEntityGetById(id: 1) { id name email } }")
+        result = await handler.execute("{ UserEntity { get_by_id(id: 1) { id name email } } }")
 
         assert result["errors"] is None
-        assert result["data"]["userEntityGetById"]["id"] == 1
-        assert result["data"]["userEntityGetById"]["name"] == "Alice"
+        assert result["data"]["UserEntity"]["get_by_id"]["id"] == 1
+        assert result["data"]["UserEntity"]["get_by_id"]["name"] == "Alice"
 
     @pytest.mark.asyncio
     async def test_query_with_variable_returns_parse_error(self):
@@ -93,7 +93,7 @@ class TestHandlerExecutionBehavior:
         result = await handler.execute(
             """
             query GetUser($id: Int!) {
-                userEntityGetById(id: $id) { id name email }
+                UserEntity { get_by_id(id: $id) { id name email } }
             }
             """
         )

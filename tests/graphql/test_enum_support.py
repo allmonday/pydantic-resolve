@@ -149,20 +149,20 @@ class TestEnumQueryExecution:
     @pytest.mark.asyncio
     async def test_enum_field_query(self):
         """Test querying enum fields."""
-        result = await self.handler.execute("{ userWithRoleEntityGetAll { id name role } }")
+        result = await self.handler.execute("{ UserWithRoleEntity { get_all { id name role } } }")
 
         # Enum values should be serialized as their names (GraphQL convention)
-        assert result["data"]["userWithRoleEntityGetAll"][0]["role"] == "ADMIN"
-        assert result["data"]["userWithRoleEntityGetAll"][1]["role"] == "USER"
+        assert result["data"]["UserWithRoleEntity"]["get_all"][0]["role"] == "ADMIN"
+        assert result["data"]["UserWithRoleEntity"]["get_all"][1]["role"] == "USER"
 
     @pytest.mark.asyncio
     async def test_post_status_enum_query(self):
         """Test querying post status enum fields."""
-        result = await self.handler.execute("{ postWithStatusEntityGetAll { id title status } }")
+        result = await self.handler.execute("{ PostWithStatusEntity { get_all { id title status } } }")
 
         # Enum values should be serialized as their names (GraphQL convention)
-        assert result["data"]["postWithStatusEntityGetAll"][0]["status"] == "PUBLISHED"
-        assert result["data"]["postWithStatusEntityGetAll"][1]["status"] == "DRAFT"
+        assert result["data"]["PostWithStatusEntity"]["get_all"][0]["status"] == "PUBLISHED"
+        assert result["data"]["PostWithStatusEntity"]["get_all"][1]["status"] == "DRAFT"
 
 
 class TestIntEnumQuery:
@@ -177,8 +177,8 @@ class TestIntEnumQuery:
     @pytest.mark.asyncio
     async def test_int_enum_field_query(self):
         """Test querying int enum fields."""
-        result = await self.handler.execute("{ taskWithPriorityEntityGetAll { id name priority } }")
+        result = await self.handler.execute("{ TaskWithPriorityEntity { get_all { id name priority } } }")
 
         # IntEnum values should be serialized as their names (GraphQL convention)
-        assert result["data"]["taskWithPriorityEntityGetAll"][0]["priority"] == "HIGH"
-        assert result["data"]["taskWithPriorityEntityGetAll"][1]["priority"] == "LOW"
+        assert result["data"]["TaskWithPriorityEntity"]["get_all"][0]["priority"] == "HIGH"
+        assert result["data"]["TaskWithPriorityEntity"]["get_all"][1]["priority"] == "LOW"

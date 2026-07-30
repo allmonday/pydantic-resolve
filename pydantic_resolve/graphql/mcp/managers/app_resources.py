@@ -44,18 +44,33 @@ class AppResources:
 
     @property
     def query_names(self) -> set[str]:
-        """Get set of query names.
+        """All query operations as ``<entity>.<method>`` identifiers.
 
-        Returns:
-            Set of query operation names
+        Under the grouped layout the map is ``{entity: {method: ...}}``; these
+        identifiers stay unique (and ``len()`` accurate) even when two entities
+        share a method name.
         """
-        return set(self.handler.query_map.keys())
+        return {
+            f"{entity}.{method}"
+            for entity, group in self.handler.query_map.items()
+            for method in group
+        }
 
     @property
     def mutation_names(self) -> set[str]:
-        """Get set of mutation names.
+        """All mutation operations as ``<entity>.<method>`` identifiers."""
+        return {
+            f"{entity}.{method}"
+            for entity, group in self.handler.mutation_map.items()
+            for method in group
+        }
 
-        Returns:
-            Set of mutation operation names
-        """
+    @property
+    def query_groups(self) -> set[str]:
+        """Entity group names that expose at least one query."""
+        return set(self.handler.query_map.keys())
+
+    @property
+    def mutation_groups(self) -> set[str]:
+        """Entity group names that expose at least one mutation."""
         return set(self.handler.mutation_map.keys())

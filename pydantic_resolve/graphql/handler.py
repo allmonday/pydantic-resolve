@@ -110,37 +110,112 @@ class GraphQLHandler:
                 + "\n\nSet order_by on the ORM relationship to enable pagination."
             )
 
-    def _build_query_map(self) -> dict[str, tuple[type, Callable]]:
-        """
-        Scan all entities and build query name to method mapping.
+    def _build_query_map(self) -> dict[str, dict[str, tuple[type, Callable]]]:
+        """Build the grouped query map.
 
         Returns:
-            Dictionary mapping query names to (return entity class, method) tuples
+            ``{entity_name: {method_name: (return_entity, method)}}``. Entities
+            without any ``@query`` method contribute no group.
         """
-        query_map = {}
-        for entity_cfg in self.er_diagram.entities:
-            methods = self.schema_builder._extract_query_methods(entity_cfg.kls)
-            for method_info in methods:
-                query_name = method_info['name']
-                return_entity = self._extract_return_entity(method_info['method'])
-                query_map[query_name] = (return_entity, method_info['method'])
-        return query_map
+        return self._build_grouped_map("query")
 
-    def _build_mutation_map(self) -> dict[str, tuple[type, Callable]]:
-        """
-        Scan all entities and build mutation name to method mapping.
+    def _build_mutation_map(self) -> dict[str, dict[str, tuple[type, Callable]]]:
+        """Build the grouped mutation map.
 
         Returns:
-            Dictionary mapping mutation names to (return entity class, method) tuples
+            ``{entity_name: {method_name: (return_entity, method)}}``. Entities
+            without any ``@mutation`` method contribute no group.
         """
-        mutation_map = {}
+        return self._build_grouped_map("mutation")
+
+    def _build_grouped_map(
+        self, operation_type: str
+    ) -> dict[str, dict[str, tuple[type, Callable]]]:
+        """Scan all entities and build a grouped operation map with eager validation.
+
+        Mirrors nexusx's ``method_scanner.scan``: the result is keyed by the
+        *defining* entity class name, then by the verbatim method field name.
+        Name collisions are rejected at scan time (not last-writer-wins), so a
+        broken entity graph fails fast in ``__init__`` — before any SDL or
+        introspection is produced.
+
+        Args:
+            operation_type: ``"query"`` or ``"mutation"``.
+
+        Returns:
+            ``{entity_name: {method_name: (return_entity, method)}}``.
+
+        Raises:
+            ReservedEntityError: An entity contributing methods is named
+                ``Query`` / ``Mutation`` / ``Subscription``.
+            DuplicateEntityError: Two distinct classes sharing a name both
+                contribute methods.
+            ReservedMethodFieldError: A method name starts with ``__``.
+            DuplicateMethodError: Two methods on one entity share a field name.
+        """
+        from pydantic_resolve.graphql.schema_errors import (
+            _RESERVED_ROOT_NAMES,
+            DuplicateEntityError,
+            DuplicateMethodError,
+            ReservedEntityError,
+            ReservedMethodFieldError,
+        )
+
+        if operation_type == "query":
+            extract = self.schema_builder._extract_query_methods
+        else:
+            extract = self.schema_builder._extract_mutation_methods
+
+        grouped: dict[str, dict[str, tuple[type, Callable]]] = {}
+        entity_by_name: dict[str, type] = {}
+
         for entity_cfg in self.er_diagram.entities:
-            methods = self.schema_builder._extract_mutation_methods(entity_cfg.kls)
+            kls = entity_cfg.kls
+            methods = extract(kls)
+            if not methods:
+                # Entities without a method of this kind produce no group — skip
+                # entirely (no group type, no root mount, no name validation).
+                continue
+
+            entity_name = kls.__name__
+
+            # Entity-level validation: reserved root names + distinct same-named classes.
+            if entity_name in _RESERVED_ROOT_NAMES:
+                raise ReservedEntityError(
+                    f"Entity class '{entity_name}' clashes with a GraphQL root "
+                    f"operation type name; rename the class (defined in {kls.__module__})."
+                )
+            prior = entity_by_name.get(entity_name)
+            if prior is not None and prior is not kls:
+                raise DuplicateEntityError(
+                    f"Entity name '{entity_name}' is declared by two distinct classes: "
+                    f"{prior.__module__}.{entity_name} and {kls.__module__}.{entity_name}. "
+                    f"Rename one of them."
+                )
+            if prior is None:
+                entity_by_name[entity_name] = kls
+
+            inner = grouped.setdefault(entity_name, {})
             for method_info in methods:
-                mutation_name = method_info['name']
+                method_name = method_info['name']
+
+                # Method-level validation.
+                if method_name.startswith("__"):
+                    raise ReservedMethodFieldError(
+                        f"Method '{method_name}' on entity '{entity_name}' "
+                        f"({kls.__module__}.{entity_name}) starts with '__', "
+                        f"which is reserved by GraphQL introspection; rename the method."
+                    )
+                if method_name in inner:
+                    raise DuplicateMethodError(
+                        f"Method '{method_name}' appears more than once on entity "
+                        f"'{entity_name}' ({kls.__module__}.{entity_name})."
+                    )
+
                 return_entity = self._extract_return_entity(method_info['method'])
-                mutation_map[mutation_name] = (return_entity, method_info['method'])
-        return mutation_map
+                inner[method_name] = (return_entity, method_info['method'])
+
+        return grouped
 
     def _extract_return_entity(self, method: Callable) -> Optional[type]:
         """

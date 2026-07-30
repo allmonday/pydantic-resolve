@@ -43,12 +43,14 @@ result = await handler.execute(
 ```python
 result = await handler.execute("""
 {
-    sprintEntityGetAll {
-        id
-        name
-        tasks {
+    SprintEntity {
+        get_all {
             id
-            title
+            name
+            tasks {
+                id
+                title
+            }
         }
     }
 }
@@ -84,7 +86,7 @@ result = await handler.execute(
 ```python
 {
     "data": {
-        "sprintEntityGetAll": [...]
+        "SprintEntity": {"get_all": [...]}
     },
     "errors": None,
 }

@@ -21,15 +21,15 @@ class IntrospectionHelper:
     def __init__(
         self,
         er_diagram,
-        query_map: dict[str, tuple[type, Callable]],
-        mutation_map: dict[str, tuple[type, Callable]],
+        query_map: dict[str, dict[str, tuple[type, Callable]]],
+        mutation_map: dict[str, dict[str, tuple[type, Callable]]],
         enable_pagination: bool = False
     ):
         """
         Args:
             er_diagram: Entity relationship diagram
-            query_map: Mapping of query names to (entity, method) tuples
-            mutation_map: Mapping of mutation names to (entity, method) tuples
+            query_map: Grouped mapping {entity_name: {method_name: (entity, method)}}
+            mutation_map: Grouped mapping {entity_name: {method_name: (entity, method)}}
             enable_pagination: When True, one-to-many fields use Result types
         """
         self.er_diagram = er_diagram

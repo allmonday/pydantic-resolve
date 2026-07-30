@@ -43,12 +43,14 @@ Execute a GraphQL query string and return a GraphQL-style response dict.
 ```python
 result = await handler.execute("""
 {
-    sprintEntityGetAll {
-        id
-        name
-        tasks {
+    SprintEntity {
+        get_all {
             id
-            title
+            name
+            tasks {
+                id
+                title
+            }
         }
     }
 }
@@ -84,7 +86,7 @@ The return value follows GraphQL response shape:
 ```python
 {
     "data": {
-        "sprintEntityGetAll": [...]
+        "SprintEntity": {"get_all": [...]}
     },
     "errors": None,
 }

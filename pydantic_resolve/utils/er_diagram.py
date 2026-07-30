@@ -273,11 +273,12 @@ class ErDiagram(BaseModel):
             kind: str,
             kls: type,
         ) -> list[QueryConfig] | list[MutationConfig]:
-            from pydantic_resolve.graphql.utils.naming import to_graphql_field_name
-
             def _to_operation_name(cfg: QueryConfig | MutationConfig) -> str:
-                base_name = cfg.name or cfg.method.__name__
-                return to_graphql_field_name(kls.__name__, base_name)
+                # Under the grouped layout the GraphQL field name is the verbatim
+                # method name (optionally overridden by cfg.name) — no entity
+                # prefix, no camelCase. Two methods on the same entity collide
+                # iff these names collide.
+                return cfg.name or cfg.method.__name__
 
             merged = list(existing_items)
             seen_method_names = {cfg.method.__name__ for cfg in existing_items}

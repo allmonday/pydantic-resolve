@@ -166,6 +166,11 @@ class IntrospectionQueryHelper:
     ) -> list[dict[str, str | None]]:
         """List all fields (operations) for Query or Mutation type.
 
+        .. note::
+            Under the grouped layout the root Query/Mutation fields are entity
+            groups (``User: UserQuery!``), not individual operations. To list the
+            actual methods use :meth:`list_group_operations`.
+
         Returns lightweight operation info suitable for Layer 1 progressive disclosure.
 
         Args:
@@ -173,11 +178,6 @@ class IntrospectionQueryHelper:
 
         Returns:
             List of dictionaries with 'name' and 'description' keys
-
-        Example:
-            >>> helper.list_operation_fields("Query")
-            [{'name': 'userGetAll', 'description': 'Get all users'},
-             {'name': 'userGetById', 'description': 'Get user by ID'}]
         """
         type_info = self._type_cache.get(operation_type)
         if not type_info:
@@ -191,6 +191,84 @@ class IntrospectionQueryHelper:
             })
 
         return result
+
+    @staticmethod
+    def _unwrap_type_name(type_ref: GraphQLTypeRef | None) -> str | None:
+        """Unwrap a GraphQL type ref (NON_NULL/LIST) to its named type."""
+        ref = type_ref
+        while ref is not None:
+            name = ref.get("name")
+            if name:
+                return name
+            ref = ref.get("ofType")
+        return None
+
+    def list_group_operations(
+        self, operation_type: str
+    ) -> list[dict[str, Any]]:
+        """List all methods across every entity group for Query or Mutation.
+
+        Under the grouped layout the root ``Query``/``Mutation`` fields are
+        entity groups (``User: UserQuery!``); the actual operations are the
+        method fields on the ``{Entity}Query``/``{Entity}Mutation`` types. This
+        descends into each group and returns one entry per method.
+
+        Args:
+            operation_type: "Query" or "Mutation"
+
+        Returns:
+            One dict per method: ``{entity, method, name ("<entity>.<method>"),
+            description}``.
+        """
+        type_info = self._type_cache.get(operation_type)
+        if not type_info:
+            return []
+
+        result: list[dict[str, Any]] = []
+        for group_field in type_info.get("fields", []) or []:
+            entity_name = group_field.get("name")
+            group_type_name = self._unwrap_type_name(group_field.get("type"))
+            if not group_type_name:
+                continue
+            group_type = self._type_cache.get(group_type_name)
+            if not group_type:
+                continue
+            for method_field in group_type.get("fields", []) or []:
+                method_name = method_field.get("name")
+                result.append({
+                    "entity": entity_name,
+                    "method": method_name,
+                    "name": f"{entity_name}.{method_name}",
+                    "description": method_field.get("description"),
+                })
+        return result
+
+    def get_group_operation(
+        self, operation_type: str, entity_name: str, method_name: str
+    ) -> GraphQLField | None:
+        """Get a method field from its ``{Entity}Query``/``{Entity}Mutation`` group.
+
+        Args:
+            operation_type: "Query" or "Mutation".
+            entity_name: Entity class name (the group field on the root type).
+            method_name: Method name verbatim.
+
+        Returns:
+            The method field introspection dict, or None if not found.
+        """
+        root_field = self.get_operation_field(operation_type, entity_name)
+        if not root_field:
+            return None
+        group_type_name = self._unwrap_type_name(root_field.get("type"))
+        if not group_type_name:
+            return None
+        group_type = self._type_cache.get(group_type_name)
+        if not group_type:
+            return None
+        for field in group_type.get("fields", []) or []:
+            if field.get("name") == method_name:
+                return field
+        return None
 
     def get_operation_with_related_types(
         self, operation_type: str, field_name: str

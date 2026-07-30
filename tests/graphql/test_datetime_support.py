@@ -70,7 +70,7 @@ class TestDateTimeJSONSerialization:
     async def test_datetime_json_serialization(self):
         """Verify datetime types can be JSON serialized."""
         result = await self.handler.execute(
-            "{ dateTimeEntityGetAll { id name created_at birth_date schedule_time price utc_time } }"
+            "{ DateTimeEntity { get_all { id name created_at birth_date schedule_time price utc_time } } }"
         )
 
         # Critical test: result must be JSON serializable
@@ -83,18 +83,18 @@ class TestDateTimeJSONSerialization:
     async def test_custom_plain_serializer(self):
         """Verify PlainSerializer is triggered correctly with mode='json'."""
         result = await self.handler.execute(
-            "{ dateTimeEntityGetAll { id utc_time } }"
+            "{ DateTimeEntity { get_all { id utc_time } } }"
         )
 
         # Verify custom serializer is triggered (with Z suffix)
-        utc_time = result["data"]["dateTimeEntityGetAll"][0]["utc_time"]
+        utc_time = result["data"]["DateTimeEntity"]["get_all"][0]["utc_time"]
         assert utc_time.endswith("Z"), f"Expected Z suffix, got: {utc_time}"
 
     @pytest.mark.asyncio
     async def test_date_serialization(self):
         """Verify date type is serialized as ISO string."""
         result = await self.handler.execute(
-            "{ dateTimeEntityGetAll { id birth_date } }"
+            "{ DateTimeEntity { get_all { id birth_date } } }"
         )
 
         json_str = json.dumps(result)
@@ -104,7 +104,7 @@ class TestDateTimeJSONSerialization:
     async def test_time_serialization(self):
         """Verify time type is serialized as ISO string."""
         result = await self.handler.execute(
-            "{ dateTimeEntityGetAll { id schedule_time } }"
+            "{ DateTimeEntity { get_all { id schedule_time } } }"
         )
 
         json_str = json.dumps(result)
@@ -115,7 +115,7 @@ class TestDateTimeJSONSerialization:
     async def test_decimal_serialization(self):
         """Verify Decimal type is serialized as string/number."""
         result = await self.handler.execute(
-            "{ dateTimeEntityGetAll { id price } }"
+            "{ DateTimeEntity { get_all { id price } } }"
         )
 
         json_str = json.dumps(result)

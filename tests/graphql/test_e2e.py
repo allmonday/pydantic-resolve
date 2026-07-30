@@ -39,7 +39,7 @@ class TestGraphQLIntegration:
     @pytest.mark.asyncio
     async def test_simple_query_execution(self):
         """测试简单查询执行"""
-        query_str = "{ simpleEntityGetAll { id name } }"
+        query_str = "{ SimpleEntity { get_all { id name } } }"
         result = await self.handler.execute(query_str)
 
         # 验证响应格式
@@ -50,28 +50,30 @@ class TestGraphQLIntegration:
         assert result["errors"] is None or len(result["errors"]) == 0
 
         # 验证数据
-        assert "simpleEntityGetAll" in result["data"]
-        users = result["data"]["simpleEntityGetAll"]
+        assert "SimpleEntity" in result["data"]
+        users = result["data"]["SimpleEntity"]["get_all"]
         assert len(users) <= 2
 
     @pytest.mark.asyncio
     async def test_query_with_arguments(self):
         """测试带参数的查询"""
-        query_str = "{ simpleEntityGetAll(limit: 1) { id } }"
+        query_str = "{ SimpleEntity { get_all(limit: 1) { id } } }"
         result = await self.handler.execute(query_str)
 
         # 验证响应
         assert "data" in result
-        assert "simpleEntityGetAll" in result["data"]
-        assert len(result["data"]["simpleEntityGetAll"]) == 1
+        assert "SimpleEntity" in result["data"]
+        assert len(result["data"]["SimpleEntity"]["get_all"]) == 1
 
     @pytest.mark.asyncio
     async def test_query_with_fragment_spread(self):
         """测试带 FragmentSpread 的查询"""
         query_str = """
         query {
-            simpleEntityGetAll(limit: 1) {
-                ...SimpleFields
+            SimpleEntity {
+                get_all(limit: 1) {
+                    ...SimpleFields
+                }
             }
         }
 
@@ -83,8 +85,8 @@ class TestGraphQLIntegration:
         result = await self.handler.execute(query_str)
 
         assert result["errors"] is None
-        assert result["data"]["simpleEntityGetAll"][0]["id"] == 1
-        assert result["data"]["simpleEntityGetAll"][0]["name"] == "Alice"
+        assert result["data"]["SimpleEntity"]["get_all"][0]["id"] == 1
+        assert result["data"]["SimpleEntity"]["get_all"][0]["name"] == "Alice"
 
     @pytest.mark.asyncio
     async def test_invalid_query(self):
