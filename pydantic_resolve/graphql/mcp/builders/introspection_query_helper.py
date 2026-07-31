@@ -138,18 +138,23 @@ class IntrospectionQueryHelper:
     def get_operation_field(
         self, operation_type: str, field_name: str
     ) -> GraphQLField | None:
-        """Get a specific field from Query or Mutation type.
+        """Get a specific field from the root Query or Mutation type.
+
+        Under the grouped layout the root fields are entity groups
+        (``UserEntity: UserEntityQuery!``); to fetch a *method* field use
+        :meth:`get_group_operation`. This method looks up a field by name on
+        the root type only.
 
         Args:
             operation_type: "Query" or "Mutation"
-            field_name: Name of the field/operation to retrieve
+            field_name: Name of the root field (an entity group name) to retrieve
 
         Returns:
             Field introspection data or None if not found
 
         Example:
-            >>> helper.get_operation_field("Query", "userGetAll")
-            {'name': 'userGetAll', 'args': [...], 'type': {...}}
+            >>> helper.get_operation_field("Query", "UserEntity")
+            {'name': 'UserEntity', 'args': [...], 'type': {...}}
         """
         type_info = self._type_cache.get(operation_type)
         if not type_info:
@@ -273,25 +278,26 @@ class IntrospectionQueryHelper:
     def get_operation_with_related_types(
         self, operation_type: str, field_name: str
     ) -> dict[str, Any] | None:
-        """Get operation field info with all related types.
+        """Get a root field with all related types.
 
-        Combines operation field info with introspection data for all related types.
-        Useful for Layer 2 progressive disclosure.
+        Combines a root Query/Mutation field (an entity group under the grouped
+        layout) with introspection data for its related types. Useful for Layer 2
+        progressive disclosure of an entity group. For a specific method field
+        use :meth:`get_group_operation`.
 
         Args:
             operation_type: "Query" or "Mutation"
-            field_name: Name of the field/operation
+            field_name: Name of the root field (an entity group name)
 
         Returns:
             Dictionary with 'operation' and 'related_types' keys, or None if not found
 
         Example:
-            >>> helper.get_operation_with_related_types("Query", "userGetAll")
+            >>> helper.get_operation_with_related_types("Query", "UserEntity")
             {
-                'operation': {'name': 'userGetAll', 'args': [...], 'type': {...}},
+                'operation': {'name': 'UserEntity', 'args': [...], 'type': {...}},
                 'related_types': [
-                    {'name': 'User', 'kind': 'OBJECT', ...},
-                    {'name': 'Post', 'kind': 'OBJECT', ...}
+                    {'name': 'UserEntityQuery', 'kind': 'OBJECT', ...},
                 ]
             }
         """

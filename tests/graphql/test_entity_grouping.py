@@ -19,9 +19,14 @@ from pydantic_resolve import (
     QueryConfig,
     base_entity,
     config_global_resolver,
+    mutation,
     query,
 )
 from pydantic_resolve.graphql import GraphQLHandler, SchemaBuilder
+from pydantic_resolve.graphql.mcp.builders.introspection_query_helper import (
+    IntrospectionQueryHelper,
+)
+from pydantic_resolve.graphql.mcp.managers.app_resources import AppResources
 from pydantic_resolve.graphql.schema_errors import (
     DuplicateMethodError,
     ReservedEntityError,
@@ -255,3 +260,111 @@ class TestEagerConflictDetection:
         ])
         with pytest.raises(ReservedEntityError):
             GraphQLHandler(diagram)
+
+
+# =====================================
+# MCP helpers operating on the grouped schema
+# =====================================
+
+
+def _build_grouped_handler():
+    """Two entities: UserEntity (query + mutation) and PostEntity (query only)."""
+    Base = base_entity()
+
+    class UserEntity(BaseModel, Base):
+        __relationships__ = []
+        id: int
+        name: str
+
+        @query
+        async def get_all(cls) -> List["UserEntity"]:
+            """Get all users."""
+            return []
+
+        @mutation
+        async def create(cls, name: str) -> "UserEntity":
+            """Create a user."""
+            return UserEntity(id=1, name=name)
+
+    class PostEntity(BaseModel, Base):
+        __relationships__ = []
+        id: int
+        title: str
+
+        @query
+        async def get_all(cls) -> List["PostEntity"]:
+            return []
+
+    diagram = Base.get_diagram()
+    config_global_resolver(diagram)
+    return GraphQLHandler(diagram)
+
+
+def _make_helper(handler: GraphQLHandler) -> IntrospectionQueryHelper:
+    data = handler.introspection._generator.generate()
+    entity_names = {cfg.kls.__name__ for cfg in handler.er_diagram.entities}
+    return IntrospectionQueryHelper(data, entity_names)
+
+
+class TestGroupedMcpHelpers:
+    """list_group_operations / get_group_operation against a real grouped schema."""
+
+    def test_list_group_operations_descends_into_groups(self):
+        helper = _make_helper(_build_grouped_handler())
+        queries = helper.list_group_operations("Query")
+
+        # One entry per method across every entity group; both entities share a
+        # method named get_all, so the <entity>.<method> identifiers stay unique.
+        names = {q["name"] for q in queries}
+        assert names == {"UserEntity.get_all", "PostEntity.get_all"}
+
+        user_get_all = next(q for q in queries if q["name"] == "UserEntity.get_all")
+        assert user_get_all["entity"] == "UserEntity"
+        assert user_get_all["method"] == "get_all"
+        assert user_get_all["description"] and "Get all users" in user_get_all["description"]
+
+    def test_list_group_operations_unknown_type_returns_empty(self):
+        helper = _make_helper(_build_grouped_handler())
+        assert helper.list_group_operations("Subscription") == []
+
+    def test_get_group_operation_returns_method_field(self):
+        helper = _make_helper(_build_grouped_handler())
+        field = helper.get_group_operation("Query", "UserEntity", "get_all")
+        assert field is not None
+        assert field["name"] == "get_all"
+
+        mut_field = helper.get_group_operation("Mutation", "UserEntity", "create")
+        assert mut_field is not None
+        assert mut_field["name"] == "create"
+
+    def test_get_group_operation_unknown_returns_none(self):
+        helper = _make_helper(_build_grouped_handler())
+        assert helper.get_group_operation("Query", "UserEntity", "nope") is None
+        assert helper.get_group_operation("Query", "Missing", "get_all") is None
+        # Cross-group: PostEntity has get_all but no create mutation.
+        assert helper.get_group_operation("Mutation", "PostEntity", "create") is None
+
+    def test_unwrap_type_name(self):
+        unwrap = IntrospectionQueryHelper._unwrap_type_name
+        assert unwrap({"name": "Foo"}) == "Foo"
+        assert unwrap(None) is None
+        # NON_NULL(OBJECT(Bar))
+        assert unwrap({"kind": "NON_NULL", "name": None,
+                       "ofType": {"kind": "OBJECT", "name": "Bar", "ofType": None}}) == "Bar"
+        # LIST(OBJECT(Baz))
+        assert unwrap({"kind": "LIST", "name": None,
+                       "ofType": {"kind": "OBJECT", "name": "Baz", "ofType": None}}) == "Baz"
+
+    def test_app_resources_group_and_name_properties(self):
+        handler = _build_grouped_handler()
+        app = AppResources(
+            name="t",
+            description="t",
+            handler=handler,
+            introspection_helper=_make_helper(handler),
+            sdl_builder=handler.schema_builder._builder,
+        )
+        assert app.query_groups == {"UserEntity", "PostEntity"}
+        assert app.mutation_groups == {"UserEntity"}
+        assert app.query_names == {"UserEntity.get_all", "PostEntity.get_all"}
+        assert app.mutation_names == {"UserEntity.create"}

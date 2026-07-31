@@ -197,21 +197,22 @@ class TestGenerateOperationSdl:
         self.builder = SDLBuilder(self.er_diagram)
 
     def test_generate_query_sdl(self):
-        """Test generating SDL for a query operation."""
+        """Test generating SDL for a query operation, wrapped in its group type."""
         result = self.builder.generate_operation_sdl("SampleUser", "get_all", "Query")
 
         assert result is not None
-        assert "# Query" in result
-        assert "get_all" in result
+        # Root mount + group type — the method is NOT a flat root field.
+        assert "type Query {\n  SampleUser: SampleUserQuery!\n}" in result
+        assert "type SampleUserQuery {\n  get_all" in result
         assert "SampleUser" in result  # Return type
 
     def test_generate_mutation_sdl(self):
-        """Test generating SDL for a mutation operation."""
+        """Test generating SDL for a mutation operation, wrapped in its group type."""
         result = self.builder.generate_operation_sdl("SampleUser", "create", "Mutation")
 
         assert result is not None
-        assert "# Mutation" in result
-        assert "create" in result
+        assert "type Mutation {\n  SampleUser: SampleUserMutation!\n}" in result
+        assert "type SampleUserMutation {\n  create" in result
 
     def test_generate_nonexistent_operation(self):
         """Test generating SDL for non-existent operation returns None."""

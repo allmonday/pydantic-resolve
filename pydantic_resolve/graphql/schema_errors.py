@@ -1,20 +1,26 @@
-"""Schema-construction errors for the entity GraphQL path.
+"""Schema-construction errors + shared scan for the entity GraphQL path.
 
-These mirror the shape of the compose (UseCaseService) path's errors but live
-in a separate module so the two intentionally-orthogonal code paths do not
-couple at the type level. All checks fire eagerly at scan time — inside
-``GraphQLHandler.__init__`` when the grouped query/mutation maps are built —
-before any SDL/introspection is produced, so a broken entity graph never
-silently drops methods.
+All checks fire eagerly at scan time — inside ``GraphQLHandler.__init__``
+when the grouped query/mutation maps are built, and (via the same
+:func:`scan_grouped_methods` helper) when SDL is generated standalone
+through ``SchemaBuilder.build_schema()`` — before any SDL or introspection
+is produced, so a broken entity graph never silently drops or clobbers a
+method.
 
 Under the grouped layout the entity class name becomes both the root
-Query/Mutation field name and the ``{Entity}Query`` / ``{Entity}Mutation`` type
-name, and the method name is used verbatim as the field on that group type.
-That makes name collisions destructive (silently clobbering a group or a
-method), so they are rejected up front instead of last-writer-wins.
+Query/Mutation field name and the ``{Entity}Query`` / ``{Entity}Mutation``
+type name, and the method name is used verbatim as the field on that group
+type. That makes name collisions destructive (silently clobbering a group or
+a method), so they are rejected up front instead of last-writer-wins.
+
+Entity-name uniqueness (two distinct classes sharing ``__name__``) is
+already enforced by ``ErDiagram._validate_configs`` at construction time, so
+it is not re-checked here.
 """
 
 from __future__ import annotations
+
+from collections.abc import Callable, Iterable
 
 
 # GraphQL root operation type names — an entity class named one of these would
@@ -24,16 +30,6 @@ _RESERVED_ROOT_NAMES = frozenset({"Query", "Mutation", "Subscription"})
 
 class EntitySchemaError(Exception):
     """Base class for entity-path schema construction errors."""
-
-
-class DuplicateEntityError(EntitySchemaError):
-    """Two distinct entity classes share the same ``__name__``.
-
-    Under the grouped layout the entity class name becomes both the root
-    Query/Mutation field name and the ``{Entity}Query`` group type name, so two
-    same-named classes would collapse into one group and silently drop one
-    entity's methods.
-    """
 
 
 class DuplicateMethodError(EntitySchemaError):
@@ -52,5 +48,71 @@ class ReservedEntityError(EntitySchemaError):
     """An entity class is named ``Query`` / ``Mutation`` / ``Subscription``.
 
     Those names collide with the GraphQL root operation types and would
-    produce self-referential, introspection-breaking schemas.
+    produce confusing, introspection-breaking schemas.
     """
+
+
+def scan_grouped_methods(
+    entities: Iterable,
+    extract_fn: Callable[[type], list[dict]],
+) -> dict[str, list[dict]]:
+    """Scan entities into a grouped ``{entity_name: [method_info, ...]}`` map.
+
+    Single source of truth for both ``GraphQLHandler`` (operation-map
+    building) and the schema generators (SDL), so every path that renders
+    operations applies the same eager conflict checks and computes the same
+    grouping. A broken entity graph therefore fails fast regardless of entry
+    point — handler init *or* standalone ``SchemaBuilder.build_schema()``.
+
+    Args:
+        entities: Iterable of Entity configs (anything exposing ``.kls``).
+        extract_fn: ``Callable[type] -> list[dict]`` returning an entity's
+            ``@query``/``@mutation`` method infos (each carrying a ``'name'``
+            key, the verbatim GraphQL field name).
+
+    Returns:
+        ``{entity_name: [method_info, ...]}``, preserving declaration order.
+        Entities with no methods of this kind are omitted.
+
+    Raises:
+        ReservedEntityError: an entity contributing methods is named
+            ``Query`` / ``Mutation`` / ``Subscription``.
+        ReservedMethodFieldError: a method field name starts with ``__``.
+        DuplicateMethodError: two methods on one entity share a field name.
+    """
+    grouped: dict[str, list[dict]] = {}
+    for entity_cfg in entities:
+        kls = entity_cfg.kls
+        methods = extract_fn(kls)
+        if not methods:
+            # Entities without a method of this kind produce no group — skip
+            # entirely (no group type, no root mount, no name validation).
+            continue
+
+        entity_name = kls.__name__
+
+        if entity_name in _RESERVED_ROOT_NAMES:
+            raise ReservedEntityError(
+                f"Entity class '{entity_name}' clashes with a GraphQL root "
+                f"operation type name; rename the class (defined in {kls.__module__})."
+            )
+
+        bucket = grouped.setdefault(entity_name, [])
+        seen_fields = {m["name"] for m in bucket}
+        for method_info in methods:
+            field_name = method_info["name"]
+            if field_name.startswith("__"):
+                raise ReservedMethodFieldError(
+                    f"Method '{field_name}' on entity '{entity_name}' "
+                    f"({kls.__module__}.{entity_name}) starts with '__', "
+                    f"which is reserved by GraphQL introspection; rename the method."
+                )
+            if field_name in seen_fields:
+                raise DuplicateMethodError(
+                    f"Method '{field_name}' appears more than once on entity "
+                    f"'{entity_name}' ({kls.__module__}.{entity_name})."
+                )
+            seen_fields.add(field_name)
+            bucket.append(method_info)
+
+    return grouped

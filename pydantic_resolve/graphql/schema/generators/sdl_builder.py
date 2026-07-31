@@ -333,23 +333,25 @@ class SDLBuilder(SchemaGenerator):
             extract = self._extract_mutation_methods
             build_def = self._build_mutation_def
 
+        # Reuse the handler's scan so standalone SchemaBuilder.build_schema()
+        # applies the same eager conflict checks (reserved names, duplicate
+        # method field names) and computes the same grouping as the handler.
+        from pydantic_resolve.graphql.schema_errors import scan_grouped_methods
+        scanned = scan_grouped_methods(self.er_diagram.entities, extract)
+
         group_blocks: list[str] = []
         root_lines: list[str] = []
 
-        for entity_cfg in self.er_diagram.entities:
-            kls = entity_cfg.kls
-            methods = extract(kls)
-            if not methods:
-                continue
-
-            method_fields = [f"  {build_def(m)}" for m in methods]
-            gt_name = group_type_name(kls.__name__, group_suffix)
+        for entity_name, method_infos in scanned.items():
+            method_fields = [f"  {build_def(m)}" for m in method_infos]
+            gt_name = group_type_name(entity_name, group_suffix)
             body = f"type {gt_name} {{\n{chr(10).join(method_fields)}\n}}"
-            description = self._get_class_description(kls)
+            # All method_infos on one entity share the same defining class.
+            description = self._get_class_description(method_infos[0]['entity'])
             if description:
                 body = f'"""{description}"""\n{body}'
             group_blocks.append(body)
-            root_lines.append(f"{kls.__name__}: {gt_name}!")
+            root_lines.append(f"{entity_name}: {gt_name}!")
 
         return group_blocks, root_lines
 
@@ -459,6 +461,11 @@ class SDLBuilder(SchemaGenerator):
         SDL for a specific query or mutation (identified by its entity group and
         verbatim method name) along with all related type definitions.
 
+        Under the grouped layout the method is a field on the
+        ``{Entity}Query`` / ``{Entity}Mutation`` group type, reached via a root
+        mount field. The generated SDL reflects that shape so an AI consumer
+        can construct a valid query — it is **not** a flat root field.
+
         Args:
             entity_name: Entity class name (the group the method belongs to).
             method_name: Method name verbatim (the field on the group type).
@@ -469,7 +476,7 @@ class SDLBuilder(SchemaGenerator):
 
         Example:
             >>> generator.generate_operation_sdl("UserEntity", "get_all", "Query")
-            '# Query\\nget_all(limit: Int, offset: Int): [UserEntity!]!\\n\\n# Related Types\\ntype UserEntity { ... }'
+            'type Query {\\n  UserEntity: UserEntityQuery!\\n}\\n\\ntype UserEntityQuery {\\n  get_all(limit: Int): [UserEntity!]!\\n}\\n\\n# Related Types\\ntype UserEntity { ... }'
         """
         # Find the operation method
         method_info = self._find_operation_method(entity_name, method_name, operation_type)
@@ -482,12 +489,21 @@ class SDLBuilder(SchemaGenerator):
         # Build SDL parts
         parts = []
 
-        # Build operation definition
+        # Root mount + group type: the method is a field on {Entity}Query /
+        # {Entity}Mutation, reached via `<entity>: <group>!` on the root type.
         if operation_type == "Query":
             field_def = self._build_query_def(method_info)
         else:
             field_def = self._build_mutation_def(method_info)
-        parts.append(f"# {operation_type}\n{field_def}")
+        group_type = group_type_name(entity_name, operation_type)
+        parts.append(
+            f"type {operation_type} {{\n"
+            f"  {entity_name}: {group_type}!\n"
+            f"}}\n\n"
+            f"type {group_type} {{\n"
+            f"  {field_def}\n"
+            f"}}"
+        )
 
         # Build related type definitions
         if related_entities:

@@ -146,12 +146,15 @@ class QueryExecutor:
                     ))
 
                 except GraphQLError as e:
-                    errors.append(e.to_dict())
+                    err = e.to_dict()
+                    err.setdefault("path", [entity_name, method_name])
+                    errors.append(err)
                 except Exception as e:
                     logger.exception(f"Unexpected error in Phase 1 for {entity_name}.{method_name}")
                     errors.append({
                         "message": str(e),
-                        "extensions": {"code": type(e).__name__}
+                        "extensions": {"code": type(e).__name__},
+                        "path": [entity_name, method_name],
                     })
 
         logger.info(f"[Phase 1] Completed: {len(execution_tasks)} queries prepared, {len(errors)} errors")
@@ -304,12 +307,15 @@ class QueryExecutor:
                     logger.debug(f"Mutation resolved: {label}")
 
                 except GraphQLError as e:
-                    errors.append(e.to_dict())
+                    err = e.to_dict()
+                    err.setdefault("path", [entity_name, method_name])
+                    errors.append(err)
                 except Exception as e:
                     logger.exception(f"Unexpected error executing {entity_name}.{method_name}")
                     errors.append({
                         "message": str(e),
-                        "extensions": {"code": type(e).__name__}
+                        "extensions": {"code": type(e).__name__},
+                        "path": [entity_name, method_name],
                     })
 
         logger.info(f"Mutation execution complete: {len(data) if data else 0} groups, {len(errors) if errors else 0} errors")
@@ -597,15 +603,16 @@ class QueryExecutor:
 
         async def execute_with_semaphore(task):
             entity_name, method_name, return_entity, query_method, field_selection, response_model = task
-            label = f"{entity_name}.{method_name}"
             if semaphore:
                 async with semaphore:
                     return await self._execute_single_query(
-                        label, return_entity, query_method, field_selection, response_model, context=context
+                        entity_name, method_name, return_entity, query_method,
+                        field_selection, response_model, context=context,
                     )
             else:
                 return await self._execute_single_query(
-                    label, return_entity, query_method, field_selection, response_model, context=context
+                    entity_name, method_name, return_entity, query_method,
+                    field_selection, response_model, context=context,
                 )
 
         # Execute all (query_method + transform + resolve) tasks concurrently
@@ -623,7 +630,8 @@ class QueryExecutor:
                 logger.exception(f"[Phase 2] Unexpected exception for {'.'.join(key)}")
                 error_dict = {
                     "message": f"Unexpected error: {str(result)}",
-                    "extensions": {"code": type(result).__name__}
+                    "extensions": {"code": type(result).__name__},
+                    "path": list(key),
                 }
                 execution_map[key] = (None, error_dict)
             else:
@@ -634,7 +642,8 @@ class QueryExecutor:
 
     async def _execute_single_query(
         self,
-        query_name: str,
+        entity_name: str,
+        method_name: str,
         entity: type,
         query_method: Callable,
         field_selection: Any,
@@ -648,7 +657,8 @@ class QueryExecutor:
         _prepare_query_resolution and _resolve_query_data.
 
         Args:
-            query_name: Query name for logging
+            entity_name: Entity group name (for logging + error path).
+            method_name: Method field name (for logging + error path).
             query_method: @query decorated method
             field_selection: Parsed field selection with arguments
             response_model: Pre-built response model class
@@ -658,6 +668,8 @@ class QueryExecutor:
             - Success: (result_data, None)
             - Failure: (None, error_dict)
         """
+        query_name = f"{entity_name}.{method_name}"
+        path = [entity_name, method_name]
         logger.debug(f"[Phase 2] Executing query: {query_name}")
 
         try:
@@ -730,11 +742,14 @@ class QueryExecutor:
 
         except GraphQLError as e:
             logger.warning(f"[Phase 2] GraphQL error for {query_name}: {e.message}")
-            return None, e.to_dict()
+            err = e.to_dict()
+            err.setdefault("path", path)
+            return None, err
         except Exception as e:
             logger.exception(f"[Phase 2] Error executing {query_name}")
             error_dict = {
                 "message": f"Execution failed for {query_name}: {str(e)}",
-                "extensions": {"code": type(e).__name__}
+                "extensions": {"code": type(e).__name__},
+                "path": path,
             }
             return None, error_dict
