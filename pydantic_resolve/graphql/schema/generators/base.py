@@ -50,9 +50,10 @@ class SchemaGenerator(ABC):
         self.collector = TypeCollector(er_diagram, self.registry)
         self.mapper = TypeMapper(er_diagram)
 
-        # Query and mutation maps (set by subclasses if needed)
-        self.query_map: dict[str, tuple[type, Callable]] = {}
-        self.mutation_map: dict[str, tuple[type, Callable]] = {}
+        # Query and mutation maps (set by subclasses if needed). Grouped:
+        # {entity_name: {method_name: (return_entity, method)}}
+        self.query_map: dict[str, dict[str, tuple[type, Callable]]] = {}
+        self.mutation_map: dict[str, dict[str, tuple[type, Callable]]] = {}
 
     @abstractmethod
     def generate(self) -> Any:
@@ -226,7 +227,6 @@ class SchemaGenerator(ABC):
             List of dicts with keys: name, description, params, return_type, entity, method
         """
         import pydantic_resolve.constant as const
-        from pydantic_resolve.graphql.utils.naming import to_graphql_field_name
 
         if operation_type == "query":
             attr = const.GRAPHQL_QUERY_ATTR
@@ -255,13 +255,15 @@ class SchemaGenerator(ABC):
             params = self._extract_method_params(sig)
             return_type = sig.return_annotation
 
-            # Build GraphQL operation name
+            # GraphQL field name is the verbatim method name (no camelCase, no
+            # entity prefix) — the field lives on the ``{Entity}Query`` /
+            # ``{Entity}Mutation`` group type, so the entity context is already
+            # the parent group.
             base_name = getattr(actual_method, name_attr, None) or name
-            graphql_name = to_graphql_field_name(entity.__name__, base_name)
             description = getattr(actual_method, desc_attr, "") or ""
 
             methods.append({
-                'name': graphql_name,
+                'name': base_name,
                 'description': description,
                 'params': params,
                 'return_type': return_type,

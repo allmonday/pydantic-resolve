@@ -238,11 +238,11 @@ class TestPaginationQueryExecution:
         )
 
         result = await handler.execute(
-            "{ authorEntityAuthors { id name articles { items { title } pagination { has_more } } } }"
+            "{ AuthorEntity { authors { id name articles { items { title } pagination { has_more } } } } }"
         )
 
         assert result["errors"] is None
-        authors = result["data"]["authorEntityAuthors"]
+        authors = result["data"]["AuthorEntity"]["authors"]
         assert len(authors) == 3
 
         # Default page_size=20, so all articles should be returned
@@ -261,11 +261,11 @@ class TestPaginationQueryExecution:
         )
 
         result = await handler.execute(
-            "{ authorEntityAuthors { id name articles(limit: 2) { items { title } pagination { has_more } } } }"
+            "{ AuthorEntity { authors { id name articles(limit: 2) { items { title } pagination { has_more } } } } }"
         )
 
         assert result["errors"] is None
-        authors = result["data"]["authorEntityAuthors"]
+        authors = result["data"]["AuthorEntity"]["authors"]
 
         # Alice has 3 articles, limit=2 should return 2 and has_more=true
         alice = authors[0]
@@ -290,22 +290,22 @@ class TestPaginationQueryExecution:
 
         # Page 1: limit=1, offset=0 for Alice
         result = await handler.execute(
-            "{ authorEntityAuthors { id name articles(limit: 1, offset: 0) { items { title } pagination { has_more } } } }"
+            "{ AuthorEntity { authors { id name articles(limit: 1, offset: 0) { items { title } pagination { has_more } } } } }"
         )
 
         assert result["errors"] is None
-        alice = result["data"]["authorEntityAuthors"][0]
+        alice = result["data"]["AuthorEntity"]["authors"][0]
         assert len(alice["articles"]["items"]) == 1
         assert alice["articles"]["items"][0]["title"] == "A1"
         assert alice["articles"]["pagination"]["has_more"] is True
 
         # Page 2: limit=10, offset=1 for Alice
         result2 = await handler.execute(
-            "{ authorEntityAuthors { id name articles(limit: 10, offset: 1) { items { title } pagination { has_more } } } }"
+            "{ AuthorEntity { authors { id name articles(limit: 10, offset: 1) { items { title } pagination { has_more } } } } }"
         )
 
         assert result2["errors"] is None
-        alice2 = result2["data"]["authorEntityAuthors"][0]
+        alice2 = result2["data"]["AuthorEntity"]["authors"][0]
         assert len(alice2["articles"]["items"]) == 2
         assert alice2["articles"]["items"][0]["title"] == "A2"
         assert alice2["articles"]["items"][1]["title"] == "A3"
@@ -321,11 +321,11 @@ class TestPaginationQueryExecution:
         )
 
         result = await handler.execute(
-            "{ authorEntityAuthors { id articles(limit: 1) { items { title } pagination { has_more total_count } } } }"
+            "{ AuthorEntity { authors { id articles(limit: 1) { items { title } pagination { has_more total_count } } } } }"
         )
 
         assert result["errors"] is None
-        authors = result["data"]["authorEntityAuthors"]
+        authors = result["data"]["AuthorEntity"]["authors"]
 
         # Alice: 3 total
         assert authors[0]["articles"]["pagination"]["total_count"] == 3
@@ -347,11 +347,11 @@ class TestPaginationQueryExecution:
         )
 
         result = await handler.execute(
-            "{ authorEntityAuthors { id name articles(limit: 10) { items { title author_id } } } }"
+            "{ AuthorEntity { authors { id name articles(limit: 10) { items { title author_id } } } } }"
         )
 
         assert result["errors"] is None
-        authors = result["data"]["authorEntityAuthors"]
+        authors = result["data"]["AuthorEntity"]["authors"]
 
         for author in authors:
             for item in author["articles"]["items"]:
@@ -363,11 +363,11 @@ class TestPaginationQueryExecution:
         handler = GraphQLHandler(diagram, enable_from_attribute_in_type_adapter=True)
 
         result = await handler.execute(
-            "{ authorEntityAuthors { id name articles { title } } }"
+            "{ AuthorEntity { authors { id name articles { title } } } }"
         )
 
         assert result["errors"] is None
-        authors = result["data"]["authorEntityAuthors"]
+        authors = result["data"]["AuthorEntity"]["authors"]
 
         # Alice should have all 3 articles
         alice = authors[0]
@@ -385,11 +385,11 @@ class TestPaginationQueryExecution:
         )
 
         result = await handler.execute(
-            "{ authorEntityAuthors { id articles(limit: 10) { items { title } } } }"
+            "{ AuthorEntity { authors { id articles(limit: 10) { items { title } } } } }"
         )
 
         assert result["errors"] is None
-        authors = result["data"]["authorEntityAuthors"]
+        authors = result["data"]["AuthorEntity"]["authors"]
         alice = authors[0]
 
         # pagination key should not be present
@@ -407,11 +407,11 @@ class TestPaginationQueryExecution:
         )
 
         result = await handler.execute(
-            "{ authorEntityAuthors { id articles(limit: 2) { items { title } pagination { has_more } } } }"
+            "{ AuthorEntity { authors { id articles(limit: 2) { items { title } pagination { has_more } } } } }"
         )
 
         assert result["errors"] is None
-        authors = result["data"]["authorEntityAuthors"]
+        authors = result["data"]["AuthorEntity"]["authors"]
         alice = authors[0]
 
         pag = alice["articles"]["pagination"]
@@ -429,11 +429,11 @@ class TestPaginationQueryExecution:
         )
 
         result = await handler.execute(
-            "{ authorEntityAuthors { id articles(limit: 2) { items { title } pagination { total_count } } } }"
+            "{ AuthorEntity { authors { id articles(limit: 2) { items { title } pagination { total_count } } } } }"
         )
 
         assert result["errors"] is None
-        authors = result["data"]["authorEntityAuthors"]
+        authors = result["data"]["AuthorEntity"]["authors"]
         alice = authors[0]
 
         pag = alice["articles"]["pagination"]
@@ -779,11 +779,11 @@ class TestNonUniqueSortField:
         )
 
         result = await handler.execute(
-            "{ categoryEntityCategories { id name items(limit: 5) { items { id name } pagination { total_count has_more } } } }"
+            "{ CategoryEntity { categories { id name items(limit: 5) { items { id name } pagination { total_count has_more } } } } }"
         )
 
         assert result["errors"] is None
-        categories = result["data"]["categoryEntityCategories"]
+        categories = result["data"]["CategoryEntity"]["categories"]
 
         # Category 1: 5 items total, limit=5, all should be returned without duplicates
         cat1 = categories[0]
@@ -814,11 +814,11 @@ class TestNonUniqueSortField:
         )
 
         result = await handler.execute(
-            "{ categoryEntityCategories { id name items(limit: 2) { items { id name priority } pagination { total_count has_more } } } }"
+            "{ CategoryEntity { categories { id name items(limit: 2) { items { id name priority } pagination { total_count has_more } } } } }"
         )
 
         assert result["errors"] is None
-        categories = result["data"]["categoryEntityCategories"]
+        categories = result["data"]["CategoryEntity"]["categories"]
 
         # Category 1: 5 items, limit=2, should get 2 items, has_more=True
         cat1 = categories[0]
@@ -993,11 +993,11 @@ class TestNestedPagination:
         )
 
         result = await handler.execute(
-            "{ blogAuthorEntityBlogAuthors { id name articles(limit: 2) { items { id title comments(limit: 1) { items { text } pagination { total_count has_more } } } pagination { total_count has_more } } } }"
+            "{ BlogAuthorEntity { blog_authors { id name articles(limit: 2) { items { id title comments(limit: 1) { items { text } pagination { total_count has_more } } } pagination { total_count has_more } } } } }"
         )
 
         assert result["errors"] is None
-        authors = result["data"]["blogAuthorEntityBlogAuthors"]
+        authors = result["data"]["BlogAuthorEntity"]["blog_authors"]
         assert len(authors) == 2
 
         # Alice: 3 articles, limit=2 → 2 articles, has_more=True
@@ -1043,11 +1043,11 @@ class TestNestedPagination:
         )
 
         result = await handler.execute(
-            "{ blogAuthorEntityBlogAuthors { id articles(limit: 1) { items { id comments { items { text } pagination { total_count } } } } } }"
+            "{ BlogAuthorEntity { blog_authors { id articles(limit: 1) { items { id comments { items { text } pagination { total_count } } } } } } }"
         )
 
         assert result["errors"] is None
-        authors = result["data"]["blogAuthorEntityBlogAuthors"]
+        authors = result["data"]["BlogAuthorEntity"]["blog_authors"]
 
         # Alice: first article has 2 comments (default page_size=20 → all)
         alice_art = authors[0]["articles"]["items"][0]
@@ -1070,7 +1070,7 @@ class TestAliasSupport:
             enable_from_attribute_in_type_adapter=True,
             enable_pagination=True,
         )
-        result = await handler.execute("{ renamed: authorEntityAuthors { id } }")
+        result = await handler.execute("{ renamed: AuthorEntity { authors { id } } }")
         assert result["errors"] is not None
         assert "alias" in result["errors"][0]["message"].lower()
 
@@ -1082,7 +1082,7 @@ class TestAliasSupport:
             enable_pagination=True,
         )
         result = await handler.execute(
-            "{ blogAuthorEntityBlogAuthors { n: name articles(limit: 1) { items { t: title } } } }"
+            "{ BlogAuthorEntity { blog_authors { n: name articles(limit: 1) { items { t: title } } } } }"
         )
         assert result["errors"] is not None
         assert "alias" in result["errors"][0]["message"].lower()
@@ -1110,11 +1110,11 @@ class TestPaginationThroughManyToOne:
         )
 
         result = await handler.execute(
-            '{ blogAuthorEntityBlogAuthors { id name articles(limit: 1) { items { id title author { id name articles(limit: 1) { items { id title } pagination { total_count has_more } } } } pagination { total_count has_more } } } }'
+            '{ BlogAuthorEntity { blog_authors { id name articles(limit: 1) { items { id title author { id name articles(limit: 1) { items { id title } pagination { total_count has_more } } } } pagination { total_count has_more } } } } }'
         )
 
         assert result["errors"] is None, f"Errors: {result['errors']}"
-        authors = result["data"]["blogAuthorEntityBlogAuthors"]
+        authors = result["data"]["BlogAuthorEntity"]["blog_authors"]
 
         # Alice: 3 articles, limit=1
         alice = authors[0]
@@ -1150,7 +1150,7 @@ class TestStablePaginationOrder:
             enable_pagination=True,
         )
 
-        query = "{ categoryEntityCategories { id name items(limit: 3) { items { id name priority } pagination { total_count } } } }"
+        query = "{ CategoryEntity { categories { id name items(limit: 3) { items { id name priority } pagination { total_count } } } } }"
 
         result1 = await handler.execute(query)
         result2 = await handler.execute(query)
@@ -1158,8 +1158,8 @@ class TestStablePaginationOrder:
         assert result1["errors"] is None
         assert result2["errors"] is None
 
-        categories1 = result1["data"]["categoryEntityCategories"]
-        categories2 = result2["data"]["categoryEntityCategories"]
+        categories1 = result1["data"]["CategoryEntity"]["categories"]
+        categories2 = result2["data"]["CategoryEntity"]["categories"]
 
         for cat1, cat2 in zip(categories1, categories2):
             items1 = cat1["items"]["items"]
@@ -1179,18 +1179,18 @@ class TestStablePaginationOrder:
 
         # Page 1: limit=3
         result1 = await handler.execute(
-            "{ categoryEntityCategories { id items(limit: 3) { items { id name priority } } } }"
+            "{ CategoryEntity { categories { id items(limit: 3) { items { id name priority } } } } }"
         )
         # Page 2: offset=3, limit=3
         result2 = await handler.execute(
-            "{ categoryEntityCategories { id items(limit: 3, offset: 3) { items { id name priority } } } }"
+            "{ CategoryEntity { categories { id items(limit: 3, offset: 3) { items { id name priority } } } } }"
         )
 
         assert result1["errors"] is None
         assert result2["errors"] is None
 
-        cats1 = result1["data"]["categoryEntityCategories"]
-        cats2 = result2["data"]["categoryEntityCategories"]
+        cats1 = result1["data"]["CategoryEntity"]["categories"]
+        cats2 = result2["data"]["CategoryEntity"]["categories"]
 
         for cat1, cat2 in zip(cats1, cats2):
             ids1 = {i["id"] for i in cat1["items"]["items"]}
@@ -1212,11 +1212,11 @@ class TestEmptyPageTotalCount:
         )
 
         result = await handler.execute(
-            "{ authorEntityAuthors { id name articles(limit: 1, offset: 10) { items { title } pagination { has_more total_count } } } }"
+            "{ AuthorEntity { authors { id name articles(limit: 1, offset: 10) { items { title } pagination { has_more total_count } } } } }"
         )
 
         assert result["errors"] is None
-        authors = result["data"]["authorEntityAuthors"]
+        authors = result["data"]["AuthorEntity"]["authors"]
 
         # Alice has 3 articles, offset=10 is past all of them
         alice = authors[0]
@@ -1421,11 +1421,11 @@ class TestManyToManyPagination:
         )
 
         result = await handler.execute(
-            "{ studentEntityStudents { id name courses { items { title } pagination { has_more } } } }"
+            "{ StudentEntity { students { id name courses { items { title } pagination { has_more } } } } }"
         )
 
         assert result["errors"] is None
-        students = result["data"]["studentEntityStudents"]
+        students = result["data"]["StudentEntity"]["students"]
         assert len(students) == 3
 
         # Alice: 4 courses, default page_size=20 → all returned
@@ -1454,11 +1454,11 @@ class TestManyToManyPagination:
         )
 
         result = await handler.execute(
-            "{ studentEntityStudents { id name courses(limit: 2) { items { title } pagination { has_more } } } }"
+            "{ StudentEntity { students { id name courses(limit: 2) { items { title } pagination { has_more } } } } }"
         )
 
         assert result["errors"] is None
-        students = result["data"]["studentEntityStudents"]
+        students = result["data"]["StudentEntity"]["students"]
 
         # Alice: 4 courses, limit=2 → 2 items, has_more=True
         alice = students[0]
@@ -1485,11 +1485,11 @@ class TestManyToManyPagination:
         )
 
         result = await handler.execute(
-            "{ studentEntityStudents { id courses(limit: 1) { items { title } pagination { has_more total_count } } } }"
+            "{ StudentEntity { students { id courses(limit: 1) { items { title } pagination { has_more total_count } } } } }"
         )
 
         assert result["errors"] is None
-        students = result["data"]["studentEntityStudents"]
+        students = result["data"]["StudentEntity"]["students"]
 
         # Alice: 4 total
         assert students[0]["courses"]["pagination"]["total_count"] == 4
@@ -1515,22 +1515,22 @@ class TestManyToManyPagination:
 
         # Page 1: limit=2, offset=0
         result = await handler.execute(
-            "{ studentEntityStudents { id courses(limit: 2, offset: 0) { items { id title } pagination { has_more total_count } } } }"
+            "{ StudentEntity { students { id courses(limit: 2, offset: 0) { items { id title } pagination { has_more total_count } } } } }"
         )
 
         assert result["errors"] is None
-        alice = result["data"]["studentEntityStudents"][0]
+        alice = result["data"]["StudentEntity"]["students"][0]
         page1_ids = [c["id"] for c in alice["courses"]["items"]]
         assert len(page1_ids) == 2
         assert alice["courses"]["pagination"]["has_more"] is True
 
         # Page 2: limit=2, offset=2
         result2 = await handler.execute(
-            "{ studentEntityStudents { id courses(limit: 2, offset: 2) { items { id title } pagination { has_more total_count } } } }"
+            "{ StudentEntity { students { id courses(limit: 2, offset: 2) { items { id title } pagination { has_more total_count } } } } }"
         )
 
         assert result2["errors"] is None
-        alice2 = result2["data"]["studentEntityStudents"][0]
+        alice2 = result2["data"]["StudentEntity"]["students"][0]
         page2_ids = [c["id"] for c in alice2["courses"]["items"]]
         assert len(page2_ids) == 2
         assert alice2["courses"]["pagination"]["has_more"] is False
@@ -1548,11 +1548,11 @@ class TestManyToManyPagination:
         )
 
         result = await handler.execute(
-            "{ studentEntityStudents { id name courses(limit: 10) { items { id title } } } }"
+            "{ StudentEntity { students { id name courses(limit: 10) { items { id title } } } } }"
         )
 
         assert result["errors"] is None
-        students = result["data"]["studentEntityStudents"]
+        students = result["data"]["StudentEntity"]["students"]
 
         # Alice (id=1): courses 1,2,3,4
         alice_courses = {c["id"] for c in students[0]["courses"]["items"]}
@@ -1576,11 +1576,11 @@ class TestManyToManyPagination:
         )
 
         result = await handler.execute(
-            "{ studentEntityStudents { id courses(limit: 1, offset: 100) { items { title } pagination { has_more total_count } } } }"
+            "{ StudentEntity { students { id courses(limit: 1, offset: 100) { items { title } pagination { has_more total_count } } } } }"
         )
 
         assert result["errors"] is None
-        students = result["data"]["studentEntityStudents"]
+        students = result["data"]["StudentEntity"]["students"]
 
         # Alice: 4 total but offset=100 → empty
         alice = students[0]

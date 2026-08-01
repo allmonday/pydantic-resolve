@@ -1,5 +1,5 @@
 ---
-description: "Release-by-release changelog for pydantic-resolve, following semver — major for breaking changes, minor for new features, patch for bug fixes. Most recent: 5.10.5."
+description: "Release-by-release changelog for pydantic-resolve, following semver — major for breaking changes, minor for new features, patch for bug fixes. Most recent: 6.0.0."
 ---
 
 # Changelog
@@ -7,6 +7,28 @@ description: "Release-by-release changelog for pydantic-resolve, following semve
 - **Major (X.0.0)**: Major new features or breaking changes
 - **Minor (x.Y.0)**: New features, backward compatible
 - **Patch (x.y.Z)**: Bug fixes and minor improvements
+
+## 6.0
+
+### 6.0.0 (2026-7-31)
+
+**BREAKING CHANGES** — entity `@query` / `@mutation` operations are now grouped by entity under `{Entity}Query` / `{Entity}Mutation` types. Client GraphQL queries, the response shape, and the MCP schema tools must all be updated. The Python surface (`Entity`, `@query` / `@mutation` decorators, `GraphQLHandler`) is unchanged. See [Migration Guide](./migration.md) for details.
+
+- break:
+  - **Grouped entity operations**: each entity's `@query` / `@mutation` methods are now the fields of a `{Entity}Query` / `{Entity}Mutation` group OBJECT, and the root `Query` / `Mutation` mounts one NON_NULL field per entity. Method names are used **verbatim** — the old `entityPrefix + MethodCamel` camelCase (`userEntityGetAll`) is gone.
+    - Client queries: `{ userEntityGetAll(limit: 10) { id } }` → `{ UserEntity { get_all(limit: 10) { id } } }`.
+    - Response shape: `data["userEntityGetAll"]` → `data["UserEntity"]["get_all"]` (nested per entity group).
+    - Selecting a bare group `{ UserEntity }` with no method subselection now returns a `BARE_GROUP_FIELD` error listing available methods; unknown group / method errors carry a GraphQL `path` (`["UserEntity"]` / `["UserEntity", "get_all"]`).
+  - **MCP tool signatures** (`get_query_schema` / `get_mutation_schema`): the single `name: str` argument becomes `entity: str, method: str`. `list_queries` / `list_mutations` now return one entry per method — `{entity, method, name ("<entity>.<method>"), description}` — instead of a flat root-field list. This keeps identifiers unique when two entities share a method name.
+  - **Removed dead naming utils**: `pydantic_resolve/graphql/utils/naming.py` (`to_camel_case`, `to_graphql_field_name`) is deleted. The only naming helper now is `group_type_name(entity_name, suffix)` in `pydantic_resolve/graphql/utils/__init__.py`.
+
+- feat:
+  - **Centralized group-type naming**: `group_type_name(entity_name, "Query" | "Mutation")` is the single source of truth for `{Entity}Query` / `{Entity}Mutation` type names, shared by the SDL generator, the introspection generator, and the executor's error messages so they cannot drift apart.
+  - **Eager scan-time conflict detection** (`pydantic_resolve/graphql/schema_errors.py`): new `ReservedEntityError` (entity class named `Query` / `Mutation` / `Subscription`), `ReservedMethodFieldError` (`__`-prefixed method field), and `DuplicateMethodError` (two methods resolving to the same field name) all fire at scan time instead of last-writer-wins. The checks live in `scan_grouped_methods`, shared by `GraphQLHandler.__init__` **and** standalone `SchemaBuilder.build_schema()`, so a broken entity graph fails fast regardless of entry point — previously the standalone SDL path silently emitted invalid duplicate-field SDL.
+
+- fix:
+  - **`generate_operation_sdl` reflects the grouped layout**: the per-operation SDL used for MCP progressive disclosure now renders the root mount (`UserEntity: UserEntityQuery!`) plus the `{Entity}Query` group type wrapping the method, instead of a misleading flat root field — so AI consumers construct valid grouped queries rather than `{ get_all { } }` at the root.
+  - **Execution-time errors carry `path`**: query and mutation method failures now include `path: [entity, method]`, matching the validation errors (previously the location was only embedded as a dotted label inside `message`).
 
 ## 5.10
 

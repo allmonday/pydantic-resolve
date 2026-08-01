@@ -1,9 +1,15 @@
 """
 Decorators for marking Entity methods as GraphQL root queries and mutations.
 
-The GraphQL operation name is automatically generated from entity name + method name
-using camelCase style: entityPrefix + MethodCamel
-(e.g., UserEntity.get_all -> userEntityGetAll)
+Operations are grouped by entity: each entity's ``@query``/``@mutation`` methods
+become the fields of a ``{Entity}Query`` / ``{Entity}Mutation`` group type, and the
+root ``Query`` / ``Mutation`` mounts one field per entity. Method field names are
+used verbatim (no entity prefix, no camelCase):
+
+    UserEntity.get_all  ->  type Query { UserEntity: UserEntityQuery! }
+                            type UserEntityQuery { get_all(...): [UserEntity!]! }
+
+so a method is queried as ``{ UserEntity { get_all {} } }``.
 
 Description is automatically extracted from the method's docstring.
 """
@@ -23,8 +29,9 @@ def query(func: Callable) -> classmethod:
     This decorator automatically implements classmethod functionality,
     so you don't need to add @staticmethod or @classmethod.
 
-    The GraphQL query name is automatically generated as: entityPrefix + MethodCamel
-    (e.g., User.get_all -> userGetAll, PostEntity.find_by_id -> postEntityFindById)
+    Operations are grouped by entity; the method becomes a field on the
+    ``{Entity}Query`` group type, named verbatim (e.g. ``UserEntity.get_all``
+    -> field ``get_all`` on ``UserEntityQuery``).
 
     Description is automatically extracted from the method's docstring.
 
@@ -47,8 +54,12 @@ def query(func: Callable) -> classmethod:
     This generates the following GraphQL Schema:
         ```graphql
         type Query {
+            UserEntity: UserEntityQuery!
+        }
+
+        type UserEntityQuery {
             "Get all users with pagination"
-            userEntityGetAll(limit: Int): [UserEntity!]!
+            get_all(limit: Int): [UserEntity!]!
         }
         ```
 
@@ -56,7 +67,7 @@ def query(func: Callable) -> classmethod:
         - Method signature should include `cls` parameter (even if unused)
         - Method is automatically converted to classmethod
         - No need to add @staticmethod or @classmethod decorator
-        - Query name is auto-generated from EntityName + method_name
+        - The field name is the verbatim method name, mounted on the {Entity}Query group
         - Description is extracted from method's docstring
     """
     # Extract description from docstring
@@ -78,8 +89,9 @@ def mutation(func: Callable) -> classmethod:
     This decorator automatically implements classmethod functionality,
     so you don't need to add @staticmethod or @classmethod.
 
-    The GraphQL mutation name is automatically generated as: entityPrefix + MethodCamel
-    (e.g., User.create_user -> userCreateUser, PostEntity.delete -> postEntityDelete)
+    Operations are grouped by entity; the method becomes a field on the
+    ``{Entity}Mutation`` group type, named verbatim (e.g. ``UserEntity.create_user``
+    -> field ``create_user`` on ``UserEntityMutation``).
 
     Description is automatically extracted from the method's docstring.
 
@@ -103,8 +115,12 @@ def mutation(func: Callable) -> classmethod:
     This generates the following GraphQL Schema:
         ```graphql
         type Mutation {
+            UserEntity: UserEntityMutation!
+        }
+
+        type UserEntityMutation {
             "Create a new user"
-            userEntityCreateUser(name: String!, email: String!): UserEntity!
+            create_user(name: String!, email: String!): UserEntity!
         }
         ```
 
@@ -116,7 +132,7 @@ def mutation(func: Callable) -> classmethod:
             - `T` -> `T!` (non-null)
             - `Optional[T]` -> `T` (nullable)
             - `list[T]` -> `[T!]!` (non-null list of non-null items)
-        - Mutation name is auto-generated from EntityName + method_name
+        - The field name is the verbatim method name, mounted on the {Entity}Mutation group
         - Description is extracted from method's docstring
     """
     # Extract description from docstring

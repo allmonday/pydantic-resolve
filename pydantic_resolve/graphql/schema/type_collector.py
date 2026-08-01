@@ -89,15 +89,15 @@ class TypeCollector:
 
     def collect_input_types(
         self,
-        query_map: Optional[dict[str, tuple[type, Callable]]] = None,
-        mutation_map: Optional[dict[str, tuple[type, Callable]]] = None
+        query_map: Optional[dict[str, dict[str, tuple[type, Callable]]]] = None,
+        mutation_map: Optional[dict[str, dict[str, tuple[type, Callable]]]] = None
     ) -> set[type]:
         """
         Collect all BaseModel types from method parameters as Input Types.
 
         Args:
-            query_map: Optional mapping of query names to (entity, method) tuples
-            mutation_map: Optional mapping of mutation names to (entity, method) tuples
+            query_map: Optional grouped mapping {entity_name: {method_name: (entity, method)}}
+            mutation_map: Optional grouped mapping {entity_name: {method_name: (entity, method)}}
 
         Returns:
             Set of all BaseModel types that need input definitions
@@ -138,14 +138,16 @@ class TypeCollector:
                 except Exception:
                     pass
 
-        # Also collect from provided query/mutation maps
+        # Also collect from provided grouped query/mutation maps
         if query_map:
-            for _, (_, method) in query_map.items():
-                self._collect_from_method(method, collect_from_type)
+            for group in query_map.values():
+                for _, (_, method) in group.items():
+                    self._collect_from_method(method, collect_from_type)
 
         if mutation_map:
-            for _, (_, method) in mutation_map.items():
-                self._collect_from_method(method, collect_from_type)
+            for group in mutation_map.values():
+                for _, (_, method) in group.items():
+                    self._collect_from_method(method, collect_from_type)
 
         return input_types
 

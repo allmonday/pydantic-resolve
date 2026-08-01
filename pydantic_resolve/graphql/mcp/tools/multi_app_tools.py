@@ -112,9 +112,11 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
     def list_queries(app_name: str) -> dict[str, Any]:
         """List all available GraphQL queries for an application.
 
-        Returns a lightweight list of query names and descriptions.
-        Use this after list_apps to discover queries for a specific app,
-        then use get_query_schema for detailed information.
+        Queries are grouped by entity (``{ Entity { method {} } }``); each entry
+        has ``entity``, ``method``, ``name`` (``"<entity>.<method>"``) and
+        ``description``. Use this after list_apps to discover queries for a
+        specific app, then use get_query_schema with the entity + method for
+        detailed information.
 
         Args:
             app_name: Name of the application (required)
@@ -127,12 +129,12 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
         """
         try:
             app = manager.get_app(app_name)
-            queries = app.introspection_helper.list_operation_fields("Query")
+            queries = app.introspection_helper.list_group_operations("Query")
 
             result = create_success_response(queries)
             result["hint"] = (
-                f"Working with app '{app_name}'. "
-                f"Use get_query_schema(name='<query_name>', app_name='{app_name}', response_type='sdl|introspection') "
+                f"Working with app '{app_name}'. Queries are grouped by entity. "
+                f"Use get_query_schema(entity='<Entity>', method='<method>', app_name='{app_name}', response_type='sdl|introspection') "
                 f"for detailed schema. response_type: 'sdl' (default, compact) or 'introspection' (detailed types). "
                 f"Or use graphql_query to execute."
             )
@@ -146,9 +148,11 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
     def list_mutations(app_name: str) -> dict[str, Any]:
         """List all available GraphQL mutations for an application.
 
-        Returns a lightweight list of mutation names and descriptions.
-        Use this after list_apps to discover mutations for a specific app,
-        then use get_mutation_schema for detailed information.
+        Mutations are grouped by entity (``{ Entity { method {} } }``); each
+        entry has ``entity``, ``method``, ``name`` (``"<entity>.<method>"``) and
+        ``description``. Use this after list_apps to discover mutations for a
+        specific app, then use get_mutation_schema with the entity + method for
+        detailed information.
 
         Args:
             app_name: Name of the application (required)
@@ -161,12 +165,12 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
         """
         try:
             app = manager.get_app(app_name)
-            mutations = app.introspection_helper.list_operation_fields("Mutation")
+            mutations = app.introspection_helper.list_group_operations("Mutation")
 
             result = create_success_response(mutations)
             result["hint"] = (
-                f"Working with app '{app_name}'. "
-                f"Use get_mutation_schema(name='<mutation_name>', app_name='{app_name}', response_type='sdl|introspection') "
+                f"Working with app '{app_name}'. Mutations are grouped by entity. "
+                f"Use get_mutation_schema(entity='<Entity>', method='<method>', app_name='{app_name}', response_type='sdl|introspection') "
                 f"for detailed schema. response_type: 'sdl' (default, compact) or 'introspection' (detailed types). "
                 f"Or use graphql_mutation to execute."
             )
@@ -215,16 +219,19 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
     # Layer 2: Get operation schema
     @mcp.tool()
     def get_query_schema(
-        name: str, app_name: str, response_type: str = "sdl"
+        entity: str, method: str, app_name: str, response_type: str = "sdl"
     ) -> dict[str, Any]:
         """Get detailed schema information for a specific GraphQL query.
 
-        Returns schema in two formats:
+        Queries are grouped by entity (``{ Entity { method {} } }``); each query
+        is identified by its entity and method name. Returns schema in two
+        formats:
         - sdl: GraphQL Schema Definition Language (compact, AI-friendly)
         - introspection: Detailed introspection data with related types
 
         Args:
-            name: Name of the query (e.g., "userEntityGetAll")
+            entity: The entity (group) the query belongs to, e.g. "User".
+            method: The method name verbatim, e.g. "get_all", "get_by_id".
             app_name: Name of the application (required)
             response_type: Response format - "sdl" or "introspection" (default: "sdl")
 
@@ -232,17 +239,17 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
             Dictionary with schema information
 
         Examples:
-            get_query_schema(name="userEntityGetAll", app_name="blog", response_type="sdl")
-            get_query_schema(name="userEntityGetAll", app_name="blog", response_type="introspection")
+            get_query_schema(entity="User", method="get_all", app_name="blog", response_type="sdl")
+            get_query_schema(entity="User", method="get_all", app_name="blog", response_type="introspection")
         """
         try:
             app = manager.get_app(app_name)
 
             if response_type == "sdl":
-                sdl = app.sdl_builder.generate_operation_sdl(name, "Query")
+                sdl = app.sdl_builder.generate_operation_sdl(entity, method, "Query")
                 if sdl is None:
                     return create_error_response(
-                        f"Query '{name}' not found in app '{app.name}'",
+                        f"Query '{entity}.{method}' not found in app '{app.name}'",
                         MCPErrors.OPERATION_NOT_FOUND,
                     )
                 result = create_success_response({"sdl": sdl})
@@ -253,10 +260,10 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
                 return result
 
             # Introspection format
-            operation = app.introspection_helper.get_operation_field("Query", name)
+            operation = app.introspection_helper.get_group_operation("Query", entity, method)
             if operation is None:
                 return create_error_response(
-                    f"Query '{name}' not found in app '{app.name}'",
+                    f"Query '{entity}.{method}' not found in app '{app.name}'",
                     MCPErrors.OPERATION_NOT_FOUND,
                 )
 
@@ -281,16 +288,19 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
 
     @mcp.tool()
     def get_mutation_schema(
-        name: str, app_name: str, response_type: str = "sdl"
+        entity: str, method: str, app_name: str, response_type: str = "sdl"
     ) -> dict[str, Any]:
         """Get detailed schema information for a specific GraphQL mutation.
 
-        Returns schema in two formats:
+        Mutations are grouped by entity (``{ Entity { method {} } }``); each
+        mutation is identified by its entity and method name. Returns schema in
+        two formats:
         - sdl: GraphQL Schema Definition Language (compact, AI-friendly)
         - introspection: Detailed introspection data with related types
 
         Args:
-            name: Name of the mutation (e.g., "userEntityCreateUser")
+            entity: The entity (group) the mutation belongs to, e.g. "User".
+            method: The method name verbatim, e.g. "create", "update".
             app_name: Name of the application (required)
             response_type: Response format - "sdl" or "introspection" (default: "sdl")
 
@@ -298,25 +308,25 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
             Dictionary with schema information
 
         Examples:
-            get_mutation_schema(name="userEntityCreateUser", app_name="blog", response_type="sdl")
+            get_mutation_schema(entity="User", method="create_user", app_name="blog", response_type="sdl")
         """
         try:
             app = manager.get_app(app_name)
 
             if response_type == "sdl":
-                sdl = app.sdl_builder.generate_operation_sdl(name, "Mutation")
+                sdl = app.sdl_builder.generate_operation_sdl(entity, method, "Mutation")
                 if sdl is None:
                     return create_error_response(
-                        f"Mutation '{name}' not found in app '{app.name}'",
+                        f"Mutation '{entity}.{method}' not found in app '{app.name}'",
                         MCPErrors.OPERATION_NOT_FOUND,
                     )
                 return create_success_response({"sdl": sdl})
 
             # Introspection format
-            operation = app.introspection_helper.get_operation_field("Mutation", name)
+            operation = app.introspection_helper.get_group_operation("Mutation", entity, method)
             if operation is None:
                 return create_error_response(
-                    f"Mutation '{name}' not found in app '{app.name}'",
+                    f"Mutation '{entity}.{method}' not found in app '{app.name}'",
                     MCPErrors.OPERATION_NOT_FOUND,
                 )
 
@@ -357,7 +367,7 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
 
         Examples:
             graphql_query(
-                query="{ userEntityGetAll(limit: 10) { id name email } }",
+                query="{ UserEntity { get_all(limit: 10) { id name email } } }",
                 app_name="blog"
             )
         """
@@ -414,8 +424,8 @@ def register_multi_app_tools(mcp: "FastMCP", manager: "MultiAppManager") -> None
 
         Examples:
             graphql_mutation(
-                mutation='mutation { userEntityCreateUser(name: "Alice", '
-                        'email: "alice@example.com") { id name } }',
+                mutation='mutation { UserEntity { create_user(name: "Alice", '
+                        'email: "alice@example.com") { id name } } }',
                 app_name="blog"
             )
         """

@@ -22,13 +22,15 @@ You have an ERD with entities and relationships. You want to query them with Gra
 
 ```graphql
 {
-    sprintEntityGetAll {
-        id
-        name
-        tasks {
+    SprintEntity {
+        get_all {
             id
-            title
-            owner { id name }
+            name
+            tasks {
+                id
+                title
+                owner { id name }
+            }
         }
     }
 }
@@ -38,21 +40,23 @@ Result:
 
 ```json
 {
-    "sprintEntityGetAll": [
-        {
-            "id": 1, "name": "Sprint 24",
-            "tasks": [
-                {"id": 10, "title": "Design docs", "owner": {"id": 7, "name": "Ada"}},
-                {"id": 11, "title": "Refine examples", "owner": {"id": 8, "name": "Bob"}}
-            ]
-        },
-        {
-            "id": 2, "name": "Sprint 25",
-            "tasks": [
-                {"id": 12, "title": "Write tests", "owner": {"id": 7, "name": "Ada"}}
-            ]
-        }
-    ]
+    "SprintEntity": {
+        "get_all": [
+            {
+                "id": 1, "name": "Sprint 24",
+                "tasks": [
+                    {"id": 10, "title": "Design docs", "owner": {"id": 7, "name": "Ada"}},
+                    {"id": 11, "title": "Refine examples", "owner": {"id": 8, "name": "Bob"}}
+                ]
+            },
+            {
+                "id": 2, "name": "Sprint 25",
+                "tasks": [
+                    {"id": 12, "title": "Write tests", "owner": {"id": 7, "name": "Ada"}}
+                ]
+            }
+        ]
+    }
 }
 ```
 
@@ -60,7 +64,7 @@ The ERD drives both the schema generation and the data resolution.
 
 ## Step 1: Define Entities with Queries
 
-Use the `@query` decorator to add root entry points. The GraphQL operation name is auto-generated as `entityPrefix + MethodCamel` (e.g., `SprintEntity.get_all` → `sprintEntityGetAll`):
+Use the `@query` decorator to add root entry points. Operations are grouped by entity: the method becomes a field on the `{Entity}Query` group type, named verbatim (e.g., `SprintEntity.get_all` is queried as `{ SprintEntity { get_all {} } }`):
 
 ```python
 from pydantic import BaseModel
@@ -126,7 +130,7 @@ class SprintEntity(BaseModel, BaseEntity):
 diagram = BaseEntity.get_diagram()
 ```
 
-1.  `@query` marks this method as a GraphQL root query. The operation name becomes `sprintEntityGetAll`.
+1.  `@query` marks this method as a GraphQL root query. It becomes the `get_all` field on the `SprintEntityQuery` group type.
 
 ## Step 2: Execute Queries
 
@@ -137,15 +141,17 @@ handler = GraphQLHandler(diagram)  # (1)
 
 result = await handler.execute("""  # (2)
 {
-    sprintEntityGetAll {
-        id
-        name
-        tasks {
+    SprintEntity {
+        get_all {
             id
-            title
-            owner {
+            name
+            tasks {
                 id
-                name
+                title
+                owner {
+                    id
+                    name
+                }
             }
         }
     }
@@ -153,7 +159,7 @@ result = await handler.execute("""  # (2)
 """)
 
 print(result)
-# {'data': {'sprintEntityGetAll': [
+# {'data': {'SprintEntity': {'get_all': [
 #     {'id': 1, 'name': 'Sprint 24', 'tasks': [
 #         {'id': 10, 'title': 'Design docs', 'owner': {'id': 7, 'name': 'Ada'}},
 #         {'id': 11, 'title': 'Refine examples', 'owner': {'id': 8, 'name': 'Bob'}},
@@ -161,7 +167,7 @@ print(result)
 #     {'id': 2, 'name': 'Sprint 25', 'tasks': [
 #         {'id': 12, 'title': 'Write tests', 'owner': {'id': 7, 'name': 'Ada'}},
 #     ]},
-# ]}, 'errors': None}
+# ]}}, 'errors': None}
 ```
 
 1.  `GraphQLHandler` generates a GraphQL schema from the ERD and wires up resolvers.
@@ -213,7 +219,7 @@ QueryConfig(
 )
 ```
 
-The final GraphQL operation name is always `entityPrefix + MethodCamel` (e.g., `SprintEntity` + `get_all` → `sprintEntityGetAll`). The `name` parameter overrides the method-name part only: `name='sprints'` → `sprintEntitySprints`.
+Operations are grouped by entity and the field name is the verbatim method name: `SprintEntity.get_all` is queried as `{ SprintEntity { get_all {} } }`. The `name` parameter overrides that field name: `name='sprints'` → `{ SprintEntity { sprints {} } }`.
 
 ```python
 async def get_all_sprints(cls, limit: int = 20) -> list[SprintEntity]:
@@ -253,8 +259,8 @@ diagram = ErDiagram(entities=[
         kls=SprintEntity,
         relationships=[...],
         queries=[
-            QueryConfig(method=get_all_sprints),          # → sprintEntityGetAllSprints
-            QueryConfig(method=get_sprint_by_id, name='sprint'),  # → sprintEntitySprint
+            QueryConfig(method=get_all_sprints),          # → SprintEntity { get_all_sprints {} }
+            QueryConfig(method=get_sprint_by_id, name='sprint'),  # → SprintEntity { sprint {} }
         ],
         mutations=[
             MutationConfig(method=create_sprint),         # → sprintEntityCreateSprint
@@ -558,7 +564,7 @@ The `pagination` field supports partial selection:
 
 ```mermaid
 flowchart TB
-    Q["Client Query<br/>{ sprintEntityGetAll { tasks { owner } } }"]
+    Q["Client Query<br/>{ SprintEntity { get_all { tasks { owner } } } }"]
     P["Query Parser"]
     R["Resolver + DataLoader"]
     D["DataLoader batch calls"]

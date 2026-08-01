@@ -138,18 +138,23 @@ class IntrospectionQueryHelper:
     def get_operation_field(
         self, operation_type: str, field_name: str
     ) -> GraphQLField | None:
-        """Get a specific field from Query or Mutation type.
+        """Get a specific field from the root Query or Mutation type.
+
+        Under the grouped layout the root fields are entity groups
+        (``UserEntity: UserEntityQuery!``); to fetch a *method* field use
+        :meth:`get_group_operation`. This method looks up a field by name on
+        the root type only.
 
         Args:
             operation_type: "Query" or "Mutation"
-            field_name: Name of the field/operation to retrieve
+            field_name: Name of the root field (an entity group name) to retrieve
 
         Returns:
             Field introspection data or None if not found
 
         Example:
-            >>> helper.get_operation_field("Query", "userGetAll")
-            {'name': 'userGetAll', 'args': [...], 'type': {...}}
+            >>> helper.get_operation_field("Query", "UserEntity")
+            {'name': 'UserEntity', 'args': [...], 'type': {...}}
         """
         type_info = self._type_cache.get(operation_type)
         if not type_info:
@@ -166,6 +171,11 @@ class IntrospectionQueryHelper:
     ) -> list[dict[str, str | None]]:
         """List all fields (operations) for Query or Mutation type.
 
+        .. note::
+            Under the grouped layout the root Query/Mutation fields are entity
+            groups (``User: UserQuery!``), not individual operations. To list the
+            actual methods use :meth:`list_group_operations`.
+
         Returns lightweight operation info suitable for Layer 1 progressive disclosure.
 
         Args:
@@ -173,11 +183,6 @@ class IntrospectionQueryHelper:
 
         Returns:
             List of dictionaries with 'name' and 'description' keys
-
-        Example:
-            >>> helper.list_operation_fields("Query")
-            [{'name': 'userGetAll', 'description': 'Get all users'},
-             {'name': 'userGetById', 'description': 'Get user by ID'}]
         """
         type_info = self._type_cache.get(operation_type)
         if not type_info:
@@ -192,28 +197,107 @@ class IntrospectionQueryHelper:
 
         return result
 
-    def get_operation_with_related_types(
-        self, operation_type: str, field_name: str
-    ) -> dict[str, Any] | None:
-        """Get operation field info with all related types.
+    @staticmethod
+    def _unwrap_type_name(type_ref: GraphQLTypeRef | None) -> str | None:
+        """Unwrap a GraphQL type ref (NON_NULL/LIST) to its named type."""
+        ref = type_ref
+        while ref is not None:
+            name = ref.get("name")
+            if name:
+                return name
+            ref = ref.get("ofType")
+        return None
 
-        Combines operation field info with introspection data for all related types.
-        Useful for Layer 2 progressive disclosure.
+    def list_group_operations(
+        self, operation_type: str
+    ) -> list[dict[str, Any]]:
+        """List all methods across every entity group for Query or Mutation.
+
+        Under the grouped layout the root ``Query``/``Mutation`` fields are
+        entity groups (``User: UserQuery!``); the actual operations are the
+        method fields on the ``{Entity}Query``/``{Entity}Mutation`` types. This
+        descends into each group and returns one entry per method.
 
         Args:
             operation_type: "Query" or "Mutation"
-            field_name: Name of the field/operation
+
+        Returns:
+            One dict per method: ``{entity, method, name ("<entity>.<method>"),
+            description}``.
+        """
+        type_info = self._type_cache.get(operation_type)
+        if not type_info:
+            return []
+
+        result: list[dict[str, Any]] = []
+        for group_field in type_info.get("fields", []) or []:
+            entity_name = group_field.get("name")
+            group_type_name = self._unwrap_type_name(group_field.get("type"))
+            if not group_type_name:
+                continue
+            group_type = self._type_cache.get(group_type_name)
+            if not group_type:
+                continue
+            for method_field in group_type.get("fields", []) or []:
+                method_name = method_field.get("name")
+                result.append({
+                    "entity": entity_name,
+                    "method": method_name,
+                    "name": f"{entity_name}.{method_name}",
+                    "description": method_field.get("description"),
+                })
+        return result
+
+    def get_group_operation(
+        self, operation_type: str, entity_name: str, method_name: str
+    ) -> GraphQLField | None:
+        """Get a method field from its ``{Entity}Query``/``{Entity}Mutation`` group.
+
+        Args:
+            operation_type: "Query" or "Mutation".
+            entity_name: Entity class name (the group field on the root type).
+            method_name: Method name verbatim.
+
+        Returns:
+            The method field introspection dict, or None if not found.
+        """
+        root_field = self.get_operation_field(operation_type, entity_name)
+        if not root_field:
+            return None
+        group_type_name = self._unwrap_type_name(root_field.get("type"))
+        if not group_type_name:
+            return None
+        group_type = self._type_cache.get(group_type_name)
+        if not group_type:
+            return None
+        for field in group_type.get("fields", []) or []:
+            if field.get("name") == method_name:
+                return field
+        return None
+
+    def get_operation_with_related_types(
+        self, operation_type: str, field_name: str
+    ) -> dict[str, Any] | None:
+        """Get a root field with all related types.
+
+        Combines a root Query/Mutation field (an entity group under the grouped
+        layout) with introspection data for its related types. Useful for Layer 2
+        progressive disclosure of an entity group. For a specific method field
+        use :meth:`get_group_operation`.
+
+        Args:
+            operation_type: "Query" or "Mutation"
+            field_name: Name of the root field (an entity group name)
 
         Returns:
             Dictionary with 'operation' and 'related_types' keys, or None if not found
 
         Example:
-            >>> helper.get_operation_with_related_types("Query", "userGetAll")
+            >>> helper.get_operation_with_related_types("Query", "UserEntity")
             {
-                'operation': {'name': 'userGetAll', 'args': [...], 'type': {...}},
+                'operation': {'name': 'UserEntity', 'args': [...], 'type': {...}},
                 'related_types': [
-                    {'name': 'User', 'kind': 'OBJECT', ...},
-                    {'name': 'Post', 'kind': 'OBJECT', ...}
+                    {'name': 'UserEntityQuery', 'kind': 'OBJECT', ...},
                 ]
             }
         """

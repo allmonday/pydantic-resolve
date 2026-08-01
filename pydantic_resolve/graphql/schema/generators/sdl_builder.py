@@ -11,6 +11,7 @@ from typing import ForwardRef, get_type_hints
 from pydantic import BaseModel
 
 from pydantic_resolve.graphql.schema.generators.base import SchemaGenerator
+from pydantic_resolve.graphql.utils import group_type_name
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.er_diagram import Relationship
 from pydantic_resolve.utils.types import get_core_types, _is_list
@@ -44,8 +45,6 @@ class SDLBuilder(SchemaGenerator):
         enum_defs: list[str] = []
         input_defs: list[str] = []
         type_defs: list[str] = []
-        query_defs: list[str] = []
-        mutation_defs: list[str] = []
         processed_types = set()
         processed_input_types = set()
         processed_enums = set()
@@ -58,16 +57,6 @@ class SDLBuilder(SchemaGenerator):
 
             # Collect enum types from entity
             self._add_enum_definitions(entity_cfg.kls, enum_defs, processed_enums)
-
-            # Extract @query methods
-            query_methods = self._extract_query_methods(entity_cfg.kls)
-            for method in query_methods:
-                query_defs.append(self._build_query_def(method))
-
-            # Extract @mutation methods
-            mutation_methods = self._extract_mutation_methods(entity_cfg.kls)
-            for method in mutation_methods:
-                mutation_defs.append(self._build_mutation_def(method))
 
         # Collect and generate nested Pydantic types (including relationship targets)
         all_collected = self.collector.collect_all_types()
@@ -109,18 +98,29 @@ class SDLBuilder(SchemaGenerator):
         if type_defs:
             schema_parts.append("\n".join(type_defs))
 
+        # Per-entity Query/Mutation group types (e.g. ``type UserQuery { ... }``),
+        # emitted before the root types that reference them.
+        query_group_blocks, query_root_lines = self._collect_groups("query", "Query")
+        mutation_group_blocks, mutation_root_lines = self._collect_groups("mutation", "Mutation")
+        if query_group_blocks:
+            schema_parts.extend(query_group_blocks)
+        if mutation_group_blocks:
+            schema_parts.extend(mutation_group_blocks)
+
         schema = "\n\n".join(schema_parts) + "\n\n"
 
-        # Query type
-        schema += "type Query {\n"
-        if query_defs:
-            schema += "\n".join(f"  {qd}" for qd in query_defs) + "\n"
-        schema += "}\n\n"
+        # Root Query type (only if any entity has queries). Gated like Mutation
+        # so a query-less schema doesn't emit an invalid empty ``type Query {}``
+        # — and stays consistent with introspection's queryType=None.
+        if query_root_lines:
+            schema += "type Query {\n"
+            schema += "\n".join(f"  {line}" for line in query_root_lines) + "\n"
+            schema += "}\n\n"
 
-        # Mutation type
-        if mutation_defs:
+        # Root Mutation type (only if any entity has mutations).
+        if mutation_root_lines:
             schema += "type Mutation {\n"
-            schema += "\n".join(f"  {md}" for md in mutation_defs) + "\n"
+            schema += "\n".join(f"  {line}" for line in mutation_root_lines) + "\n"
             schema += "}\n"
 
         return schema
@@ -313,6 +313,50 @@ class SDLBuilder(SchemaGenerator):
             params_str = f"({params})"
         return f"{name}{params_str}: {method_info['return_type']}"
 
+    def _collect_groups(
+        self, operation_type: str, group_suffix: str
+    ) -> tuple[list[str], list[str]]:
+        """Build per-entity group type blocks and root mount lines.
+
+        Args:
+            operation_type: ``"query"`` or ``"mutation"``.
+            group_suffix: ``"Query"`` or ``"Mutation"`` (the type-name suffix).
+
+        Returns:
+            ``(group_type_blocks, root_field_lines)``. ``group_type_blocks`` are
+            ``type {Entity}Query { ... }`` SDL definitions; ``root_field_lines``
+            are ``{Entity}: {Entity}Query!`` entries for the root type. Entities
+            with no methods of this kind contribute nothing.
+        """
+        if operation_type == "query":
+            extract = self._extract_query_methods
+            build_def = self._build_query_def
+        else:
+            extract = self._extract_mutation_methods
+            build_def = self._build_mutation_def
+
+        # Reuse the handler's scan so standalone SchemaBuilder.build_schema()
+        # applies the same eager conflict checks (reserved names, duplicate
+        # method field names) and computes the same grouping as the handler.
+        from pydantic_resolve.graphql.schema_errors import scan_grouped_methods
+        scanned = scan_grouped_methods(self.er_diagram.entities, extract, group_suffix)
+
+        group_blocks: list[str] = []
+        root_lines: list[str] = []
+
+        for entity_name, method_infos in scanned.items():
+            method_fields = [f"  {build_def(m)}" for m in method_infos]
+            gt_name = group_type_name(entity_name, group_suffix)
+            body = f"type {gt_name} {{\n{chr(10).join(method_fields)}\n}}"
+            # All method_infos on one entity share the same defining class.
+            description = self._get_class_description(method_infos[0]['entity'])
+            if description:
+                body = f'"""{description}"""\n{body}'
+            group_blocks.append(body)
+            root_lines.append(f"{entity_name}: {gt_name}!")
+
+        return group_blocks, root_lines
+
     def _map_return_type_to_gql(self, return_type: type) -> str:
         """Map return type to GraphQL type."""
         core_types = get_core_types(return_type)
@@ -408,27 +452,36 @@ class SDLBuilder(SchemaGenerator):
                 processed_enums.add(enum_type.__name__)
 
     def generate_operation_sdl(
-        self, operation_name: str, operation_type: str = "Query"
+        self,
+        entity_name: str,
+        method_name: str,
+        operation_type: str = "Query",
     ) -> str | None:
         """Generate SDL for a single operation and its related types.
 
-        This method is used for MCP progressive disclosure, It generates
-        the SDL for a specific query or mutation along with all related
-        type definitions.
+        This method is used for MCP progressive disclosure; it generates the
+        SDL for a specific query or mutation (identified by its entity group and
+        verbatim method name) along with all related type definitions.
+
+        Under the grouped layout the method is a field on the
+        ``{Entity}Query`` / ``{Entity}Mutation`` group type, reached via a root
+        mount field. The generated SDL reflects that shape so an AI consumer
+        can construct a valid query — it is **not** a flat root field.
 
         Args:
-            operation_name: Name of the GraphQL operation (e.g., "userEntityGetAll")
+            entity_name: Entity class name (the group the method belongs to).
+            method_name: Method name verbatim (the field on the group type).
             operation_type: "Query" or "Mutation" (default: "Query")
 
         Returns:
             SDL string for the operation and related types, or None if not found.
 
         Example:
-            >>> generator.generate_operation_sdl("userEntityGetAll", "Query")
-            '# Query\\nuserEntityGetAll(limit: Int, offset: Int): [UserEntity!]!\\n\\n# Related Types\\ntype UserEntity { ... }'
+            >>> generator.generate_operation_sdl("UserEntity", "get_all", "Query")
+            'type Query {\\n  UserEntity: UserEntityQuery!\\n}\\n\\ntype UserEntityQuery {\\n  get_all(limit: Int): [UserEntity!]!\\n}\\n\\n# Related Types\\ntype UserEntity { ... }'
         """
         # Find the operation method
-        method_info = self._find_operation_method(operation_name, operation_type)
+        method_info = self._find_operation_method(entity_name, method_name, operation_type)
         if not method_info:
             return None
 
@@ -438,12 +491,28 @@ class SDLBuilder(SchemaGenerator):
         # Build SDL parts
         parts = []
 
-        # Build operation definition
+        # Root mount + group type: the method is a field on {Entity}Query /
+        # {Entity}Mutation, reached via `<entity>: <group>!` on the root type.
         if operation_type == "Query":
             field_def = self._build_query_def(method_info)
         else:
             field_def = self._build_mutation_def(method_info)
-        parts.append(f"# {operation_type}\n{field_def}")
+        # Surface the method's docstring as a field description — the most
+        # useful piece for an AI consumer of this progressive-disclosure SDL.
+        description = method_info.get("description")
+        if description:
+            field_block = f'  """{description}"""\n  {field_def}'
+        else:
+            field_block = f"  {field_def}"
+        group_type = group_type_name(entity_name, operation_type)
+        parts.append(
+            f"type {operation_type} {{\n"
+            f"  {entity_name}: {group_type}!\n"
+            f"}}\n\n"
+            f"type {group_type} {{\n"
+            f"{field_block}\n"
+            f"}}"
+        )
 
         # Build related type definitions
         if related_entities:
@@ -464,25 +533,28 @@ class SDLBuilder(SchemaGenerator):
         return "\n\n".join(parts)
 
     def _find_operation_method(
-        self, operation_name: str, operation_type: str
+        self, entity_name: str, method_name: str, operation_type: str
     ) -> dict | None:
-        """Find method info for a given operation name.
+        """Find method info for a given (entity, method) pair.
 
         Args:
-            operation_name: Name of the GraphQL operation
+            entity_name: Entity class name (the group field on the root type).
+            method_name: Method name verbatim (the field on the group type).
             operation_type: "Query" or "Mutation"
 
         Returns:
             Method info dictionary or None if not found
         """
         for entity_cfg in self.er_diagram.entities:
+            if entity_cfg.kls.__name__ != entity_name:
+                continue
             if operation_type == "Query":
                 methods = self._extract_query_methods(entity_cfg.kls)
             else:
                 methods = self._extract_mutation_methods(entity_cfg.kls)
 
             for method in methods:
-                if method['name'] == operation_name:
+                if method['name'] == method_name:
                     return method
         return None
 

@@ -197,38 +197,49 @@ class TestGenerateOperationSdl:
         self.builder = SDLBuilder(self.er_diagram)
 
     def test_generate_query_sdl(self):
-        """Test generating SDL for a query operation."""
-        result = self.builder.generate_operation_sdl("sampleUserGetAll", "Query")
+        """Test generating SDL for a query operation, wrapped in its group type."""
+        result = self.builder.generate_operation_sdl("SampleUser", "get_all", "Query")
 
         assert result is not None
-        assert "# Query" in result
-        assert "sampleUserGetAll" in result
+        # Root mount + group type — the method is NOT a flat root field.
+        assert "type Query {\n  SampleUser: SampleUserQuery!\n}" in result
+        assert "type SampleUserQuery {" in result
+        assert "get_all" in result
         assert "SampleUser" in result  # Return type
 
     def test_generate_mutation_sdl(self):
-        """Test generating SDL for a mutation operation."""
-        result = self.builder.generate_operation_sdl("sampleUserCreate", "Mutation")
+        """Test generating SDL for a mutation operation, wrapped in its group type."""
+        result = self.builder.generate_operation_sdl("SampleUser", "create", "Mutation")
 
         assert result is not None
-        assert "# Mutation" in result
-        assert "sampleUserCreate" in result
+        assert "type Mutation {\n  SampleUser: SampleUserMutation!\n}" in result
+        assert "type SampleUserMutation {" in result
+        assert "create" in result
 
     def test_generate_nonexistent_operation(self):
         """Test generating SDL for non-existent operation returns None."""
-        result = self.builder.generate_operation_sdl("nonExistent", "Query")
+        result = self.builder.generate_operation_sdl("SampleUser", "nonexistent_method", "Query")
         assert result is None
 
     def test_includes_related_types(self):
         """Test that related types are included in SDL."""
-        result = self.builder.generate_operation_sdl("sampleUserGetAll", "Query")
+        result = self.builder.generate_operation_sdl("SampleUser", "get_all", "Query")
 
         assert result is not None
         # Should include the return type definition
         assert "# Related Types" in result or "type SampleUser" in result
 
+    def test_operation_sdl_surfaces_method_description(self):
+        """The method's docstring appears as a field description block."""
+        result = self.builder.generate_operation_sdl("SampleUser", "get_all", "Query")
+
+        assert result is not None
+        # get_all's docstring is "Get all users." — emitted as a block string.
+        assert '"""Get all users' in result
+
     def test_string_return_type_resolved(self):
         """Test that string return type annotations are resolved to entity types."""
-        result = self.builder.generate_operation_sdl("sampleUserCreate", "Mutation")
+        result = self.builder.generate_operation_sdl("SampleUser", "create", "Mutation")
 
         assert result is not None
         # The return type should be SampleUser, not String
@@ -251,7 +262,7 @@ class TestCollectRelatedEntitiesFromMethod:
             if entity_cfg.kls.__name__ == 'SampleUser':
                 methods = self.builder._extract_query_methods(entity_cfg.kls)
                 for method in methods:
-                    if method['name'] == 'sampleUserGetAll':
+                    if method['name'] == 'get_all':
                         entities = self.builder._collect_related_entities_from_method(method)
                         assert SampleUser in entities
                         return
@@ -263,7 +274,7 @@ class TestCollectRelatedEntitiesFromMethod:
             if entity_cfg.kls.__name__ == 'SampleUser':
                 methods = self.builder._extract_query_methods(entity_cfg.kls)
                 for method in methods:
-                    if method['name'] == 'sampleUserGetAll':
+                    if method['name'] == 'get_all':
                         entities = self.builder._collect_related_entities_from_method(method)
                         # List[SampleUser] should still collect SampleUser
                         assert SampleUser in entities
@@ -276,7 +287,7 @@ class TestCollectRelatedEntitiesFromMethod:
             if entity_cfg.kls.__name__ == 'SampleUser':
                 methods = self.builder._extract_mutation_methods(entity_cfg.kls)
                 for method in methods:
-                    if method['name'] == 'sampleUserCreate':
+                    if method['name'] == 'create':
                         entities = self.builder._collect_related_entities_from_method(method)
                         # String annotation 'SampleUser' should resolve to SampleUser class
                         assert SampleUser in entities

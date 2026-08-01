@@ -1,8 +1,81 @@
 ---
-description: Migration guide across pydantic-resolve versions. Covers v5.4 → v5.5 (AutoLoad API simplification, implicit relationship resolution) and later breaking changes, with before/after code for each.
+description: Migration guide across pydantic-resolve versions. Covers v5 → v6 (grouped entity GraphQL layout) and earlier breaking changes, with before/after code for each.
 ---
 
 # Migration Guide
+
+## v5 to v6
+
+v6 groups entity `@query` / `@mutation` operations by entity under `{Entity}Query` / `{Entity}Mutation` types. The Python surface — `Entity`, the `@query` / `@mutation` decorators, `GraphQLHandler` — is unchanged; only the generated GraphQL schema, the response shape, and the MCP schema tools change. Four breaking changes affect GraphQL clients and MCP consumers.
+
+### 1. Operations are grouped by entity
+
+Each entity's `@query` / `@mutation` methods are now fields on a `{Entity}Query` / `{Entity}Mutation` group OBJECT, and the root `Query` / `Mutation` mounts one NON_NULL field per entity. Method names are used verbatim — the old `entityPrefix + MethodCamel` camelCase is gone.
+
+```graphql
+# v5 — flat root field per method
+type Query {
+  userEntityGetAll(limit: Int): [UserEntity!]!
+  userEntityGetById(id: Int!): UserEntity
+}
+
+# v6 — one group per entity, method names verbatim
+type Query {
+  UserEntity: UserEntityQuery!
+}
+
+type UserEntityQuery {
+  get_all(limit: Int): [UserEntity!]!
+  get_by_id(id: Int!): UserEntity
+}
+```
+
+Client queries add one nesting level (the entity group):
+
+```graphql
+# v5
+{ userEntityGetAll(limit: 10) { id name } }
+
+# v6
+{ UserEntity { get_all(limit: 10) { id name } } }
+```
+
+Error reporting improves alongside this: selecting a bare group with no method (`{ UserEntity }`) returns a `BARE_GROUP_FIELD` error listing the available methods, and unknown group / method errors carry a GraphQL `path` (e.g. `["UserEntity", "get_all"]`). A schema with no `@query` methods now omits the root `Query` type entirely (introspection reports `queryType: null`).
+
+### 2. Response data is nested per entity
+
+Dispatch is now two-level (group → method), so results nest as `data[entity][method]`.
+
+```python
+# v5
+users = result["data"]["userEntityGetAll"]
+
+# v6
+users = result["data"]["UserEntity"]["get_all"]
+```
+
+Mutations nest the same way: `result["data"]["UserEntity"]["create_user"]`.
+
+### 3. MCP schema tools take `entity` + `method`
+
+`get_query_schema` / `get_mutation_schema` replace the single `name` argument with `entity` and `method`. `list_queries` / `list_mutations` now return one entry per method — `{entity, method, name ("<entity>.<method>"), description}` — so identifiers stay unique when two entities share a method name.
+
+```python
+# v5
+get_query_schema(name="userEntityGetAll", app_name="blog")
+queries = list_queries(app_name="blog")
+# -> [{"name": "userEntityGetAll", "description": "..."}]
+
+# v6
+get_query_schema(entity="UserEntity", method="get_all", app_name="blog")
+queries = list_queries(app_name="blog")
+# -> [{"entity": "UserEntity", "method": "get_all",
+#      "name": "UserEntity.get_all", "description": "..."}]
+```
+
+### 4. Removed naming utilities
+
+`pydantic_resolve/graphql/utils/naming.py` (`to_camel_case`, `to_graphql_field_name`) is removed — field names are the verbatim method name now, so the camelCase + entity-prefix logic is obsolete. The only naming helper left is `group_type_name(entity_name, suffix)` in `pydantic_resolve/graphql/utils/__init__.py`. If you imported the old helpers, switch to `group_type_name` or inline the verbatim name.
 
 ## v5.4 to v5.5
 

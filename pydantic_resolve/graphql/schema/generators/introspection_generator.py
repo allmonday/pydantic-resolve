@@ -13,6 +13,7 @@ from typing import Any, Callable, Optional, get_type_hints
 from pydantic import BaseModel
 
 from pydantic_resolve.graphql.schema.generators.base import SchemaGenerator
+from pydantic_resolve.graphql.utils import group_type_name
 import pydantic_resolve.constant as const
 from pydantic_resolve.graphql.schema.type_registry import TypeInfo, FieldInfo, ArgumentInfo, SCALAR_TYPES
 from pydantic_resolve.graphql.types import (
@@ -39,8 +40,8 @@ class IntrospectionGenerator(SchemaGenerator):
     def __init__(
         self,
         er_diagram,
-        query_map: Optional[dict[str, tuple[type, Callable]]] = None,
-        mutation_map: Optional[dict[str, tuple[type, Callable]]] = None,
+        query_map: Optional[dict[str, dict[str, tuple[type, Callable]]]] = None,
+        mutation_map: Optional[dict[str, dict[str, tuple[type, Callable]]]] = None,
         enable_pagination: bool = False
     ):
         """
@@ -48,8 +49,8 @@ class IntrospectionGenerator(SchemaGenerator):
 
         Args:
             er_diagram: Entity relationship diagram
-            query_map: Mapping of query names to (entity, method) tuples
-            mutation_map: Mapping of mutation names to (entity, method) tuples
+            query_map: Grouped mapping {entity_name: {method_name: (entity, method)}}
+            mutation_map: Grouped mapping {entity_name: {method_name: (entity, method)}}
             enable_pagination: When True, one-to-many fields use Result types
         """
         super().__init__(er_diagram)
@@ -58,6 +59,9 @@ class IntrospectionGenerator(SchemaGenerator):
         self.enable_pagination = enable_pagination
         self._collected_types: dict[str, type] = {}
         self._input_types: set[type] = set()
+        # Entity class lookup by name — used for {Entity}Query/{Entity}Mutation
+        # group-type descriptions.
+        self._entity_map = {cfg.kls.__name__: cfg.kls for cfg in er_diagram.entities}
 
     def generate(self) -> IntrospectionData:
         """
@@ -66,9 +70,11 @@ class IntrospectionGenerator(SchemaGenerator):
         Returns:
             Introspection __schema dictionary
         """
+        has_queries = any(self.query_map.values())
+        has_mutations = any(self.mutation_map.values())
         return {
-            "queryType": {"name": "Query", "kind": "OBJECT"},
-            "mutationType": {"name": "Mutation", "kind": "OBJECT"} if self.mutation_map else None,
+            "queryType": {"name": "Query", "kind": "OBJECT"} if has_queries else None,
+            "mutationType": {"name": "Mutation", "kind": "OBJECT"} if has_mutations else None,
             "subscriptionType": None,
             "types": self._get_all_introspection_types(),
             "directives": []
@@ -191,20 +197,30 @@ class IntrospectionGenerator(SchemaGenerator):
         page_types = self._build_page_types()
         types.extend(page_types)
 
-        # Add Query type
-        types.append({
-            "kind": "OBJECT",
-            "name": "Query",
-            "description": "Root query type",
-            "fields": self._get_query_fields(),
-            "inputFields": None,
-            "interfaces": [],
-            "enumValues": None,
-            "possibleTypes": None
-        })
+        # Add per-entity group types ({Entity}Query / {Entity}Mutation). Each
+        # group's fields are the entity's @query/@mutation methods, named verbatim.
+        for entity_name, methods in self.query_map.items():
+            if methods:
+                types.append(self._build_entity_group_type(entity_name, methods, "Query"))
+        for entity_name, methods in self.mutation_map.items():
+            if methods:
+                types.append(self._build_entity_group_type(entity_name, methods, "Mutation"))
+
+        # Add Query type (root has one mount field per entity group)
+        if any(self.query_map.values()):
+            types.append({
+                "kind": "OBJECT",
+                "name": "Query",
+                "description": "Root query type",
+                "fields": self._get_query_fields(),
+                "inputFields": None,
+                "interfaces": [],
+                "enumValues": None,
+                "possibleTypes": None
+            })
 
         # Add Mutation type
-        if self.mutation_map:
+        if any(self.mutation_map.values()):
             types.append({
                 "kind": "OBJECT",
                 "name": "Mutation",
@@ -257,8 +273,16 @@ class IntrospectionGenerator(SchemaGenerator):
             if page_type["name"] == type_name:
                 return page_type
 
+        # Check per-entity group types ({Entity}Query / {Entity}Mutation)
+        for entity_name, methods in self.query_map.items():
+            if methods and group_type_name(entity_name, "Query") == type_name:
+                return self._build_entity_group_type(entity_name, methods, "Query")
+        for entity_name, methods in self.mutation_map.items():
+            if methods and group_type_name(entity_name, "Mutation") == type_name:
+                return self._build_entity_group_type(entity_name, methods, "Mutation")
+
         # Check Query type
-        if type_name == "Query":
+        if type_name == "Query" and any(self.query_map.values()):
             return {
                 "kind": "OBJECT",
                 "name": "Query",
@@ -271,7 +295,7 @@ class IntrospectionGenerator(SchemaGenerator):
             }
 
         # Check Mutation type
-        if type_name == "Mutation" and self.mutation_map:
+        if type_name == "Mutation" and any(self.mutation_map.values()):
             return {
                 "kind": "OBJECT",
                 "name": "Mutation",
@@ -551,12 +575,85 @@ class IntrospectionGenerator(SchemaGenerator):
         return fields
 
     def _get_query_fields(self) -> list[dict]:
-        """Get introspection fields for Query type."""
-        return self._get_operation_fields(self.query_map, "Query")
+        """Get root Query fields: one mount field per entity group.
+
+        Under the grouped layout the root Query has one field per entity
+        (``Entity: EntityQuery!``); the methods themselves live on the
+        ``{Entity}Query`` group types (see :meth:`_build_entity_group_type`).
+        """
+        return [
+            self._build_group_mount_field(name, "Query")
+            for name, methods in self.query_map.items()
+            if methods
+        ]
 
     def _get_mutation_fields(self) -> list[dict]:
-        """Get introspection fields for Mutation type."""
-        return self._get_operation_fields(self.mutation_map, "Mutation")
+        """Get root Mutation fields: one mount field per entity group."""
+        return [
+            self._build_group_mount_field(name, "Mutation")
+            for name, methods in self.mutation_map.items()
+            if methods
+        ]
+
+    def _entity_description(self, entity_name: str) -> Optional[str]:
+        """Return the stripped docstring for an entity class, or None."""
+        entity = self._entity_map.get(entity_name)
+        if entity is None:
+            return None
+        doc = getattr(entity, "__doc__", None)
+        if not doc:
+            return None
+        doc = doc.strip()
+        return doc or None
+
+    def _build_group_mount_field(self, entity_name: str, group_suffix: str) -> dict:
+        """Build the root field that mounts an entity's group type.
+
+        Produces ``EntityName: EntityNameQuery!`` (NON_NULL OBJECT). The
+        entity's docstring lives on the group OBJECT type (see
+        :meth:`_build_entity_group_type`), not on this mount field, matching
+        the SDL renderer.
+        """
+        return {
+            "name": entity_name,
+            "description": None,
+            "args": [],
+            "type": {
+                "kind": "NON_NULL",
+                "name": None,
+                "ofType": {
+                    "kind": "OBJECT",
+                    "name": group_type_name(entity_name, group_suffix),
+                    "ofType": None,
+                },
+            },
+            "isDeprecated": False,
+            "deprecationReason": None,
+        }
+
+    def _build_entity_group_type(
+        self,
+        entity_name: str,
+        methods: dict[str, tuple[type, Callable]],
+        group_suffix: str,
+    ) -> GraphQLType:
+        """Build the ``{Entity}Query`` / ``{Entity}Mutation`` group OBJECT.
+
+        Its fields are the entity's @query/@mutation methods, named verbatim,
+        and its description is the entity's docstring (matching the SDL
+        renderer, which puts the docstring on the group type). ``methods`` is
+        the inner grouped map ``{method_name: (entity, method)}``.
+        """
+        return {
+            "kind": "OBJECT",
+            "name": group_type_name(entity_name, group_suffix),
+            "description": self._entity_description(entity_name),
+            "fields": self._get_operation_fields(methods, group_suffix),
+            "inputFields": None,
+            "interfaces": [],
+            "enumValues": None,
+            "possibleTypes": None,
+        }
 
     def _format_default_value(self, default_value: Any) -> str:
         """Format a Python default value as a GraphQL literal string.

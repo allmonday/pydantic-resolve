@@ -110,37 +110,60 @@ class GraphQLHandler:
                 + "\n\nSet order_by on the ORM relationship to enable pagination."
             )
 
-    def _build_query_map(self) -> dict[str, tuple[type, Callable]]:
-        """
-        Scan all entities and build query name to method mapping.
+    def _build_query_map(self) -> dict[str, dict[str, tuple[type, Callable]]]:
+        """Build the grouped query map.
 
         Returns:
-            Dictionary mapping query names to (return entity class, method) tuples
+            ``{entity_name: {method_name: (return_entity, method)}}``. Entities
+            without any ``@query`` method contribute no group.
         """
-        query_map = {}
-        for entity_cfg in self.er_diagram.entities:
-            methods = self.schema_builder._extract_query_methods(entity_cfg.kls)
-            for method_info in methods:
-                query_name = method_info['name']
-                return_entity = self._extract_return_entity(method_info['method'])
-                query_map[query_name] = (return_entity, method_info['method'])
-        return query_map
+        return self._build_grouped_map("query")
 
-    def _build_mutation_map(self) -> dict[str, tuple[type, Callable]]:
-        """
-        Scan all entities and build mutation name to method mapping.
+    def _build_mutation_map(self) -> dict[str, dict[str, tuple[type, Callable]]]:
+        """Build the grouped mutation map.
 
         Returns:
-            Dictionary mapping mutation names to (return entity class, method) tuples
+            ``{entity_name: {method_name: (return_entity, method)}}``. Entities
+            without any ``@mutation`` method contribute no group.
         """
-        mutation_map = {}
-        for entity_cfg in self.er_diagram.entities:
-            methods = self.schema_builder._extract_mutation_methods(entity_cfg.kls)
-            for method_info in methods:
-                mutation_name = method_info['name']
+        return self._build_grouped_map("mutation")
+
+    def _build_grouped_map(
+        self, operation_type: str
+    ) -> dict[str, dict[str, tuple[type, Callable]]]:
+        """Scan all entities and build a grouped operation map.
+
+        Delegates grouping + eager conflict checks to
+        :func:`scan_grouped_methods` (shared with the SDL generator), then
+        reshapes the result into the ``(return_entity, method)`` tuples the
+        executor and introspection helper consume. Conflicts therefore fail
+        fast in ``__init__`` — before any SDL or introspection is produced.
+
+        Args:
+            operation_type: ``"query"`` or ``"mutation"``.
+
+        Returns:
+            ``{entity_name: {method_name: (return_entity, method)}}``.
+        """
+        from pydantic_resolve.graphql.schema_errors import scan_grouped_methods
+
+        if operation_type == "query":
+            extract = self.schema_builder._extract_query_methods
+            group_suffix = "Query"
+        else:
+            extract = self.schema_builder._extract_mutation_methods
+            group_suffix = "Mutation"
+
+        scanned = scan_grouped_methods(self.er_diagram.entities, extract, group_suffix)
+
+        grouped: dict[str, dict[str, tuple[type, Callable]]] = {}
+        for entity_name, method_infos in scanned.items():
+            inner = grouped[entity_name] = {}
+            for method_info in method_infos:
                 return_entity = self._extract_return_entity(method_info['method'])
-                mutation_map[mutation_name] = (return_entity, method_info['method'])
-        return mutation_map
+                inner[method_info['name']] = (return_entity, method_info['method'])
+
+        return grouped
 
     def _extract_return_entity(self, method: Callable) -> Optional[type]:
         """

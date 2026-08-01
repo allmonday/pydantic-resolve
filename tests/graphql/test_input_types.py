@@ -182,9 +182,10 @@ class TestInputTypeSchemaGeneration:
         """Test that mutation with input parameter generates correct schema"""
         schema = schema_builder.build_schema()
 
-        # Check mutation definition uses input type
+        # Check mutation definition uses input type. Under the grouped layout
+        # the method field lives on the {Entity}Mutation group type, named verbatim.
         # Note: return type inference is a separate concern
-        assert "userEntityCreateUser(input: CreateUserInput!)" in schema
+        assert "create_user(input: CreateUserInput!)" in schema
 
     def test_multiple_input_types_generated(self, schema_builder):
         """Test that multiple input types are generated"""
@@ -219,11 +220,13 @@ class TestInputTypeArgumentConversion:
         """Test that mutation arguments are converted from dict to Pydantic model"""
         query = """
         mutation {
-            userEntityCreateUser(input: { name: "Test User", email: "test@example.com", age: 25 }) {
-                id
-                name
-                email
-                age
+            UserEntity {
+                create_user(input: { name: "Test User", email: "test@example.com", age: 25 }) {
+                    id
+                    name
+                    email
+                    age
+                }
             }
         }
         """
@@ -231,23 +234,25 @@ class TestInputTypeArgumentConversion:
         result = await handler.execute(query)
 
         assert result["errors"] is None
-        assert result["data"]["userEntityCreateUser"]["name"] == "Test User"
-        assert result["data"]["userEntityCreateUser"]["email"] == "test@example.com"
-        assert result["data"]["userEntityCreateUser"]["age"] == 25
+        assert result["data"]["UserEntity"]["create_user"]["name"] == "Test User"
+        assert result["data"]["UserEntity"]["create_user"]["email"] == "test@example.com"
+        assert result["data"]["UserEntity"]["create_user"]["age"] == 25
 
     @pytest.mark.asyncio
     async def test_mutation_with_nested_input(self, handler):
         """Test mutation with nested input type"""
         query = """
         mutation {
-            userEntityCreateUser(input: {
-                name: "Test User",
-                email: "test@example.com",
-                address: { street: "123 Main St", city: "NYC", zip_code: "10001" }
-            }) {
-                id
-                name
-                email
+            UserEntity {
+                create_user(input: {
+                    name: "Test User",
+                    email: "test@example.com",
+                    address: { street: "123 Main St", city: "NYC", zip_code: "10001" }
+                }) {
+                    id
+                    name
+                    email
+                }
             }
         }
         """
@@ -255,17 +260,19 @@ class TestInputTypeArgumentConversion:
         result = await handler.execute(query)
 
         assert result["errors"] is None
-        assert result["data"]["userEntityCreateUser"]["name"] == "Test User"
+        assert result["data"]["UserEntity"]["create_user"]["name"] == "Test User"
 
     @pytest.mark.asyncio
     async def test_mutation_with_optional_input_fields(self, handler):
         """Test mutation with optional input fields"""
         query = """
         mutation {
-            userEntityUpdateUser(id: 1, input: { name: "Updated Name" }) {
-                id
-                name
-                email
+            UserEntity {
+                update_user(id: 1, input: { name: "Updated Name" }) {
+                    id
+                    name
+                    email
+                }
             }
         }
         """
@@ -273,16 +280,18 @@ class TestInputTypeArgumentConversion:
         result = await handler.execute(query)
 
         assert result["errors"] is None
-        assert result["data"]["userEntityUpdateUser"]["name"] == "Updated Name"
+        assert result["data"]["UserEntity"]["update_user"]["name"] == "Updated Name"
 
     @pytest.mark.asyncio
     async def test_query_with_scalar_arguments_still_works(self, handler):
         """Test that queries with scalar arguments still work"""
         query = """
         query {
-            userEntityGetAll(limit: 1) {
-                id
-                name
+            UserEntity {
+                get_all(limit: 1) {
+                    id
+                    name
+                }
             }
         }
         """
@@ -292,7 +301,7 @@ class TestInputTypeArgumentConversion:
         assert result["errors"] is None
         # Note: scalar argument filtering may not work in current implementation
         # This test verifies the query doesn't error
-        assert "userEntityGetAll" in result["data"]
+        assert "UserEntity" in result["data"]
 
 
 class TestInputTypeIntrospection:
@@ -338,7 +347,7 @@ class TestInputTypeIntrospection:
         """Test that mutation arguments show INPUT_OBJECT type"""
         query = """
         {
-            __type(name: "Mutation") {
+            __type(name: "UserEntityMutation") {
                 fields {
                     name
                     args {
@@ -357,9 +366,9 @@ class TestInputTypeIntrospection:
 
         assert result["errors"] is None
 
-        # Find userEntityCreateUser mutation
+        # Methods live on the {Entity}Mutation group type, named verbatim.
         mutation_fields = result["data"]["__type"]["fields"]
-        create_user_field = next(f for f in mutation_fields if f["name"] == "userEntityCreateUser")
+        create_user_field = next(f for f in mutation_fields if f["name"] == "create_user")
 
         # Check the input argument
         input_arg = next(a for a in create_user_field["args"] if a["name"] == "input")
@@ -371,7 +380,7 @@ class TestInputTypeIntrospection:
         """Test that mutation returning bool has correct SCALAR: Boolean type in introspection"""
         query = """
         {
-            __type(name: "Mutation") {
+            __type(name: "PostEntityMutation") {
                 fields {
                     name
                     type {
@@ -387,9 +396,9 @@ class TestInputTypeIntrospection:
 
         assert result["errors"] is None
 
-        # Find postEntityDeletePost mutation
+        # Methods live on the {Entity}Mutation group type, named verbatim.
         mutation_fields = result["data"]["__type"]["fields"]
-        delete_post_field = next(f for f in mutation_fields if f["name"] == "postEntityDeletePost")
+        delete_post_field = next(f for f in mutation_fields if f["name"] == "delete_post")
 
         # Check the return type is SCALAR Boolean
         assert delete_post_field["type"]["kind"] == "SCALAR"
