@@ -60,7 +60,7 @@ class IntrospectionGenerator(SchemaGenerator):
         self._collected_types: dict[str, type] = {}
         self._input_types: set[type] = set()
         # Entity class lookup by name — used for {Entity}Query/{Entity}Mutation
-        # group mount-field descriptions.
+        # group-type descriptions.
         self._entity_map = {cfg.kls.__name__: cfg.kls for cfg in er_diagram.entities}
 
     def generate(self) -> IntrospectionData:
@@ -595,24 +595,28 @@ class IntrospectionGenerator(SchemaGenerator):
             if methods
         ]
 
+    def _entity_description(self, entity_name: str) -> Optional[str]:
+        """Return the stripped docstring for an entity class, or None."""
+        entity = self._entity_map.get(entity_name)
+        if entity is None:
+            return None
+        doc = getattr(entity, "__doc__", None)
+        if not doc:
+            return None
+        doc = doc.strip()
+        return doc or None
+
     def _build_group_mount_field(self, entity_name: str, group_suffix: str) -> dict:
         """Build the root field that mounts an entity's group type.
 
-        Produces ``EntityName: EntityNameQuery!`` (NON_NULL OBJECT), with the
-        entity's docstring as its description so GraphiQL's Docs panel has
-        something to show.
+        Produces ``EntityName: EntityNameQuery!`` (NON_NULL OBJECT). The
+        entity's docstring lives on the group OBJECT type (see
+        :meth:`_build_entity_group_type`), not on this mount field, matching
+        the SDL renderer.
         """
-        description = None
-        entity = self._entity_map.get(entity_name)
-        if entity is not None:
-            doc = getattr(entity, '__doc__', None)
-            if doc:
-                doc = doc.strip()
-                if doc:
-                    description = doc
         return {
             "name": entity_name,
-            "description": description,
+            "description": None,
             "args": [],
             "type": {
                 "kind": "NON_NULL",
@@ -635,13 +639,15 @@ class IntrospectionGenerator(SchemaGenerator):
     ) -> GraphQLType:
         """Build the ``{Entity}Query`` / ``{Entity}Mutation`` group OBJECT.
 
-        Its fields are the entity's @query/@mutation methods, named verbatim.
-        ``methods`` is the inner grouped map ``{method_name: (entity, method)}``.
+        Its fields are the entity's @query/@mutation methods, named verbatim,
+        and its description is the entity's docstring (matching the SDL
+        renderer, which puts the docstring on the group type). ``methods`` is
+        the inner grouped map ``{method_name: (entity, method)}``.
         """
         return {
             "kind": "OBJECT",
             "name": group_type_name(entity_name, group_suffix),
-            "description": None,
+            "description": self._entity_description(entity_name),
             "fields": self._get_operation_fields(methods, group_suffix),
             "inputFields": None,
             "interfaces": [],

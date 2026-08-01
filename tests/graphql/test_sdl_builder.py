@@ -203,7 +203,8 @@ class TestGenerateOperationSdl:
         assert result is not None
         # Root mount + group type — the method is NOT a flat root field.
         assert "type Query {\n  SampleUser: SampleUserQuery!\n}" in result
-        assert "type SampleUserQuery {\n  get_all" in result
+        assert "type SampleUserQuery {" in result
+        assert "get_all" in result
         assert "SampleUser" in result  # Return type
 
     def test_generate_mutation_sdl(self):
@@ -212,7 +213,8 @@ class TestGenerateOperationSdl:
 
         assert result is not None
         assert "type Mutation {\n  SampleUser: SampleUserMutation!\n}" in result
-        assert "type SampleUserMutation {\n  create" in result
+        assert "type SampleUserMutation {" in result
+        assert "create" in result
 
     def test_generate_nonexistent_operation(self):
         """Test generating SDL for non-existent operation returns None."""
@@ -226,6 +228,14 @@ class TestGenerateOperationSdl:
         assert result is not None
         # Should include the return type definition
         assert "# Related Types" in result or "type SampleUser" in result
+
+    def test_operation_sdl_surfaces_method_description(self):
+        """The method's docstring appears as a field description block."""
+        result = self.builder.generate_operation_sdl("SampleUser", "get_all", "Query")
+
+        assert result is not None
+        # get_all's docstring is "Get all users." — emitted as a block string.
+        assert '"""Get all users' in result
 
     def test_string_return_type_resolved(self):
         """Test that string return type annotations are resolved to entity types."""

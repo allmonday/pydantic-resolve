@@ -149,10 +149,12 @@ class GraphQLHandler:
 
         if operation_type == "query":
             extract = self.schema_builder._extract_query_methods
+            group_suffix = "Query"
         else:
             extract = self.schema_builder._extract_mutation_methods
+            group_suffix = "Mutation"
 
-        scanned = scan_grouped_methods(self.er_diagram.entities, extract)
+        scanned = scan_grouped_methods(self.er_diagram.entities, extract, group_suffix)
 
         grouped: dict[str, dict[str, tuple[type, Callable]]] = {}
         for entity_name, method_infos in scanned.items():

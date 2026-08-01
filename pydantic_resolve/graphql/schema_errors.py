@@ -22,6 +22,8 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 
+from pydantic_resolve.graphql.utils import group_type_name
+
 
 # GraphQL root operation type names — an entity class named one of these would
 # collide with the synthesized root types.
@@ -52,9 +54,23 @@ class ReservedEntityError(EntitySchemaError):
     """
 
 
+class GroupTypeCollisionError(EntitySchemaError):
+    """A ``{Entity}Query`` / ``{Entity}Mutation`` group type name collides with
+    another entity's object type name.
+
+    Every entity produces an OBJECT type named after its class, and every
+    entity with ``@query``/``@mutation`` methods produces a ``{Entity}Query``/
+    ``{Entity}Mutation`` group type. If those two sets overlap (e.g. entities
+    ``User`` and ``UserQuery``) the SDL/introspection ends up with two
+    same-named type definitions. Reject it up front instead of emitting
+    ambiguous schema.
+    """
+
+
 def scan_grouped_methods(
     entities: Iterable,
     extract_fn: Callable[[type], list[dict]],
+    group_suffix: str,
 ) -> dict[str, list[dict]]:
     """Scan entities into a grouped ``{entity_name: [method_info, ...]}`` map.
 
@@ -69,6 +85,8 @@ def scan_grouped_methods(
         extract_fn: ``Callable[type] -> list[dict]`` returning an entity's
             ``@query``/``@mutation`` method infos (each carrying a ``'name'``
             key, the verbatim GraphQL field name).
+        group_suffix: ``"Query"`` or ``"Mutation"`` — the group type-name
+            suffix being built, used for the group-type collision check.
 
     Returns:
         ``{entity_name: [method_info, ...]}``, preserving declaration order.
@@ -79,7 +97,13 @@ def scan_grouped_methods(
             ``Query`` / ``Mutation`` / ``Subscription``.
         ReservedMethodFieldError: a method field name starts with ``__``.
         DuplicateMethodError: two methods on one entity share a field name.
+        GroupTypeCollisionError: a ``{Entity}{group_suffix}`` group type name
+            collides with another entity's object type name.
     """
+    # Every entity produces an OBJECT type named after its class, so a group
+    # type name that matches any entity class name would duplicate a type.
+    entity_type_names = {entity_cfg.kls.__name__ for entity_cfg in entities}
+
     grouped: dict[str, list[dict]] = {}
     for entity_cfg in entities:
         kls = entity_cfg.kls
@@ -95,6 +119,14 @@ def scan_grouped_methods(
             raise ReservedEntityError(
                 f"Entity class '{entity_name}' clashes with a GraphQL root "
                 f"operation type name; rename the class (defined in {kls.__module__})."
+            )
+
+        group_type = group_type_name(entity_name, group_suffix)
+        if group_type in entity_type_names:
+            raise GroupTypeCollisionError(
+                f"Entity '{entity_name}' produces {group_suffix} group type "
+                f"'{group_type}', which collides with the entity class "
+                f"'{group_type}' also in the diagram; rename one of them."
             )
 
         bucket = grouped.setdefault(entity_name, [])

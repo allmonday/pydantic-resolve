@@ -29,6 +29,7 @@ from pydantic_resolve.graphql.mcp.builders.introspection_query_helper import (
 from pydantic_resolve.graphql.mcp.managers.app_resources import AppResources
 from pydantic_resolve.graphql.schema_errors import (
     DuplicateMethodError,
+    GroupTypeCollisionError,
     ReservedEntityError,
     ReservedMethodFieldError,
 )
@@ -368,3 +369,89 @@ class TestGroupedMcpHelpers:
         assert app.mutation_groups == {"UserEntity"}
         assert app.query_names == {"UserEntity.get_all", "PostEntity.get_all"}
         assert app.mutation_names == {"UserEntity.create"}
+
+
+# =====================================
+# Edge cases found in the second review pass
+# =====================================
+
+
+class TestGroupedEdgeCases:
+    """Hardened edge cases: zero-query schema, group-type collisions,
+    description placement, and operation SDL richness."""
+
+    def test_zero_query_schema_omits_empty_query_type(self):
+        # A mutation-only app must not emit an invalid empty `type Query {}`,
+        # and SDL must agree with introspection (queryType is None).
+        Base = base_entity()
+
+        class MutOnly(BaseModel, Base):
+            __relationships__ = []
+            id: int
+
+            @mutation
+            async def create(cls, name: str) -> "MutOnly":
+                return MutOnly(id=1)
+
+        diagram = Base.get_diagram()
+        sdl = SchemaBuilder(diagram).build_schema()
+        assert "type Query {" not in sdl
+        assert "type Mutation {" in sdl
+
+        config_global_resolver(diagram)
+        intro = GraphQLHandler(diagram).introspection._generator.generate()
+        assert intro["queryType"] is None
+        assert intro["mutationType"] is not None
+
+    def test_group_type_name_collision_raises(self):
+        # Entity `User` produces group type `UserQuery`, colliding with the
+        # entity class `UserQuery` — both standalone SDL and the handler reject.
+        Base = base_entity()
+
+        class User(BaseModel, Base):
+            __relationships__ = []
+            id: int
+
+            @query
+            async def get_all(cls) -> List["User"]:
+                return []
+
+        class UserQuery(BaseModel, Base):  # name intentionally collides with User's group type
+            __relationships__ = []
+            id: int
+
+            @query
+            async def get_all(cls) -> List["UserQuery"]:
+                return []
+
+        diagram = Base.get_diagram()
+        with pytest.raises(GroupTypeCollisionError):
+            SchemaBuilder(diagram).build_schema()
+
+        config_global_resolver(diagram)
+        with pytest.raises(GroupTypeCollisionError):
+            GraphQLHandler(diagram)
+
+    def test_introspection_description_lives_on_group_type(self):
+        # The entity docstring describes the group OBJECT type (matching SDL),
+        # not the root mount field.
+        Base = base_entity()
+
+        class Widget(BaseModel, Base):
+            """A widget entity."""
+
+            __relationships__ = []
+            id: int
+
+            @query
+            async def get_all(cls) -> List["Widget"]:
+                return []
+
+        diagram = Base.get_diagram()
+        config_global_resolver(diagram)
+        intro = GraphQLHandler(diagram).introspection._generator.generate()
+        names = {t["name"]: t for t in intro["types"]}
+
+        assert names["WidgetQuery"]["description"] == "A widget entity."
+        mount = next(f for f in names["Query"]["fields"] if f["name"] == "Widget")
+        assert mount["description"] is None

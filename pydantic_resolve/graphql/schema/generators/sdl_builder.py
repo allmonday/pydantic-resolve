@@ -109,11 +109,13 @@ class SDLBuilder(SchemaGenerator):
 
         schema = "\n\n".join(schema_parts) + "\n\n"
 
-        # Root Query type: one NON_NULL mount field per entity group.
-        schema += "type Query {\n"
+        # Root Query type (only if any entity has queries). Gated like Mutation
+        # so a query-less schema doesn't emit an invalid empty ``type Query {}``
+        # — and stays consistent with introspection's queryType=None.
         if query_root_lines:
+            schema += "type Query {\n"
             schema += "\n".join(f"  {line}" for line in query_root_lines) + "\n"
-        schema += "}\n\n"
+            schema += "}\n\n"
 
         # Root Mutation type (only if any entity has mutations).
         if mutation_root_lines:
@@ -337,7 +339,7 @@ class SDLBuilder(SchemaGenerator):
         # applies the same eager conflict checks (reserved names, duplicate
         # method field names) and computes the same grouping as the handler.
         from pydantic_resolve.graphql.schema_errors import scan_grouped_methods
-        scanned = scan_grouped_methods(self.er_diagram.entities, extract)
+        scanned = scan_grouped_methods(self.er_diagram.entities, extract, group_suffix)
 
         group_blocks: list[str] = []
         root_lines: list[str] = []
@@ -495,13 +497,20 @@ class SDLBuilder(SchemaGenerator):
             field_def = self._build_query_def(method_info)
         else:
             field_def = self._build_mutation_def(method_info)
+        # Surface the method's docstring as a field description — the most
+        # useful piece for an AI consumer of this progressive-disclosure SDL.
+        description = method_info.get("description")
+        if description:
+            field_block = f'  """{description}"""\n  {field_def}'
+        else:
+            field_block = f"  {field_def}"
         group_type = group_type_name(entity_name, operation_type)
         parts.append(
             f"type {operation_type} {{\n"
             f"  {entity_name}: {group_type}!\n"
             f"}}\n\n"
             f"type {group_type} {{\n"
-            f"  {field_def}\n"
+            f"{field_block}\n"
             f"}}"
         )
 
