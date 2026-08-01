@@ -164,12 +164,14 @@ async def graphql_endpoint(req: GraphQLRequest):
 
 ## 查询示例
 
+> 查询按实体分组：`{ Entity { method(args) { fields } } }`，结果嵌套为 `data[Entity][method]`。
+
 ### 1. 获取所有用户
 
 ```bash
 curl -X POST http://localhost:8000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query": "{ userEntityV3UsersV3 { id name email role created_at } }"}'
+  -d '{"query": "{ UserEntity { users_v3 { id name email role created_at } } }"}'
 ```
 
 ### 2. 获取分页用户
@@ -177,7 +179,7 @@ curl -X POST http://localhost:8000/graphql \
 ```bash
 curl -X POST http://localhost:8000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query": "{ userEntityV3UsersV3(limit: 2, offset: 1) { id name email } }"}'
+  -d '{"query": "{ UserEntity { users_v3(limit: 2, offset: 1) { id name email } } }"}'
 ```
 
 ### 3. 获取单个用户及其文章（嵌套查询）
@@ -185,7 +187,7 @@ curl -X POST http://localhost:8000/graphql \
 ```bash
 curl -X POST http://localhost:8000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query": "{ userEntityV3UserV3(id: 1) { id name email posts { title content status } } }"}'
+  -d '{"query": "{ UserEntity { user_v3(id: 1) { id name email posts { title content status } } } }"}'
 ```
 
 ### 4. 获取所有文章
@@ -193,7 +195,7 @@ curl -X POST http://localhost:8000/graphql \
 ```bash
 curl -X POST http://localhost:8000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query": "{ postEntityV3PostsV3 { id title content status created_at } }"}'
+  -d '{"query": "{ PostEntity { posts_v3 { id title content status created_at } } }"}'
 ```
 
 ### 5. 按状态筛选文章
@@ -201,7 +203,7 @@ curl -X POST http://localhost:8000/graphql \
 ```bash
 curl -X POST http://localhost:8000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query": "{ postEntityV3PostsV3(status: \"published\") { id title content } }"}'
+  -d '{"query": "{ PostEntity { posts_v3(status: \"published\") { id title content } } }"}'
 ```
 
 ### 6. 获取文章及作者（多层级嵌套）
@@ -209,7 +211,7 @@ curl -X POST http://localhost:8000/graphql \
 ```bash
 curl -X POST http://localhost:8000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query": "{ postEntityV3PostsV3 { title content author { name email role } } }"}'
+  -d '{"query": "{ PostEntity { posts_v3 { title content author { name email role } } } }"}'
 ```
 
 ### 7. 获取评论及作者和文章（三层嵌套）
@@ -217,7 +219,7 @@ curl -X POST http://localhost:8000/graphql \
 ```bash
 curl -X POST http://localhost:8000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query": "{ commentEntityV3CommentsV3 { text author { name email } post { title author { name } } } }"}'
+  -d '{"query": "{ CommentEntity { comments_v3 { text author { name email } post { title author { name } } } } }"}'
 ```
 
 ### 8. 获取单个文章及评论
@@ -225,7 +227,7 @@ curl -X POST http://localhost:8000/graphql \
 ```bash
 curl -X POST http://localhost:8000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query": "{ postEntityV3PostV3(id: 1) { title content author { name email } comments { text author { name } } } }"}'
+  -d '{"query": "{ PostEntity { post_v3(id: 1) { title content author { name email } comments { text author { name } } } } }"}'
 ```
 
 ### 9. 多查询
@@ -233,7 +235,7 @@ curl -X POST http://localhost:8000/graphql \
 ```bash
 curl -X POST http://localhost:8000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query": "{ postEntityV3PostsV3 { id title } userEntityV3UsersV3 { id name } }"}'
+  -d '{"query": "{ PostEntity { posts_v3 { id title } } UserEntity { users_v3 { id name } } }"}'
 ```
 
 ## Mutation 示例
@@ -243,7 +245,7 @@ curl -X POST http://localhost:8000/graphql \
 ```bash
 curl -X POST http://localhost:8000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query": "mutation { userEntityV3CreateUserV3(name: \"Eve\", email: \"eve@example.com\") { id name email } }"}'
+  -d '{"query": "mutation { UserEntity { createUserV3(name: \"Eve\", email: \"eve@example.com\") { id name email } } }"}'
 ```
 
 ### 使用 Input Type 创建用户
@@ -251,7 +253,7 @@ curl -X POST http://localhost:8000/graphql \
 ```bash
 curl -X POST http://localhost:8000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query": "mutation { userEntityV3CreateUserWithInputV3(input: { name: \"Frank\", email: \"frank@example.com\", role: USER }) { id name email role } }"}'
+  -d '{"query": "mutation { UserEntity { createUserWithInputV3(input: { name: \"Frank\", email: \"frank@example.com\", role: USER }) { id name email role } } }"}'
 ```
 
 ### 创建文章
@@ -259,7 +261,7 @@ curl -X POST http://localhost:8000/graphql \
 ```bash
 curl -X POST http://localhost:8000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query": "mutation { postEntityV3CreatePostV3(title: \"New Post\", content: \"Hello\", author_id: 1) { id title status } }"}'
+  -d '{"query": "mutation { PostEntity { createPostV3(title: \"New Post\", content: \"Hello\", author_id: 1) { id title status } } }"}'
 ```
 
 ### 创建评论
@@ -267,19 +269,19 @@ curl -X POST http://localhost:8000/graphql \
 ```bash
 curl -X POST http://localhost:8000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query": "mutation { commentEntityV3CreateCommentV3(text: \"Nice!\", author_id: 2, post_id: 1) { id text } }"}'
+  -d '{"query": "mutation { CommentEntity { createCommentV3(text: \"Nice!\", author_id: 2, post_id: 1) { id text } } }"}'
 ```
 
 ## 数据模型
 
-### UserEntityV3
+### UserEntity
 - `id`: Int
 - `name`: String
 - `email`: String
 - `role`: String (admin/user)
 - `created_at`: DateTime
 
-### PostEntityV3
+### PostEntity
 - `id`: Int
 - `title`: String
 - `content`: String
@@ -287,7 +289,7 @@ curl -X POST http://localhost:8000/graphql \
 - `status`: String (published/draft/archived)
 - `created_at`: DateTime
 
-### CommentEntityV3
+### CommentEntity
 - `id`: Int
 - `text`: String
 - `author_id`: Int (FK → User)
@@ -296,23 +298,27 @@ curl -X POST http://localhost:8000/graphql \
 
 ## 可用查询
 
+每个查询挂在对应实体的 `{Entity}Query` 组下（如 `UserEntity.users_v3`）。
+
 | 查询 | 参数 | 返回类型 | 说明 |
 |------|------|----------|------|
-| `userEntityV3UsersV3` | `limit: Int, offset: Int` | [User] | 获取用户列表（分页） |
-| `userEntityV3UserV3` | `id: Int!` | User | 获取单个用户 |
-| `postEntityV3PostsV3` | `limit: Int, status: String` | [Post] | 获取文章列表（可按状态筛选） |
-| `postEntityV3PostV3` | `id: Int!` | Post | 获取单个文章 |
-| `commentEntityV3CommentsV3` | - | [Comment] | 获取所有评论 |
+| `UserEntity.users_v3` | `limit: Int, offset: Int` | [User] | 获取用户列表（分页） |
+| `UserEntity.user_v3` | `id: Int!` | User | 获取单个用户 |
+| `PostEntity.posts_v3` | `limit: Int, status: String` | [Post] | 获取文章列表（可按状态筛选） |
+| `PostEntity.post_v3` | `id: Int!` | Post | 获取单个文章 |
+| `CommentEntity.comments_v3` | - | [Comment] | 获取所有评论 |
 
 ## 可用变更
 
+每个变更挂在对应实体的 `{Entity}Mutation` 组下。
+
 | 变更 | 参数 | 返回类型 | 说明 |
 |------|------|----------|------|
-| `userEntityV3CreateUserV3` | `name, email, role?` | User | 创建用户 |
-| `userEntityV3CreateUserWithInputV3` | `input: CreateUserInput` | User | 使用 Input Type 创建用户 |
-| `postEntityV3CreatePostV3` | `title, content, author_id, status?` | Post | 创建文章 |
-| `postEntityV3CreatePostWithInputV3` | `input: CreatePostInput` | Post | 使用 Input Type 创建文章 |
-| `commentEntityV3CreateCommentV3` | `text, author_id, post_id` | Comment | 创建评论 |
+| `UserEntity.createUserV3` | `name, email, role?` | User | 创建用户 |
+| `UserEntity.createUserWithInputV3` | `input: CreateUserInput` | User | 使用 Input Type 创建用户 |
+| `PostEntity.createPostV3` | `title, content, author_id, status?` | Post | 创建文章 |
+| `PostEntity.createPostWithInputV3` | `input: CreatePostInput` | Post | 使用 Input Type 创建文章 |
+| `CommentEntity.createCommentV3` | `text, author_id, post_id` | Comment | 创建评论 |
 
 ## MCP Server
 

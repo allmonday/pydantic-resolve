@@ -124,7 +124,7 @@ class UserEntity(BaseModel, BaseEntity):
     name: str = Field(description="用户姓名")
     email: str = Field(description="用户邮箱地址")
     role: UserRole = Field(description="用户角色")
-    created_at: datetime = Field(description="创建时间")
+    created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
     something: dict = Field(default={'key': 'value'}, description="额外信息字典")
     meta: list[UserMetaEntity] = Field(default_factory=list, description="用户元信息列表")
 
@@ -222,7 +222,7 @@ class PostEntity(BaseModel, BaseEntity):
     content: str = Field(default="", description="文章内容")
     author_id: int = Field(description="作者用户ID")
     status: PostStatus = Field(description="文章状态")
-    created_at: datetime = Field(description="创建时间")
+    created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
 
     @query
     async def get_all(cls, limit: int = 10, status: Optional[PostStatus] = None) -> List['PostEntity']:
@@ -333,7 +333,7 @@ class CommentEntity(BaseModel, BaseEntity):
     text: str = Field(description="评论内容")
     author_id: int = Field(description="评论者用户ID")
     post_id: int = Field(description="被评论的文章ID")
-    created_at: datetime = Field(description="创建时间")
+    created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
 
     @query
     async def get_all(cls) -> List['CommentEntity']:

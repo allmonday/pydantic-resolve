@@ -26,28 +26,28 @@ https://lucasconstantino.github.io/graphiql-online/
 ```bash
 curl -X POST http://localhost:8000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query": "{ users { id name email role } }"}'
+  -d '{"query": "{ UserEntity { users_v3 { id name email role } } }"}'
 ```
 
 ### 获取单个用户
 ```bash
 curl -X POST http://localhost:8000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query": "{ user(id: 1) { id name email } }"}'
+  -d '{"query": "{ UserEntity { user_v3(id: 1) { id name email } } }"}'
 ```
 
 ### 获取所有文章
 ```bash
 curl -X POST http://localhost:8000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query": "{ posts { id title content } }"}'
+  -d '{"query": "{ PostEntity { posts_v3 { id title content } } }"}'
 ```
 
 ### 嵌套查询 - 文章及作者
 ```bash
 curl -X POST http://localhost:8000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query": "{ posts { title author { name email } } }"}'
+  -d '{"query": "{ PostEntity { posts_v3 { title author { name email } } } }"}'
 ```
 
 ## 4. 查看文档

@@ -3,6 +3,8 @@ GraphQL Demo FastAPI 应用
 提供可查询的 GraphQL endpoint
 """
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, APIRouter, Request
 from fastapi.responses import PlainTextResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,11 +17,23 @@ from demo.graphql.entities_v3 import diagram_v3, init_db_v3
 
 diagram = diagram_v3
 
+# 配置全局 resolver
+config_global_resolver(diagram)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize database tables and seed data on startup."""
+    await init_db_v3()
+    yield
+
+
 # 创建 FastAPI 应用
-app = FastAPI(diagram=diagram,
+app = FastAPI(
+    lifespan=lifespan,
     title="Pydantic Resolve GraphQL Demo",
     description="演示 pydantic-resolve 的 GraphQL 查询功能",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 # 添加 CORS 中间件
@@ -30,15 +44,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# 配置全局 resolver
-config_global_resolver(diagram)
-
-
-@app.on_event("startup")
-async def startup():
-    """Initialize database tables and seed data."""
-    await init_db_v3()
 
 # 创建 GraphQL handler 和 schema builder
 handler = GraphQLHandler(diagram, enable_from_attribute_in_type_adapter=True, enable_pagination=True)

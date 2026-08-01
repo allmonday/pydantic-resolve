@@ -39,23 +39,23 @@ class TestQueryRecognition:
 
     def test_users_v2_query_exists(self, handler):
         """验证 users_v2 查询被识别"""
-        assert 'users_v2' in handler.query_map
+        assert 'users_v2' in handler.query_map['UserEntityV2']
 
     def test_user_v2_query_exists(self, handler):
         """验证 user_v2 查询被识别"""
-        assert 'user_v2' in handler.query_map
+        assert 'user_v2' in handler.query_map['UserEntityV2']
 
     def test_posts_v2_query_exists(self, handler):
         """验证 posts_v2 查询被识别"""
-        assert 'posts_v2' in handler.query_map
+        assert 'posts_v2' in handler.query_map['PostEntityV2']
 
     def test_post_v2_query_exists(self, handler):
         """验证 post_v2 查询被识别"""
-        assert 'post_v2' in handler.query_map
+        assert 'post_v2' in handler.query_map['PostEntityV2']
 
     def test_comments_v2_query_exists(self, handler):
         """验证 comments_v2 查询被识别"""
-        assert 'comments_v2' in handler.query_map
+        assert 'comments_v2' in handler.query_map['CommentEntityV2']
 
 
 class TestMutationRecognition:
@@ -68,15 +68,15 @@ class TestMutationRecognition:
 
     def test_create_user_v2_mutation_exists(self, handler):
         """验证 createUserV2 变更被识别"""
-        assert 'createUserV2' in handler.mutation_map
+        assert 'createUserV2' in handler.mutation_map['UserEntityV2']
 
     def test_create_post_v2_mutation_exists(self, handler):
         """验证 createPostV2 变更被识别"""
-        assert 'createPostV2' in handler.mutation_map
+        assert 'createPostV2' in handler.mutation_map['PostEntityV2']
 
     def test_create_comment_v2_mutation_exists(self, handler):
         """验证 createCommentV2 变更被识别"""
-        assert 'createCommentV2' in handler.mutation_map
+        assert 'createCommentV2' in handler.mutation_map['CommentEntityV2']
 
 
 class TestQueryExecution:
@@ -85,48 +85,48 @@ class TestQueryExecution:
     @pytest.mark.asyncio
     async def test_query_users(self, handler):
         """测试获取所有用户"""
-        result = await handler.execute('{ users_v2 { id name email role } }')
+        result = await handler.execute('{ UserEntityV2 { users_v2 { id name email role } } }')
 
         assert result['data'] is not None
-        assert 'users_v2' in result['data']
-        assert len(result['data']['users_v2']) > 0
-        assert result['data']['users_v2'][0]['name'] is not None
+        assert 'users_v2' in result['data']['UserEntityV2']
+        assert len(result['data']['UserEntityV2']['users_v2']) > 0
+        assert result['data']['UserEntityV2']['users_v2'][0]['name'] is not None
 
     @pytest.mark.asyncio
     async def test_query_user_by_id(self, handler):
         """测试根据 ID 获取单个用户"""
-        result = await handler.execute('{ user_v2(id: 1) { id name email role } }')
+        result = await handler.execute('{ UserEntityV2 { user_v2(id: 1) { id name email role } } }')
 
         assert result['data'] is not None
-        assert result['data']['user_v2']['id'] == 1
-        assert result['data']['user_v2']['name'] == 'Alice'
+        assert result['data']['UserEntityV2']['user_v2']['id'] == 1
+        assert result['data']['UserEntityV2']['user_v2']['name'] == 'Alice'
 
     @pytest.mark.asyncio
     async def test_query_posts(self, handler):
         """测试获取所有文章"""
-        result = await handler.execute('{ posts_v2 { id title content status } }')
+        result = await handler.execute('{ PostEntityV2 { posts_v2 { id title content status } } }')
 
         assert result['data'] is not None
-        assert 'posts_v2' in result['data']
-        assert len(result['data']['posts_v2']) > 0
+        assert 'posts_v2' in result['data']['PostEntityV2']
+        assert len(result['data']['PostEntityV2']['posts_v2']) > 0
 
     @pytest.mark.asyncio
     async def test_query_posts_with_filter(self, handler):
         """测试按状态筛选文章"""
-        result = await handler.execute('{ posts_v2(status: "published") { id title status } }')
+        result = await handler.execute('{ PostEntityV2 { posts_v2(status: "published") { id title status } } }')
 
         assert result['data'] is not None
-        for post in result['data']['posts_v2']:
-            assert post['status'] == 'published'
+        for post in result['data']['PostEntityV2']['posts_v2']:
+            assert post['status'] == 'PUBLISHED'
 
     @pytest.mark.asyncio
     async def test_query_comments(self, handler):
         """测试获取所有评论"""
-        result = await handler.execute('{ comments_v2 { id text } }')
+        result = await handler.execute('{ CommentEntityV2 { comments_v2 { id text } } }')
 
         assert result['data'] is not None
-        assert 'comments_v2' in result['data']
-        assert len(result['data']['comments_v2']) > 0
+        assert 'comments_v2' in result['data']['CommentEntityV2']
+        assert len(result['data']['CommentEntityV2']['comments_v2']) > 0
 
 
 class TestMutationExecution:
@@ -136,47 +136,47 @@ class TestMutationExecution:
     async def test_mutation_create_user(self, handler):
         """测试创建用户"""
         result = await handler.execute(
-            'mutation { createUserV2(name: "TestUser", email: "test@test.com") { id name email role } }'
+            'mutation { UserEntityV2 { createUserV2(name: "TestUser", email: "test@test.com") { id name email role } } }'
         )
 
         assert result['data'] is not None
-        assert result['data']['createUserV2']['name'] == 'TestUser'
-        assert result['data']['createUserV2']['email'] == 'test@test.com'
-        assert result['data']['createUserV2']['role'] == 'user'  # 默认值
+        assert result['data']['UserEntityV2']['createUserV2']['name'] == 'TestUser'
+        assert result['data']['UserEntityV2']['createUserV2']['email'] == 'test@test.com'
+        assert result['data']['UserEntityV2']['createUserV2']['role'] == 'USER'  # 默认值
 
     @pytest.mark.asyncio
     async def test_mutation_create_user_with_role(self, handler):
         """测试创建带角色的用户"""
         result = await handler.execute(
-            'mutation { createUserV2(name: "Admin", email: "admin@test.com", role: "admin") { id name role } }'
+            'mutation { UserEntityV2 { createUserV2(name: "Admin", email: "admin@test.com", role: "admin") { id name role } } }'
         )
 
         assert result['data'] is not None
-        assert result['data']['createUserV2']['role'] == 'admin'
+        assert result['data']['UserEntityV2']['createUserV2']['role'] == 'ADMIN'
 
     @pytest.mark.asyncio
     async def test_mutation_create_post(self, handler):
         """测试创建文章"""
         result = await handler.execute(
-            'mutation { createPostV2(title: "New Post", content: "Content", author_id: 1) { id title content author_id status } }'
+            'mutation { PostEntityV2 { createPostV2(title: "New Post", content: "Content", author_id: 1) { id title content author_id status } } }'
         )
 
         assert result['data'] is not None
-        assert result['data']['createPostV2']['title'] == 'New Post'
-        assert result['data']['createPostV2']['author_id'] == 1
-        assert result['data']['createPostV2']['status'] == 'draft'  # 默认值
+        assert result['data']['PostEntityV2']['createPostV2']['title'] == 'New Post'
+        assert result['data']['PostEntityV2']['createPostV2']['author_id'] == 1
+        assert result['data']['PostEntityV2']['createPostV2']['status'] == 'DRAFT'  # 默认值
 
     @pytest.mark.asyncio
     async def test_mutation_create_comment(self, handler):
         """测试创建评论"""
         result = await handler.execute(
-            'mutation { createCommentV2(text: "Nice article!", author_id: 1, post_id: 1) { id text author_id post_id } }'
+            'mutation { CommentEntityV2 { createCommentV2(text: "Nice article!", author_id: 1, post_id: 1) { id text author_id post_id } } }'
         )
 
         assert result['data'] is not None
-        assert result['data']['createCommentV2']['text'] == 'Nice article!'
-        assert result['data']['createCommentV2']['author_id'] == 1
-        assert result['data']['createCommentV2']['post_id'] == 1
+        assert result['data']['CommentEntityV2']['createCommentV2']['text'] == 'Nice article!'
+        assert result['data']['CommentEntityV2']['createCommentV2']['author_id'] == 1
+        assert result['data']['CommentEntityV2']['createCommentV2']['post_id'] == 1
 
 
 class TestRelationshipResolution:
@@ -186,11 +186,11 @@ class TestRelationshipResolution:
     async def test_post_author_relationship(self, handler):
         """测试文章-作者关系解析"""
         result = await handler.execute(
-            '{ posts_v2 { title author { name email } } }'
+            '{ PostEntityV2 { posts_v2 { title author { name email } } } }'
         )
 
         assert result['data'] is not None
-        posts = result['data']['posts_v2']
+        posts = result['data']['PostEntityV2']['posts_v2']
         assert len(posts) > 0
 
         # 验证每篇文章都有作者信息
@@ -204,11 +204,11 @@ class TestRelationshipResolution:
     async def test_post_comments_relationship(self, handler):
         """测试文章-评论关系解析"""
         result = await handler.execute(
-            '{ posts_v2 { title comments { text } } }'
+            '{ PostEntityV2 { posts_v2 { title comments { text } } } }'
         )
 
         assert result['data'] is not None
-        posts = result['data']['posts_v2']
+        posts = result['data']['PostEntityV2']['posts_v2']
         assert len(posts) > 0
 
         # 第一篇文章应该有评论
@@ -221,11 +221,11 @@ class TestRelationshipResolution:
     async def test_comment_author_relationship(self, handler):
         """测试评论-作者关系解析"""
         result = await handler.execute(
-            '{ comments_v2 { text author { name } } }'
+            '{ CommentEntityV2 { comments_v2 { text author { name } } } }'
         )
 
         assert result['data'] is not None
-        comments = result['data']['comments_v2']
+        comments = result['data']['CommentEntityV2']['comments_v2']
         assert len(comments) > 0
 
         for comment in comments:
@@ -237,11 +237,11 @@ class TestRelationshipResolution:
     async def test_comment_post_relationship(self, handler):
         """测试评论-文章关系解析"""
         result = await handler.execute(
-            '{ comments_v2 { text post { title } } }'
+            '{ CommentEntityV2 { comments_v2 { text post { title } } } }'
         )
 
         assert result['data'] is not None
-        comments = result['data']['comments_v2']
+        comments = result['data']['CommentEntityV2']['comments_v2']
         assert len(comments) > 0
 
         for comment in comments:
@@ -253,11 +253,11 @@ class TestRelationshipResolution:
     async def test_user_myposts_relationship(self, handler):
         """测试用户-文章关系解析"""
         result = await handler.execute(
-            '{ users_v2 { name myposts { title status } } }'
+            '{ UserEntityV2 { users_v2 { name myposts { title status } } } }'
         )
 
         assert result['data'] is not None
-        users = result['data']['users_v2']
+        users = result['data']['UserEntityV2']['users_v2']
         assert len(users) > 0
 
         # Alice (id=1) 应该有文章
@@ -270,11 +270,11 @@ class TestRelationshipResolution:
     async def test_nested_relationships(self, handler):
         """测试嵌套关系解析：文章 -> 作者 -> 文章列表"""
         result = await handler.execute(
-            '{ posts_v2(limit: 2) { title author { name email myposts { title } } } }'
+            '{ PostEntityV2 { posts_v2(limit: 2) { title author { name email myposts { title } } } } }'
         )
 
         assert result['data'] is not None
-        posts = result['data']['posts_v2']
+        posts = result['data']['PostEntityV2']['posts_v2']
         assert len(posts) > 0
 
         for post in posts:
@@ -293,23 +293,23 @@ class TestInputType:
     async def test_create_user_with_input(self, handler):
         """测试使用 Input Type 创建用户"""
         result = await handler.execute(
-            'mutation { createUserWithInputV2(input: {name: "InputUser", email: "input@test.com", role: "user"}) { id name email role } }'
+            'mutation { UserEntityV2 { createUserWithInputV2(input: {name: "InputUser", email: "input@test.com", role: "user"}) { id name email role } } }'
         )
 
         assert result['data'] is not None
-        assert result['data']['createUserWithInputV2']['name'] == 'InputUser'
-        assert result['data']['createUserWithInputV2']['email'] == 'input@test.com'
+        assert result['data']['UserEntityV2']['createUserWithInputV2']['name'] == 'InputUser'
+        assert result['data']['UserEntityV2']['createUserWithInputV2']['email'] == 'input@test.com'
 
     @pytest.mark.asyncio
     async def test_create_post_with_input(self, handler):
         """测试使用 Input Type 创建文章"""
         result = await handler.execute(
-            'mutation { createPostWithInputV2(input: {title: "Input Post", content: "Content", author_id: 1, status: "published"}) { id title content status } }'
+            'mutation { PostEntityV2 { createPostWithInputV2(input: {title: "Input Post", content: "Content", author_id: 1, status: "published"}) { id title content status } } }'
         )
 
         assert result['data'] is not None
-        assert result['data']['createPostWithInputV2']['title'] == 'Input Post'
-        assert result['data']['createPostWithInputV2']['status'] == 'published'
+        assert result['data']['PostEntityV2']['createPostWithInputV2']['title'] == 'Input Post'
+        assert result['data']['PostEntityV2']['createPostWithInputV2']['status'] == 'PUBLISHED'
 
 
 class TestErDiagramConfiguration:
@@ -338,7 +338,7 @@ class TestErDiagramConfiguration:
         """验证 UserEntityV2 在 ErDiagram 中有正确的关係配置"""
         user_cfg = next((cfg for cfg in diagram_v2.entities if cfg.kls == UserEntityV2), None)
         assert user_cfg is not None
-        assert len(user_cfg.relationships) == 1
+        assert len(user_cfg.relationships) == 2  # myposts + self_id (scalar demo)
         assert user_cfg.relationships[0].name == 'myposts'
 
     def test_post_entity_has_relationships(self):
