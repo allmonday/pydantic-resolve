@@ -38,19 +38,19 @@ class TestQueryRecognition:
         assert len(handler.query_map) > 0
 
     def test_users_v3_query_exists(self, handler):
-        assert "userEntityV3UsersV3" in handler.query_map
+        assert "users_v3" in handler.query_map["UserEntity"]
 
     def test_user_v3_query_exists(self, handler):
-        assert "userEntityV3UserV3" in handler.query_map
+        assert "user_v3" in handler.query_map["UserEntity"]
 
     def test_posts_v3_query_exists(self, handler):
-        assert "postEntityV3PostsV3" in handler.query_map
+        assert "posts_v3" in handler.query_map["PostEntity"]
 
     def test_post_v3_query_exists(self, handler):
-        assert "postEntityV3PostV3" in handler.query_map
+        assert "post_v3" in handler.query_map["PostEntity"]
 
     def test_comments_v3_query_exists(self, handler):
-        assert "commentEntityV3CommentsV3" in handler.query_map
+        assert "comments_v3" in handler.query_map["CommentEntity"]
 
 
 class TestMutationRecognition:
@@ -61,13 +61,13 @@ class TestMutationRecognition:
         assert len(handler.mutation_map) > 0
 
     def test_create_user_v3_mutation_exists(self, handler):
-        assert "userEntityV3CreateUserV3" in handler.mutation_map
+        assert "createUserV3" in handler.mutation_map["UserEntity"]
 
     def test_create_post_v3_mutation_exists(self, handler):
-        assert "postEntityV3CreatePostV3" in handler.mutation_map
+        assert "createPostV3" in handler.mutation_map["PostEntity"]
 
     def test_create_comment_v3_mutation_exists(self, handler):
-        assert "commentEntityV3CreateCommentV3" in handler.mutation_map
+        assert "createCommentV3" in handler.mutation_map["CommentEntity"]
 
 
 class TestQueryExecution:
@@ -76,49 +76,49 @@ class TestQueryExecution:
     @pytest.mark.asyncio
     async def test_query_users(self, handler):
         result = await handler.execute(
-            "{ userEntityV3UsersV3 { id name email role } }"
+            "{ UserEntity { users_v3 { id name email role } } }"
         )
         assert result["data"] is not None
-        users = result["data"]["userEntityV3UsersV3"]
+        users = result["data"]["UserEntity"]["users_v3"]
         assert len(users) > 0
         assert users[0]["name"] is not None
 
     @pytest.mark.asyncio
     async def test_query_user_by_id(self, handler):
         result = await handler.execute(
-            "{ userEntityV3UserV3(id: 1) { id name email role } }"
+            "{ UserEntity { user_v3(id: 1) { id name email role } } }"
         )
         assert result["data"] is not None
-        user = result["data"]["userEntityV3UserV3"]
+        user = result["data"]["UserEntity"]["user_v3"]
         assert user["id"] == 1
         assert user["name"] == "Alice"
 
     @pytest.mark.asyncio
     async def test_query_posts(self, handler):
         result = await handler.execute(
-            "{ postEntityV3PostsV3 { id title content status } }"
+            "{ PostEntity { posts_v3 { id title content status } } }"
         )
         assert result["data"] is not None
-        assert "postEntityV3PostsV3" in result["data"]
-        assert len(result["data"]["postEntityV3PostsV3"]) > 0
+        assert "posts_v3" in result["data"]["PostEntity"]
+        assert len(result["data"]["PostEntity"]["posts_v3"]) > 0
 
     @pytest.mark.asyncio
     async def test_query_posts_with_filter(self, handler):
         result = await handler.execute(
-            '{ postEntityV3PostsV3(status: "published") { id title status } }'
+            '{ PostEntity { posts_v3(status: "published") { id title status } } }'
         )
         assert result["data"] is not None
-        for post in result["data"]["postEntityV3PostsV3"]:
+        for post in result["data"]["PostEntity"]["posts_v3"]:
             assert post["status"] == "published"
 
     @pytest.mark.asyncio
     async def test_query_comments(self, handler):
         result = await handler.execute(
-            "{ commentEntityV3CommentsV3 { id text } }"
+            "{ CommentEntity { comments_v3 { id text } } }"
         )
         assert result["data"] is not None
-        assert "commentEntityV3CommentsV3" in result["data"]
-        assert len(result["data"]["commentEntityV3CommentsV3"]) > 0
+        assert "comments_v3" in result["data"]["CommentEntity"]
+        assert len(result["data"]["CommentEntity"]["comments_v3"]) > 0
 
 
 class TestMutationExecution:
@@ -127,10 +127,10 @@ class TestMutationExecution:
     @pytest.mark.asyncio
     async def test_mutation_create_user(self, handler):
         result = await handler.execute(
-            'mutation { userEntityV3CreateUserV3(name: "TestUser", email: "test@test.com") { id name email role } }'
+            'mutation { UserEntity { createUserV3(name: "TestUser", email: "test@test.com") { id name email role } } }'
         )
         assert result["data"] is not None
-        user = result["data"]["userEntityV3CreateUserV3"]
+        user = result["data"]["UserEntity"]["createUserV3"]
         assert user["name"] == "TestUser"
         assert user["email"] == "test@test.com"
         assert user["role"] == "user"
@@ -138,18 +138,18 @@ class TestMutationExecution:
     @pytest.mark.asyncio
     async def test_mutation_create_user_with_role(self, handler):
         result = await handler.execute(
-            'mutation { userEntityV3CreateUserV3(name: "Admin", email: "admin@test.com", role: "admin") { id name role } }'
+            'mutation { UserEntity { createUserV3(name: "Admin", email: "admin@test.com", role: "admin") { id name role } } }'
         )
         assert result["data"] is not None
-        assert result["data"]["userEntityV3CreateUserV3"]["role"] == "admin"
+        assert result["data"]["UserEntity"]["createUserV3"]["role"] == "admin"
 
     @pytest.mark.asyncio
     async def test_mutation_create_post(self, handler):
         result = await handler.execute(
-            'mutation { postEntityV3CreatePostV3(title: "New Post", content: "Content", author_id: 1) { id title content author_id status } }'
+            'mutation { PostEntity { createPostV3(title: "New Post", content: "Content", author_id: 1) { id title content author_id status } } }'
         )
         assert result["data"] is not None
-        post = result["data"]["postEntityV3CreatePostV3"]
+        post = result["data"]["PostEntity"]["createPostV3"]
         assert post["title"] == "New Post"
         assert post["author_id"] == 1
         assert post["status"] == "draft"
@@ -157,10 +157,10 @@ class TestMutationExecution:
     @pytest.mark.asyncio
     async def test_mutation_create_comment(self, handler):
         result = await handler.execute(
-            'mutation { commentEntityV3CreateCommentV3(text: "Nice article!", author_id: 1, post_id: 1) { id text author_id post_id } }'
+            'mutation { CommentEntity { createCommentV3(text: "Nice article!", author_id: 1, post_id: 1) { id text author_id post_id } } }'
         )
         assert result["data"] is not None
-        comment = result["data"]["commentEntityV3CreateCommentV3"]
+        comment = result["data"]["CommentEntity"]["createCommentV3"]
         assert comment["text"] == "Nice article!"
         assert comment["author_id"] == 1
         assert comment["post_id"] == 1
@@ -172,10 +172,10 @@ class TestRelationshipResolution:
     @pytest.mark.asyncio
     async def test_post_author_relationship(self, handler):
         result = await handler.execute(
-            "{ postEntityV3PostsV3 { title author { name email } } }"
+            "{ PostEntity { posts_v3 { title author { name email } } } }"
         )
         assert result["data"] is not None
-        posts = result["data"]["postEntityV3PostsV3"]
+        posts = result["data"]["PostEntity"]["posts_v3"]
         assert len(posts) > 0
         for post in posts:
             assert "author" in post
@@ -186,10 +186,10 @@ class TestRelationshipResolution:
     @pytest.mark.asyncio
     async def test_post_comments_relationship(self, handler):
         result = await handler.execute(
-            "{ postEntityV3PostsV3 { title comments { text } } }"
+            "{ PostEntity { posts_v3 { title comments { text } } } }"
         )
         assert result["data"] is not None
-        posts = result["data"]["postEntityV3PostsV3"]
+        posts = result["data"]["PostEntity"]["posts_v3"]
         assert len(posts) > 0
         first_post = posts[0]
         if first_post.get("comments"):
@@ -199,10 +199,10 @@ class TestRelationshipResolution:
     @pytest.mark.asyncio
     async def test_comment_author_relationship(self, handler):
         result = await handler.execute(
-            "{ commentEntityV3CommentsV3 { text author { name } } }"
+            "{ CommentEntity { comments_v3 { text author { name } } } }"
         )
         assert result["data"] is not None
-        comments = result["data"]["commentEntityV3CommentsV3"]
+        comments = result["data"]["CommentEntity"]["comments_v3"]
         assert len(comments) > 0
         for comment in comments:
             assert "author" in comment
@@ -212,10 +212,10 @@ class TestRelationshipResolution:
     @pytest.mark.asyncio
     async def test_comment_post_relationship(self, handler):
         result = await handler.execute(
-            "{ commentEntityV3CommentsV3 { text post { title } } }"
+            "{ CommentEntity { comments_v3 { text post { title } } } }"
         )
         assert result["data"] is not None
-        comments = result["data"]["commentEntityV3CommentsV3"]
+        comments = result["data"]["CommentEntity"]["comments_v3"]
         assert len(comments) > 0
         for comment in comments:
             assert "post" in comment
@@ -226,10 +226,10 @@ class TestRelationshipResolution:
     async def test_user_posts_relationship(self, handler):
         """Test user -> posts relationship (renamed from myposts in v2)."""
         result = await handler.execute(
-            "{ userEntityV3UsersV3 { name posts { title status } } }"
+            "{ UserEntity { users_v3 { name posts { title status } } } }"
         )
         assert result["data"] is not None
-        users = result["data"]["userEntityV3UsersV3"]
+        users = result["data"]["UserEntity"]["users_v3"]
         assert len(users) > 0
         alice = next((u for u in users if u["name"] == "Alice"), None)
         if alice and alice.get("posts"):
@@ -240,20 +240,20 @@ class TestRelationshipResolution:
     async def test_user_comments_relationship(self, handler):
         """Test user -> comments relationship (new in v3 via ORM)."""
         result = await handler.execute(
-            "{ userEntityV3UsersV3 { name comments { text } } }"
+            "{ UserEntity { users_v3 { name comments { text } } } }"
         )
         assert result["data"] is not None
-        users = result["data"]["userEntityV3UsersV3"]
+        users = result["data"]["UserEntity"]["users_v3"]
         assert len(users) > 0
 
     @pytest.mark.asyncio
     async def test_nested_relationships(self, handler):
         """Test nested resolution: Post -> Author -> Posts."""
         result = await handler.execute(
-            "{ postEntityV3PostsV3(limit: 2) { title author { name email posts { title } } } }"
+            "{ PostEntity { posts_v3(limit: 2) { title author { name email posts { title } } } } }"
         )
         assert result["data"] is not None
-        posts = result["data"]["postEntityV3PostsV3"]
+        posts = result["data"]["PostEntity"]["posts_v3"]
         assert len(posts) > 0
         for post in posts:
             assert "author" in post
@@ -269,20 +269,20 @@ class TestInputType:
     @pytest.mark.asyncio
     async def test_create_user_with_input(self, handler):
         result = await handler.execute(
-            'mutation { userEntityV3CreateUserWithInputV3(input: {name: "InputUser", email: "input@test.com", role: "user"}) { id name email role } }'
+            'mutation { UserEntity { createUserWithInputV3(input: {name: "InputUser", email: "input@test.com", role: "user"}) { id name email role } } }'
         )
         assert result["data"] is not None
-        user = result["data"]["userEntityV3CreateUserWithInputV3"]
+        user = result["data"]["UserEntity"]["createUserWithInputV3"]
         assert user["name"] == "InputUser"
         assert user["email"] == "input@test.com"
 
     @pytest.mark.asyncio
     async def test_create_post_with_input(self, handler):
         result = await handler.execute(
-            'mutation { postEntityV3CreatePostWithInputV3(input: {title: "Input Post", content: "Content", author_id: 1, status: "published"}) { id title content status } }'
+            'mutation { PostEntity { createPostWithInputV3(input: {title: "Input Post", content: "Content", author_id: 1, status: "published"}) { id title content status } } }'
         )
         assert result["data"] is not None
-        post = result["data"]["postEntityV3CreatePostWithInputV3"]
+        post = result["data"]["PostEntity"]["createPostWithInputV3"]
         assert post["title"] == "Input Post"
         assert post["status"] == "published"
 
@@ -295,15 +295,15 @@ class TestErDiagramConfiguration:
 
     def test_diagram_contains_user_entity(self):
         entity_names = [cfg.kls.__name__ for cfg in diagram_v3.entities]
-        assert "UserEntityV3" in entity_names
+        assert "UserEntity" in entity_names
 
     def test_diagram_contains_post_entity(self):
         entity_names = [cfg.kls.__name__ for cfg in diagram_v3.entities]
-        assert "PostEntityV3" in entity_names
+        assert "PostEntity" in entity_names
 
     def test_diagram_contains_comment_entity(self):
         entity_names = [cfg.kls.__name__ for cfg in diagram_v3.entities]
-        assert "CommentEntityV3" in entity_names
+        assert "CommentEntity" in entity_names
 
     def test_user_entity_has_relationships(self):
         user_cfg = next(
@@ -329,12 +329,12 @@ class TestContextInjection:
     async def test_context_reaches_query_method(self, handler):
         """Context dict is passed to @query method's context parameter."""
         result = await handler.execute(
-            "{ postEntityV3MyPostsV3 { id title author_id } }",
+            "{ PostEntity { my_posts_v3 { id title author_id } } }",
             context={"user_id": 1},
         )
         assert result["errors"] is None
         assert result["data"] is not None
-        posts = result["data"]["postEntityV3MyPostsV3"]
+        posts = result["data"]["PostEntity"]["my_posts_v3"]
         # All posts should belong to user_id=1 (Alice)
         for post in posts:
             assert post["author_id"] == 1
@@ -343,12 +343,12 @@ class TestContextInjection:
     async def test_context_with_different_user(self, handler):
         """Different context values produce different results."""
         result = await handler.execute(
-            "{ postEntityV3MyPostsV3 { id title author_id } }",
+            "{ PostEntity { my_posts_v3 { id title author_id } } }",
             context={"user_id": 2},
         )
         assert result["errors"] is None
         assert result["data"] is not None
-        posts = result["data"]["postEntityV3MyPostsV3"]
+        posts = result["data"]["PostEntity"]["my_posts_v3"]
         for post in posts:
             assert post["author_id"] == 2
 
@@ -356,7 +356,7 @@ class TestContextInjection:
     async def test_context_none_raises_for_required_query(self, handler):
         """Method that requires context raises when context is not provided."""
         result = await handler.execute(
-            "{ postEntityV3MyPostsV3 { id title } }",
+            "{ PostEntity { my_posts_v3 { id title } } }",
         )
         # Should have errors because the method raises ValueError
         assert result["errors"] is not None
@@ -365,13 +365,13 @@ class TestContextInjection:
     async def test_query_without_context_unaffected(self, handler):
         """Queries that don't use context still work normally."""
         result = await handler.execute(
-            "{ postEntityV3PostsV3 { id title } }",
+            "{ PostEntity { posts_v3 { id title } } }",
             context={"user_id": 999},
         )
         assert result["errors"] is None
         assert result["data"] is not None
         # Should return ALL posts, not filtered by user_id
-        assert len(result["data"]["postEntityV3PostsV3"]) > 0
+        assert len(result["data"]["PostEntity"]["posts_v3"]) > 0
 
     @pytest.mark.asyncio
     async def test_context_hidden_from_schema(self):
@@ -380,8 +380,8 @@ class TestContextInjection:
         builder = SchemaBuilder(d)
         schema_sdl = builder.build_schema()
 
-        # The MyPostsV3 query should exist but without _context param
-        assert "MyPostsV3" in schema_sdl
+        # The my_posts_v3 query should exist but without _context param
+        assert "my_posts_v3" in schema_sdl
         # _context should NOT appear as a parameter in the schema
         assert "_context" not in schema_sdl
 

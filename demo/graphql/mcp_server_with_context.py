@@ -16,12 +16,12 @@ Usage:
     #    curl -X POST http://localhost:8000/mcp/ \
     #      -H "Authorization: Bearer 1" \
     #      -H "Content-Type: application/json" \
-    #      -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"graphql_query","arguments":{"query":"{ postEntityV3MyPostsV3 { id title } }","app_name":"blog_v3"}},"id":1}'
+    #      -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"graphql_query","arguments":{"query":"{ PostEntity { my_posts_v3 { id title } } }","app_name":"blog_v3"}},"id":1}'
 
     # 2. Get all posts (no context needed):
     #    curl -X POST http://localhost:8000/mcp/ \
     #      -H "Content-Type: application/json" \
-    #      -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"graphql_query","arguments":{"query":"{ postEntityV3PostsV3 { id title } }","app_name":"blog_v3"}},"id":2}'
+    #      -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"graphql_query","arguments":{"query":"{ PostEntity { posts_v3 { id title } } }","app_name":"blog_v3"}},"id":2}'
 
 Flow:
     HTTP Request (Authorization: Bearer <user_id>)
@@ -67,7 +67,7 @@ apps: list[AppConfig] = [
         er_diagram=diagram_v3,
         description="Blog system with context-aware queries. "
                     "Use Authorization: Bearer <user_id> header to authenticate. "
-                    "The myPostsV3 query returns only the authenticated user's posts.",
+                    "The my_posts_v3 query returns only the authenticated user's posts.",
         enable_from_attribute_in_type_adapter=True,
         context_extractor=extract_user_context,
     ),

@@ -77,7 +77,7 @@ class CommentEntityV2(BaseModel):
     text: str = Field(description="评论内容")
     author_id: int = Field(description="评论者用户ID")
     post_id: int = Field(description="被评论的文章ID")
-    created_at: datetime = Field(description="创建时间")
+    created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
 
 
 class PostEntityV2(BaseModel):
@@ -90,7 +90,7 @@ class PostEntityV2(BaseModel):
     content: str = Field(default="", description="文章内容")
     author_id: int = Field(description="作者用户ID")
     status: PostStatus = Field(description="文章状态")
-    created_at: datetime = Field(description="创建时间")
+    created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
 
 
 class UserEntityV2(BaseModel):
@@ -102,7 +102,7 @@ class UserEntityV2(BaseModel):
     name: str = Field(description="用户姓名")
     email: str = Field(description="用户邮箱地址")
     role: UserRole = Field(description="用户角色")
-    created_at: datetime = Field(description="创建时间")
+    created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
 
 
 # =====================================

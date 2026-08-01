@@ -1,10 +1,11 @@
 name: Test
 
-on: 
+on:
   push:
     paths:
       - 'pydantic_resolve/**'
       - 'tests/**'
+      - 'demo/**'
 
 jobs:
   test:
@@ -29,4 +30,4 @@ jobs:
         run: uv pip install "pydantic==2.11.7"
 
       - name: Test with pytest
-        run: uv run pytest tests/
+        run: uv run pytest tests/ demo/
