@@ -12,7 +12,7 @@ description: "Release-by-release changelog for pydantic-resolve, following semve
 
 ### 6.0.0 (2026-7-31)
 
-**BREAKING CHANGES** — entity `@query` / `@mutation` operations are now grouped by entity under `{Entity}Query` / `{Entity}Mutation` types. Client GraphQL queries, the response shape, and the MCP schema tools must all be updated. The Python surface (`Entity`, `@query` / `@mutation` decorators, `GraphQLHandler`) is unchanged.
+**BREAKING CHANGES** — entity `@query` / `@mutation` operations are now grouped by entity under `{Entity}Query` / `{Entity}Mutation` types. Client GraphQL queries, the response shape, and the MCP schema tools must all be updated. The Python surface (`Entity`, `@query` / `@mutation` decorators, `GraphQLHandler`) is unchanged. See [Migration Guide](./migration.md) for details.
 
 - break:
   - **Grouped entity operations**: each entity's `@query` / `@mutation` methods are now the fields of a `{Entity}Query` / `{Entity}Mutation` group OBJECT, and the root `Query` / `Mutation` mounts one NON_NULL field per entity. Method names are used **verbatim** — the old `entityPrefix + MethodCamel` camelCase (`userEntityGetAll`) is gone.
