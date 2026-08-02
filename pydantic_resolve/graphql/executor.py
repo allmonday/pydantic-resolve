@@ -13,8 +13,10 @@ import asyncio
 import inspect
 import logging
 import os
+from datetime import date, datetime, time
 from enum import Enum
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Union, get_args, get_origin
+from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -28,6 +30,17 @@ from pydantic_resolve.graphql.utils import group_type_name
 from pydantic_resolve.graphql.response_builder import ResponseBuilder
 
 logger = logging.getLogger(__name__)
+
+
+# Scalar types whose GraphQL wire form is a string but which callers expect as
+# real Python objects (UUID/datetime/date/time). Ordered: datetime subclasses
+# date, so datetime must precede date.
+_COERCIBLE_SCALARS = (UUID, datetime, time, date)
+
+
+def _is_coercible_scalar(py_type: Any) -> bool:
+    """True if ``py_type`` is a temporal/UUID scalar we coerce from string."""
+    return any(safe_issubclass(py_type, t) for t in _COERCIBLE_SCALARS)
 
 
 class QueryExecutor:
@@ -494,6 +507,12 @@ class QueryExecutor:
                                         for item in value
                                     ]
                                 break
+                        # Handle temporal/UUID scalar params (incl list[T], Optional[T]).
+                        # GraphQL sends these as strings; coerce to the real Python
+                        # object so e.g. SQLAlchemy UUID/datetime columns don't crash.
+                        elif _is_coercible_scalar(core_type):
+                            converted_value = self._convert_scalar_value(value, param_type)
+                            break
 
                     if converted_value is not None:
                         converted[param_name] = converted_value
@@ -507,6 +526,48 @@ class QueryExecutor:
             return arguments
 
         return converted
+
+    def _convert_scalar_value(self, value: Any, target_type: Any) -> Any:
+        """Coerce a GraphQL wire value (string) to a temporal/UUID scalar.
+
+        Recurses into ``list[T]`` and unwraps ``Optional[T]`` / ``Union[T, None]``
+        so ``list[UUID]``, ``Optional[datetime]``, and ``list[Optional[date]]``
+        all convert element-wise. Non-string leaves are returned unchanged.
+        """
+        # Unwrap Optional[T] / Union[T, None] -> T
+        if get_origin(target_type) is Union:
+            non_none = [a for a in get_args(target_type) if a is not type(None)]
+            if len(non_none) == 1:
+                target_type = non_none[0]
+
+        if get_origin(target_type) is list:
+            (elem_type,) = get_args(target_type) or (None,)
+            if elem_type is None:
+                return value
+            return [self._convert_scalar_value(item, elem_type) for item in value]
+
+        return self._coerce_scalar(value, target_type)
+
+    @staticmethod
+    def _coerce_scalar(value: Any, py_type: Any) -> Any:
+        """Coerce a single string wire value to the target scalar, or return it."""
+        if not isinstance(value, str):
+            return value
+        try:
+            # datetime subclasses date -> check datetime first
+            if safe_issubclass(py_type, UUID):
+                return UUID(value)
+            if safe_issubclass(py_type, datetime):
+                # datetime.fromisoformat (pre-3.11) rejects trailing 'Z'
+                return datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if safe_issubclass(py_type, time):
+                return time.fromisoformat(value)
+            if safe_issubclass(py_type, date):
+                return date.fromisoformat(value)
+        except (ValueError, TypeError):
+            # Leave as-is; let the method body / validation surface the error.
+            return value
+        return value
 
     def _convert_to_model(self, data: dict, model_class: type) -> BaseModel:
         """

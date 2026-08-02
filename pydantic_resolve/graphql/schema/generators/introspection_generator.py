@@ -164,7 +164,7 @@ class IntrospectionGenerator(SchemaGenerator):
         types = []
 
         # Add scalar types (convert TypeInfo to dict format)
-        for name in ["Int", "Float", "String", "Boolean", "ID"]:
+        for name in SCALAR_TYPES:
             scalar = SCALAR_TYPES[name]
             types.append({
                 "kind": scalar.kind,

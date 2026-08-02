@@ -5,6 +5,8 @@ Provides centralized type conversion between Python and GraphQL types.
 """
 
 from enum import Enum
+from datetime import datetime, date, time
+from uuid import UUID
 from typing import get_origin, get_args, Union
 from pydantic_resolve.utils.class_util import safe_issubclass
 from pydantic_resolve.utils.types import get_core_types, _is_optional, _is_list
@@ -18,6 +20,16 @@ PYTHON_TO_GQL_TYPES = {
     float: 'Float',
     bool: 'Boolean',
 }
+
+# Temporal + UUID scalars, matched by subclass. Ordered: ``datetime`` is a
+# subclass of ``date``, so it must come first or a datetime field would wrongly
+# map to ``Date``. Transport stays string-serialized (ISO 8601 / UUID str).
+_SCALAR_SUBCLASS_MAP = (
+    (UUID, "UUID"),
+    (datetime, "DateTime"),
+    (time, "Time"),
+    (date, "Date"),
+)
 
 
 def is_enum_type(python_type: type) -> bool:
@@ -145,6 +157,11 @@ def map_scalar_type(python_type: type) -> str:
     if python_type in PYTHON_TO_GQL_TYPES:
         return PYTHON_TO_GQL_TYPES[python_type]
 
+    # Temporal + UUID scalars (subclass-matched; ordered datetime before date)
+    for py_cls, gql_name in _SCALAR_SUBCLASS_MAP:
+        if safe_issubclass(python_type, py_cls):
+            return gql_name
+
     # Check via string (handle type strings, etc.)
     type_str = str(python_type).lower()
     if "int" in type_str:
@@ -173,6 +190,10 @@ def get_graphql_type_description(gql_type: str) -> str:
         "String": "The `String` scalar type represents textual data.",
         "Boolean": "The `Boolean` scalar type represents `true` or `false`.",
         "ID": "The `ID` scalar type represents a unique identifier.",
+        "UUID": "The `UUID` scalar type represents a UUID, serialized as a string.",
+        "DateTime": "The `DateTime` scalar type represents an ISO 8601 datetime, serialized as a string.",
+        "Date": "The `Date` scalar type represents an ISO 8601 date, serialized as a string.",
+        "Time": "The `Time` scalar type represents an ISO 8601 time, serialized as a string.",
     }
     return descriptions.get(gql_type)
 

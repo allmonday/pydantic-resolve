@@ -1,5 +1,5 @@
 ---
-description: "Release-by-release changelog for pydantic-resolve, following semver — major for breaking changes, minor for new features, patch for bug fixes. Most recent: 6.0.0."
+description: "Release-by-release changelog for pydantic-resolve, following semver — major for breaking changes, minor for new features, patch for bug fixes. Most recent: 6.1.0."
 ---
 
 # Changelog
@@ -7,6 +7,15 @@ description: "Release-by-release changelog for pydantic-resolve, following semve
 - **Major (X.0.0)**: Major new features or breaking changes
 - **Minor (x.Y.0)**: New features, backward compatible
 - **Patch (x.y.Z)**: Bug fixes and minor improvements
+
+## 6.1
+
+### 6.1.0 (2026-8-2)
+
+- fix:
+  - **`UUID` / `DateTime` / `Date` / `Time` are now first-class GraphQL scalars** (port of nexusx #104 / #92 / #105): `uuid.UUID`, `datetime`, `date`, and `time` previously fell back to `String` everywhere — the scalar map only knew `int`/`str`/`float`/`bool`, and `map_scalar_type` used fragile substring matching. SDL rendered `id: UUID` as `id: String!`, introspection never advertised the scalars, and `@query` / `@mutation` params of these types (including `list[UUID]`, `list[datetime]`, `Optional[T]`) arrived as raw strings — crashing SQLAlchemy/SQLModel on `UUID` / `datetime` column binding. They now render as `UUID!` / `DateTime!` / `Date!` / `Time!` in SDL, are advertised as scalars in `__schema`, and are coerced to real Python objects on the input side. The introspection scalar list and `TypeRegistry._scalars` are now derived from the single `SCALAR_TYPES` registry so they can't drift.
+
+    **SDL surface change** (why this is a minor, not a patch): fields/args of these types change from `String` to `UUID` / `DateTime` / `Date` / `Time`. Transport is unchanged (still string-serialized ISO 8601 / UUID). SDL consumers (graphql-codegen, Apollo) will see new scalar names and should regenerate types. `Decimal` is unchanged (still `String`).
 
 ## 6.0
 
