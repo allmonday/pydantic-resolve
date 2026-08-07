@@ -83,6 +83,26 @@ SCALAR_TYPES: dict[str, TypeInfo] = {
         kind="SCALAR",
         description="The `ID` scalar type represents a unique identifier."
     ),
+    "UUID": TypeInfo(
+        name="UUID",
+        kind="SCALAR",
+        description="The `UUID` scalar type represents a UUID, serialized as a string."
+    ),
+    "DateTime": TypeInfo(
+        name="DateTime",
+        kind="SCALAR",
+        description="The `DateTime` scalar type represents an ISO 8601 datetime, serialized as a string."
+    ),
+    "Date": TypeInfo(
+        name="Date",
+        kind="SCALAR",
+        description="The `Date` scalar type represents an ISO 8601 date, serialized as a string."
+    ),
+    "Time": TypeInfo(
+        name="Time",
+        kind="SCALAR",
+        description="The `Time` scalar type represents an ISO 8601 time, serialized as a string."
+    ),
 }
 
 
@@ -96,7 +116,7 @@ class TypeRegistry:
 
     def __init__(self):
         self._types: dict[str, TypeInfo] = {}
-        self._scalars: set = {'Int', 'Float', 'String', 'Boolean', 'ID'}
+        self._scalars: set = set(SCALAR_TYPES.keys())
 
         # Register standard scalars
         for name, type_info in SCALAR_TYPES.items():
